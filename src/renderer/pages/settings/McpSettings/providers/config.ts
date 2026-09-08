@@ -2,9 +2,6 @@ import type { CompoundIcon } from '@cherrystudio/ui'
 import { Bailian, Modelscope } from '@cherrystudio/ui/icons/providers'
 import type { McpServer } from '@shared/data/types/mcpServer'
 
-import { getBailianToken, saveBailianToken, syncBailianServers } from './bailian'
-import { getModelScopeToken, MODELSCOPE_HOST, saveModelScopeToken, syncModelScopeServers } from './modelscope'
-
 export interface SyncResult {
   success: boolean
   message: string

@@ -366,6 +366,22 @@ export class ChannelManager extends BaseService {
         })
       })
 
+      adapter.on('callback_query', (cb) => {
+        if (channelMessageHandler.isWriteQuiesced) {
+          logger.warn('Channel callback dropped: intake is write-quiesced', { agentId, channelId: row.id })
+          return
+        }
+        trackChatId(cb.chatId)
+        channelMessageHandler.handleCallbackQuery(adapter, cb).catch((err) => {
+          logger.error('Unhandled error in callback handler', {
+            agentId,
+            channelId: row.id,
+            error: err instanceof Error ? err.message : String(err)
+          })
+          void cb.answerCallbackQuery({ text: '处理失败' }).catch(() => {})
+        })
+      })
+
       // Forward QR events to any pending waiters
       adapter.on('qr', (url) => {
         const waiterKey = `${agentId}:${row.id}`

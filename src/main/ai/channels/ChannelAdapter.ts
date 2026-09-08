@@ -26,13 +26,25 @@ export type ChannelMessageEvent = {
   files?: FileAttachment[]
 }
 
+export type ChannelCommandName =
+  | 'new'
+  | 'compact'
+  | 'help'
+  | 'whoami'
+  | 'stop'
+  | 'model'
+  | 'switch'
+  | 'mode'
+  | 'status'
+  | 'rename'
+
 export type ChannelCommandEvent = {
   chatId: string
   /** Stable external conversation identity. Defaults to chatId for platforms without threads. */
   conversationId?: string
   userId: string
   userName: string
-  command: 'new' | 'compact' | 'help' | 'whoami'
+  command: ChannelCommandName
   args?: string
   /** Platform message id of the command message, so the reply can target it. See `ChannelMessageEvent.messageId`. */
   messageId?: string
@@ -40,12 +52,29 @@ export type ChannelCommandEvent = {
   replyInThread?: boolean
 }
 
+/** Telegram-style inline keyboard (also usable as opaque markup for other platforms). */
+export type ChannelInlineKeyboard = {
+  inline_keyboard: Array<Array<{ text: string; callback_data: string }>>
+}
+
+export type ChannelCallbackQueryEvent = {
+  chatId: string
+  userId: string
+  userName: string
+  data: string
+  messageId?: number
+  answerCallbackQuery: (opts?: { text?: string }) => Promise<void>
+  editReplyMarkup: (keyboard: ChannelInlineKeyboard) => Promise<void>
+}
+
 export type SendMessageOptions = {
-  parseMode?: 'MarkdownV2' | 'HTML'
+  parseMode?: 'MarkdownV2' | 'HTML' | 'html' | 'plain' | null
   /** Inbound message id to reply against. String for QQ (passive `msg_id`); number for Telegram. */
   replyToMessageId?: string | number
   /** Keep the reply inside the inbound message's thread when the platform supports it. */
   replyInThread?: boolean
+  /** Telegram inline keyboard / equivalent. */
+  replyMarkup?: ChannelInlineKeyboard
 }
 
 /** Channel type → its config payload, projected from the `AgentChannelEntity` discriminated union. */
@@ -259,6 +288,7 @@ export abstract class ChannelAdapter extends EventEmitter {
   // Typed event emitter overrides
   override emit(event: 'message', data: ChannelMessageEvent): boolean
   override emit(event: 'command', data: ChannelCommandEvent): boolean
+  override emit(event: 'callback_query', data: ChannelCallbackQueryEvent): boolean
   override emit(event: 'qr', url: string): boolean
   override emit(event: 'credentials', data: { appId: string; appSecret: string }): boolean
   override emit(event: 'log', data: ChannelLogEntry): boolean
@@ -269,6 +299,7 @@ export abstract class ChannelAdapter extends EventEmitter {
 
   override on(event: 'message', listener: (data: ChannelMessageEvent) => void): this
   override on(event: 'command', listener: (data: ChannelCommandEvent) => void): this
+  override on(event: 'callback_query', listener: (data: ChannelCallbackQueryEvent) => void): this
   override on(event: 'qr', listener: (url: string) => void): this
   override on(event: 'credentials', listener: (data: { appId: string; appSecret: string }) => void): this
   override on(event: 'log', listener: (data: ChannelLogEntry) => void): this

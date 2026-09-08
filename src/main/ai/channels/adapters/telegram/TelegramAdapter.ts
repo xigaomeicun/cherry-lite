@@ -6,10 +6,15 @@ import {
   MAX_FILE_SIZE_BYTES
 } from '@main/utils/downloadAsBase64'
 import { Bot, InputFile } from 'grammy'
-import { chunkMessage, renderTelegramHtml } from './markdownTg'
 
-import { ChannelAdapter, type ChannelAdapterConfig, type SendMessageOptions } from '../../ChannelAdapter'
+import {
+  ChannelAdapter,
+  type ChannelAdapterConfig,
+  type ChannelCommandEvent,
+  type SendMessageOptions
+} from '../../ChannelAdapter'
 import { registerAdapterFactory } from '../../ChannelManager'
+import { chunkMessage, renderTelegramHtml } from './markdownTg'
 
 const TELEGRAM_MAX_LENGTH = 4096
 
@@ -70,55 +75,68 @@ class TelegramAdapter extends ChannelAdapter {
       await next()
     })
 
-    // Command handlers
-    bot.command('new', (ctx) => {
+    const emitCommand = (
+      ctx: { chat: { id: number }; from?: { id: number; first_name?: string }; match?: string | RegExpMatchArray },
+      command: ChannelCommandEvent['command'],
+      withArgs = false
+    ) => {
+      const args = withArgs ? String(ctx.match ?? '').trim() : undefined
       this.emit('command', {
         chatId: ctx.chat.id.toString(),
         userId: ctx.from?.id?.toString() ?? '',
         userName: ctx.from?.first_name ?? '',
-        command: 'new'
+        command,
+        ...(args ? { args } : {}),
+        messageId: String((ctx as { message?: { message_id?: number } }).message?.message_id ?? '')
       })
-    })
+    }
 
-    bot.command('compact', (ctx) => {
-      this.emit('command', {
-        chatId: ctx.chat.id.toString(),
+    // Command handlers (Cherry-Lite extended menu; no /whoami)
+    bot.command('new', (ctx) => emitCommand(ctx, 'new'))
+    bot.command('stop', (ctx) => emitCommand(ctx, 'stop'))
+    bot.command('model', (ctx) => emitCommand(ctx, 'model'))
+    bot.command('switch', (ctx) => emitCommand(ctx, 'switch'))
+    bot.command('mode', (ctx) => emitCommand(ctx, 'mode'))
+    bot.command('status', (ctx) => emitCommand(ctx, 'status'))
+    bot.command('rename', (ctx) => emitCommand(ctx, 'rename', true))
+    bot.command('compact', (ctx) => emitCommand(ctx, 'compact'))
+    bot.command('help', (ctx) => emitCommand(ctx, 'help'))
+
+    bot.on('callback_query:data', async (ctx) => {
+      const data = ctx.callbackQuery?.data
+      if (!data) return
+      const chatId = ctx.chat?.id?.toString() || ctx.callbackQuery.message?.chat?.id?.toString()
+      if (!chatId) return
+      this.emit('callback_query', {
+        chatId,
         userId: ctx.from?.id?.toString() ?? '',
         userName: ctx.from?.first_name ?? '',
-        command: 'compact'
-      })
-    })
-
-    bot.command('help', (ctx) => {
-      this.emit('command', {
-        chatId: ctx.chat.id.toString(),
-        userId: ctx.from?.id?.toString() ?? '',
-        userName: ctx.from?.first_name ?? '',
-        command: 'help'
-      })
-    })
-
-    bot.command('whoami', (ctx) => {
-      this.emit('command', {
-        chatId: ctx.chat.id.toString(),
-        userId: ctx.from?.id?.toString() ?? '',
-        userName: ctx.from?.first_name ?? '',
-        command: 'whoami'
+        data,
+        messageId: ctx.callbackQuery.message?.message_id,
+        answerCallbackQuery: async (opts) => {
+          await ctx.answerCallbackQuery(opts?.text ? { text: opts.text } : undefined).catch(() => {})
+        },
+        editReplyMarkup: async (keyboard) => {
+          await ctx.editMessageReplyMarkup({ reply_markup: keyboard as never }).catch(() => {})
+        }
       })
     })
 
     // Text message handler
     bot.on('message:text', (ctx) => {
+      this.ackInbound(ctx)
       this.emit('message', {
         chatId: ctx.chat.id.toString(),
         userId: ctx.from?.id?.toString() ?? '',
         userName: ctx.from?.first_name ?? '',
-        text: ctx.message.text
+        text: ctx.message.text,
+        messageId: String(ctx.message.message_id)
       })
     })
 
     // Photo message handler — download the largest resolution and emit with caption
     bot.on('message:photo', async (ctx) => {
+      this.ackInbound(ctx)
       const photos = ctx.message.photo
       if (!photos || photos.length === 0) return
 
@@ -134,12 +152,14 @@ class TelegramAdapter extends ChannelAdapter {
         userId: ctx.from?.id?.toString() ?? '',
         userName: ctx.from?.first_name ?? '',
         text,
+        messageId: String(ctx.message.message_id),
         ...(images.length > 0 ? { images } : {})
       })
     })
 
     // Document/file handler — download and emit as file attachment
     bot.on('message:document', async (ctx) => {
+      this.ackInbound(ctx)
       const doc = ctx.message.document
       if (!doc) return
 
@@ -159,16 +179,22 @@ class TelegramAdapter extends ChannelAdapter {
         userId: ctx.from?.id?.toString() ?? '',
         userName: ctx.from?.first_name ?? '',
         text,
+        messageId: String(ctx.message.message_id),
         ...(files.length > 0 ? { files } : {})
       })
     })
 
     // Register bot commands with Telegram
     await bot.api.setMyCommands([
-      { command: 'new', description: 'Start a new conversation' },
-      { command: 'compact', description: 'Compact conversation history' },
-      { command: 'help', description: 'Show help information' },
-      { command: 'whoami', description: 'Show the current chat ID' }
+      { command: 'new', description: '🆕 开启全新会话' },
+      { command: 'stop', description: '✋ 终止当前生成' },
+      { command: 'model', description: '🧠 切换底座模型' },
+      { command: 'switch', description: '🤖 切换执行后端' },
+      { command: 'mode', description: '🎮 切换权限模式' },
+      { command: 'status', description: '📊 查看当前状态' },
+      { command: 'rename', description: '✏️ 命名当前会话' },
+      { command: 'compact', description: '🗜️ 压缩会话记忆' },
+      { command: 'help', description: '📖 显示可用命令' }
     ])
 
     // Error handler — err is a BotError wrapping the original cause in err.error
@@ -311,7 +337,8 @@ class TelegramAdapter extends ChannelAdapter {
     }
 
     // High-fidelity Telegram HTML rendering (ports markdown-tg with table-to-list, code blocks, br handling)
-    const formatted = renderTelegramHtml(text)
+    const isRawHtml = opts?.parseMode === 'html' || opts?.parseMode === 'HTML'
+    const formatted = isRawHtml ? text : renderTelegramHtml(text)
     const chunks = chunkMessage(formatted, TELEGRAM_MAX_LENGTH)
 
     for (let i = 0; i < chunks.length; i++) {
@@ -319,12 +346,17 @@ class TelegramAdapter extends ChannelAdapter {
       const replyParams =
         typeof opts?.replyToMessageId === 'number' && i === 0
           ? { reply_parameters: { message_id: opts.replyToMessageId } }
-          : {}
+          : typeof opts?.replyToMessageId === 'string' && /^\d+$/.test(opts.replyToMessageId) && i === 0
+            ? { reply_parameters: { message_id: Number(opts.replyToMessageId) } }
+            : {}
+      const isLast = i === chunks.length - 1
+      const markupParams = isLast && opts?.replyMarkup ? { reply_markup: opts.replyMarkup } : {}
 
       try {
         await this.bot.api.sendMessage(chatId, chunk, {
           parse_mode: 'HTML',
-          ...replyParams
+          ...replyParams,
+          ...markupParams
         })
       } catch (error) {
         this.log.warn('HTML send failed, falling back to plain text', {
@@ -341,6 +373,19 @@ class TelegramAdapter extends ChannelAdapter {
       if (i < chunks.length - 1) {
         await new Promise((resolve) => setTimeout(resolve, 350))
       }
+    }
+  }
+
+  /** Inbound ack: reaction eyes + typing (best-effort). */
+  private ackInbound(ctx: { chat?: { id: number }; message?: { message_id: number } }): void {
+    try {
+      const chatId = ctx.chat?.id
+      const messageId = ctx.message?.message_id
+      if (chatId == null || messageId == null || !this.bot) return
+      this.bot.api.setMessageReaction(chatId, messageId, [{ type: 'emoji', emoji: '👀' }]).catch(() => {})
+      this.bot.api.sendChatAction(chatId, 'typing').catch(() => {})
+    } catch {
+      /* ignore */
     }
   }
 

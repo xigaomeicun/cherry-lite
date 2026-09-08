@@ -20,8 +20,15 @@ import { AGENT_SESSION_SLASH_COMMANDS_CACHE_KEY } from '@shared/ai/agentSessionS
 import type { AgentChannelEntity } from '@shared/data/api/schemas/agentChannels'
 import type { AgentSessionEntity } from '@shared/data/api/schemas/agentSessions'
 
-import type { ChannelAdapter, ChannelCommandEvent, ChannelMessageEvent, SendMessageOptions } from './ChannelAdapter'
+import type {
+  ChannelAdapter,
+  ChannelCallbackQueryEvent,
+  ChannelCommandEvent,
+  ChannelMessageEvent,
+  SendMessageOptions
+} from './ChannelAdapter'
 import { SLASH_COMMANDS } from './constants'
+import { askUserPending, busyOffers, escHtml, MODEL_PICK_LIMIT } from './telegramChannelExtras'
 
 const logger = loggerService.withContext('ChannelMessageHandler')
 
@@ -224,6 +231,45 @@ export class ChannelMessageHandler {
       })
       return Promise.resolve()
     }
+
+    // Telegram: if a turn is already streaming for this session, auto-queue (do not drop).
+    // Optional interrupt / cancel via callback card.
+    type BusyMsg = ChannelMessageEvent & {
+      _skipBusyCheck?: boolean
+      _cherryBusyCancelled?: boolean
+      _cherryBusyOfferId?: string
+    }
+    const busyMsg = message as BusyMsg
+    if (adapter.channelType === 'telegram' && !busyMsg._skipBusyCheck) {
+      const sid = this.peekSessionId(adapter.agentId, adapter.channelId, conversationIdOf(message))
+      if (sid && this.activeAbortControllers.has(sid)) {
+        const offerId = `busy_${Math.random().toString(36).slice(2, 9)}`
+        const snippet = escHtml((message.text || '附件/文件任务').slice(0, 50))
+        busyMsg._skipBusyCheck = true
+        busyMsg._cherryBusyOfferId = offerId
+        busyOffers.set(offerId, { activeSessionId: sid, message: busyMsg, cancelled: false })
+        void adapter
+          .sendMessage(
+            message.chatId,
+            `⏳ <b>当前正在执行任务中...</b>\n\n新指令：<i>${snippet}</i>\n\n✅ <b>已自动加入队列</b>，上轮完成后执行。`,
+            {
+              ...responseOptionsFor(message),
+              parseMode: 'html',
+              replyMarkup: {
+                inline_keyboard: [
+                  [
+                    { text: '⚡️ 立即打断', callback_data: `busy:interrupt:${offerId}` },
+                    { text: '🗑 放弃此条', callback_data: `busy:cancel:${offerId}` }
+                  ]
+                ]
+              }
+            }
+          )
+          .catch(() => {})
+        message = busyMsg
+      }
+    }
+
     const batchKey = `${conversationKey(adapter.agentId, adapter.channelId, conversationIdOf(message))}:${message.userId}`
 
     return new Promise<void>((resolve, reject) => {
@@ -292,9 +338,23 @@ export class ChannelMessageHandler {
         await ready
         if (batch.cancelled) return
 
-        const merged = this.mergeMessages(batch.messages)
-        if (batch.messages.length > 1) {
-          logger.info('Flushing merged message batch', { batchKey, messageCount: batch.messages.length })
+        const alive = batch.messages.filter((m) => !(m as { _cherryBusyCancelled?: boolean })._cherryBusyCancelled)
+        for (const m of batch.messages) {
+          const offerId = (m as { _cherryBusyOfferId?: string })._cherryBusyOfferId
+          if (offerId) busyOffers.delete(offerId)
+        }
+        if (!alive.length) {
+          batch.admit()
+          return
+        }
+
+        const merged = this.mergeMessages(alive)
+        if (alive.length > 1) {
+          logger.info('Flushing merged message batch', { batchKey, messageCount: alive.length })
+        }
+        if ((merged as { _cherryBusyCancelled?: boolean })._cherryBusyCancelled) {
+          batch.admit()
+          return
         }
         await this.processIncoming(batch.adapter, merged, batch.admit)
       })
@@ -369,6 +429,13 @@ export class ChannelMessageHandler {
     message: ChannelMessageEvent,
     onAdmitted?: () => void
   ): Promise<void> {
+    if ((message as { _cherryBusyCancelled?: boolean })._cherryBusyCancelled) {
+      onAdmitted?.()
+      return
+    }
+    const offerId = (message as { _cherryBusyOfferId?: string })._cherryBusyOfferId
+    if (offerId) busyOffers.delete(offerId)
+
     const { agentId } = adapter
 
     try {
@@ -529,7 +596,16 @@ export class ChannelMessageHandler {
       return
     }
 
-    if (command.command === 'help' || command.command === 'whoami') {
+    if (
+      command.command === 'help' ||
+      command.command === 'whoami' ||
+      command.command === 'stop' ||
+      command.command === 'status' ||
+      command.command === 'mode' ||
+      command.command === 'model' ||
+      command.command === 'switch' ||
+      command.command === 'rename'
+    ) {
       return this.processCommand(adapter, command, () => {})
     }
 
@@ -651,6 +727,137 @@ export class ChannelMessageHandler {
           )
           break
         }
+        case 'stop': {
+          onAdmitted()
+          const sid = this.peekSessionId(agentId, adapter.channelId, conversationIdOf(command))
+          if (!sid || !this.abortSession(sid)) {
+            await adapter.sendMessage(command.chatId, '当前没有正在执行的任务。', {
+              ...replyOpts,
+              parseMode: 'plain'
+            })
+          } else {
+            await adapter.sendMessage(command.chatId, '✋ 已发送终止信号。', { ...replyOpts, parseMode: 'plain' })
+          }
+          break
+        }
+        case 'status': {
+          onAdmitted()
+          const agent = agentService.getAgent(agentId)
+          const sid = this.peekSessionId(agentId, adapter.channelId, conversationIdOf(command))
+          const busy = sid ? this.activeAbortControllers.has(sid) : false
+          const mode = agent?.configuration?.permission_mode ?? 'default'
+          const text = [
+            `📊 <b>状态</b>`,
+            `🔹 智能体: <code>${escHtml(agent?.name ?? agentId)}</code>`,
+            `🔹 模型: <code>${escHtml(String(agent?.model ?? '—'))}</code>`,
+            `🔹 权限: <code>${escHtml(String(mode))}</code>`,
+            `🔹 会话: <code>${escHtml(sid ?? '无')}</code>`,
+            `🔹 忙碌: ${busy ? '是 ⏳' : '否 ✅'}`
+          ].join('\n')
+          await adapter.sendMessage(command.chatId, text, { ...replyOpts, parseMode: 'html' })
+          break
+        }
+        case 'mode': {
+          onAdmitted()
+          const agent = agentService.getAgent(agentId)
+          const current = agent?.configuration?.permission_mode ?? 'default'
+          const agentType = agent?.type || 'claude-code'
+          const supportsPlan = agentType !== 'pi'
+          const supportsAuto = agentType !== 'dsh'
+          const rows: Array<Array<{ text: string; callback_data: string }>> = []
+          if (supportsPlan) {
+            rows.push([
+              {
+                text: current === 'plan' ? '✅ 💡 仅规划模式' : '💡 仅规划模式',
+                callback_data: 'perm:plan'
+              }
+            ])
+          }
+          rows.push([
+            {
+              text: current === 'bypassPermissions' ? '✅ 🚀 完全放行模式' : '🚀 完全放行模式',
+              callback_data: 'perm:bypassPermissions'
+            }
+          ])
+          if (supportsAuto) {
+            rows.push([
+              {
+                text: current === 'auto' ? '✅ 🪐 智能批准模式' : '🪐 智能批准模式',
+                callback_data: 'perm:auto'
+              }
+            ])
+          }
+          rows.push([
+            {
+              text: current === 'default' ? '✅ 🔒 逐次确认模式' : '🔒 逐次确认模式',
+              callback_data: 'perm:default'
+            }
+          ])
+          await adapter.sendMessage(
+            command.chatId,
+            `🎮 <b>切换权限模式</b>\n当前：<code>${escHtml(String(current))}</code>`,
+            {
+              ...replyOpts,
+              parseMode: 'html',
+              replyMarkup: { inline_keyboard: rows }
+            }
+          )
+          break
+        }
+        case 'model': {
+          onAdmitted()
+          const { modelService } = await import('@data/services/ModelService')
+          const models = modelService.list({ enabled: true }).slice(0, MODEL_PICK_LIMIT)
+          if (models.length === 0) {
+            await adapter.sendMessage(command.chatId, '未找到已启用模型。', { ...replyOpts, parseMode: 'plain' })
+            break
+          }
+          const rows = models.map((m) => {
+            const id = `${m.providerId}::${m.id}`
+            const label = `${m.name || m.id}`.slice(0, 40)
+            return [{ text: label, callback_data: `mdl:${id}`.slice(0, 64) }]
+          })
+          await adapter.sendMessage(command.chatId, '🧠 <b>选择底座模型</b>（仅显示前 30 个已启用）', {
+            ...replyOpts,
+            parseMode: 'html',
+            replyMarkup: { inline_keyboard: rows }
+          })
+          break
+        }
+        case 'switch': {
+          onAdmitted()
+          const { agents } = agentService.listAgents({ limit: 30 })
+          if (agents.length === 0) {
+            await adapter.sendMessage(command.chatId, '没有可用智能体。', { ...replyOpts, parseMode: 'plain' })
+            break
+          }
+          const rows = agents.map((a) => [
+            {
+              text: `${a.id === agentId ? '✅ ' : ''}${(a.name || a.id).slice(0, 40)}`,
+              callback_data: `sw:${a.id}`.slice(0, 64)
+            }
+          ])
+          await adapter.sendMessage(command.chatId, '🤖 <b>切换执行后端（智能体）</b>', {
+            ...replyOpts,
+            parseMode: 'html',
+            replyMarkup: { inline_keyboard: rows }
+          })
+          break
+        }
+        case 'rename': {
+          onAdmitted()
+          const newName = (command.args || '').trim()
+          if (!newName) {
+            await adapter.sendMessage(command.chatId, '用法：/rename 新名称', { ...replyOpts, parseMode: 'plain' })
+            break
+          }
+          agentService.updateAgent(agentId, { name: newName.slice(0, 80) })
+          await adapter.sendMessage(command.chatId, `✏️ 已命名为：${newName.slice(0, 80)}`, {
+            ...replyOpts,
+            parseMode: 'plain'
+          })
+          break
+        }
       }
     } catch (error) {
       logger.error('Error handling command', {
@@ -670,6 +877,226 @@ export class ChannelMessageHandler {
         })
     } finally {
       onAdmitted()
+    }
+  }
+
+  /** Telegram inline-keyboard callbacks (perm / mdl / sw / busy / approval cards). */
+  async handleCallbackQuery(adapter: ChannelAdapter, cb: ChannelCallbackQueryEvent): Promise<void> {
+    const { data, chatId } = cb
+    try {
+      if (data.startsWith('perm:')) {
+        const targetPerm = data.slice(5) as 'plan' | 'bypassPermissions' | 'auto' | 'default' | 'acceptEdits'
+        const agent = agentService.getAgent(adapter.agentId)
+        if (agent) {
+          const currentConfig = agent.configuration || {}
+          agentService.updateAgent(adapter.agentId, {
+            configuration: { ...currentConfig, permission_mode: targetPerm }
+          })
+          await cb.answerCallbackQuery({ text: `已切换至 [${targetPerm}]` })
+          await cb.editReplyMarkup({
+            inline_keyboard: [[{ text: `✅ 已切换: ${targetPerm}`, callback_data: 'noop' }]]
+          })
+        } else {
+          await cb.answerCallbackQuery({ text: '智能体不存在' })
+        }
+        return
+      }
+
+      if (data.startsWith('mdl:')) {
+        const modelId = data.slice(4)
+        if (!modelId.includes('::')) {
+          await cb.answerCallbackQuery({ text: '无效模型' })
+          return
+        }
+        agentService.updateAgent(adapter.agentId, {
+          model: modelId as import('@shared/data/types/model').UniqueModelId
+        })
+        await cb.answerCallbackQuery({ text: '模型已切换' })
+        await cb.editReplyMarkup({
+          inline_keyboard: [[{ text: `✅ ${modelId.slice(0, 40)}`, callback_data: 'noop' }]]
+        })
+        return
+      }
+
+      if (data.startsWith('sw:')) {
+        const targetAgentId = data.slice(3)
+        const target = agentService.getAgent(targetAgentId)
+        if (!target) {
+          await cb.answerCallbackQuery({ text: '目标智能体不存在' })
+          return
+        }
+        channelService.updateChannel(adapter.channelId, { agentId: targetAgentId })
+        // Soft-heal permission mode for Pi / DSH
+        const mode = target.configuration?.permission_mode
+        if (target.type === 'pi' && mode === 'plan') {
+          agentService.updateAgent(targetAgentId, {
+            configuration: { ...(target.configuration || {}), permission_mode: 'auto' }
+          })
+        }
+        if (target.type === 'dsh' && mode === 'auto') {
+          agentService.updateAgent(targetAgentId, {
+            configuration: { ...(target.configuration || {}), permission_mode: 'plan' }
+          })
+        }
+        await cb.answerCallbackQuery({ text: `已切换至 ${target.name || targetAgentId}` })
+        await cb.editReplyMarkup({
+          inline_keyboard: [[{ text: `✅ ${target.name || targetAgentId}`, callback_data: 'noop' }]]
+        })
+        // Notify on the still-live adapter before reconnect tears it down.
+        await adapter
+          .sendMessage(chatId, `🤖 渠道已绑定智能体 <b>${escHtml(target.name || targetAgentId)}</b>，正在重连…`, {
+            parseMode: 'html'
+          })
+          .catch(() => {})
+        void application
+          .get('ChannelManager')
+          .syncChannel(adapter.channelId)
+          .catch((err) => logger.warn('Channel switch sync failed', { err, channelId: adapter.channelId }))
+        return
+      }
+
+      if (data.startsWith('busy:')) {
+        const parts = data.split(':')
+        const action = parts[1]
+        const offerId = parts[2]
+        const offer = busyOffers.get(offerId)
+        if (!offer) {
+          await cb.answerCallbackQuery({ text: '⚪ 该操作已过期或已被处理' })
+          await cb.editReplyMarkup({ inline_keyboard: [] })
+          return
+        }
+        if (action === 'interrupt') {
+          busyOffers.delete(offerId)
+          await cb.answerCallbackQuery({ text: '⚡️ 已打断上一任务，队列将尽快执行' })
+          await cb.editReplyMarkup({
+            inline_keyboard: [[{ text: '⚡️ 上一任务已打断，队列执行中', callback_data: 'noop' }]]
+          })
+          this.abortSession(offer.activeSessionId)
+        } else if (action === 'cancel') {
+          busyOffers.delete(offerId)
+          offer.cancelled = true
+          offer.message._cherryBusyCancelled = true
+          await cb.answerCallbackQuery({ text: '🗑 已取消此条新消息' })
+          await cb.editReplyMarkup({
+            inline_keyboard: [[{ text: '🗑 本条新指令已取消', callback_data: 'noop' }]]
+          })
+        } else {
+          await cb.answerCallbackQuery({ text: '✅ 已在队列中' })
+        }
+        return
+      }
+
+      // Approval cards: xplan / asku / tapr — handled in ChannelAdapterListener via registry;
+      // still answer here if leftover.
+      if (data.startsWith('xplan:') || data.startsWith('asku:') || data.startsWith('tapr:')) {
+        const { toolApprovalRegistry } = await import('@main/ai/toolApproval/ToolApprovalRegistry')
+        if (data.startsWith('xplan:approve:')) {
+          const approvalId = data.slice('xplan:approve:'.length)
+          toolApprovalRegistry.dispatch(approvalId, { approved: true })
+          await cb.answerCallbackQuery({ text: '✅ 已批准执行' })
+          await cb.editReplyMarkup({ inline_keyboard: [[{ text: '✅ 已批准执行', callback_data: 'noop' }]] })
+          return
+        }
+        if (data.startsWith('xplan:revise:')) {
+          const approvalId = data.slice('xplan:revise:'.length)
+          toolApprovalRegistry.dispatch(approvalId, {
+            approved: false,
+            reason: '用户选择继续调整计划'
+          })
+          await cb.answerCallbackQuery({ text: '✏️ 已退回调整' })
+          await cb.editReplyMarkup({ inline_keyboard: [[{ text: '✏️ 继续调整中', callback_data: 'noop' }]] })
+          return
+        }
+        if (data.startsWith('xplan:cancel:')) {
+          const approvalId = data.slice('xplan:cancel:'.length)
+          toolApprovalRegistry.dispatch(approvalId, { approved: false, reason: '用户放弃任务' })
+          await cb.answerCallbackQuery({ text: '❌ 已放弃' })
+          await cb.editReplyMarkup({ inline_keyboard: [[{ text: '❌ 已放弃任务', callback_data: 'noop' }]] })
+          return
+        }
+        if (data.startsWith('tapr:ok:')) {
+          const approvalId = data.slice('tapr:ok:'.length)
+          toolApprovalRegistry.dispatch(approvalId, { approved: true })
+          await cb.answerCallbackQuery({ text: '✅ 已允许' })
+          await cb.editReplyMarkup({ inline_keyboard: [[{ text: '✅ 已允许', callback_data: 'noop' }]] })
+          return
+        }
+        if (data.startsWith('tapr:no:')) {
+          const approvalId = data.slice('tapr:no:'.length)
+          toolApprovalRegistry.dispatch(approvalId, { approved: false, reason: '用户通过 Telegram 拒绝了该工具调用。' })
+          await cb.answerCallbackQuery({ text: '❌ 已拒绝' })
+          await cb.editReplyMarkup({ inline_keyboard: [[{ text: '❌ 已拒绝', callback_data: 'noop' }]] })
+          return
+        }
+        if (data.startsWith('asku:')) {
+          // asku:approvalId:optionIndex — MVP single-question
+          const rest = data.slice('asku:'.length)
+          const colon = rest.lastIndexOf(':')
+          const approvalId = rest.slice(0, colon)
+          const oi = Number(rest.slice(colon + 1))
+          const pending = askUserPending.get(approvalId)
+          if (!pending) {
+            await cb.answerCallbackQuery({ text: '题目已过期' })
+            return
+          }
+          const q = pending.input.questions[pending.qIndex]
+          const opt = q?.options?.[oi]
+          if (!q || !opt) {
+            await cb.answerCallbackQuery({ text: '无效选项' })
+            return
+          }
+          pending.answers[q.header || q.question || `q${pending.qIndex}`] = {
+            selected: [opt.label],
+            freeText: undefined
+          }
+          pending.qIndex += 1
+          if (pending.qIndex >= pending.input.questions.length) {
+            askUserPending.delete(approvalId)
+            toolApprovalRegistry.dispatch(approvalId, {
+              approved: true,
+              updatedInput: { ...pending.input, answers: pending.answers }
+            })
+            await cb.answerCallbackQuery({ text: '✅ 已提交' })
+            await cb.editReplyMarkup({ inline_keyboard: [[{ text: '✅ 已提交答案', callback_data: 'noop' }]] })
+          } else {
+            await cb.answerCallbackQuery({
+              text: `已选，下一题 (${pending.qIndex + 1}/${pending.input.questions.length})`
+            })
+            // Next question is re-sent by listener only on first show; for multi-q send next card here.
+            const nq = pending.input.questions[pending.qIndex]
+            const circles = ['①', '②', '③', '④']
+            const options = Array.isArray(nq.options) ? nq.options : []
+            let cardText = `💬 <b>请选择</b> <i>(${pending.qIndex + 1}/${pending.input.questions.length})</i>\n\n${escHtml(nq.question || nq.header || '请选择')}`
+            const rows: Array<Array<{ text: string; callback_data: string }>> = []
+            for (let i = 0; i < options.length && i < 4; i++) {
+              const label = String(options[i].label || `选项${i + 1}`).slice(0, 60)
+              cardText += `\n\n<b>${circles[i]}</b> ${escHtml(label)}`
+              rows.push([
+                {
+                  text: `${circles[i]} ${label}`.slice(0, 64),
+                  callback_data: `asku:${approvalId}:${i}`
+                }
+              ])
+            }
+            await adapter.sendMessage(chatId, cardText, {
+              parseMode: 'html',
+              replyMarkup: { inline_keyboard: rows }
+            })
+            await cb.editReplyMarkup({ inline_keyboard: [[{ text: '✅ 本题已答', callback_data: 'noop' }]] })
+          }
+          return
+        }
+      }
+
+      if (data === 'noop') {
+        await cb.answerCallbackQuery()
+        return
+      }
+
+      await cb.answerCallbackQuery({ text: '未知操作' })
+    } catch (err) {
+      logger.error('Callback query error', { err, data, chatId })
+      await cb.answerCallbackQuery({ text: '处理失败' }).catch(() => {})
     }
   }
 

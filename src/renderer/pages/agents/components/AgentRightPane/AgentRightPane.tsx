@@ -1208,10 +1208,9 @@ function AgentTraceRightPanel({ active, scope }: RightPanelComponentProps<AgentR
 }
 
 function resolveAgentFilesReadiness(scope: AgentRightPanelScope): RightPanelReadiness {
+  // Keep files ready whenever a workspace path exists — even empty SYSTEM trees —
+  // so clicking an absolute `.md` artifact opens the preview instead of falling through to status.
   if (scope.meta.conversationState !== 'ready') return scope.meta.conversationState
-  if (scope.meta.workspaceType === AGENT_WORKSPACE_TYPE.SYSTEM && !scope.hasSystemWorkspaceFiles) {
-    return 'unavailable'
-  }
   return scope.meta.workspacePath ? 'ready' : 'unavailable'
 }
 

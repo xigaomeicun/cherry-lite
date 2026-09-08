@@ -555,7 +555,8 @@ describe('ChannelMessageHandler', () => {
     expect(helpText).toContain('/new')
     expect(helpText).toContain('/compact')
     expect(helpText).toContain('/help')
-    expect(helpText).toContain('/whoami')
+    expect(helpText).toContain('/stop')
+    expect(helpText).toContain('/model')
   })
 
   it('handleCommand /help merges the bound session slash commands (control wins on collision)', async () => {
@@ -579,7 +580,7 @@ describe('ChannelMessageHandler', () => {
 
       const helpText = adapter.sendMessage.mock.calls[0][1] as string
       expect(helpText).toContain('/deploy - Deploy the app')
-      expect(helpText).toContain('/compact - Compact conversation history')
+      expect(helpText).toContain('/compact - 🗜️ 压缩会话记忆')
       expect(helpText).not.toContain('session dup')
     } finally {
       MockMainCacheServiceUtils.setSharedCacheValue(AGENT_SESSION_SLASH_COMMANDS_CACHE_KEY('session-xyz'), null)

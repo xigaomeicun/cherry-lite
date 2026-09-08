@@ -81,6 +81,21 @@ class ToolApprovalRegistry {
     }
   }
 
+  /** Channel cards need toolName + input; returns `undefined` when already resolved. */
+  peekDetails(
+    approvalId: string
+  ): (ApprovalRegistration & { toolName: string; originalInput: Record<string, unknown> }) | undefined {
+    const entry = this.pending.get(approvalId)
+    if (!entry) return undefined
+    return {
+      sessionId: entry.sessionId,
+      toolCallId: entry.toolCallId,
+      presentation: entry.presentation,
+      toolName: entry.toolName,
+      originalInput: entry.originalInput
+    }
+  }
+
   /** Returns `undefined` for unknown ids (already dispatched / session expired). */
   dispatch(approvalId: string, decision: DispatchDecision): ApprovalRegistration | undefined {
     const entry = this.pending.get(approvalId)

@@ -1,5 +1,14 @@
 import { loggerService } from '@logger'
-import { type ChannelAdapter, sanitizeChannelOutput, type SendMessageOptions } from '@main/ai/channels'
+import {
+  askUserPending,
+  type ChannelAdapter,
+  escHtml,
+  normalizeToolKey,
+  sanitizeChannelOutput,
+  type SendMessageOptions,
+  toolPermSent
+} from '@main/ai/channels'
+import { toolApprovalRegistry } from '@main/ai/toolApproval/ToolApprovalRegistry'
 import type { UniqueModelId } from '@shared/data/types/model'
 import type { UIMessageChunk } from 'ai'
 
@@ -12,6 +21,7 @@ const INCOMPLETE_CITATION_MARKER_PATTERN = /[ \t]?\[(?:c(?:i(?:t(?:e(?::[\w-]*)?
 export class ChannelAdapterListener implements StreamListener {
   readonly id: string
   private accumulatedText = ''
+  private exitPlanCardSent = false
 
   constructor(
     private readonly adapter: ChannelAdapter,
@@ -53,6 +63,126 @@ export class ChannelAdapterListener implements StreamListener {
       const update = this.updateStream(text.replace(INCOMPLETE_CITATION_MARKER_PATTERN, ''))
       void update.catch(() => {})
     }
+
+    if (chunk.type === 'tool-approval-request' && this.adapter.channelType === 'telegram') {
+      this.sendTelegramApprovalCard(chunk)
+    }
+  }
+
+  private sendTelegramApprovalCard(chunk: UIMessageChunk & { type: 'tool-approval-request' }): void {
+    const approvalId = chunk.approvalId
+    if (!approvalId) return
+
+    const details = toolApprovalRegistry.peekDetails(approvalId)
+    const toolNameRaw = details?.toolName ?? ''
+    const toolKey = normalizeToolKey(toolNameRaw)
+    const input = (details?.originalInput ?? {}) as Record<string, unknown>
+
+    if (toolKey === 'exitplanmode' && !this.exitPlanCardSent) {
+      this.exitPlanCardSent = true
+      void this.adapter
+        .sendMessage(
+          this.platformChatId,
+          '📋 <b>计划已就绪</b>\n\n模型已提交 <code>exit_plan_mode</code>，源码尚未改动。请确认：',
+          {
+            ...this.responseOptions,
+            parseMode: 'html',
+            replyMarkup: {
+              inline_keyboard: [
+                [
+                  { text: '✅ 批准执行', callback_data: `xplan:approve:${approvalId}` },
+                  { text: '✏️ 继续调整', callback_data: `xplan:revise:${approvalId}` },
+                  { text: '❌ 放弃任务', callback_data: `xplan:cancel:${approvalId}` }
+                ]
+              ]
+            }
+          }
+        )
+        .catch((err) => logger.error('Failed to send exit_plan_mode card', { err }))
+      return
+    }
+
+    if (toolKey === 'askuserquestion' || toolKey === 'builtinaskuserquestion') {
+      const questions = Array.isArray(input.questions) ? input.questions : []
+      if (questions.length === 0 || askUserPending.has(approvalId)) return
+
+      askUserPending.set(approvalId, {
+        input: input as {
+          questions: Array<{
+            question?: string
+            header?: string
+            options?: Array<{ label?: string; description?: string }>
+          }>
+          answers?: Record<string, unknown>
+        },
+        answers: { ...((input.answers as Record<string, unknown>) || {}) },
+        qIndex: 0
+      })
+
+      const q = questions[0] as {
+        question?: string
+        header?: string
+        options?: Array<{ label?: string; description?: string }>
+      }
+      const options = Array.isArray(q.options) ? q.options : []
+      const circles = ['①', '②', '③', '④']
+      let cardText = '💬 <b>请选择</b>'
+      if (questions.length > 1) cardText += ` <i>(1/${questions.length})</i>`
+      cardText += `\n\n${escHtml(q.question || q.header || '请选择')}`
+      const rows: Array<Array<{ text: string; callback_data: string }>> = []
+      for (let oi = 0; oi < options.length && oi < 4; oi++) {
+        const label = String(options[oi].label || `选项${oi + 1}`).slice(0, 60)
+        cardText += `\n\n<b>${circles[oi]}</b> ${escHtml(label)}`
+        if (options[oi].description) {
+          cardText += `\n<i>${escHtml(String(options[oi].description).slice(0, 120))}</i>`
+        }
+        rows.push([{ text: `${circles[oi]} ${label}`.slice(0, 64), callback_data: `asku:${approvalId}:${oi}` }])
+      }
+      void this.adapter
+        .sendMessage(this.platformChatId, cardText, {
+          ...this.responseOptions,
+          parseMode: 'html',
+          replyMarkup: { inline_keyboard: rows }
+        })
+        .catch((err) => logger.error('Failed to send AskUserQuestion card', { err }))
+      return
+    }
+
+    if (!toolKey || toolKey === 'exitplanmode') return
+    if (toolPermSent.has(approvalId)) return
+    toolPermSent.add(approvalId)
+
+    let cardText = `⚠️ <b>AI 申请操作权限</b>\n\n🔹 <b>工具</b>: <code>${escHtml(toolNameRaw || toolKey)}</code>`
+    try {
+      let detail = ''
+      if (typeof input.command === 'string') detail = input.command
+      else if (typeof input.file_path === 'string') detail = input.file_path
+      else if (typeof input.path === 'string') detail = input.path
+      else if (typeof input.filePath === 'string') detail = input.filePath
+      else if (typeof input.url === 'string') detail = input.url
+      else if (Object.keys(input).length > 0) detail = JSON.stringify(input)
+      if (detail) {
+        if (detail.length > 1500) detail = `${detail.slice(0, 1500)}\n... (已截断)`
+        cardText += `\n🔹 <b>详情</b>:\n<pre>${escHtml(detail)}</pre>`
+      }
+    } catch {
+      // ignore serialization failures
+    }
+    cardText += '\n\n请问是否授权该操作？'
+    void this.adapter
+      .sendMessage(this.platformChatId, cardText, {
+        ...this.responseOptions,
+        parseMode: 'html',
+        replyMarkup: {
+          inline_keyboard: [
+            [
+              { text: '✅ 允许', callback_data: `tapr:ok:${approvalId}` },
+              { text: '❌ 拒绝', callback_data: `tapr:no:${approvalId}` }
+            ]
+          ]
+        }
+      })
+      .catch((err) => logger.error('Failed to send tool permission card', { err }))
   }
 
   async onDone(result: StreamDoneResult): Promise<void> {

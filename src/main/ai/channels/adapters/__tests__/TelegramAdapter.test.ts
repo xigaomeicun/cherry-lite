@@ -19,7 +19,8 @@ const mockBot = {
     setMyCommands: vi.fn().mockResolvedValue(undefined),
     sendMessage: vi.fn().mockResolvedValue(undefined),
     sendChatAction: vi.fn().mockResolvedValue(undefined),
-    sendDocument: vi.fn().mockResolvedValue(undefined)
+    sendDocument: vi.fn().mockResolvedValue(undefined),
+    setMessageReaction: vi.fn().mockResolvedValue(undefined)
   },
   catch: vi.fn(),
   start: vi.fn().mockResolvedValue(undefined),
@@ -92,13 +93,19 @@ describe('TelegramAdapter', () => {
     await adapter.connect()
 
     expect(mockBot.use).toHaveBeenCalledTimes(1) // auth middleware
-    expect(mockBot.command).toHaveBeenCalledTimes(4) // new, compact, help, whoami
+    expect(mockBot.command).toHaveBeenCalledTimes(9) // new/stop/model/switch/mode/status/rename/compact/help
+    expect(mockBot.on).toHaveBeenCalledWith('callback_query:data', expect.any(Function))
     expect(mockBot.on).toHaveBeenCalledWith('message:text', expect.any(Function))
     expect(mockBot.api.setMyCommands).toHaveBeenCalledWith([
-      { command: 'new', description: 'Start a new conversation' },
-      { command: 'compact', description: 'Compact conversation history' },
-      { command: 'help', description: 'Show help information' },
-      { command: 'whoami', description: 'Show the current chat ID' }
+      { command: 'new', description: '🆕 开启全新会话' },
+      { command: 'stop', description: '✋ 终止当前生成' },
+      { command: 'model', description: '🧠 切换底座模型' },
+      { command: 'switch', description: '🤖 切换执行后端' },
+      { command: 'mode', description: '🎮 切换权限模式' },
+      { command: 'status', description: '📊 查看当前状态' },
+      { command: 'rename', description: '✏️ 命名当前会话' },
+      { command: 'compact', description: '🗜️ 压缩会话记忆' },
+      { command: 'help', description: '📖 显示可用命令' }
     ])
     expect(mockBot.catch).toHaveBeenCalledTimes(1)
     expect(mockBot.start).toHaveBeenCalledTimes(1)
@@ -161,27 +168,27 @@ describe('TelegramAdapter', () => {
     expect(mockBot.start.mock.calls.length).toBe(callsAfterDisconnect) // no further reconnect
   })
 
-  it('sendMessage() sends text with MarkdownV2 by default', async () => {
+  it('sendMessage() sends text with HTML by default', async () => {
     const adapter = createAdapter()
     await adapter.connect()
     await adapter.sendMessage('123', 'Hello')
 
-    expect(mockBot.api.sendMessage).toHaveBeenCalledWith('123', 'Hello', { parse_mode: 'MarkdownV2' })
+    expect(mockBot.api.sendMessage).toHaveBeenCalledWith('123', 'Hello', { parse_mode: 'HTML' })
   })
 
-  it('sendMessage() converts markdown to MarkdownV2 via library', async () => {
+  it('sendMessage() converts markdown to Telegram HTML via library', async () => {
     const adapter = createAdapter()
     await adapter.connect()
-    await adapter.sendMessage('123', 'Price is 10.5!')
+    await adapter.sendMessage('123', '**bold price**')
 
     const call = mockBot.api.sendMessage.mock.calls[0]
     expect(call[0]).toBe('123')
-    expect(call[2]).toEqual({ parse_mode: 'MarkdownV2' })
-    // The library converts the text — special chars should be escaped
-    expect(call[1]).not.toBe('Price is 10.5!')
+    expect(call[2]).toEqual({ parse_mode: 'HTML' })
+    expect(call[1]).toContain('<b>')
+    expect(call[1]).not.toBe('**bold price**')
   })
 
-  it('sendMessage() falls back to plain text on MarkdownV2 error', async () => {
+  it('sendMessage() falls back to plain text on HTML parse error', async () => {
     const adapter = createAdapter()
     await adapter.connect()
 
@@ -273,18 +280,21 @@ describe('TelegramAdapter', () => {
       chatId: '123',
       userId: '456',
       userName: 'TestUser',
-      command: 'new'
+      command: 'new',
+      messageId: ''
     })
   })
 
-  it('whoami command handler emits command events', async () => {
+  it('stop command handler emits command events', async () => {
     const adapter = createAdapter()
     await adapter.connect()
 
     const commandSpy = vi.fn()
     adapter.on('command', commandSpy)
 
-    const commandHandler = mockBot.command.mock.calls[3][1] as (ctx: any) => void
+    const stopCall = mockBot.command.mock.calls.find((call) => call[0] === 'stop')
+    expect(stopCall).toBeDefined()
+    const commandHandler = stopCall![1] as (ctx: any) => void
 
     commandHandler({
       chat: { id: 123 },
@@ -295,7 +305,8 @@ describe('TelegramAdapter', () => {
       chatId: '123',
       userId: '456',
       userName: 'TestUser',
-      command: 'whoami'
+      command: 'stop',
+      messageId: ''
     })
   })
 
@@ -306,20 +317,22 @@ describe('TelegramAdapter', () => {
     const messageSpy = vi.fn()
     adapter.on('message', messageSpy)
 
-    // Extract the message:text handler
-    const messageHandler = mockBot.on.mock.calls[0][1] as (ctx: any) => void
+    const textCall = mockBot.on.mock.calls.find((call) => call[0] === 'message:text')
+    expect(textCall).toBeDefined()
+    const messageHandler = textCall![1] as (ctx: any) => void
 
     messageHandler({
       chat: { id: 123 },
       from: { id: 456, first_name: 'TestUser' },
-      message: { text: 'Hello bot' }
+      message: { message_id: 42, text: 'Hello bot' }
     })
 
     expect(messageSpy).toHaveBeenCalledWith({
       chatId: '123',
       userId: '456',
       userName: 'TestUser',
-      text: 'Hello bot'
+      text: 'Hello bot',
+      messageId: '42'
     })
   })
 })
