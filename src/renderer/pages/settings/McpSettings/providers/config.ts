@@ -23,28 +23,7 @@ export interface ProviderConfig {
   syncServers: (token: string) => Promise<SyncResult>
 }
 
-export const providers: ProviderConfig[] = [
-  {
-    key: 'bailian',
-    nameKey: 'provider.dashscope',
-    discoverUrl: `https://bailian.console.aliyun.com/?tab=mcp#/mcp-market`,
-    apiKeyUrl: `https://bailian.console.aliyun.com/?tab=app#/api-key`,
-    tokenFieldName: 'bailianToken',
-    getToken: getBailianToken,
-    saveToken: saveBailianToken,
-    syncServers: syncBailianServers
-  },
-  {
-    key: 'modelscope',
-    nameKey: 'ModelScope',
-    discoverUrl: `${MODELSCOPE_HOST}/mcp?hosted=1&page=1`,
-    apiKeyUrl: `${MODELSCOPE_HOST}/my/myaccesstoken`,
-    tokenFieldName: 'modelScopeToken',
-    getToken: getModelScopeToken,
-    saveToken: saveModelScopeToken,
-    syncServers: syncModelScopeServers
-  }
-]
+export const providers: ProviderConfig[] = []
 
 /**
  * Helper function to get the display name for a provider.

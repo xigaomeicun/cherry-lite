@@ -78,22 +78,26 @@ const McpSettings: FC = () => {
                 className={settingsSubmenuItemClassName}
                 labelClassName={settingsSubmenuItemLabelClassName}
               />
-              <MenuDivider className={settingsSubmenuDividerClassName} />
-              <div className={settingsSubmenuSectionTitleClassName}>{t('settings.mcp.providers', 'Providers')}</div>
-              {providers.map((provider) => (
-                <MenuItem
-                  key={provider.key}
-                  label={getProviderDisplayName(provider, t)}
-                  active={activeView === provider.key}
-                  onClick={() => navigate({ to: `/settings/mcp/${provider.key}` })}
-                  icon={(() => {
-                    const logo = getMcpProviderLogo(provider.key)
-                    return logo ? <logo.Avatar size={16} shape="circle" /> : <FolderCog size={16} />
-                  })()}
-                  className={settingsSubmenuItemClassName}
-                  labelClassName={settingsSubmenuItemLabelClassName}
-                />
-              ))}
+              {providers.length > 0 && (
+                <>
+                  <MenuDivider className={settingsSubmenuDividerClassName} />
+                  <div className={settingsSubmenuSectionTitleClassName}>{t('settings.mcp.providers', 'Providers')}</div>
+                  {providers.map((provider) => (
+                    <MenuItem
+                      key={provider.key}
+                      label={getProviderDisplayName(provider, t)}
+                      active={activeView === provider.key}
+                      onClick={() => navigate({ to: `/settings/mcp/${provider.key}` })}
+                      icon={(() => {
+                        const logo = getMcpProviderLogo(provider.key)
+                        return logo ? <logo.Avatar size={16} shape="circle" /> : <FolderCog size={16} />
+                      })()}
+                      className={settingsSubmenuItemClassName}
+                      labelClassName={settingsSubmenuItemLabelClassName}
+                    />
+                  ))}
+                </>
+              )}
             </MenuList>
           </Scrollbar>
         </div>

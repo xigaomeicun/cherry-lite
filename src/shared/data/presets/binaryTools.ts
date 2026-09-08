@@ -150,13 +150,7 @@ export const PRESETS_BINARY_TOOLS: BinaryToolPreset[] = [
     icon: 'simple-icons:notion',
     repoUrl: 'https://github.com/makenotion/cli',
     homepage: 'https://ntn.dev'
-  },
-  {
-    name: BABELDOC_TOOL_NAME,
-    displayName: 'BabelDOC Stream',
-    tool: 'pipx:babeldoc-stream',
-    repoUrl: 'https://github.com/eeee0717/BabelDOC',
-    homepage: 'https://pypi.org/project/babeldoc-stream/'
   }
+  // BabelDOC Stream 已从 Cherry-Lite 预设中彻底移除
   // Managed Code CLIs are listed in codeCliTools.ts instead of here.
 ]

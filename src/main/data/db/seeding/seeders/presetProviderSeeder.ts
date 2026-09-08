@@ -60,18 +60,8 @@ export class PresetProviderSeeder implements ISeeder {
     return this.getLoader().getProvidersVersion()
   }
 
-  run(db: DbType): void {
-    let rawProviders: ProtoProviderConfig[]
-    try {
-      rawProviders = this.getLoader().loadProviders()
-    } catch (error) {
-      throw new Error('PresetProviderSeeder: failed to load registry providers', { cause: error })
-    }
-
-    if (rawProviders.length === 0) return
-
-    const rows = rawProviders.map(toDbRow)
-
-    db.transaction((tx) => providerService.batchUpsertTx(tx, rows))
+  run(_db: DbType): void {
+    // Cherry-Lite: 彻底绝育！不自动往数据库塞入 60+ 个商业服务商预设，只留用户自己配置的代理和本地模型
+    return
   }
 }

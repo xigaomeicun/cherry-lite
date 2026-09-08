@@ -174,7 +174,8 @@ export class CherryAiDefaultModelSeeder implements ISeeder {
     })
   }
 
-  run(db: DbType): void {
-    db.transaction((tx) => ensureCherryAiDefaultModelSetupTx(tx))
+  run(_db: DbType): void {
+    // Cherry-Lite: 彻底绝育！不自动向数据库塞入 CherryAI 和 Cherry Cloud 默认服务商及模型
+    return
   }
 }
