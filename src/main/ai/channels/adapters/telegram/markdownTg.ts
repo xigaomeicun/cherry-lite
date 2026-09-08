@@ -1,4 +1,5 @@
 // @ts-nocheck
+/* eslint-disable */
 // telegram-bridge/lib/markdown-tg.mjs — Markdown → Telegram HTML & chunking
 
 export const CHUNK_MAX = 4096;

@@ -9,7 +9,6 @@ import {
   SettingTitle
 } from '@renderer/components/SettingsPrimitives'
 import { useTheme } from '@renderer/hooks/useTheme'
-import type { NotificationSource } from '@renderer/types/notification'
 import type { FC } from 'react'
 import { useTranslation } from 'react-i18next'
 

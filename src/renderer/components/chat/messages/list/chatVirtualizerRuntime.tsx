@@ -684,7 +684,7 @@ export function useChatVirtualizerRuntime<T>({
 
   useEffect(() => {
     if (lengthDelta > 0 && !addedAtStart) {
-      enterFollowingMode('new-message-at-end')
+      enterFollowingMode('scroll-to-bottom')
       stickToEffectiveBottom()
     }
     previousDataKeysRef.current = dataKeys
