@@ -63,7 +63,8 @@ export function useScrollAnchor<T extends HTMLElement = HTMLElement>() {
         // (short conversation, disclosure expand). Reading ownership must not
         // depend on pre-existing overflow, so still hand the anchor to the
         // runtime before bottom-follow can push the new overflow past it.
-        if (options?.enterReadingMode) requestReadingControl()
+        // Codex Mode: 不因折叠卡片/思考链展开而强占阅读模式导致停止跟随置底
+        // if (options?.enterReadingMode) requestReadingControl()
         update()
         return
       }
@@ -72,7 +73,7 @@ export function useScrollAnchor<T extends HTMLElement = HTMLElement>() {
       // change. Yield only for that exact scroller; context may cross a portal
       // or include an independently scrollable descendant.
       if (isRuntimeManaged(scrollContainer)) {
-        if (options?.enterReadingMode) requestReadingControl()
+        // if (options?.enterReadingMode) requestReadingControl()
         update()
         return
       }

@@ -683,8 +683,12 @@ export function useChatVirtualizerRuntime<T>({
   const shift = addedAtStart || removedFromStart
 
   useEffect(() => {
+    if (lengthDelta > 0 && !addedAtStart) {
+      enterFollowingMode('new-message-at-end')
+      stickToEffectiveBottom()
+    }
     previousDataKeysRef.current = dataKeys
-  }, [dataKeys])
+  }, [dataKeys, lengthDelta, addedAtStart, enterFollowingMode, stickToEffectiveBottom])
 
   const wrappedItems = useMemo<WrappedItem<T>[]>(
     () =>

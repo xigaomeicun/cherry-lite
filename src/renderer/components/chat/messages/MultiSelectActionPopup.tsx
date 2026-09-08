@@ -66,11 +66,10 @@ const MultiSelectActionPopup: FC<Props> = ({
             </Tooltip>
           )}
         </ActionButtons>
-        <Tooltip content={t('chat.navigation.close')}>
-          <Button className="rounded-full" variant="ghost" onClick={onClose} size="icon">
-            <X size={16} />
-          </Button>
-        </Tooltip>
+        {/* 摘除导致 (0,0) 幽灵气泡的 Tooltip 包装 */}
+        <Button className="rounded-full" variant="ghost" onClick={onClose} size="icon" aria-label={t('chat.navigation.close')}>
+          <X size={16} />
+        </Button>
       </ActionBar>
     </Container>
   )

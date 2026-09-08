@@ -619,17 +619,16 @@ export function ArtifactPaneView(props: ArtifactPaneViewProps) {
       <>
         <OpenTargetButton targetPath={getArtifactPaneSelectionPath(overlaySelection)} pathKind="file" />
         {refreshButton}
-        <Tooltip content={t('agent.preview_pane.close')} delay={800}>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            className="text-muted-foreground hover:bg-accent hover:text-foreground"
-            aria-label={t('agent.preview_pane.close')}
-            onClick={handleClosePreview}>
-            <X size={16} />
-          </Button>
-        </Tooltip>
+        {/* 摘除导致 (0,0) 幽灵气泡的 Tooltip 包装 */}
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          className="text-muted-foreground hover:bg-accent hover:text-foreground"
+          aria-label={t('agent.preview_pane.close')}
+          onClick={handleClosePreview}>
+          <X size={16} />
+        </Button>
       </>
     )
 

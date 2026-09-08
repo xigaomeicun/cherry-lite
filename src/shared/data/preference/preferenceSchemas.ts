@@ -62,6 +62,8 @@ export interface PreferenceSchemas {
     'app.launch_on_boot': boolean
     // redux/settings/notification.assistant
     'app.notification.assistant.enabled': boolean
+    'app.notification.completion_sound.enabled': boolean
+    'app.notification.approval_sound.enabled': boolean
     // redux/settings/notification.backup
     'app.notification.backup.enabled': boolean
     // redux/settings/notification.knowledge
@@ -593,6 +595,8 @@ export const DefaultPreferences: PreferenceSchemas = {
     'app.language': null,
     'app.launch_on_boot': false,
     'app.notification.assistant.enabled': false,
+    'app.notification.completion_sound.enabled': true,
+    'app.notification.approval_sound.enabled': true,
     'app.notification.backup.enabled': false,
     'app.notification.knowledge.enabled': false,
     'app.notification.mini_app.enabled': true,

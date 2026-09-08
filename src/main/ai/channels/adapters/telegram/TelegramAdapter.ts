@@ -7,6 +7,7 @@ import {
 } from '@main/utils/downloadAsBase64'
 import { Bot, InputFile } from 'grammy'
 import { convert as toMarkdownV2 } from 'telegram-markdown-v2'
+import { chunkMessage, renderTelegramHtml } from './markdownTg'
 
 import { ChannelAdapter, type ChannelAdapterConfig, type SendMessageOptions } from '../../ChannelAdapter'
 import { registerAdapterFactory } from '../../ChannelManager'
@@ -305,43 +306,53 @@ class TelegramAdapter extends ChannelAdapter {
       throw new Error('Bot is not connected')
     }
 
-    const parseMode = opts?.parseMode ?? 'MarkdownV2'
-    const isMarkdown = parseMode === 'MarkdownV2'
-    // Split the PLAIN text first and escape each chunk, so the MarkdownV2 send and
-    // its plain-text fallback share one chunk boundary. (Splitting the *formatted*
-    // text and then re-splitting the *raw* text by the same index misaligns — escaping
-    // changes lengths/boundaries — dropping, duplicating, or passing `undefined` chunks.)
-    const plainChunks = splitMessage(text, isMarkdown ? TELEGRAM_MARKDOWN_CHUNK_BUDGET : TELEGRAM_MAX_LENGTH)
+    const isPlain = opts?.parseMode === 'plain'
+    if (isPlain) {
+      const plainChunks = splitMessage(text, TELEGRAM_MAX_LENGTH)
+      for (let i = 0; i < plainChunks.length; i++) {
+        const plain = plainChunks[i]
+        const replyParams =
+          typeof opts?.replyToMessageId === 'number' && i === 0
+            ? { reply_parameters: { message_id: opts.replyToMessageId } }
+            : {}
+        await this.bot.api.sendMessage(chatId, plain, replyParams)
+      }
+      return
+    }
 
-    for (let i = 0; i < plainChunks.length; i++) {
-      const plain = plainChunks[i]
-      const formatted = isMarkdown ? toMarkdownV2(plain).trimEnd() : plain
-      // Telegram message ids are numeric; a string replyToMessageId (QQ's msg_id) isn't ours.
+    // High-fidelity Telegram HTML rendering (ports markdown-tg with table-to-list, code blocks, br handling)
+    const formatted = renderTelegramHtml(text)
+    const chunks = chunkMessage(formatted, TELEGRAM_MAX_LENGTH)
+
+    for (let i = 0; i < chunks.length; i++) {
+      const chunk = chunks[i]
       const replyParams =
         typeof opts?.replyToMessageId === 'number' && i === 0
           ? { reply_parameters: { message_id: opts.replyToMessageId } }
           : {}
 
       try {
-        await this.bot.api.sendMessage(chatId, formatted, {
-          parse_mode: parseMode,
+        await this.bot.api.sendMessage(chatId, chunk, {
+          parse_mode: 'HTML',
           ...replyParams
         })
       } catch (error) {
-        // Fallback to plain text if MarkdownV2 parsing fails — same chunk content.
-        if (isMarkdown) {
-          this.log.warn('MarkdownV2 send failed, falling back to plain text', {
-            chatId,
-            error: error instanceof Error ? error.message : String(error)
-          })
+        this.log.warn('HTML send failed, falling back to plain text', {
+          chatId,
+          error: error instanceof Error ? error.message : String(error)
+        })
+        const plainChunks = splitMessage(text, TELEGRAM_MAX_LENGTH)
+        for (const plain of plainChunks) {
           await this.bot.api.sendMessage(chatId, plain, replyParams)
-        } else {
-          throw error
         }
       }
 
       // Small delay between chunks to avoid rate limiting
-      if (i < plainChunks.length - 1) {
+      if (i < chunks.length - 1) {
+        await new Promise((resolve) => setTimeout(resolve, 350))
+      }
+    }
+  }
         await new Promise((resolve) => setTimeout(resolve, 100))
       }
     }

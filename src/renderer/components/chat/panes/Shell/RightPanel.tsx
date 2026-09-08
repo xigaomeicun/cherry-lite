@@ -462,11 +462,10 @@ export function RightPanelHeaderControls({ canMaximize = false }: { canMaximize?
   return (
     <div className="flex shrink-0 items-center gap-0.5 [-webkit-app-region:no-drag]">
       {maximizeButton}
-      <Tooltip content={closeLabel} delay={800}>
-        <NavbarIcon tone="conversation" aria-label={closeLabel} onClick={actions.close}>
-          <RightSidebarCollapseIcon />
-        </NavbarIcon>
-      </Tooltip>
+      {/* 摘除导致 (0,0) 幽灵气泡的 Tooltip 包装 */}
+      <NavbarIcon tone="conversation" aria-label={closeLabel} onClick={actions.close}>
+        <RightSidebarCollapseIcon />
+      </NavbarIcon>
     </div>
   )
 }
