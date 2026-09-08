@@ -152,7 +152,12 @@ export class MainWindowService extends BaseService {
   private registerActivateHandler() {
     // showMainWindow's fallback re-opens via WindowManager when the previous window
     // has been destroyed; reuse path falls through to focus + restore.
-    const handler = () => this.showMainWindow()
+    const handler = () => {
+      if (isMac) {
+        app.focus({ steal: true })
+      }
+      this.showMainWindow()
+    }
     app.on('activate', handler)
     this.registerDisposable(() => app.removeListener('activate', handler))
   }
@@ -161,7 +166,12 @@ export class MainWindowService extends BaseService {
     // Protocol URL dispatch is handled by ProtocolService on the same event.
     // Multiple listeners on 'second-instance' are intentional: ProtocolService
     // dispatches the URL, MainWindowService restores the window.
-    const handler = () => this.showMainWindow()
+    const handler = () => {
+      if (isMac) {
+        app.focus({ steal: true })
+      }
+      this.showMainWindow()
+    }
     app.on('second-instance', handler)
     this.registerDisposable(() => app.removeListener('second-instance', handler))
   }
@@ -526,10 +536,34 @@ export class MainWindowService extends BaseService {
     // in tray mode — WM deduplicates via its dockShouldBeVisible flag.
     application.get('WindowManager').behavior.setMacShowInDockByType(WindowType.Main, true)
 
+    if (isMac) {
+      app.focus({ steal: true })
+    }
+
     const mainWindow = this.mainWindow
     if (mainWindow && !mainWindow.isDestroyed()) {
       if (mainWindow.isMinimized()) {
         mainWindow.restore()
+        if (isMac) {
+          mainWindow.show()
+          mainWindow.focus()
+          mainWindow.moveTop()
+        }
+        this.pushMainWindowInitData(initData)
+        return
+      }
+
+      /**
+       * [macOS] 单击 Dock 或外部激活时毫秒级瞬调窗口至最前台
+       * 消除 setVisibleOnAllWorkspaces 同步抖动导致的“需要点两次 Dock”Bug (#19588)
+       */
+      if (isMac) {
+        if (mainWindow.isFullScreen() && !mainWindow.isVisible()) {
+          mainWindow.setFullScreen(false)
+        }
+        mainWindow.show()
+        mainWindow.focus()
+        mainWindow.moveTop()
         this.pushMainWindowInitData(initData)
         return
       }
