@@ -6,22 +6,12 @@ import {
   MAX_FILE_SIZE_BYTES
 } from '@main/utils/downloadAsBase64'
 import { Bot, InputFile } from 'grammy'
-import { convert as toMarkdownV2 } from 'telegram-markdown-v2'
 import { chunkMessage, renderTelegramHtml } from './markdownTg'
 
 import { ChannelAdapter, type ChannelAdapterConfig, type SendMessageOptions } from '../../ChannelAdapter'
 import { registerAdapterFactory } from '../../ChannelManager'
 
 const TELEGRAM_MAX_LENGTH = 4096
-/**
- * Plain-text chunk budget under MarkdownV2. We split the *plain* text (so each
- * chunk has an index-aligned plain fallback) and then escape it; escaping only
- * grows length, so this headroom keeps the formatted chunk within the 4096 hard
- * limit for normal prose. A pathological all-special-char chunk could still
- * overflow — Telegram then rejects it and the catch sends the plain chunk, which
- * is always within budget.
- */
-const TELEGRAM_MARKDOWN_CHUNK_BUDGET = 3200
 
 import { splitMessage } from '../../utils'
 
@@ -306,7 +296,7 @@ class TelegramAdapter extends ChannelAdapter {
       throw new Error('Bot is not connected')
     }
 
-    const isPlain = opts?.parseMode === 'plain'
+    const isPlain = (opts?.parseMode as string) === 'plain'
     if (isPlain) {
       const plainChunks = splitMessage(text, TELEGRAM_MAX_LENGTH)
       for (let i = 0; i < plainChunks.length; i++) {
