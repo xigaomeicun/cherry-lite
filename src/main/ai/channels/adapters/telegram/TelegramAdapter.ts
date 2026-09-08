@@ -353,10 +353,6 @@ class TelegramAdapter extends ChannelAdapter {
       }
     }
   }
-        await new Promise((resolve) => setTimeout(resolve, 100))
-      }
-    }
-  }
 
   override async sendFile(chatId: string, file: FileAttachment): Promise<void> {
     if (!this.bot) {
