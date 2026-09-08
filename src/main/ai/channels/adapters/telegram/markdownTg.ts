@@ -933,4 +933,16 @@ export function markdownToTelegramHtmlSafe(md, opts = {}) {
     return cleanUnsupportedHtmlTagsAfterEscape(compiled);
 }
 
-// v1.0.1 sync test
+export function renderTelegramHtml(md: string): string {
+    if (!md) return "";
+    let t = normalizeDetailsFold(md);
+    t = normalizeModelHtmlBreaks(t);
+    t = normalizeModelDefinitionLists(t);
+    t = normalizeLooseMarkdownTables(t);
+    if (hasTable(t)) {
+        const listHtml = buildListFallbackHtml(t);
+        if (listHtml) return listHtml;
+    }
+    return markdownToTelegramHtmlSafe(t);
+}
+

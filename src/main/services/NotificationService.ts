@@ -12,6 +12,7 @@ import { getFullChromeWindowInfos } from '@main/utils/fullChromeWindows'
 import type { ConversationNavigationTarget } from '@shared/types/navigation'
 import { CONVERSATION_NOTIFICATION_ACTION_KEY, type ConversationNotification, type Notification } from '@shared/types/notification'
 import { execFile } from 'node:child_process'
+import fs from 'node:fs'
 import path from 'node:path'
 import { Notification as ElectronNotification } from 'electron'
 
@@ -66,11 +67,28 @@ export class NotificationService extends BaseService {
     electronNotification.show()
   }
 
+  private resolveSoundPath(filename: string): string | null {
+    const candidates = [
+      path.join(process.resourcesPath, filename),
+      path.join(process.resourcesPath, 'resources', filename),
+      path.join(process.resourcesPath, 'app.asar.unpacked', 'resources', filename),
+      path.join(process.cwd(), 'resources', filename)
+    ]
+    for (const candidate of candidates) {
+      try {
+        if (fs.existsSync(candidate)) return candidate
+      } catch (_) {}
+    }
+    return null
+  }
+
   private handleConversationCompleted({ topicId, turnId, completedAt }: ConversationCompletedEvent): void {
     try {
       if (application.get('PreferenceService').get('app.notification.completion_sound.enabled')) {
-        const soundPath = path.join(process.resourcesPath, 'cherrystudio-completion.mp3')
-        execFile('afplay', [soundPath], { timeout: 8000 }, () => {})
+        const soundPath = this.resolveSoundPath('cherrystudio-completion.mp3')
+        if (soundPath) {
+          execFile('afplay', [soundPath], { timeout: 8000 }, () => {})
+        }
       }
     } catch (_) {}
     const target = this.resolveConversationTarget(topicId)
@@ -92,8 +110,10 @@ export class NotificationService extends BaseService {
   private handleApprovalRequested({ topicId, approvalId, requestedAt }: ApprovalRequestedEvent): void {
     try {
       if (application.get('PreferenceService').get('app.notification.approval_sound.enabled')) {
-        const soundPath = path.join(process.resourcesPath, 'cherrystudio-approval.mp3')
-        execFile('afplay', [soundPath], { timeout: 8000 }, () => {})
+        const soundPath = this.resolveSoundPath('cherrystudio-approval.mp3')
+        if (soundPath) {
+          execFile('afplay', [soundPath], { timeout: 8000 }, () => {})
+        }
       }
     } catch (_) {}
     const target = this.resolveConversationTarget(topicId)
