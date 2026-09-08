@@ -37,18 +37,19 @@ jobs:
       - name: Install Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version-file: '.node-version'
+
+      - name: Setup macOS dependencies
+        run: |
+          brew install python-setuptools || true
 
       - name: Install pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 11.8.0
+        uses: pnpm/action-setup@v5
 
       - name: Get pnpm store directory
         id: pnpm-cache
         shell: bash
-        run: |
-          echo "STORE_PATH=$(pnpm store path)" >> $GITHUB_OUTPUT
+        run: echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_OUTPUT
 
       - name: Setup pnpm cache
         uses: actions/cache@v4
@@ -60,10 +61,11 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pnpm install --frozen-lockfile
+          pnpm install
 
       - name: Build macOS Application (arm64 & x64)
         run: |
+          sudo -H pip install setuptools || true
           pnpm run build:mac
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: false
@@ -97,7 +99,11 @@ jobs:
             🚀 **构建产物特性**：
             - 基于当前 `cherry-lite` 定制分支自动化编译
             - 适配 macOS Apple Silicon (arm64) 与 Intel (x64)
-            - 包含完整的客户端 `.dmg` 安装包与 `.zip` 便携包
+            - 修复 macOS Dock 图标单击秒弹问题 (#19588)
+            - 修复视口自动滚动置底 (Codex Follow 机制)
+            - 彻底摘除 (0,0) 幽灵气泡 (全域无残留)
+            - 内置原生任务完成与权限审批提示音
+            - 搭载高保真 Telegram 原生 HTML 渲染引擎
           files: |
             release-dist/*.dmg
             release-dist/*.zip
