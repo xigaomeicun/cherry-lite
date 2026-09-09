@@ -1,7 +1,7 @@
 import type { SettingsSearchEntry } from '../settingsSearch/types'
 
-// Data settings switches its 13 panels via component state, not sub-routes, so
-// each entry carries the owning panel key — jumps navigate as /settings/data?panel=<key>
+// Data settings switches panels via component state, not sub-routes, so each
+// entry carries the owning panel key — jumps navigate as /settings/data?panel=<key>
 // and DataSettings mounts that panel before the anchor lookup. Conditional rows
 // (v1 remigration) and modal-only actions stay out per D8.
 export const route = '/settings/data'
@@ -84,43 +84,6 @@ export const entries: SettingsSearchEntry[] = [
     groupKey: 'settings.data.webdav.title'
   },
   {
-    anchorId: 's3-endpoint',
-    titleKey: 'settings.data.s3.endpoint.label',
-    panel: 's3',
-    groupKey: 'settings.data.s3.title.label',
-    aliases: ['s3']
-  },
-  {
-    anchorId: 's3-bucket',
-    titleKey: 'settings.data.s3.bucket.label',
-    panel: 's3',
-    groupKey: 'settings.data.s3.title.label'
-  },
-  {
-    anchorId: 's3-region',
-    titleKey: 'settings.data.s3.region.label',
-    panel: 's3',
-    groupKey: 'settings.data.s3.title.label'
-  },
-  {
-    anchorId: 's3-access-key',
-    titleKey: 'settings.data.s3.accessKeyId.label',
-    panel: 's3',
-    groupKey: 'settings.data.s3.title.label'
-  },
-  {
-    anchorId: 's3-auto-sync',
-    titleKey: 'settings.data.s3.autoSync.label',
-    panel: 's3',
-    groupKey: 'settings.data.s3.title.label'
-  },
-  {
-    anchorId: 's3-max-backups',
-    titleKey: 'settings.data.s3.maxBackups.label',
-    panel: 's3',
-    groupKey: 'settings.data.s3.title.label'
-  },
-  {
     anchorId: 'import-chatgpt',
     titleKey: 'settings.data.import_settings.chatgpt',
     panel: 'import_settings',
@@ -200,49 +163,10 @@ export const entries: SettingsSearchEntry[] = [
     groupKey: 'settings.data.notion.title'
   },
   {
-    anchorId: 'yuque-token',
-    titleKey: 'settings.data.yuque.token',
-    panel: 'yuque',
-    groupKey: 'settings.data.yuque.title',
-    aliases: ['yuque', '语雀']
-  },
-  {
-    anchorId: 'yuque-repo-url',
-    titleKey: 'settings.data.yuque.repo_url',
-    panel: 'yuque',
-    groupKey: 'settings.data.yuque.title'
-  },
-  {
-    anchorId: 'joplin-url',
-    titleKey: 'settings.data.joplin.url',
-    panel: 'joplin',
-    groupKey: 'settings.data.joplin.title',
-    aliases: ['joplin']
-  },
-  {
-    anchorId: 'joplin-token',
-    titleKey: 'settings.data.joplin.token',
-    panel: 'joplin',
-    groupKey: 'settings.data.joplin.title'
-  },
-  {
     anchorId: 'obsidian-default-vault',
     titleKey: 'settings.data.obsidian.default_vault',
     panel: 'obsidian',
     groupKey: 'settings.data.obsidian.title',
     aliases: ['obsidian']
-  },
-  {
-    anchorId: 'siyuan-api-url',
-    titleKey: 'settings.data.siyuan.api_url',
-    panel: 'siyuan',
-    groupKey: 'settings.data.siyuan.title',
-    aliases: ['siyuan', '思源笔记']
-  },
-  {
-    anchorId: 'siyuan-token',
-    titleKey: 'settings.data.siyuan.token.label',
-    panel: 'siyuan',
-    groupKey: 'settings.data.siyuan.title'
   }
 ]
