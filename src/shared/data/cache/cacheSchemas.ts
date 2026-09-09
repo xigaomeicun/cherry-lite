@@ -385,6 +385,8 @@ export type RendererPersistCacheSchema = {
   'ui.chat.resource_pane.width': number
   // Recent composer inputs shared by chat and agent surfaces (MRU order, capped by the consumer)
   'ui.composer.input_history': string[]
+  // Manual composer editor height (px). Null = auto/content height. Shared across topics/sessions.
+  'ui.composer.editor_height': number | null
   'ui.chat.last_used_assistant_id': string | null
   'ui.chat.last_used_topic_id': string | null
   // Per-surface classic-layout right-pane override. Null delegates to the page's position-derived
@@ -447,6 +449,7 @@ export const DefaultRendererPersistCache: RendererPersistCacheSchema = {
   'ui.chat.artifact_pane.width': 460,
   'ui.chat.resource_pane.width': 275, // keep in sync with 'ui.chat.sidebar.width'
   'ui.composer.input_history': [],
+  'ui.composer.editor_height': null,
   'ui.chat.last_used_assistant_id': null,
   'ui.chat.last_used_topic_id': null,
   'ui.chat.right_pane_open_override': null,

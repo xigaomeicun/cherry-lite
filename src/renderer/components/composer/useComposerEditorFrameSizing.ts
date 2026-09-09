@@ -1,3 +1,4 @@
+import { usePersistCache } from '@data/hooks/useCache'
 import { useResizeDrag } from '@renderer/hooks/useResizeDrag'
 import type { useTimer } from '@renderer/hooks/useTimer'
 import type {
@@ -121,7 +122,15 @@ export function useComposerEditorFrameSizing({
   const pendingExpandedRef = useRef<boolean | null>(null)
   const resizeDragRef = useRef({ startClientY: 0, startHeight: 0, collapseExpanded: false })
   const [animatedHeight, setAnimatedHeight] = useState<string | null>(null)
-  const [manualHeight, setManualHeight] = useState<number | null>(null)
+  // Persist across topics/sessions/restarts. Local mirror so commits always re-render
+  // (topic remount re-reads persist via lazy init).
+  const [persistedHeight, setPersistedHeight] = usePersistCache('ui.composer.editor_height')
+  const [manualHeight, setManualHeight] = useState<number | null>(() => persistedHeight)
+  const previewHeightRef = useRef<number | null>(null)
+
+  useEffect(() => {
+    setManualHeight(persistedHeight)
+  }, [persistedHeight])
 
   const hasManualHeight = manualHeight !== null
   const hasCustomHeight = isExpanded || hasManualHeight
@@ -150,15 +159,40 @@ export function useComposerEditorFrameSizing({
     return manualHeight ?? minHeight
   }, [isExpanded, manualHeight, maxHeight, minHeight])
 
-  const setClampedManualHeight = useCallback(
+  const rememberHeight = useCallback(
+    (height: number | null) => {
+      previewHeightRef.current = null
+      setManualHeight(height)
+      setPersistedHeight(height)
+    },
+    [setPersistedHeight]
+  )
+
+  const setClampedPreviewHeight = useCallback(
+    (height: number) => {
+      const clamped = clampComposerEditorHeightPx(height, minHeight, maxHeight)
+      clearAnimationFrame()
+      pendingExpandedRef.current = null
+      setAnimatedHeight(null)
+      previewHeightRef.current = clamped
+      setManualHeight(clamped)
+    },
+    [clearAnimationFrame, maxHeight, minHeight]
+  )
+
+  const commitManualHeight = useCallback(
     (height: number) => {
       clearAnimationFrame()
       pendingExpandedRef.current = null
       setAnimatedHeight(null)
-      setManualHeight(clampComposerEditorHeightPx(height, minHeight, maxHeight))
+      rememberHeight(clampComposerEditorHeightPx(height, minHeight, maxHeight))
     },
-    [clearAnimationFrame, maxHeight, minHeight]
+    [clearAnimationFrame, maxHeight, minHeight, rememberHeight]
   )
+
+  const clearManualHeight = useCallback(() => {
+    rememberHeight(null)
+  }, [rememberHeight])
 
   const handleResizeMove = useCallback(
     (moveEvent: MouseEvent) => {
@@ -168,13 +202,19 @@ export function useComposerEditorFrameSizing({
         onExpandedChange(false)
       }
 
-      setClampedManualHeight(dragState.startHeight + dragState.startClientY - moveEvent.clientY)
+      setClampedPreviewHeight(dragState.startHeight + dragState.startClientY - moveEvent.clientY)
     },
-    [onExpandedChange, setClampedManualHeight]
+    [onExpandedChange, setClampedPreviewHeight]
   )
+
+  const handleResizeEnd = useCallback(() => {
+    const current = previewHeightRef.current
+    if (current !== null) rememberHeight(current)
+  }, [rememberHeight])
 
   const { isResizing, startResizing } = useResizeDrag({
     onMove: handleResizeMove,
+    onEnd: handleResizeEnd,
     cursor: 'row-resize'
   })
 
@@ -214,9 +254,9 @@ export function useComposerEditorFrameSizing({
 
       event.preventDefault()
       if (isExpanded) onExpandedChange(false)
-      setClampedManualHeight(nextHeight)
+      commitManualHeight(nextHeight)
     },
-    [getCurrentHeight, isExpanded, maxHeight, minHeight, onExpandedChange, setClampedManualHeight]
+    [commitManualHeight, getCurrentHeight, isExpanded, maxHeight, minHeight, onExpandedChange]
   )
 
   const toggleExpanded = useCallback(
@@ -230,7 +270,8 @@ export function useComposerEditorFrameSizing({
         pendingExpandedRef.current = target
       }
 
-      if (!target) setManualHeight(null)
+      // Keep remembered height when leaving expand.
+      if (!target) previewHeightRef.current = null
       onExpandedChange(target)
       focusEditor()
     },
@@ -254,6 +295,13 @@ export function useComposerEditorFrameSizing({
     clearAnimatedHeightAfterTransition()
   }, [clearAnimatedHeightAfterTransition, clearAnimationFrame, isExpanded, minHeight])
 
+  // Re-clamp after font/viewport changes so a remembered height never exceeds the live max.
+  useEffect(() => {
+    if (manualHeight === null) return
+    const clamped = clampComposerEditorHeightPx(manualHeight, minHeight, maxHeight)
+    if (clamped !== manualHeight) rememberHeight(clamped)
+  }, [manualHeight, maxHeight, minHeight, rememberHeight])
+
   useEffect(() => clearAnimationFrame, [clearAnimationFrame])
 
   const handleTransitionEnd = useCallback((event: ReactTransitionEvent<HTMLDivElement>) => {
@@ -270,7 +318,7 @@ export function useComposerEditorFrameSizing({
     pendingExpandedRef.current = null
 
     if (!frame) {
-      setManualHeight(null)
+      clearManualHeight()
       onExpandedChange(false)
       focusEditor()
       return
@@ -281,7 +329,7 @@ export function useComposerEditorFrameSizing({
 
     setAnimatedHeight(`${startHeight}px`)
     animationFrameRef.current = window.requestAnimationFrame(() => {
-      setManualHeight(null)
+      clearManualHeight()
       onExpandedChange(false)
       setAnimatedHeight(`${targetHeight}px`)
       animationFrameRef.current = null
@@ -291,6 +339,7 @@ export function useComposerEditorFrameSizing({
   }, [
     clearAnimatedHeightAfterTransition,
     clearAnimationFrame,
+    clearManualHeight,
     focusEditor,
     getCurrentHeight,
     minHeight,
