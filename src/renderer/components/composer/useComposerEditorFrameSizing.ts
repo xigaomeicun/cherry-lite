@@ -355,9 +355,10 @@ export function useComposerEditorFrameSizing({
       height: resolvedFrameHeight,
       minHeight,
       overflow: 'hidden',
-      transitionDuration: isResizing ? '0ms' : `${COMPOSER_EDITOR_HEIGHT_TRANSITION_MS}ms`
+      // Only animate intentional expand/collapse; topic remounts must not tween height.
+      transitionDuration: isResizing || animatedHeight === null ? '0ms' : `${COMPOSER_EDITOR_HEIGHT_TRANSITION_MS}ms`
     }),
-    [isResizing, minHeight, resolvedFrameHeight]
+    [animatedHeight, isResizing, minHeight, resolvedFrameHeight]
   )
 
   const editorContentStyle = useMemo<ComposerEditorContentStyle>(

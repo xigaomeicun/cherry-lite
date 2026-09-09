@@ -1,3 +1,4 @@
+import { usePersistCache } from '@data/hooks/useCache'
 import { usePreference } from '@data/hooks/usePreference'
 import { loggerService } from '@logger'
 import NarrowLayout from '@renderer/components/chat/layout/NarrowLayout'
@@ -69,6 +70,7 @@ function DeferredComposerSurface(props: ComposerSurfaceProps) {
   const [Runtime, setRuntime] = useState<ComponentType<ComposerSurfaceProps>>()
   const [runtimeReady, setRuntimeReady] = useState(false)
   const [isComposing, setIsComposing] = useState(false)
+  const [storedEditorHeight] = usePersistCache('ui.composer.editor_height')
   const sendBlockedReasonRef = useRef(props.sendBlockedReason)
 
   useEffect(() => {
@@ -230,6 +232,7 @@ function DeferredComposerSurface(props: ComposerSurfaceProps) {
   const belowControls = props.renderBelowControls?.(undefined, pendingPanelControl)
   const sendAccessoryElement = typeof props.sendAccessory === 'function' ? props.sendAccessory() : props.sendAccessory
   const editorMinHeight = getComposerEditorMinHeight(props.fontSize)
+  const editorFrameHeight = storedEditorHeight ?? editorMinHeight
   const sendAction =
     props.isLoading && props.sendDisabled ? (
       <button
@@ -271,7 +274,7 @@ function DeferredComposerSurface(props: ComposerSurfaceProps) {
             data-ui="part:composer-input"
             className="box-border block w-full min-w-0 flex-1 resize-none overflow-auto bg-transparent text-foreground outline-none"
             style={{
-              height: editorMinHeight,
+              height: editorFrameHeight,
               minHeight: editorMinHeight,
               padding: '6px 44px 0 15px',
               fontSize: props.fontSize,
