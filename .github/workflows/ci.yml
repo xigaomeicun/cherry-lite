@@ -1,22 +1,12 @@
 name: CI
 
+# cherry-lite: local develop + pack. Do not auto-run on push/PR (failure mails).
+# Need the suite → Actions → CI → Run workflow.
 permissions:
   contents: read
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
-      - v2
-      - "release/v*"
-  pull_request:
-    branches:
-      - main
-      - develop
-      - v2
-      - "release/v*"
-    types: [ready_for_review, synchronize, opened, reopened]
 
 jobs:
   changes:
