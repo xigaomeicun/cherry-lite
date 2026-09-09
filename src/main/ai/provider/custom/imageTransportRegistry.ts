@@ -1,4 +1,5 @@
 import { dmxapiUsesCustomTransport } from './dmxapi/dmxapiImageRouting'
+import { geminiImageUsesChatCompletions } from './gemini/geminiImageRouting'
 import type { ImageGenerationTransport } from './imageGenerationModel'
 
 interface TransportRegistration {
@@ -68,6 +69,16 @@ const TRANSPORTS: Record<string, TransportRegistration> = {
     load: async (settings) => {
       const { buildTokenhubTransport } = await import('./tokenhub/tokenhubProvider')
       return buildTokenhubTransport(settings as Parameters<typeof buildTokenhubTransport>[0])
+    }
+  },
+  // CLI Proxy gemini-image (and aliases): chat/completions protocol on any
+  // openai-compatible provider. supports() is model-gated so other image models
+  // on the same provider keep the stock /images/generations path.
+  'openai-compatible': {
+    supports: geminiImageUsesChatCompletions,
+    load: async (settings) => {
+      const { buildGeminiImageTransport } = await import('./gemini/geminiImageTransport')
+      return buildGeminiImageTransport(settings as Parameters<typeof buildGeminiImageTransport>[0])
     }
   }
 }

@@ -3,8 +3,9 @@
  * custom-provider image models run on the job system. ppio / dashscope /
  * modelscope always resolve a poll-capable transport; dmxapi resolves one only
  * for its bespoke families (native gpt-image / dall-e / imagen / gemini-image
- * and the openai-flat fallback stay on the in-SDK path); everything else is
- * null.
+ * and the openai-flat fallback stay on the in-SDK path); openai-compatible
+ * resolves only for CLI Proxy `gemini-image` (chat/completions); everything
+ * else is null.
  */
 import { describe, expect, it } from 'vitest'
 
@@ -40,6 +41,17 @@ describe('resolveImageTransport', () => {
     ]) {
       expect(hasImageTransport('dmxapi', modelId)).toBe(false)
       expect(resolveImageTransport('dmxapi', modelId, settings)).toBeNull()
+    }
+  })
+
+  it('resolves openai-compatible only for gemini-image (chat/completions)', () => {
+    const settings = { apiKey: 'token', baseURL: 'http://127.0.0.1:8317/v1' }
+    expect(hasImageTransport('openai-compatible', 'gemini-image')).toBe(true)
+    expect(resolveImageTransport('openai-compatible', 'gemini-image', settings)).not.toBeNull()
+
+    for (const modelId of ['dall-e-3', 'gpt-image-1', 'gemini-2.5-flash-image', 'flux-1']) {
+      expect(hasImageTransport('openai-compatible', modelId)).toBe(false)
+      expect(resolveImageTransport('openai-compatible', modelId, settings)).toBeNull()
     }
   })
 

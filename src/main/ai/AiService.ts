@@ -60,7 +60,7 @@ import { deleteImageInputEntries, imageGenerationJobHandler } from './provider/c
 import type { ImageGenerationJobOutput, ImageGenerationJobPayload } from './provider/custom/tasks/jobTypes'
 import { buildVendorProviderOptions } from './provider/custom/wire/buildImageRequest'
 import { DEFAULT_DIFFUSION_REGISTRATION, WIRE_REGISTRY } from './provider/custom/wire/wireProfile'
-import { resolveEffectiveEndpoint, resolveWireModelId } from './provider/endpoint'
+import { resolveAiSdkProviderId, resolveEffectiveEndpoint, resolveWireModelId } from './provider/endpoint'
 import { listModels as listModelsFromProvider, probeOllamaModel } from './provider/listModels'
 import { resolveSdkConfig } from './provider/sdkConfig'
 import type { AgentLoopHooks, NativeFileSupport, RequestFeature } from './runtime/aiSdk'
@@ -888,17 +888,26 @@ export class AiService extends BaseService {
     const params = request.paramValues
     const { structured, vendorBag } = splitParamValues(params)
 
-    // Async custom-provider transports (ppio / dashscope / modelscope /
-    // dmxapi-bespoke) run the submit/poll loop on the job system so it survives
-    // a restart. Decide this before `resolveTransportFor` selects a serving key:
-    // the job handler is the single selection owner for this path. A transport
-    // builds its own request envelope per model, so it receives the canonical
-    // camelCase `vendorBag` directly (native n/size/seed travel via the job
-    // payload → `input.*`). No wire-naming, no casing probes. Keyed by preset,
-    // not `provider.id`: a user-added instance carries a UUID id and would fall
-    // through to the direct image model, which never passes `modelDescriptor`.
+    // Custom-provider image transports (ppio / dashscope / modelscope /
+    // dmxapi-bespoke / openai-compatible gemini-image) run on the job system so
+    // async submit/poll survives a restart (sync one-shots return imageUrls
+    // immediately). Decide this before `resolveTransportFor` selects a serving
+    // key: the job handler is the single selection owner for this path. A
+    // transport builds its own request envelope per model, so it receives the
+    // canonical camelCase `vendorBag` directly (native n/size/seed travel via
+    // the job payload → `input.*`). No wire-naming, no casing probes.
+    //
+    // Keyed by preset first (`presetProviderId ?? id`) so a user-added instance
+    // of e.g. ppio still hits the transport. Also check the resolved AI SDK
+    // provider id so model-gated openai-compatible transports (gemini-image →
+    // chat/completions) work for custom providers whose id is a UUID.
+    const transportModelId = model.apiModelId ?? model.id
     const transportProviderId = provider.presetProviderId ?? provider.id
-    if (request.uniqueModelId && hasImageTransport(transportProviderId, model.apiModelId ?? model.id)) {
+    const aiSdkProviderId = resolveAiSdkProviderId(provider, resolveEffectiveEndpoint(provider, model).endpointType)
+    if (
+      request.uniqueModelId &&
+      (hasImageTransport(transportProviderId, transportModelId) || hasImageTransport(aiSdkProviderId, transportModelId))
+    ) {
       return await this.generateImageViaJob(request, structured, vendorBag, signal, source)
     }
 
@@ -1302,8 +1311,14 @@ export class AiService extends BaseService {
           probeParams[key] = spec.default
         }
       }
+      const transportModelId = model.apiModelId ?? model.id
       const transportProviderId = provider.presetProviderId ?? provider.id
-      if (request.uniqueModelId && hasImageTransport(transportProviderId, model.apiModelId ?? model.id)) {
+      const aiSdkProviderId = resolveAiSdkProviderId(provider, resolveEffectiveEndpoint(provider, model).endpointType)
+      if (
+        request.uniqueModelId &&
+        (hasImageTransport(transportProviderId, transportModelId) ||
+          hasImageTransport(aiSdkProviderId, transportModelId))
+      ) {
         // Transport models run their submit/poll loop on the job system, whose
         // handler re-selects a serving key — dropping the health check's
         // `apiKeyOverride` and possibly probing a different rotated credential
