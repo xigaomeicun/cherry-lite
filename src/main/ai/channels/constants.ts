@@ -6,8 +6,7 @@ export const SLASH_COMMANDS = [
   { name: 'mode', description: '🎮 切换权限模式' },
   { name: 'status', description: '📊 查看当前状态' },
   { name: 'rename', description: '✏️ 命名当前会话' },
-  { name: 'compact', description: '🗜️ 压缩会话记忆' },
-  { name: 'help', description: '📖 显示可用命令' }
+  { name: 'compact', description: '🗜️ 压缩会话记忆' }
 ] as const
 
 const COMMAND_REGEX = new RegExp(`^\\/(${SLASH_COMMANDS.map((c) => c.name).join('|')})\\b`)

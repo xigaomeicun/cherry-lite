@@ -91,7 +91,7 @@ class TelegramAdapter extends ChannelAdapter {
       })
     }
 
-    // Command handlers (Cherry-Lite extended menu; no /whoami)
+    // Command handlers (Cherry-Lite extended menu; no /whoami /help)
     bot.command('new', (ctx) => emitCommand(ctx, 'new'))
     bot.command('stop', (ctx) => emitCommand(ctx, 'stop'))
     bot.command('model', (ctx) => emitCommand(ctx, 'model'))
@@ -100,7 +100,6 @@ class TelegramAdapter extends ChannelAdapter {
     bot.command('status', (ctx) => emitCommand(ctx, 'status'))
     bot.command('rename', (ctx) => emitCommand(ctx, 'rename', true))
     bot.command('compact', (ctx) => emitCommand(ctx, 'compact'))
-    bot.command('help', (ctx) => emitCommand(ctx, 'help'))
 
     bot.on('callback_query:data', async (ctx) => {
       const data = ctx.callbackQuery?.data
@@ -193,8 +192,7 @@ class TelegramAdapter extends ChannelAdapter {
       { command: 'mode', description: '🎮 切换权限模式' },
       { command: 'status', description: '📊 查看当前状态' },
       { command: 'rename', description: '✏️ 命名当前会话' },
-      { command: 'compact', description: '🗜️ 压缩会话记忆' },
-      { command: 'help', description: '📖 显示可用命令' }
+      { command: 'compact', description: '🗜️ 压缩会话记忆' }
     ])
 
     // Error handler — err is a BotError wrapping the original cause in err.error

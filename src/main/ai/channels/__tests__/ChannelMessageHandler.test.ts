@@ -554,9 +554,9 @@ describe('ChannelMessageHandler', () => {
     expect(helpText).toContain('Available commands:')
     expect(helpText).toContain('/new')
     expect(helpText).toContain('/compact')
-    expect(helpText).toContain('/help')
     expect(helpText).toContain('/stop')
     expect(helpText).toContain('/model')
+    expect(helpText).not.toContain('/help')
   })
 
   it('handleCommand /help merges the bound session slash commands (control wins on collision)', async () => {

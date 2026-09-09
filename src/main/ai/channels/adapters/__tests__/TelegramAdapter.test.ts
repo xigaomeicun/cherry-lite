@@ -93,7 +93,7 @@ describe('TelegramAdapter', () => {
     await adapter.connect()
 
     expect(mockBot.use).toHaveBeenCalledTimes(1) // auth middleware
-    expect(mockBot.command).toHaveBeenCalledTimes(9) // new/stop/model/switch/mode/status/rename/compact/help
+    expect(mockBot.command).toHaveBeenCalledTimes(8) // new/stop/model/switch/mode/status/rename/compact
     expect(mockBot.on).toHaveBeenCalledWith('callback_query:data', expect.any(Function))
     expect(mockBot.on).toHaveBeenCalledWith('message:text', expect.any(Function))
     expect(mockBot.api.setMyCommands).toHaveBeenCalledWith([
@@ -104,8 +104,7 @@ describe('TelegramAdapter', () => {
       { command: 'mode', description: '🎮 切换权限模式' },
       { command: 'status', description: '📊 查看当前状态' },
       { command: 'rename', description: '✏️ 命名当前会话' },
-      { command: 'compact', description: '🗜️ 压缩会话记忆' },
-      { command: 'help', description: '📖 显示可用命令' }
+      { command: 'compact', description: '🗜️ 压缩会话记忆' }
     ])
     expect(mockBot.catch).toHaveBeenCalledTimes(1)
     expect(mockBot.start).toHaveBeenCalledTimes(1)

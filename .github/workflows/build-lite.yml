@@ -1,5 +1,6 @@
 name: Build Cherry Lite (macOS)
 
+# 默认本地打包（pnpm build:mac:arm64）。需要云端产物时再手动跑本 workflow。
 on:
   workflow_dispatch:
     inputs:
@@ -12,9 +13,6 @@ on:
         required: true
         type: boolean
         default: true
-  push:
-    tags:
-      - 'v*'
 
 permissions:
   contents: write
@@ -88,7 +86,7 @@ jobs:
           if-no-files-found: error
 
       - name: Publish GitHub Release
-        if: (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')) || (github.event_name == 'workflow_dispatch' && inputs.create_release)
+        if: github.event_name == 'workflow_dispatch' && inputs.create_release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ inputs.release_tag || github.ref_name }}

@@ -743,18 +743,90 @@ export class ChannelMessageHandler {
         case 'status': {
           onAdmitted()
           const agent = agentService.getAgent(agentId)
-          const sid = this.peekSessionId(agentId, adapter.channelId, conversationIdOf(command))
-          const busy = sid ? this.activeAbortControllers.has(sid) : false
-          const mode = agent?.configuration?.permission_mode ?? 'default'
-          const text = [
-            `📊 <b>状态</b>`,
-            `🔹 智能体: <code>${escHtml(agent?.name ?? agentId)}</code>`,
-            `🔹 模型: <code>${escHtml(String(agent?.model ?? '—'))}</code>`,
-            `🔹 权限: <code>${escHtml(String(mode))}</code>`,
-            `🔹 会话: <code>${escHtml(sid ?? '无')}</code>`,
-            `🔹 忙碌: ${busy ? '是 ⏳' : '否 ✅'}`
-          ].join('\n')
-          await adapter.sendMessage(command.chatId, text, { ...replyOpts, parseMode: 'html' })
+          const agentName = agent?.name || 'Cherry Agent'
+          const agentType = agent?.type || 'unknown'
+          const currentMode = agent?.configuration?.permission_mode || 'default'
+          const modelStr = String(agent?.model || '默认模型')
+          const modeMeta: Record<string, { emoji: string; label: string }> = {
+            plan: { emoji: '💡', label: '仅规划 (Plan)' },
+            bypassPermissions: { emoji: '🚀', label: '完全放行 (Bypass)' },
+            auto: { emoji: '🪐', label: '智能批准 (Auto)' },
+            default: { emoji: '🔒', label: '逐次确认 (Ask)' }
+          }
+          const modeInfo = modeMeta[String(currentMode)] || { emoji: '', label: String(currentMode) }
+          const fmtTok = (n: number): string | null => {
+            if (!Number.isFinite(n) || n < 0) return null
+            if (n >= 1e6) {
+              const m = (n / 1e6).toFixed(1)
+              return m.endsWith('.0') ? `${Number.parseInt(m, 10)}M` : `${m}M`
+            }
+            if (n >= 1e3) {
+              const k = (n / 1e3).toFixed(1)
+              return k.endsWith('.0') ? `${Number.parseInt(k, 10)}k` : `${k}k`
+            }
+            return String(Math.round(n))
+          }
+          let contextLine: string | null = null
+          try {
+            const { AGENT_SESSION_CONTEXT_USAGE_CACHE_KEY } = await import('@shared/ai/agentSessionContextUsage')
+            const sessionId = this.peekSessionId(agentId, adapter.channelId, conversationIdOf(command))
+            if (sessionId) {
+              try {
+                application.get('AgentSessionRuntimeService').refreshContextUsageOnDemand(sessionId)
+              } catch {
+                /* no live connection */
+              }
+              await new Promise((r) => setTimeout(r, 350))
+              const usage = application
+                .get('CacheService')
+                .getShared(AGENT_SESSION_CONTEXT_USAGE_CACHE_KEY(sessionId)) as
+                | { totalTokens?: number; maxTokens?: number; percentage?: number }
+                | null
+                | undefined
+              if (usage) {
+                const used = Math.round(Number(usage.totalTokens) || 0)
+                let max = Math.round(Number(usage.maxTokens) || 0)
+                if (max <= 0) {
+                  try {
+                    const { modelService } = await import('@data/services/ModelService')
+                    const models = modelService.list({ enabled: true })
+                    const hit =
+                      models.find((m) => `${m.providerId}::${m.id}` === modelStr) ||
+                      models.find((m) => modelStr.endsWith(`::${m.id}`) || modelStr.endsWith(m.id))
+                    max = Math.round(Number(hit?.contextWindow) || 0)
+                  } catch {
+                    /* ignore */
+                  }
+                }
+                if (max <= 0) max = 256000
+                const pctNum = Number(usage.percentage)
+                const pct = Number.isFinite(pctNum) && pctNum > 0 ? pctNum : max > 0 ? (used / max) * 100 : 0
+                const usedLabel = fmtTok(used)
+                const maxLabel = fmtTok(max)
+                if (usedLabel && maxLabel && max > 0) {
+                  contextLine = `• <b>上下文</b>: 🧠 <code>${usedLabel} / ${maxLabel} (${pct.toFixed(1)}%)</code>`
+                } else if (usedLabel) {
+                  contextLine = `• <b>上下文</b>: 🧠 <code>${usedLabel} tokens</code>`
+                }
+              }
+            }
+          } catch {
+            /* ignore context lookup */
+          }
+          const modelShort = modelStr.includes('::') ? modelStr.split('::').pop()! : modelStr
+          const statusLines = [
+            `📊 <b>Cherry Studio 智能体状态</b>`,
+            '',
+            `• <b>智能体</b>: ${escHtml(agentName)}`,
+            `• <b>架构</b>: <code>${escHtml(String(agentType))}</code>`,
+            `• <b>模型</b>: <code>${escHtml(modelShort)}</code>`,
+            `• <b>权限</b>: ${modeInfo.emoji} <code>${escHtml(modeInfo.label)}</code>`
+          ]
+          if (contextLine) statusLines.push(contextLine)
+          await adapter.sendMessage(command.chatId, statusLines.join('\n'), {
+            ...replyOpts,
+            parseMode: 'html'
+          })
           break
         }
         case 'mode': {
@@ -831,12 +903,14 @@ export class ChannelMessageHandler {
             await adapter.sendMessage(command.chatId, '没有可用智能体。', { ...replyOpts, parseMode: 'plain' })
             break
           }
-          const rows = agents.map((a) => [
-            {
-              text: `${a.id === agentId ? '✅ ' : ''}${(a.name || a.id).slice(0, 40)}`,
-              callback_data: `sw:${a.id}`.slice(0, 64)
-            }
-          ])
+          const buttons = agents.map((a) => ({
+            text: `${a.id === agentId ? '✅ ' : ''}${(a.name || a.id).slice(0, 40)}`,
+            callback_data: `sw:${a.id}`.slice(0, 64)
+          }))
+          const rows: Array<Array<{ text: string; callback_data: string }>> = []
+          for (let i = 0; i < buttons.length; i += 2) {
+            rows.push(buttons.slice(i, i + 2))
+          }
           await adapter.sendMessage(command.chatId, '🤖 <b>切换执行后端（智能体）</b>', {
             ...replyOpts,
             parseMode: 'html',
