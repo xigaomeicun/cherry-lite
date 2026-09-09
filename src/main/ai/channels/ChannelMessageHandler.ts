@@ -785,22 +785,22 @@ export class ChannelMessageHandler {
                 | undefined
               if (usage) {
                 const used = Math.round(Number(usage.totalTokens) || 0)
-                let max = Math.round(Number(usage.maxTokens) || 0)
-                if (max <= 0) {
-                  try {
-                    const { modelService } = await import('@data/services/ModelService')
-                    const models = modelService.list({ enabled: true })
-                    const hit =
-                      models.find((m) => `${m.providerId}::${m.id}` === modelStr) ||
-                      models.find((m) => modelStr.endsWith(`::${m.id}`) || modelStr.endsWith(m.id))
-                    max = Math.round(Number(hit?.contextWindow) || 0)
-                  } catch {
-                    /* ignore */
-                  }
+                // Prefer the model's declared contextWindow (e.g. 1M) over CLI auto-compact
+                // budget (usage.maxTokens), matching what users configure.
+                let max = 0
+                try {
+                  const { modelService } = await import('@data/services/ModelService')
+                  const models = modelService.list({ enabled: true })
+                  const hit =
+                    models.find((m) => `${m.providerId}::${m.id}` === modelStr) ||
+                    models.find((m) => modelStr.endsWith(`::${m.id}`) || modelStr.endsWith(m.id))
+                  max = Math.round(Number(hit?.contextWindow) || 0)
+                } catch {
+                  /* ignore */
                 }
+                if (max <= 0) max = Math.round(Number(usage.maxTokens) || 0)
                 if (max <= 0) max = 256000
-                const pctNum = Number(usage.percentage)
-                const pct = Number.isFinite(pctNum) && pctNum > 0 ? pctNum : max > 0 ? (used / max) * 100 : 0
+                const pct = max > 0 ? (used / max) * 100 : 0
                 const usedLabel = fmtTok(used)
                 const maxLabel = fmtTok(max)
                 if (usedLabel && maxLabel && max > 0) {

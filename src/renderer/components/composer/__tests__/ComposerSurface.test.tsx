@@ -25,7 +25,7 @@ const mocks = vi.hoisted(() => ({
   simulateDeferredEditorStyle: false,
   actions: undefined as ComposerSurfaceActions | undefined,
   editorClientHeight: 28,
-  deferredEditorMinHeight: 55,
+  deferredEditorMinHeight: 65,
   editorContentLineCount: 1,
   editorViewComposing: false,
   editorViewDom: undefined as HTMLElement | undefined,
@@ -455,7 +455,7 @@ describe('ComposerSurface', () => {
     mocks.simulateDeferredEditorStyle = false
     mocks.actions = undefined
     mocks.editorClientHeight = 28
-    mocks.deferredEditorMinHeight = 55
+    mocks.deferredEditorMinHeight = 65
     mocks.editorContentLineCount = 1
     mocks.editorViewComposing = false
     mocks.editorViewDom = document.createElement('div')
@@ -1006,7 +1006,7 @@ describe('ComposerSurface', () => {
     const expandedHeight = `${Math.max(220, Math.round(window.innerHeight * 0.5))}px`
     const stableEditorElementStyle = editor.getAttribute('data-editor-style')
 
-    expect(editorContainer).toHaveStyle({ minHeight: '55px' })
+    expect(editorContainer).toHaveStyle({ minHeight: '65px' })
     expect(editorContainer).not.toHaveStyle({ height: 'max(220px, 50vh)' })
     expect(editorContent).not.toHaveStyle({ height: '100%' })
     expect(editorContent.style.getPropertyValue('--composer-editor-max-height')).toBe('max(220px, 40vh)')
@@ -1031,7 +1031,7 @@ describe('ComposerSurface', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'chat.input.restore' }))
 
-    await waitFor(() => expect(editorContainer).toHaveStyle({ height: '55px', overflow: 'hidden' }))
+    await waitFor(() => expect(editorContainer).toHaveStyle({ height: '65px', overflow: 'hidden' }))
     fireEvent.transitionEnd(editorContainer as HTMLElement, { propertyName: 'height' })
 
     expect(screen.getByRole('button', { name: 'chat.input.expand' })).toHaveAttribute('aria-pressed', 'false')
@@ -1055,7 +1055,7 @@ describe('ComposerSurface', () => {
     expect(corner).not.toBeNull()
     expect(resizeHandle.closest('#inputbar')).toBe(inputbar)
     expect(resizeHandle).toHaveAttribute('aria-orientation', 'horizontal')
-    expect(resizeHandle).toHaveAttribute('aria-valuemin', '55')
+    expect(resizeHandle).toHaveAttribute('aria-valuemin', '65')
     expect(resizeHandle).toHaveAttribute('aria-valuemax', `${Math.max(220, Math.round(window.innerHeight * 0.5))}`)
     expect(expandButton.closest('#inputbar')).toBe(inputbar)
     expect(expandButton.parentElement).toBe(corner)
@@ -1079,10 +1079,10 @@ describe('ComposerSurface', () => {
 
     fireEvent.mouseMove(document, { clientY: 100 })
 
-    expect(editorContainer).toHaveStyle({ height: '155px', transitionDuration: '0ms' })
+    expect(editorContainer).toHaveStyle({ height: '165px', transitionDuration: '0ms' })
     expect(editorContent).toHaveStyle({ height: '100%' })
     expect(screen.getByTestId('composer-editor').className).toContain('max-h-[max(220px,50vh)]')
-    expect(editorContent.style.getPropertyValue('--composer-editor-max-height')).toBe('155px')
+    expect(editorContent.style.getPropertyValue('--composer-editor-max-height')).toBe('165px')
     expect(editorContent.style.getPropertyValue('--composer-editor-height')).toBe('100%')
     expect(screen.getByRole('button', { name: 'chat.input.restore' })).toHaveAttribute('aria-pressed', 'true')
     expect(inputbar).not.toHaveClass('expanded')
@@ -1095,7 +1095,7 @@ describe('ComposerSurface', () => {
     await waitFor(() =>
       expect(screen.getByRole('button', { name: 'chat.input.expand' })).toHaveAttribute('aria-pressed', 'false')
     )
-    await waitFor(() => expect(editorContainer).toHaveStyle({ height: '55px' }))
+    await waitFor(() => expect(editorContainer).toHaveStyle({ height: '65px' }))
     fireEvent.transitionEnd(editorContainer, { propertyName: 'height' })
 
     expect(editorContainer.style.height).toBe('')
@@ -1114,7 +1114,7 @@ describe('ComposerSurface', () => {
     expect(editorContainer).toHaveStyle({ height: expandedHeight })
 
     fireEvent.mouseMove(document, { clientY: 1000 })
-    expect(editorContainer).toHaveStyle({ height: '55px' })
+    expect(editorContainer).toHaveStyle({ height: '65px' })
   })
 
   it('converts expanded height to manual height when dragging from the expanded state', async () => {
@@ -1145,7 +1145,7 @@ describe('ComposerSurface', () => {
     fireEvent.mouseMove(document, { clientY: 100 })
     fireEvent.mouseUp(document)
 
-    expect(editorContainer).toHaveStyle({ height: '155px' })
+    expect(editorContainer).toHaveStyle({ height: '165px' })
 
     act(() => {
       mocks.actions?.toggleExpanded(true)
@@ -1163,10 +1163,10 @@ describe('ComposerSurface', () => {
     })
     expect(handled).toBe(true)
 
-    await waitFor(() => expect(editorContainer).toHaveStyle({ height: '155px' }))
+    await waitFor(() => expect(editorContainer).toHaveStyle({ height: '165px' }))
     fireEvent.transitionEnd(editorContainer, { propertyName: 'height' })
 
-    expect(editorContainer).toHaveStyle({ height: '155px' })
+    expect(editorContainer).toHaveStyle({ height: '165px' })
     expect(editorContent).toHaveStyle({ height: '100%' })
     expect(screen.getByRole('button', { name: 'chat.input.restore' })).toHaveAttribute('aria-pressed', 'true')
   })
@@ -1195,7 +1195,7 @@ describe('ComposerSurface', () => {
     expect(resizeHandle).toHaveFocus()
 
     fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Home' })
-    expect(editorContainer).toHaveStyle({ height: '55px' })
+    expect(editorContainer).toHaveStyle({ height: '65px' })
   })
 
   it('renders editing controls in a full-width header inside the inputbar', () => {
