@@ -6,7 +6,6 @@
 
 | Document | Description |
 |----------|-------------|
-| [Contributing](../CONTRIBUTING.md) | How to contribute code |
 | [App Update Architecture](./contrib/app-upgrade.md) | How clients check for updates through the managed release service, with channels and the release history feed |
 | [🌿 Branching Strategy](./contrib/branching-strategy.md) | Branch model for contributions, pull request guidelines, and version tag management targeting main |
 | [🖥️ Develop](./contrib/development.md) | Developer environment setup covering IDE configuration, Windows symlink support, and project install steps |

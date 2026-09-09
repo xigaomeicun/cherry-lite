@@ -1,11 +1,9 @@
-<!-- Template from https://github.com/kubevirt/kubevirt/blob/main/.github/PULL_REQUEST_TEMPLATE.md?-->
-<!--  Thanks for sending a pull request!  Here are some tips for you:
-1. Consider creating this PR as draft: https://github.com/CherryHQ/cherry-studio/blob/main/CONTRIBUTING.md
--->
+<!-- Thanks for sending a pull request. -->
 
 > ### Branch strategy
 >
 > - Active development targets `main`.
+> - Conventions: see [`CLAUDE.md`](../CLAUDE.md) and [`docs/contrib/development.md`](../docs/contrib/development.md).
 
 ### What this PR does
 

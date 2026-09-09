@@ -61,7 +61,6 @@ export const generateIndex = (repoRoot: string): string => {
     '',
     '| Document | Description |',
     '|----------|-------------|',
-    '| [Contributing](../CONTRIBUTING.md) | How to contribute code |',
     ...tableRows(docsDir, listMarkdownFiles(path.join(docsDir, 'contrib'))),
     '',
     '## References'
