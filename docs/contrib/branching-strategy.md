@@ -65,7 +65,7 @@ When contributing to Cherry Studio, please follow these guidelines:
    - Resolve any automatically reported backport failure without merging all of `main` into the release branch
    - Publishing the GitHub Release applies the release metadata delta to the latest `main` and opens a metadata-only sync PR
    - Squash the metadata PR with the exact title `chore(release): sync v<version> metadata` (plus only GitHub's optional PR-number suffix) and keep `release-metadata-boundary: v<version>` on its own line in the squash commit body
-   - Follow the [Release Workflow Operations](./release-workflow.md) runbook to prepare, build, hotfix, publish, and synchronize a release
+   - For cherry-lite packaging (local build / optional cloud workflows), see [Cherry Lite Packaging](./release-workflow.md) — upstream CherryHQ release/backport/publish flows are neutralized
 
 ## Workflow Diagram
 
