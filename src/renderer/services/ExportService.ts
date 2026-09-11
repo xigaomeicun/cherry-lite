@@ -16,7 +16,10 @@ import type { Topic } from '@renderer/types/topic'
 import { fetchMessagesSummary } from '@renderer/utils/aiGeneration'
 import { getTitleFromString, messagesToPlainText, processCitations } from '@renderer/utils/export'
 import { removeSpecialCharactersForFileName } from '@renderer/utils/file'
-import { captureScrollableAsBlob, captureScrollableAsDataUrl } from '@renderer/utils/image'
+import {
+  captureScrollableAsBlob as captureScrollableAsBlobUtil,
+  captureScrollableAsDataUrl as captureScrollableAsDataUrlUtil
+} from '@renderer/utils/image'
 import { convertMathFormula, markdownToPlainText } from '@renderer/utils/markdown'
 import { stripCitationMarkers } from '@renderer/utils/message/citations'
 import { getComposerTextFromMessage } from '@renderer/utils/message/composerTokens'
@@ -94,6 +97,34 @@ const getExportState = () => exportState
 const setExportingState = (isExporting: boolean) => {
   exportState = isExporting
 }
+
+type ScrollableCaptureRef = Parameters<typeof captureScrollableAsDataUrlUtil>[0]
+type ScrollableBlobCallback = Parameters<typeof captureScrollableAsBlobUtil>[1]
+
+// Image captures temporarily mutate renderer DOM and share the native capture
+// lifecycle, so their coordination belongs with the export runtime owner.
+export class ExportService {
+  private imageCaptureQueue = Promise.resolve()
+
+  private enqueueImageCapture<T>(capture: () => Promise<T>): Promise<T> {
+    const queuedCapture = this.imageCaptureQueue.then(capture)
+    this.imageCaptureQueue = queuedCapture.then(
+      () => undefined,
+      () => undefined
+    )
+    return queuedCapture
+  }
+
+  public captureScrollableAsDataUrl(elRef: ScrollableCaptureRef) {
+    return this.enqueueImageCapture(() => captureScrollableAsDataUrlUtil(elRef))
+  }
+
+  public captureScrollableAsBlob(elRef: ScrollableCaptureRef, func: ScrollableBlobCallback) {
+    return this.enqueueImageCapture(() => captureScrollableAsBlobUtil(elRef, func))
+  }
+}
+
+export const exportService = new ExportService()
 
 /**
  * 安全地处理思维链内容，保留安全的 HTML 标签如 <br>，移除危险内容
@@ -1509,11 +1540,16 @@ const exportNoteAsMarkdown = async (noteName: string, content: string): Promise<
   }
 }
 
-const getScrollableElement = (): HTMLElement | null => {
+const getScrollableElement = (noteId: string): HTMLElement | null => {
   const notesPage = document.querySelector('#notes-page')
   if (!notesPage) return null
 
-  const allDivs = notesPage.querySelectorAll('div')
+  const noteEditor = Array.from(notesPage.querySelectorAll<HTMLElement>('[data-note-id]')).find(
+    (element) => element.dataset.noteId === noteId
+  )
+  if (!noteEditor) return null
+
+  const allDivs = noteEditor.querySelectorAll('div')
   for (const div of Array.from(allDivs)) {
     const style = window.getComputedStyle(div)
     if (style.overflowY === 'auto' || style.overflowY === 'scroll') {
@@ -1525,20 +1561,19 @@ const getScrollableElement = (): HTMLElement | null => {
   return null
 }
 
-const getScrollableRef = (): { current: HTMLElement } | null => {
-  const element = getScrollableElement()
-  if (!element) {
-    toast.warning(i18n.t('notes.no_content_to_copy'))
-    return null
+const getScrollableRef = (noteId: string): ScrollableCaptureRef => ({
+  get current() {
+    const element = getScrollableElement(noteId)
+    if (!element) {
+      toast.warning(i18n.t('notes.no_content_to_copy'))
+    }
+    return element
   }
-  return { current: element }
-}
+})
 
-const exportNoteAsImageToClipboard = async (): Promise<void> => {
-  const scrollableRef = getScrollableRef()
-  if (!scrollableRef) return
-
-  await captureScrollableAsBlob(scrollableRef, async (blob) => {
+const exportNoteAsImageToClipboard = async (noteId: string): Promise<void> => {
+  const scrollableRef = getScrollableRef(noteId)
+  await exportService.captureScrollableAsBlob(scrollableRef, async (blob) => {
     if (blob) {
       await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })])
       toast.success(i18n.t('common.copied'))
@@ -1546,11 +1581,9 @@ const exportNoteAsImageToClipboard = async (): Promise<void> => {
   })
 }
 
-const exportNoteAsImageFile = async (noteName: string): Promise<void> => {
-  const scrollableRef = getScrollableRef()
-  if (!scrollableRef) return
-
-  const dataUrl = await captureScrollableAsDataUrl(scrollableRef)
+const exportNoteAsImageFile = async (noteName: string, noteId: string): Promise<void> => {
+  const scrollableRef = getScrollableRef(noteId)
+  const dataUrl = await exportService.captureScrollableAsDataUrl(scrollableRef)
   if (dataUrl) {
     const fileName = removeSpecialCharactersForFileName(noteName)
     await window.api.file.saveImage(fileName, dataUrl)
@@ -1558,7 +1591,7 @@ const exportNoteAsImageFile = async (noteName: string): Promise<void> => {
 }
 
 interface NoteExportOptions {
-  node: { name: string; externalPath: string }
+  node: { id: string; name: string; externalPath: string }
   platform: 'markdown' | 'docx' | 'notion' | 'yuque' | 'joplin' | 'siyuan' | 'copyImage' | 'exportImage'
 }
 
@@ -1568,9 +1601,9 @@ export const exportNote = async ({ node, platform }: NoteExportOptions): Promise
 
     switch (platform) {
       case 'copyImage':
-        return await exportNoteAsImageToClipboard()
+        return await exportNoteAsImageToClipboard(node.id)
       case 'exportImage':
-        return await exportNoteAsImageFile(node.name)
+        return await exportNoteAsImageFile(node.name, node.id)
       case 'markdown':
         return await exportNoteAsMarkdown(node.name, content)
       case 'docx':
