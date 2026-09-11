@@ -6,7 +6,11 @@ import {
   isAskUserQuestionToolName,
   parseAskUserQuestionToolInput
 } from '@renderer/components/chat/messages/tools/shared/agentToolTypes'
-import type { MessageStreamingLayers, MessageToolApprovalInput } from '@renderer/components/chat/messages/types'
+import type {
+  MessageListSelectAllPagination,
+  MessageStreamingLayers,
+  MessageToolApprovalInput
+} from '@renderer/components/chat/messages/types'
 import type { ComposerContextValue } from '@renderer/components/composer/ComposerContext'
 import { useToolApprovalComposerOverrides } from '@renderer/components/composer/useToolApprovalComposerOverrides'
 import type { AgentComposerSendOptions } from '@renderer/components/composer/variants/AgentComposer'
@@ -107,6 +111,7 @@ export interface AgentChatRuntimeState {
   isLoading: boolean
   hasOlder?: boolean
   loadOlder?: () => void
+  selectAllPagination?: MessageListSelectAllPagination
   isPending: boolean
   stop: () => Promise<void>
   sendMessage: (message?: { text: string }, options?: AgentSendOptions) => Promise<boolean>
@@ -134,6 +139,7 @@ export function useAgentChatRuntimeState({
     isLoading,
     hasOlder,
     loadOlder,
+    selectAllPagination,
     refresh,
     seedReservedMessages,
     deleteMessage: deleteSessionMessage
@@ -304,6 +310,7 @@ export function useAgentChatRuntimeState({
     isLoading,
     hasOlder,
     loadOlder,
+    selectAllPagination,
     isPending,
     stop,
     sendMessage,
