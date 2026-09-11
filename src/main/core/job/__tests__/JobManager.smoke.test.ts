@@ -152,7 +152,7 @@ describe('JobManager smoke (dummy.echo)', () => {
     const dbSvc = MockMainDbServiceExport.dbService
     const cacheSvc = MockMainCacheServiceExport.cacheService
 
-    ;(application.get as ReturnType<typeof vi.fn>).mockImplementation((name: string) => {
+    ;(application.get as ReturnType<typeof vi.fn<(...args: any[]) => any>>).mockImplementation((name: string) => {
       switch (name) {
         case 'DbService':
           return dbSvc

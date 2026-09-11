@@ -81,7 +81,7 @@ describe('JobManager schedule control APIs', () => {
 
     const dbSvc = MockMainDbServiceExport.dbService
     const cacheSvc = MockMainCacheServiceExport.cacheService
-    ;(application.get as ReturnType<typeof vi.fn>).mockImplementation((name: string) => {
+    ;(application.get as ReturnType<typeof vi.fn<(...args: any[]) => any>>).mockImplementation((name: string) => {
       switch (name) {
         case 'DbService':
           return dbSvc
@@ -407,6 +407,7 @@ describe('JobManager schedule control APIs', () => {
       expect(armSpy).toHaveBeenCalledTimes(1)
       expect(updated?.nextRun).not.toBeNull()
       expect(Date.parse(updated?.nextRun ?? '')).toBeLessThanOrEqual(Date.now() + 30_000)
+      armSpy.mockRestore()
     })
 
     it('(b) trigger + enabled false: disposes and does not re-arm', async () => {
@@ -424,6 +425,7 @@ describe('JobManager schedule control APIs', () => {
       expect(updated?.enabled).toBe(false)
       expect(armSpy).not.toHaveBeenCalled()
       expect(getScheduleDisposables().has(snap.id)).toBe(false)
+      armSpy.mockRestore()
     })
 
     it('(c) enabled-only false→true: re-arms', async () => {
@@ -443,6 +445,7 @@ describe('JobManager schedule control APIs', () => {
 
       expect(updated?.enabled).toBe(true)
       expect(armSpy).toHaveBeenCalledTimes(1)
+      armSpy.mockRestore()
     })
 
     it('(d) enabled-only true→false: disposes', async () => {
@@ -481,6 +484,7 @@ describe('JobManager schedule control APIs', () => {
 
       expect(await jobManager.triggerJobScheduleNowById(snap.id)).toBe(true)
       expect(jobService.list({ scheduleId: snap.id })).toEqual([expect.objectContaining({ input: latestTemplate })])
+      armSpy.mockRestore()
     })
 
     it('keeps an interval timer armed while its next automatic fire reads the latest template', async () => {
@@ -538,6 +542,7 @@ describe('JobManager schedule control APIs', () => {
 
       expect(result).toBeNull()
       expect(armSpy).not.toHaveBeenCalled()
+      armSpy.mockRestore()
     })
   })
 

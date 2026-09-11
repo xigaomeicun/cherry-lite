@@ -54,7 +54,10 @@ const latestTemplate = () => {
 }
 
 describe('showNativePopupMenu', () => {
-  let sender: { send: ReturnType<typeof vi.fn>; isDestroyed: ReturnType<typeof vi.fn> }
+  let sender: {
+    send: ReturnType<typeof vi.fn<(...args: any[]) => any>>
+    isDestroyed: ReturnType<typeof vi.fn<(...args: any[]) => any>>
+  }
   let event: IpcMainInvokeEvent
 
   beforeEach(() => {

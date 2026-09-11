@@ -308,7 +308,7 @@ vi.mock('@application', () => ({
 
 vi.mock('../WebDav', () => ({
   // Return a distinct object per construction so instance identity is observable.
-  default: vi.fn(() => ({}))
+  default: vi.fn(class {})
 }))
 
 vi.mock('../S3Storage', () => ({
@@ -428,7 +428,9 @@ describe('BackupManager direct v2 data compatibility', () => {
       finalize: vi.fn(() => finishOutput?.())
     }
     mockCreateAtomicWriteStream.mockReturnValue(output)
-    vi.mocked(ZipArchive).mockReturnValue(archive as never)
+    vi.mocked(ZipArchive).mockImplementation(function () {
+      return archive as never
+    })
     return { archive, output }
   }
 
@@ -526,7 +528,9 @@ describe('BackupManager direct v2 data compatibility', () => {
       directory: vi.fn(),
       finalize: vi.fn(() => outputs.forEach((stream) => stream.end()))
     }
-    vi.mocked(ZipArchive).mockReturnValue(archive as never)
+    vi.mocked(ZipArchive).mockImplementation(function () {
+      return archive as never
+    })
     vi.spyOn(backupManager as any, 'getDirSize').mockResolvedValue(1)
     vi.spyOn(backupManager as any, 'copyDirWithProgress').mockResolvedValue(undefined)
 
@@ -570,7 +574,9 @@ describe('BackupManager direct v2 data compatibility', () => {
       directory: vi.fn(),
       finalize: vi.fn(() => outputs.forEach((stream) => stream.end()))
     }
-    vi.mocked(ZipArchive).mockReturnValue(archive as never)
+    vi.mocked(ZipArchive).mockImplementation(function () {
+      return archive as never
+    })
     vi.spyOn(backupManager as any, 'getDirSize').mockResolvedValue(1)
     vi.spyOn(backupManager as any, 'copyDirWithProgress').mockResolvedValue(undefined)
 
@@ -628,7 +634,9 @@ describe('BackupManager direct v2 data compatibility', () => {
       directory: vi.fn(),
       finalize: vi.fn(() => outputs.forEach((stream) => stream.end()))
     }
-    vi.mocked(ZipArchive).mockReturnValue(archive as never)
+    vi.mocked(ZipArchive).mockImplementation(function () {
+      return archive as never
+    })
     vi.spyOn(backupManager as any, 'getDirSize').mockResolvedValue(1)
     vi.spyOn(backupManager as any, 'copyDirWithProgress').mockResolvedValue(undefined)
     vi.mocked(fs.chmod).mockClear()

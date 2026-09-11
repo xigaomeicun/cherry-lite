@@ -51,7 +51,7 @@ function getScrollElement() {
 describe('HorizontalScrollContainer', () => {
   beforeEach(() => {
     resizeObserverInstances.length = 0
-    globalThis.ResizeObserver = vi.fn((callback: ResizeObserverCallback) => {
+    globalThis.ResizeObserver = vi.fn(function (callback: ResizeObserverCallback) {
       const instance: ResizeObserverMockInstance = { callback, targets: [] }
       resizeObserverInstances.push(instance)
       return {

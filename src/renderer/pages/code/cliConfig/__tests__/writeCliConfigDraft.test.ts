@@ -88,6 +88,8 @@ describe('writeCliConfigDraft', () => {
   let existing: Record<string, string>
 
   beforeEach(() => {
+    mocks.request.mockClear()
+    vi.mocked(dataApiService.get).mockClear()
     written = null
     writes = []
     existing = {}

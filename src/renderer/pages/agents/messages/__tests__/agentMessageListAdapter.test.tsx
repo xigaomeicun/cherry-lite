@@ -88,7 +88,8 @@ vi.mock('@data/DataApiService', () => ({
 vi.mock('@renderer/hooks/useTopicStreamStatus', () => ({
   useTopicStreamStatus: () => ({
     status: 'idle',
-    activeExecutions: []
+    activeExecutions: [],
+    awaitingApprovalAnchors: []
   })
 }))
 
