@@ -152,6 +152,10 @@ export class CodeCliService extends BaseService {
       toAsarUnpackedPath(application.getPath('feature.code_cli.skills.builtin')),
       preset.skillFolderName
     )
+    if (!fs.existsSync(sourcePath)) {
+      logger.debug('Skipping absent pruned Code CLI skill', { cliTool: preset.id, sourcePath })
+      return
+    }
     await skillService.syncBuiltinSkill(preset.skillFolderName, sourcePath, app.getVersion(), preset.skillNamespace)
   }
 

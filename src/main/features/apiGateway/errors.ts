@@ -233,7 +233,14 @@ export function anthropicErrorHandler({ code, error, status }: GatewayErrorConte
     return status(error.status, anthropicEnvelope(typeForStatus(error.status), error.message))
   }
 
-  logger.error('API gateway request error', { code, error })
+  const isExpectedBetaHandshake =
+    error instanceof Error && typeof error.message === 'string' && error.message.includes('mid-conversation-system')
+
+  if (isExpectedBetaHandshake) {
+    logger.debug('API gateway beta handshake negotiation (downgrading role system)', { code, error })
+  } else {
+    logger.error('API gateway request error', { code, error })
+  }
   const { statusCode, errorResponse } = transformAnthropicError(error)
   return status(statusCode, errorResponse)
 }
