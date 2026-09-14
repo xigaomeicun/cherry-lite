@@ -91,7 +91,10 @@ describe('edition packaging', () => {
       nsisGuid: '41a4ccd8-bcc0-5710-9eee-0e164da68057',
       productName: 'Cherry Studio',
       protocol: 'cherrystudio',
-      publish: { provider: 'generic', url: 'https://releases.cherry-ai.com' },
+      publish: {
+        provider: 'generic',
+        url: 'https://github.com/xigaomeicun/cherry-lite/releases/latest/download'
+      },
       windowsArtifactName: '${productName}-${version}-${arch}-setup.${ext}'
     })
   })

@@ -5,9 +5,9 @@ on:
   workflow_dispatch:
     inputs:
       release_tag:
-        description: 'Release Tag (e.g. v2.0.13-lite)'
+        description: 'Release Tag (e.g. v6.0.0-lite)'
         required: false
-        default: 'v2.0.13-lite'
+        default: 'v6.0.0-lite'
       create_release:
         description: 'Publish as GitHub Release'
         required: true

@@ -91,6 +91,11 @@ export function isCatalogManifestCompatible(manifest: CatalogManifest, appVersio
   const minimum = semver.coerce(manifest.minAppVersion)?.version
   const source = semver.coerce(manifest.sourceAppVersion)?.version
   if (!app || !minimum || !source) return false
+  // cherry-lite: custom fixed versions (6.x.x) are intentionally ahead of upstream release series.
+  // Bypass the sourceAppVersion ceiling check while ensuring the minimum schema version requirement is met.
+  if (semver.major(app) >= 6) {
+    return semver.gte(app, minimum)
+  }
   return semver.gte(app, minimum) && semver.lte(app, source)
 }
 

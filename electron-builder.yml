@@ -188,7 +188,7 @@ artifactBuildCompleted: scripts/artifact-build-completed.js
 releaseInfo:
   releaseNotes: |
     <!--LANG:en-->
-    Cherry Studio 2.0.13 - New Features, Fixes, and Improvements
+    Cherry Studio 6.0.0-lite - New Features, Fixes, and Improvements
 
     ✨ New Features
     - [Models] Add GPT-6 Astra support with context limits, reasoning controls, Fast mode, native web search, tiered pricing, and the official model icon.
@@ -263,7 +263,7 @@ releaseInfo:
     - [HTML Artifacts] HTML artifact previews skip full-element layout sweeps for scrollable content.
 
     <!--LANG:zh-CN-->
-    Cherry Studio 2.0.13 - 新功能、修复与改进
+    Cherry Studio 6.0.0-lite - 新功能、修复与改进
 
     ✨ 新功能
     - [模型] 新增 GPT-6 Astra 支持，包括上下文限制、推理控制、快速模式、原生联网搜索、分层定价和官方模型图标。
