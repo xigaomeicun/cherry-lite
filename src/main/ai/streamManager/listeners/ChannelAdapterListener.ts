@@ -67,6 +67,45 @@ export class ChannelAdapterListener implements StreamListener {
     if (chunk.type === 'tool-approval-request' && this.adapter.channelType === 'telegram') {
       this.sendTelegramApprovalCard(chunk)
     }
+
+    if (chunk.type === 'tool-input-available') {
+      void this.adapter
+        .onToolProgress?.(
+          this.platformChatId,
+          {
+            kind: 'start',
+            toolCallId: chunk.toolCallId,
+            toolName: chunk.toolName,
+            input: chunk.input
+          },
+          this.responseOptions
+        )
+        ?.catch(() => {})
+    } else if (chunk.type === 'tool-input-start') {
+      void this.adapter
+        .onToolProgress?.(
+          this.platformChatId,
+          {
+            kind: 'start',
+            toolCallId: chunk.toolCallId,
+            toolName: chunk.toolName
+          },
+          this.responseOptions
+        )
+        ?.catch(() => {})
+    } else if (chunk.type === 'tool-output-available' || chunk.type === 'tool-output-error') {
+      void this.adapter
+        .onToolProgress?.(
+          this.platformChatId,
+          {
+            kind: 'done',
+            toolCallId: chunk.toolCallId,
+            ok: chunk.type === 'tool-output-available'
+          },
+          this.responseOptions
+        )
+        ?.catch(() => {})
+    }
   }
 
   private sendTelegramApprovalCard(chunk: UIMessageChunk & { type: 'tool-approval-request' }): void {
@@ -186,6 +225,7 @@ export class ChannelAdapterListener implements StreamListener {
   }
 
   async onDone(result: StreamDoneResult): Promise<void> {
+    await this.adapter.dismissToolProgress?.(this.platformChatId, this.responseOptions)?.catch(() => {})
     const text = sanitizeChannelOutput(this.accumulatedText).text.trim()
     if (!text) {
       logger.warn('ChannelAdapterListener.onDone with empty text', {
@@ -213,6 +253,7 @@ export class ChannelAdapterListener implements StreamListener {
 
   // oxlint-disable-next-line no-unused-vars
   async onPaused(_result: StreamPausedResult): Promise<void> {
+    await this.adapter.dismissToolProgress?.(this.platformChatId, this.responseOptions)?.catch(() => {})
     const text = sanitizeChannelOutput(this.accumulatedText).text.trim()
     if (!text) return
 
@@ -231,6 +272,7 @@ export class ChannelAdapterListener implements StreamListener {
   }
 
   async onError(result: StreamErrorResult): Promise<void> {
+    await this.adapter.dismissToolProgress?.(this.platformChatId, this.responseOptions)?.catch(() => {})
     if (this.suppressErrorMessage) return
     try {
       await this.deliver(`Error: ${result.error.message ?? 'Unknown error'}`)

@@ -77,6 +77,10 @@ export type SendMessageOptions = {
   replyMarkup?: ChannelInlineKeyboard
 }
 
+export type ToolProgressEvent =
+  | { kind: 'start'; toolCallId: string; toolName: string; input?: unknown }
+  | { kind: 'done'; toolCallId: string; ok: boolean }
+
 /** Channel type → its config payload, projected from the `AgentChannelEntity` discriminated union. */
 type ChannelConfigByType = {
   [T in AgentChannelType]: Extract<AgentChannelEntity, { type: T }>['config']
@@ -282,6 +286,24 @@ export abstract class ChannelAdapter extends EventEmitter {
    */
   // oxlint-disable-next-line no-unused-vars
   async onStreamError(_chatId: string, _error: string, _opts?: SendMessageOptions): Promise<void> {
+    // Default no-op.
+  }
+
+  /**
+   * Called when an agent tool starts or finishes execution.
+   * Platforms that support ephemeral status indicators (e.g. Telegram tool bubbles)
+   * can override this to reflect live progress.
+   */
+  // oxlint-disable-next-line no-unused-vars
+  async onToolProgress(_chatId: string, _event: ToolProgressEvent, _opts?: SendMessageOptions): Promise<void> {
+    // Default no-op.
+  }
+
+  /**
+   * Called when a turn completes, aborts, or pauses, dismissing any ephemeral tool indicators.
+   */
+  // oxlint-disable-next-line no-unused-vars
+  async dismissToolProgress(_chatId: string, _opts?: SendMessageOptions): Promise<void> {
     // Default no-op.
   }
 

@@ -729,6 +729,7 @@ export class ChannelMessageHandler {
         }
         case 'stop': {
           onAdmitted()
+          void adapter.dismissToolProgress(command.chatId).catch(() => {})
           const sid = this.peekSessionId(agentId, adapter.channelId, conversationIdOf(command))
           if (!sid || !this.abortSession(sid)) {
             await adapter.sendMessage(command.chatId, '当前没有正在执行的任务。', {
@@ -1041,6 +1042,7 @@ export class ChannelMessageHandler {
         }
         if (action === 'interrupt') {
           busyOffers.delete(offerId)
+          void adapter.dismissToolProgress(cb.chatId).catch(() => {})
           await cb.answerCallbackQuery({ text: '⚡️ 已打断上一任务，队列将尽快执行' })
           await cb.editReplyMarkup({
             inline_keyboard: [[{ text: '⚡️ 上一任务已打断，队列执行中', callback_data: 'noop' }]]

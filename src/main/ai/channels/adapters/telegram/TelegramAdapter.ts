@@ -11,10 +11,12 @@ import {
   ChannelAdapter,
   type ChannelAdapterConfig,
   type ChannelCommandEvent,
-  type SendMessageOptions
+  type SendMessageOptions,
+  type ToolProgressEvent
 } from '../../ChannelAdapter'
 import { registerAdapterFactory } from '../../ChannelManager'
 import { chunkMessage, renderTelegramHtml } from './markdownTg'
+import { TelegramToolBubbleController } from './TelegramToolBubble'
 
 const TELEGRAM_MAX_LENGTH = 4096
 
@@ -24,6 +26,7 @@ class TelegramAdapter extends ChannelAdapter {
   private bot: Bot | null = null
   private readonly botToken: string
   private readonly allowedChatIds: string[]
+  private readonly toolBubbles = new Map<string, TelegramToolBubbleController>()
 
   // Long-polling reconnect with backoff. grammY rethrows fatal polling errors (401/409) out of
   // `bot.start()`; without this a recoverable 409/Conflict left the bot permanently down.
@@ -266,6 +269,10 @@ class TelegramAdapter extends ChannelAdapter {
     this.shouldStop = true
     this.clearReconnectTimer()
     this.clearStabilityTimer()
+    for (const bubble of this.toolBubbles.values()) {
+      bubble.dispose()
+    }
+    this.toolBubbles.clear()
     if (this.bot) {
       await this.bot.stop()
       this.bot = null
@@ -409,6 +416,47 @@ class TelegramAdapter extends ChannelAdapter {
     }
 
     await this.bot.api.sendChatAction(chatId, 'typing')
+  }
+
+  private getBubbleController(chatId: string): TelegramToolBubbleController | null {
+    if (!this.bot) return null
+    let controller = this.toolBubbles.get(chatId)
+    if (!controller) {
+      controller = new TelegramToolBubbleController(
+        chatId,
+        {
+          sendMessage: async (text: string) => {
+            const msg = await this.bot!.api.sendMessage(chatId, text)
+            return msg.message_id
+          },
+          editMessageText: async (messageId: number, text: string) => {
+            await this.bot!.api.editMessageText(chatId, messageId, text)
+          },
+          deleteMessage: async (messageId: number) => {
+            await this.bot!.api.deleteMessage(chatId, messageId)
+          }
+        },
+        this.log
+      )
+      this.toolBubbles.set(chatId, controller)
+    }
+    return controller
+  }
+
+  override async onToolProgress(chatId: string, event: ToolProgressEvent): Promise<void> {
+    const bubble = this.getBubbleController(chatId)
+    if (!bubble) return
+    if (event.kind === 'start') {
+      bubble.onStart(event.toolCallId, event.toolName, event.input)
+    } else if (event.kind === 'done') {
+      bubble.onDone(event.toolCallId)
+    }
+  }
+
+  override async dismissToolProgress(chatId: string): Promise<void> {
+    const bubble = this.toolBubbles.get(chatId)
+    if (!bubble) return
+    await bubble.dismiss(false)
   }
 }
 

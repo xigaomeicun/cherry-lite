@@ -18,6 +18,8 @@ function makeAdapter(overrides: Partial<ChannelAdapter> = {}): ChannelAdapter {
     onTextUpdate: vi.fn().mockResolvedValue(undefined),
     onStreamComplete: vi.fn().mockResolvedValue(false),
     sendMessage: vi.fn().mockResolvedValue(undefined),
+    onToolProgress: vi.fn().mockResolvedValue(undefined),
+    dismissToolProgress: vi.fn().mockResolvedValue(undefined),
     ...overrides
   } as unknown as ChannelAdapter
 }
@@ -121,5 +123,60 @@ describe('ChannelAdapterListener', () => {
 
     expect(adapter.onStreamComplete).not.toHaveBeenCalled()
     expect(adapter.sendMessage).not.toHaveBeenCalled()
+  })
+
+  it('routes tool-input-available and tool-output-available to onToolProgress', () => {
+    const adapter = makeAdapter()
+    const listener = new ChannelAdapterListener(adapter, 'chat-1')
+
+    listener.onChunk({
+      type: 'tool-input-available',
+      toolCallId: 'call-1',
+      toolName: 'bash',
+      input: { command: 'ls -la' }
+    } as unknown as UIMessageChunk)
+
+    expect(adapter.onToolProgress).toHaveBeenCalledWith(
+      'chat-1',
+      {
+        kind: 'start',
+        toolCallId: 'call-1',
+        toolName: 'bash',
+        input: { command: 'ls -la' }
+      },
+      undefined
+    )
+
+    listener.onChunk({
+      type: 'tool-output-available',
+      toolCallId: 'call-1',
+      output: 'total 0'
+    } as unknown as UIMessageChunk)
+
+    expect(adapter.onToolProgress).toHaveBeenCalledWith(
+      'chat-1',
+      {
+        kind: 'done',
+        toolCallId: 'call-1',
+        ok: true
+      },
+      undefined
+    )
+  })
+
+  it('dismisses tool progress on onDone, onPaused, and onError before final delivery', async () => {
+    const adapter = makeAdapter({ onStreamComplete: vi.fn().mockResolvedValue(false) })
+    const listener = new ChannelAdapterListener(adapter, 'chat-1')
+
+    listener.onChunk(delta('result'))
+    await listener.onDone({ status: 'success' } as StreamDoneResult)
+
+    expect(adapter.dismissToolProgress).toHaveBeenCalledWith('chat-1', undefined)
+
+    await listener.onPaused({ status: 'paused' } as StreamPausedResult)
+    expect(adapter.dismissToolProgress).toHaveBeenCalledTimes(2)
+
+    await listener.onError({ error: new Error('boom') } as any)
+    expect(adapter.dismissToolProgress).toHaveBeenCalledTimes(3)
   })
 })
