@@ -175,16 +175,17 @@ describe('resolveMountedMcpServers', () => {
     expect([...mounted].sort()).toEqual(['agent-memory', 'cherry-tools', 'mcp-manager', 'skills'])
   })
 
-  it('drops the skills and mcp-manager servers for Cherry Support while keeping its host servers', () => {
+  it('keeps the skills and mcp-manager servers for Cherry Support alongside its host servers', () => {
+    // Cherry-Lite: Support runs with environment `open`, so the user-environment servers stay
+    // mounted instead of being stripped the way upstream's `sealed` variant does.
     const mounted = resolveMountedMcpServers(
       { type: 'claude-code', configuration: { builtin_role: 'support' } } as never,
       {
         channelLinked: false
       }
     )
-    expect(mounted.has('skills')).toBe(false)
-    // A sealed Agent must not register MCP servers into the user's environment either.
-    expect(mounted.has('mcp-manager')).toBe(false)
+    expect(mounted.has('skills')).toBe(true)
+    expect(mounted.has('mcp-manager')).toBe(true)
     expect(mounted.has('assistant')).toBe(true)
   })
 

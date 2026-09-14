@@ -173,8 +173,12 @@ rpm:
   # https://github.com/electron/forge/issues/3594
   fpm: ["--rpm-rpmbuild-define=_build_id_links none"]
 publish:
+  # cherry-lite: never point at the official feed. A local build keeps upstream's version
+  # number (e.g. 2.0.13 while upstream ships 2.0.14), so the updater would otherwise pull
+  # the official package and overwrite every fork customization. This repo publishes no
+  # releases, so update checks fail closed (AppUpdaterService swallows the error).
   provider: generic
-  url: https://releases.cherry-ai.com
+  url: https://github.com/xigaomeicun/cherry-lite/releases/latest/download
 electronDownload:
   mirror: https://npmmirror.com/mirrors/electron/
 beforePack: scripts/before-pack.js

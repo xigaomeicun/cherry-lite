@@ -38,7 +38,11 @@ async function resolveFile(dir: string, name: string, failOnError = false): Prom
     if (failOnError) throw new Error(`Required agent prompt file is not a regular file: ${matchedPath}`)
     return undefined
   } catch (error) {
-    if (failOnError) throw error
+    // Mirror the first probe: a missing directory means "no such file here", exactly like a
+    // missing file. Only a present-but-unusable entry is worth failing on. Callers can reach
+    // this before the workspace is materialized (a primed connection that never ran the
+    // driver's validateSession), and that must not fail the whole prompt build.
+    if (failOnError && (error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
     return undefined
   }
 }

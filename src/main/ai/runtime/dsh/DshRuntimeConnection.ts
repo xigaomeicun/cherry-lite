@@ -18,6 +18,7 @@ import { ensureAgentDataDirectory } from '@main/ai/agents/agentDataDirectory'
 import { resolveAgentCapabilities, resolveMountedMcpServers } from '@main/ai/agents/builtin/builtinAgentCapabilities'
 import { buildAgentMcpServers } from '@main/ai/runtime/agentMcpServers'
 import { buildAgentRuntimePrompt } from '@main/ai/runtime/agentPrompt'
+import { prepareAgentSessionWorkspaceDirectory } from '@main/ai/runtime/agentSessionWorkspace'
 import { buildAgentUserContent } from '@main/ai/runtime/agentUserContent'
 import { buildCitationsGuidance } from '@main/ai/runtime/citationsGuidance'
 import { wrapSteerReminder } from '@main/ai/steerReminder'
@@ -269,6 +270,20 @@ export class DshRuntimeConnection implements AgentRuntimeConnection {
     if (!session.agentId || !workspacePath) {
       throw new Error(`dsh agent session ${this.input.sessionId} has no agent or workspace configured`)
     }
+
+    // The driver's validateSession owns workspace preparation, but a primed/warm connection
+    // reaches start() without it — leaving an app-owned system workspace uncreated while
+    // buildAgentRuntimePrompt reads the workspace (system.md). Materialize it here too.
+    // Best-effort on purpose: validateSession stays the authoritative gate that reports an
+    // unusable workspace to the user, and a failure here must not pre-empt it with a less
+    // useful error (a prompt built without system.md is already the correct degraded result).
+    await prepareAgentSessionWorkspaceDirectory(session).catch((error) => {
+      logger.warn('Failed to prepare the dsh session workspace before building the prompt', {
+        sessionId: this.input.sessionId,
+        workspacePath,
+        error
+      })
+    })
 
     // dsh has no native permission modes; the bridge plugin enforces the pushed policy.
     this.permissionMode = toBridgePermissionMode(agent.configuration?.permission_mode)

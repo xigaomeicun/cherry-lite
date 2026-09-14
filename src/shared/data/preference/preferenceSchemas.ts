@@ -63,11 +63,11 @@ export interface PreferenceSchemas {
     // target-key-definitions/complex/complex
     'app.logs.retention_days': number
     // redux/settings/notification.assistant
-    'app.notification.assistant.enabled': boolean
-    'app.notification.completion_sound.enabled': boolean
     'app.notification.approval_sound.enabled': boolean
+    'app.notification.assistant.enabled': boolean
     // redux/settings/notification.backup
     'app.notification.backup.enabled': boolean
+    'app.notification.completion_sound.enabled': boolean
     // redux/settings/notification.knowledge
     'app.notification.knowledge.enabled': boolean
     // target-key-definitions/complex/complex
@@ -590,17 +590,19 @@ export const DefaultPreferences: PreferenceSchemas = {
     'agent.session.display_mode': 'agent',
     'agent.session.position': 'left',
     'app.developer_mode.enabled': false,
-    'app.dist.auto_update.enabled': true,
+    // cherry-lite: default off. The build keeps upstream's version number, so auto-download
+    // would fetch the official package and replace this fork (see electron-builder.yml publish).
+    'app.dist.auto_update.enabled': false,
     'app.dist.test_plan.channel': PreferenceTypes.UpgradeChannel.LATEST,
     'app.dist.test_plan.enabled': false,
     'app.fetch.allow_private_network': true,
     'app.language': null,
     'app.launch_on_boot': false,
     'app.logs.retention_days': 30,
-    'app.notification.assistant.enabled': false,
-    'app.notification.completion_sound.enabled': true,
     'app.notification.approval_sound.enabled': true,
+    'app.notification.assistant.enabled': false,
     'app.notification.backup.enabled': false,
+    'app.notification.completion_sound.enabled': true,
     'app.notification.knowledge.enabled': false,
     'app.notification.mini_app.enabled': true,
     'app.notification.update.enabled': false,

@@ -2322,7 +2322,7 @@ describe('buildClaudeCodeSessionSettings', () => {
     expect(settings.allowedTools).toContain('mcp__skills__search_skills')
   })
 
-  it('restricts Cherry Support to its bundled skills without marketplace access', async () => {
+  it('gives Cherry Support the user skill environment, not just its own bundle', async () => {
     const workspacePath = await mkdtemp(path.join(os.tmpdir(), 'support-skill-source-'))
     const workspacePluginManifest = path.join(
       workspacePath,
@@ -2358,24 +2358,29 @@ describe('buildClaudeCodeSessionSettings', () => {
     const settings = await buildClaudeCodeSessionSettings(session as never, {} as never)
     await rm(workspacePath, { recursive: true, force: true })
 
-    expect(settings.skills).toEqual([
-      'cherry-assistant-builtin:cherry-assistant-guide',
-      'cherry-assistant-builtin:faq-collector',
-      'cherry-assistant-builtin:cherry-studio-feedback',
-      'cherry-assistant-builtin:issue-reporter'
-    ])
-    expect(settings.plugins).toEqual([
-      {
-        type: 'local',
-        path: '/app/feature.agents.builtin/cherry-assistant/.claude',
-        skipMcpDiscovery: true
-      }
-    ])
-    expect(settings.settingSources).toEqual([])
-    expect(mocks.listSkills).not.toHaveBeenCalled()
-    expect(mocks.listLocalSkillFolderNames).not.toHaveBeenCalled()
-    expect(settings.mcpServers?.skills).toBeUndefined()
-    expect(settings.allowedTools).not.toContain('mcp__skills__search_skills')
+    // Cherry-Lite: Support runs with environment `open` (not upstream's `sealed`), so the user
+    // skill environment is resolved alongside the builtin bundle — bare skill names rather than
+    // `cherry-assistant-builtin:`-prefixed ones, and the skills MCP server stays mounted.
+    expect(settings.skills).toEqual(
+      expect.arrayContaining(['cherry-assistant-guide', 'faq-collector', 'cherry-studio-feedback', 'issue-reporter'])
+    )
+    // Under `open` the workspace plugin dir and the managed CLAUDE root are discovered too,
+    // not just the builtin bundle. The workspace path is a per-run temp dir, so match on shape.
+    expect(settings.plugins).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ type: 'local', path: expect.stringContaining('same-name-skills') }),
+        { type: 'local', path: '/app/feature.agents.claude.root', skipMcpDiscovery: true },
+        {
+          type: 'local',
+          path: '/app/feature.agents.builtin/cherry-assistant/.claude',
+          skipMcpDiscovery: true
+        }
+      ])
+    )
+    expect(mocks.listSkills).toHaveBeenCalled()
+    expect(mocks.listLocalSkillFolderNames).toHaveBeenCalled()
+    expect(settings.mcpServers?.skills).toBeDefined()
+    expect(settings.allowedTools).toContain('mcp__skills__search_skills')
     expect(mocks.createAssistantServer).toHaveBeenCalledWith('anthropic::claude-sonnet', [
       'navigate',
       'diagnose',

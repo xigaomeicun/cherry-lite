@@ -116,6 +116,22 @@ describe('PromptBuilder', () => {
     expect(result).toContain('`/workspace/SOUL.md`')
   })
 
+  it('treats a missing workspace directory as "no system.md" instead of failing the build', async () => {
+    // Regression: a primed/warm connection can reach the prompt build before the driver's
+    // validateSession materialized the workspace. `readdir` then throws ENOENT for the missing
+    // directory, and the case-insensitive probe used to rethrow it under `failOnError` — even
+    // though the exact-match probe tolerates the very same ENOENT. That asymmetry turned a
+    // pre-warmed connection into "Failed to prime agent session connection".
+    setupFiles({})
+    mockedReaddir.mockImplementation(async () => {
+      throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
+    })
+
+    const { base } = await builder.buildPromptParts('/workspace')
+
+    expect(base).toEqual({ kind: 'native' })
+  })
+
   it('no longer embeds the always-injected tool-usage handbook (now a lazy builtin skill)', async () => {
     setupFiles({})
 

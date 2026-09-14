@@ -1,8 +1,7 @@
-import { describe, expect, it } from 'vitest'
-
 import { DEFAULT_ASSISTANT_TOOL_NAMES } from '@main/ai/toolApproval/assistantToolNames'
 import { BUILTIN_AGENT_ROLE } from '@shared/ai/builtinAgent'
 import { AGENT_TYPES, type AgentType } from '@shared/data/api/schemas/agents'
+import { describe, expect, it } from 'vitest'
 
 import { hostToolsEnabled, resolveAgentCapabilities, resolveHostTools } from '../builtinAgentCapabilities'
 
@@ -23,9 +22,13 @@ describe('resolveAgentCapabilities', () => {
     expect(capabilities.allKnowledgeBases).toBe(false)
   })
 
-  it('closes Cherry Support to its own bundle', () => {
+  it('opens Cherry Support to the user environment so local skills and MCP servers still mount', () => {
+    // Cherry-Lite: Support ships `open`, not upstream's `sealed`. `sealed` made
+    // buildSkillWhitelist whitelist builtin skills only and made resolveMountedMcpServers
+    // drop skills / mcp-manager, so the support Agent could not use local skills (the Skill
+    // tool answered "Unknown skill"). See CAPABILITIES_BY_ROLE[BUILTIN_AGENT_ROLE.SUPPORT].
     const capabilities = resolveAgentCapabilities({ configuration: { builtin_role: BUILTIN_AGENT_ROLE.SUPPORT } })
-    expect(capabilities.environment).toBe('sealed')
+    expect(capabilities.environment).toBe('open')
   })
 
   it('withholds arbitrary Agent creation from Cherry Support', () => {
