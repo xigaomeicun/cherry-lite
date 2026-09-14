@@ -2,8 +2,6 @@ import { randomUUID } from 'node:crypto'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 
-import mime from 'mime'
-
 import { application } from '@application'
 import { agentChannelService as channelService } from '@data/services/AgentChannelService'
 import { agentService } from '@data/services/AgentService'
@@ -21,6 +19,7 @@ import type { FileAttachment, ImageAttachment } from '@main/utils/downloadAsBase
 import { AGENT_SESSION_SLASH_COMMANDS_CACHE_KEY } from '@shared/ai/agentSessionSlashCommands'
 import type { AgentChannelEntity } from '@shared/data/api/schemas/agentChannels'
 import type { AgentSessionEntity } from '@shared/data/api/schemas/agentSessions'
+import mime from 'mime'
 
 import type {
   ChannelAdapter,
@@ -234,41 +233,19 @@ export class ChannelMessageHandler {
       return Promise.resolve()
     }
 
-    // Telegram: if a turn is already streaming for this session, auto-queue (do not drop).
-    // Optional interrupt / cancel via callback card.
-    type BusyMsg = ChannelMessageEvent & {
-      _skipBusyCheck?: boolean
-      _cherryBusyCancelled?: boolean
-      _cherryBusyOfferId?: string
-    }
-    const busyMsg = message as BusyMsg
-    if (adapter.channelType === 'telegram' && !busyMsg._skipBusyCheck) {
+    // Telegram: if a turn is already streaming for this session, auto-abort the previous turn
+    // and seamlessly insert the new instruction (aligned with Copilot bridge style & emoji).
+    if (adapter.channelType === 'telegram') {
       const sid = this.peekSessionId(adapter.agentId, adapter.channelId, conversationIdOf(message))
       if (sid && this.activeAbortControllers.has(sid)) {
-        const offerId = `busy_${Math.random().toString(36).slice(2, 9)}`
-        const snippet = escHtml((message.text || '附件/文件任务').slice(0, 50))
-        busyMsg._skipBusyCheck = true
-        busyMsg._cherryBusyOfferId = offerId
-        busyOffers.set(offerId, { activeSessionId: sid, message: busyMsg, cancelled: false })
+        this.abortSession(sid)
+        void adapter.dismissToolProgress(message.chatId).catch(() => {})
         void adapter
-          .sendMessage(
-            message.chatId,
-            `⏳ <b>当前正在执行任务中...</b>\n\n新指令：<i>${snippet}</i>\n\n✅ <b>已自动加入队列</b>，上轮完成后执行。`,
-            {
-              ...responseOptionsFor(message),
-              parseMode: 'html',
-              replyMarkup: {
-                inline_keyboard: [
-                  [
-                    { text: '⚡️ 立即打断', callback_data: `busy:interrupt:${offerId}` },
-                    { text: '🗑 放弃此条', callback_data: `busy:cancel:${offerId}` }
-                  ]
-                ]
-              }
-            }
-          )
+          .sendMessage(message.chatId, '⚡️ <i>已打断上一任务，正在执行新指令...</i>', {
+            ...responseOptionsFor(message),
+            parseMode: 'html'
+          })
           .catch(() => {})
-        message = busyMsg
       }
     }
 
@@ -1226,7 +1203,9 @@ export class ChannelMessageHandler {
 
   /** Abort an active stream for the given session. Returns true if a stream was in flight. */
   abortSession(sessionId: string): boolean {
-    if (!this.activeAbortControllers.has(sessionId)) return false
+    const controller = this.activeAbortControllers.get(sessionId)
+    if (!controller) return false
+    controller.abort()
     this.abortSessionStream(sessionId, 'channel-session-aborted')
     return true
   }

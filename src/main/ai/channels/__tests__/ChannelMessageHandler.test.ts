@@ -1,4 +1,3 @@
-import { EventEmitter } from 'events'
 import { mkdtemp, readdir, rm } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
@@ -10,6 +9,7 @@ import { buildAgentSessionTopicId } from '@main/ai/agentSession/topic'
 import { AgentSessionWorkspaceError } from '@main/ai/runtime/agentSessionWorkspace'
 import { AGENT_SESSION_SLASH_COMMANDS_CACHE_KEY } from '@shared/ai/agentSessionSlashCommands'
 import { MockMainCacheServiceUtils } from '@test-mocks/main/CacheService'
+import { EventEmitter } from 'events'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { ChannelMessageEvent } from '../ChannelAdapter'
@@ -263,6 +263,44 @@ describe('ChannelMessageHandler', () => {
       text: 'second'
     })
     expect(adapter.sendMessage).toHaveBeenCalledWith('chat-1', 'second completed', undefined)
+  })
+
+  it('auto-aborts the active turn and immediately inserts when a new Telegram message arrives', async () => {
+    const adapter = createMockAdapter({ channelType: 'telegram' })
+    const session = {
+      id: 'session-tg-busy',
+      agentId: 'agent-1',
+      agentType: 'claude-code',
+      model: 'openai::gpt-4',
+      workspace: { path: '/tmp/test-workspace' },
+      configuration: {}
+    }
+    vi.mocked(agentSessionService.create).mockReturnValue(session as any)
+
+    // Simulate an active abort controller registered for the session
+    const abortController = new AbortController()
+    ;(channelMessageHandler as any).activeAbortControllers.set('session-tg-busy', abortController)
+    persistedChannelSessions.bindings.set('channel-1:chat-1', 'session-tg-busy')
+    persistedChannelSessions.sessions.set('session-tg-busy', session as any)
+
+    adapter.dismissToolProgress = vi.fn().mockResolvedValue(undefined)
+
+    simulateStream([{ type: 'text-delta', delta: 'new instruction output' }])
+
+    await handleIncomingAndFlush(adapter, {
+      chatId: 'chat-1',
+      userId: 'user-1',
+      userName: 'User',
+      text: 'interrupting message'
+    })
+
+    expect(abortController.signal.aborted).toBe(true)
+    expect(adapter.dismissToolProgress).toHaveBeenCalledWith('chat-1')
+    expect(adapter.sendMessage).toHaveBeenCalledWith(
+      'chat-1',
+      '⚡️ <i>已打断上一任务，正在执行新指令...</i>',
+      expect.objectContaining({ parseMode: 'html' })
+    )
   })
 
   // channels-core-3: the streaming delivery path (real ChannelAdapterListener) must route
