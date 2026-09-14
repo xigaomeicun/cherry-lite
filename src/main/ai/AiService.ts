@@ -87,6 +87,7 @@ import type {
 } from './types'
 import { installProviderUserAgentInterceptor } from './utils/customFetch'
 import { type SplitImageParams, splitParamValues } from './utils/imageOptions'
+import { normalizeImageEditInputs } from './utils/normalizeImageEditInputs'
 import { createAiUsageCaptureContext } from './utils/usageCapture'
 
 const logger = loggerService.withContext('AiService')
@@ -900,6 +901,7 @@ export class AiService extends BaseService {
     // WireProfile engine forwards.
     const params = request.paramValues
     const { structured, vendorBag } = splitParamValues(params)
+    const inputImages = request.inputImages ? await normalizeImageEditInputs(request.inputImages, signal) : undefined
 
     // Custom-provider image transports (ppio / dashscope / modelscope /
     // dmxapi-bespoke / openai-compatible gemini-image) run on the job system so
@@ -921,12 +923,12 @@ export class AiService extends BaseService {
       request.uniqueModelId &&
       (hasImageTransport(transportProviderId, transportModelId) || hasImageTransport(aiSdkProviderId, transportModelId))
     ) {
-      return await this.generateImageViaJob(request, structured, vendorBag, signal, source)
+      return await this.generateImageViaJob({ ...request, inputImages }, structured, vendorBag, signal, source)
     }
 
     const { sdkConfig, credentialReceipt } = await this.resolveTransportFor(request)
-    const promptParam = request.inputImages
-      ? { text: request.prompt, images: request.inputImages, ...(request.mask && { mask: request.mask }) }
+    const promptParam = inputImages
+      ? { text: request.prompt, images: inputImages, ...(request.mask && { mask: request.mask }) }
       : request.prompt
 
     // Vendor body (`providerOptions[providerId]`): the WireProfile engine maps the
