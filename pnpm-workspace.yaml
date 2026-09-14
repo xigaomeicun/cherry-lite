@@ -85,6 +85,9 @@ patchedDependencies:
   '@ai-sdk/google@3.0.113': patches/@ai-sdk__google@3.0.113.patch
   '@ai-sdk/anthropic': patches/@ai-sdk__anthropic.patch
   '@tiptap/extension-drag-handle@3.26.1': patches/@tiptap__extension-drag-handle@3.26.1.patch
+  # #20475: stops the orderedList/taskList tokenizer from re-splitting the whole
+  # remaining source at every block boundary (O(blocks x size) markdown parse freeze).
+  '@tiptap/extension-list@3.26.1': patches/@tiptap__extension-list@3.26.1.patch
   '@tiptap/markdown@3.26.1': patches/@tiptap__markdown@3.26.1.patch
   '@openrouter/ai-sdk-provider@2.10.0': patches/@openrouter__ai-sdk-provider@2.10.0.patch
   onnxruntime-node@1.25.1: patches/onnxruntime-node@1.25.1.patch
@@ -102,6 +105,9 @@ patchedDependencies:
   '@deepseek-ai/dsh-llm-pi-ai@0.1.0-rc.7': patches/@deepseek-ai__dsh-llm-pi-ai@0.1.0-rc.7.patch
   '@earendil-works/pi-ai@0.80.6': patches/@earendil-works__pi-ai@0.80.6.patch
   '@earendil-works/pi-coding-agent@0.80.3': patches/@earendil-works__pi-coding-agent@0.80.3.patch
+  # #20329: preserve current animation targets when React Activity reconnects.
+  # Remove when an upstream release includes the blocked-initial-animation remount fix.
+  motion-dom@12.42.0: patches/motion-dom@12.42.0.patch
 
 allowBuilds:
   '@deepseek-ai/dsh-subprocess-local': true
