@@ -601,7 +601,9 @@ export class ExecutionStreamOverlayService {
             if (!cancelled) logger.warn('readUIMessageStream error', { topicId, executionId, err })
           }
         })) {
-          if (cancelled) break
+          // cancelBranch terminates the input; drain queued output so the SDK
+          // can close its controller without an iterator cancellation racing it.
+          if (cancelled) continue
           const sharedParts = shareSettledPartReferences(
             last?.parts as CherryMessagePart[] | undefined,
             snapshot.parts as CherryMessagePart[]
