@@ -1,8 +1,7 @@
+import type { useMutation } from '@data/hooks/useDataApi'
 import { mockUseMutation, mockUseQuery } from '@test-mocks/renderer/useDataApi'
 import { act, renderHook } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-
-import type { useMutation } from '@data/hooks/useDataApi'
 
 import type { PaintingData } from '../../model/types/paintingData'
 import { usePaintingList } from '../usePaintingList'
@@ -53,12 +52,11 @@ describe('usePaintingList', () => {
     deletePainting.mockResolvedValue(undefined)
     refresh.mockResolvedValue(undefined)
     mockUseMutation.mockImplementation((method) => ({
-      trigger:
-        method === 'PATCH'
-          ? (data: PaintingMutationArgs) => updatePainting(data?.params?.id, data?.body)
-          : method === 'DELETE'
-            ? (data: PaintingMutationArgs) => deletePainting(data?.params?.id)
-            : createPainting,
+      trigger: (method === 'PATCH'
+        ? (data: PaintingMutationArgs) => updatePainting(data?.params?.id, data?.body)
+        : method === 'DELETE'
+          ? (data: PaintingMutationArgs) => deletePainting(data?.params?.id)
+          : createPainting) as any,
       isLoading: false,
       error: undefined
     }))
