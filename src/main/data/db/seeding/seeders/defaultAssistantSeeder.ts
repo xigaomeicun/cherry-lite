@@ -1,6 +1,7 @@
 import { assistantTable } from '@data/db/schemas/assistant'
 import { messageTable } from '@data/db/schemas/message'
 import { topicTable } from '@data/db/schemas/topic'
+import { userModelTable } from '@data/db/schemas/userModel'
 import { messageService } from '@data/services/MessageService'
 import { insertWithOrderKey } from '@data/services/utils/orderKey'
 import { DEFAULT_ASSISTANT_SEED, getDefaultAssistantNameForLocale } from '@shared/data/presets/defaultAssistant'
@@ -31,8 +32,22 @@ export class DefaultAssistantSeeder implements ISeeder {
         return
       }
 
+      let modelId: string | null = null
+      if (DEFAULT_ASSISTANT_SEED.modelId) {
+        const [existingModel] = tx
+          .select({ id: userModelTable.id })
+          .from(userModelTable)
+          .where(eq(userModelTable.id, DEFAULT_ASSISTANT_SEED.modelId))
+          .limit(1)
+          .all()
+        if (existingModel) {
+          modelId = existingModel.id
+        }
+      }
+
       const insertValues = {
         ...DEFAULT_ASSISTANT_SEED,
+        modelId,
         name: getDefaultAssistantNameForLocale(this.getPreferredSystemLanguage()),
         settings: { ...DEFAULT_ASSISTANT_SEED.settings }
       } satisfies Omit<typeof assistantTable.$inferInsert, 'orderKey'>
