@@ -68,10 +68,8 @@ describe('pasteHandling', () => {
       event,
       ['.txt'],
       setFiles,
-      undefined,
       true,
       LONG_TEXT_PASTE_THRESHOLD,
-      '',
       undefined,
       (key) => (key === 'chat.input.pasted_text_file_name' ? 'pasted text.txt' : key)
     )
@@ -107,14 +105,7 @@ describe('pasteHandling', () => {
       }
     } as unknown as ClipboardEvent
 
-    const handled = await pasteHandling.handlePaste(
-      event,
-      ['.png'],
-      setFiles,
-      undefined,
-      true,
-      LONG_TEXT_PASTE_THRESHOLD
-    )
+    const handled = await pasteHandling.handlePaste(event, ['.png'], setFiles, true, LONG_TEXT_PASTE_THRESHOLD)
 
     expect(handled).toBe(false)
     expect(preventDefault).not.toHaveBeenCalled()
@@ -154,7 +145,7 @@ describe('pasteHandling', () => {
       }
     } as unknown as ClipboardEvent
 
-    const handled = await pasteHandling.handlePaste(event, [], setFiles, undefined, true, LONG_TEXT_PASTE_THRESHOLD, '')
+    const handled = await pasteHandling.handlePaste(event, [], setFiles, true, LONG_TEXT_PASTE_THRESHOLD)
 
     expect(handled).toBe(false)
     expect(preventDefault).not.toHaveBeenCalled()
@@ -334,8 +325,6 @@ describe('pasteHandling', () => {
       undefined,
       undefined,
       undefined,
-      undefined,
-      undefined,
       (key) => key
     )
 
@@ -374,8 +363,6 @@ describe('pasteHandling', () => {
       event,
       ['.png'],
       setFiles,
-      undefined,
-      undefined,
       undefined,
       undefined,
       undefined,
