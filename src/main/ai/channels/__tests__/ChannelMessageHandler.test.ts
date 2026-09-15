@@ -298,7 +298,7 @@ describe('ChannelMessageHandler', () => {
     expect(adapter.dismissToolProgress).toHaveBeenCalledWith('chat-1')
     expect(adapter.sendMessage).toHaveBeenCalledWith(
       'chat-1',
-      '⚡️ <i>已打断上一任务，正在执行新指令...</i>',
+      '⚡️ <i>已收到新指令，正在顺序处理...</i>',
       expect.objectContaining({ parseMode: 'html' })
     )
   })

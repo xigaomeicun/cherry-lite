@@ -241,7 +241,7 @@ export class ChannelMessageHandler {
         this.abortSession(sid)
         void adapter.dismissToolProgress(message.chatId).catch(() => {})
         void adapter
-          .sendMessage(message.chatId, '⚡️ <i>已打断上一任务，正在执行新指令...</i>', {
+          .sendMessage(message.chatId, '⚡️ <i>已收到新指令，正在顺序处理...</i>', {
             ...responseOptionsFor(message),
             parseMode: 'html'
           })
