@@ -258,7 +258,7 @@ export class ChannelMessageHandler {
         // Steer was declined or unavailable (e.g. pure text turn / no tool boundary);
         // seamlessly queue for execution once the current turn completes.
         void adapter
-          .sendMessage(message.chatId, '⏳ <i>当前任务正在执行中，新指令已自动排队，完成后紧接着执行...</i>', {
+          .sendMessage(message.chatId, '⏳ <i>任务执行中，新指令已排队…</i>', {
             ...responseOptionsFor(message),
             parseMode: 'html'
           })

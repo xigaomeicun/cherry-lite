@@ -344,7 +344,7 @@ describe('ChannelMessageHandler', () => {
     expect(abortController.signal.aborted).toBe(false)
     expect(adapter.sendMessage).toHaveBeenCalledWith(
       'chat-1',
-      '⏳ <i>当前任务正在执行中，新指令已自动排队，完成后紧接着执行...</i>',
+      '⏳ <i>任务执行中，新指令已排队…</i>',
       expect.objectContaining({ parseMode: 'html' })
     )
   })
