@@ -339,7 +339,11 @@ function DeferredComposerSurface(props: ComposerSurfaceProps) {
               if (matchesComposerShortcut(event, newlineShortcut)) insertFallbackNewline(event.currentTarget)
             }}
           />
-          <ComposerFocusShortcut focus={() => textareaRef.current?.focus()} editable={props.editable} />
+          <ComposerFocusShortcut
+            focus={() => textareaRef.current?.focus()}
+            editable={props.editable}
+            composerEmpty={props.text.length === 0}
+          />
         </div>
       </div>
       <div

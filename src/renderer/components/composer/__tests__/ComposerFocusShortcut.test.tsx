@@ -11,7 +11,7 @@ const state = vi.hoisted(() => ({ active: true }))
 
 vi.mock('@renderer/hooks/tab', () => ({ useIsActiveTab: () => state.active }))
 
-function mount(editable = true) {
+function mount(editable = true, composerEmpty = true) {
   render(
     <CommandContextKeyProvider>
       <CommandProvider>
@@ -19,6 +19,7 @@ function mount(editable = true) {
         <ComposerFocusShortcut
           focus={() => screen.getByRole('textbox', { name: 'Message' }).focus()}
           editable={editable}
+          composerEmpty={composerEmpty}
         />
       </CommandProvider>
     </CommandContextKeyProvider>
@@ -71,5 +72,22 @@ describe('ComposerFocusShortcut', () => {
     expect(screen.queryByText('Ctrl+I')).not.toBeInTheDocument()
     await user.keyboard('{Control>}i{/Control}')
     expect(input).not.toHaveFocus()
+  })
+
+  it('hides the hint once the composer holds text, so it cannot sit on top of the first line', () => {
+    mount(true, false)
+
+    expect(screen.queryByText('Ctrl+I')).not.toBeInTheDocument()
+  })
+
+  it('keeps the hint out of the editor flow so it cannot drag the editor scrollbar inward', () => {
+    mount()
+
+    // `absolute` is the whole point: a flow-level sibling steals width from the editor, which moves
+    // the editor's own scrollbar away from the composer's right edge while the hint is visible.
+    const hint = screen.getByText('Ctrl+I').parentElement
+    expect(hint).not.toBeNull()
+    expect(hint).toHaveClass('absolute')
+    expect(hint).not.toHaveClass('flex-1')
   })
 })
