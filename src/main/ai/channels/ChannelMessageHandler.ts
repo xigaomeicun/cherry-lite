@@ -1015,7 +1015,7 @@ export class ChannelMessageHandler {
         })
         // Notify on the still-live adapter before reconnect tears it down.
         await adapter
-          .sendMessage(chatId, `🤖 渠道已绑定智能体 <b>${escHtml(target.name || targetAgentId)}</b>，正在重连…`, {
+          .sendMessage(chatId, `🤖 渠道已绑定智能体 <b>${escHtml(target.name || targetAgentId)}</b>`, {
             parseMode: 'html'
           })
           .catch(() => {})
