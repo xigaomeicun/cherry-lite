@@ -3843,8 +3843,9 @@ describe('Sessions', () => {
     const deleteAgentMenuItem = screen
       .getAllByRole('menuitem', { name: 'Delete Agent' })
       .find((button) => button.getAttribute('data-slot') === 'dropdown-menu-item')
+    // The menu must offer the REAL delete — that positive lookup is what fails if the built-in role
+    // ever regains a tasks-only downgrade (the copy for it no longer exists in any catalog).
     expect(deleteAgentMenuItem).toBeDefined()
-    expect(screen.queryByRole('menuitem', { name: 'Delete agent tasks' })).not.toBeInTheDocument()
 
     fireEvent.click(deleteAgentMenuItem as HTMLElement)
 
