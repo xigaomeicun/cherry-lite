@@ -11,6 +11,7 @@ import {
   createSessionWorkdirDisplayMaps,
   createSessionWorkdirLabelMap,
   getPrimarySessionWorkdir,
+  getSessionMoveTargetAgentId,
   moveSessionWorkdirGroupAfterDrop,
   normalizeSessionDropPayload,
   normalizeSessionWorkdirPath,
@@ -115,10 +116,12 @@ describe('SessionList helpers', () => {
     expect(normalizeSessionDropPayload(crossGroupPayload)).toBe(crossGroupPayload)
   })
 
-  it('allows drag only inside the same non-pinned display group', () => {
+  it('allows drag inside the same group and across agent groups, but nowhere else', () => {
     const cases = [
       ['same agent group', 'agent', 'session:agent:agent-a', 'session:agent:agent-a', true],
-      ['different agent groups', 'agent', 'session:agent:agent-a', 'session:agent:agent-b', false],
+      ['different agent groups', 'agent', 'session:agent:agent-a', 'session:agent:agent-b', true],
+      ['orphan agent group as target', 'agent', 'session:agent:agent-a', 'session:agent:unknown', false],
+      ['pinned group as target', 'agent', 'session:agent:agent-a', 'session:pinned', false],
       ['same workdir group', 'workdir', 'session:workspace:ws-a', 'session:workspace:ws-a', true],
       ['different workdir groups', 'workdir', 'session:workspace:ws-a', 'session:workspace:ws-b', false],
       ['pinned group', 'workdir', 'session:pinned', 'session:pinned', false],
@@ -127,6 +130,45 @@ describe('SessionList helpers', () => {
 
     for (const [label, mode, sourceGroupId, targetGroupId, expected] of cases) {
       expect(canDropSessionItemInDisplayGroup({ mode, sourceGroupId, targetGroupId }), label).toBe(expected)
+    }
+  })
+
+  it('resolves the cross-agent move target only for an agent-group drop on a different owner', () => {
+    const cases = [
+      ['agent group to another agent', 'agent', 'session:agent:agent-a', 'session:agent:agent-b', 'agent-b'],
+      ['workdir group to another workdir', 'workdir', 'session:workspace:ws-a', 'session:workspace:ws-b', undefined],
+      ['time mode', 'time', 'session:bucket:today', 'session:bucket:earlier', undefined],
+      ['same agent group', 'agent', 'session:agent:agent-a', 'session:agent:agent-a', undefined],
+      ['orphan target has no agent', 'agent', 'session:agent:agent-a', 'session:agent:unknown', undefined],
+      ['pinned target', 'agent', 'session:agent:agent-a', 'session:pinned', undefined],
+      ['plain group id', 'agent', 'session:agent:agent-a', 'agent-b', undefined]
+    ] as const
+
+    for (const [label, mode, sourceGroupId, targetGroupId, expected] of cases) {
+      expect(getSessionMoveTargetAgentId({ mode, sourceGroupId, targetGroupId }), label).toBe(expected)
+    }
+  })
+
+  it('agrees with the drop gate on every cross-group case (a move target implies a droppable target)', () => {
+    const groupPairs = [
+      ['session:agent:agent-a', 'session:agent:agent-b'],
+      ['session:agent:agent-a', 'session:agent:unknown'],
+      ['session:agent:agent-a', 'session:pinned'],
+      ['session:agent:agent-a', 'session:agent:agent-a'],
+      ['session:workspace:ws-a', 'session:workspace:ws-b']
+    ] as const
+
+    for (const mode of ['agent', 'workdir', 'time'] as const) {
+      for (const [sourceGroupId, targetGroupId] of groupPairs) {
+        const moveTarget = getSessionMoveTargetAgentId({ mode, sourceGroupId, targetGroupId })
+        const droppable = canDropSessionItemInDisplayGroup({ mode, sourceGroupId, targetGroupId })
+        const label = `${mode} ${sourceGroupId} -> ${targetGroupId}`
+
+        // A resolved move target must be droppable, otherwise the gesture is offered but nothing runs.
+        if (moveTarget) expect(droppable, label).toBe(true)
+        // Conversely, a cross-group drop only passes the gate when it also resolves a move target.
+        if (droppable && sourceGroupId !== targetGroupId) expect(moveTarget, label).toBeDefined()
+      }
     }
   })
 

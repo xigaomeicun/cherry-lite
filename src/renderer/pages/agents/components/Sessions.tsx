@@ -60,6 +60,7 @@ import {
   createSessionWorkdirDisplayMaps,
   getAgentIdFromSessionGroupId,
   getSessionAgentGroupId,
+  getSessionMoveTargetAgentId,
   getWorkdirPathFromSessionGroupId,
   isSystemWorkspaceSession,
   moveSessionAgentGroupAfterDrop,
@@ -1608,6 +1609,30 @@ const Sessions = ({
       const session = sessionItems.find((candidate) => candidate.id === payload.activeId)
       if (!session || session.pinned) return
 
+      // A drop into ANOTHER agent's group reassigns the session's owner instead of reordering it.
+      // The group resolver only emits an `agent:<id>` id for an agent present in `agentById` — a
+      // session whose owner is missing falls into the orphan group, which resolves no target here.
+      const moveTargetAgentId = getSessionMoveTargetAgentId({
+        mode: displayMode,
+        sourceGroupId: payload.sourceGroupId,
+        targetGroupId: payload.targetGroupId
+      })
+
+      if (moveTargetAgentId) {
+        if (session.agentId === moveTargetAgentId) return
+
+        const moved = await updateSession({ id: session.id, agentId: moveTargetAgentId })
+        if (!moved) return
+
+        // Land the session where it was dropped inside its new group. Best effort: the ownership
+        // change above is the operation that matters, so a failed position tweak must stay silent
+        // rather than report the whole gesture as failed.
+        void reorderSession(session.id, buildSessionDropAnchor(normalizeSessionDropPayload(payload)), {
+          silent: true
+        })
+        return
+      }
+
       const normalizedPayload = normalizeSessionDropPayload(payload)
       const anchor = buildSessionDropAnchor(normalizedPayload)
       setOptimisticMove(normalizedPayload)
@@ -1630,6 +1655,7 @@ const Sessions = ({
       reorderWorkspace,
       sessionItems,
       t,
+      updateSession,
       workdirDragReady,
       workdirDisplay,
       workspaceRowsForDisplay
@@ -1993,7 +2019,9 @@ const Sessions = ({
         groups: displayMode === 'agent' ? agentDragReady : workdirDragReady,
         items: itemDragReady,
         itemSameGroup: itemDragReady,
-        itemCrossGroup: false
+        // Only the agent grouping can act on a cross-group item drop (it reassigns the session's
+        // owner); the time / workdir groupings keep it off so the list never offers a dead gesture.
+        itemCrossGroup: displayMode === 'agent' && agentDragReady
       }}
       canDragGroup={canDragSessionGroup}
       canDropGroup={canDropSessionGroup}

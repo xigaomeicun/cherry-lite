@@ -415,6 +415,30 @@ export function buildSessionAgentGroupDropAnchor(
   return buildResourceListGroupDropAnchor(payload, overAgentId)
 }
 
+/**
+ * Resolve the cross-agent MOVE target for a session-item drop, or `undefined` when the drop carries
+ * no ownership change (a plain reorder inside one group, or a gesture the list must refuse).
+ *
+ * In the `agent` display mode a group IS an agent, so dropping a session into another agent's group
+ * reassigns the session's owner. The `time` / `workdir` modes group by bucket / workspace — their
+ * group ids carry no agent, so a cross-group drop there can never move anything.
+ *
+ * Refused targets: the pinned group (pin state is not ownership) and the orphan `unknown agent`
+ * group — both fail `getAgentIdFromSessionGroupId`. A same-group drop is never a move.
+ */
+export function getSessionMoveTargetAgentId({
+  mode,
+  sourceGroupId,
+  targetGroupId
+}: {
+  mode: AgentSessionDisplayMode
+  sourceGroupId: string
+  targetGroupId: string
+}): string | undefined {
+  if (mode !== 'agent' || sourceGroupId === targetGroupId) return undefined
+  return getAgentIdFromSessionGroupId(targetGroupId)
+}
+
 export function canDropSessionItemInDisplayGroup({
   mode,
   sourceGroupId,
@@ -424,7 +448,11 @@ export function canDropSessionItemInDisplayGroup({
   sourceGroupId: string
   targetGroupId: string
 }) {
-  return mode !== 'time' && sourceGroupId === targetGroupId && targetGroupId !== SESSION_PINNED_GROUP_ID
+  if (targetGroupId === SESSION_PINNED_GROUP_ID) return false
+  if (mode === 'time') return false
+  if (sourceGroupId === targetGroupId) return true
+  // A cross-group drop is a valid gesture only where we can actually reassign the session.
+  return getSessionMoveTargetAgentId({ mode, sourceGroupId, targetGroupId }) !== undefined
 }
 
 export function applyOptimisticSessionDisplayMove<T extends SessionListItem>(

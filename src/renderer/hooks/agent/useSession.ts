@@ -376,12 +376,17 @@ export const useSessions = (
     refresh: ['/agent-sessions']
   })
   const reorderSession = useCallback(
-    async (id: string, anchor: OrderRequest): Promise<boolean> => {
+    async (id: string, anchor: OrderRequest, options?: { silent?: boolean }): Promise<boolean> => {
       try {
         await reorderTrigger({ params: { id }, body: anchor })
         return true
       } catch (error) {
-        toast.error(formatErrorMessageWithPrefix(error, t('agent.session.reorder.error.failed')))
+        // `silent` is for best-effort position tweaks that ride an operation that already
+        // succeeded (e.g. the position half of a cross-agent move) — a toast there would
+        // report the whole gesture as failed when the session did move.
+        if (options?.silent !== true) {
+          toast.error(formatErrorMessageWithPrefix(error, t('agent.session.reorder.error.failed')))
+        }
         return false
       }
     },

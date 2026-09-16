@@ -3137,7 +3137,7 @@ describe('Sessions', () => {
     )
   })
 
-  it('blocks cross-agent groups while preserving same-agent reorder', async () => {
+  it('reassigns the session owner when dropped on another agent group, keeping same-agent reorder', async () => {
     preferenceMocks.values.set('agent.session.display_mode', 'agent')
     agentDataMocks.useAgents.mockReturnValue({
       agents: [
@@ -3154,14 +3154,61 @@ describe('Sessions', () => {
         createSession({ id: 'session-c', name: 'Gamma session', agentId: 'agent-b', orderKey: 'c' })
       ]
     })
+    sessionDataMocks.updateSession.mockResolvedValue({ id: 'session-a', agentId: 'agent-b' })
 
     render(<SessionsForTest />)
 
     expect(screen.getByTestId('dnd-context')).toBeInTheDocument()
     startDraggingSession('session-a')
 
-    expectSessionBlocked('Gamma session')
+    // Cross-agent targets are now droppable: the drop reassigns ownership instead of reordering.
+    expect(screen.getByText('Gamma session').closest('[data-drop-blocked="true"]')).toBeNull()
     expect(screen.getByText('Beta session').closest('[data-drop-blocked="true"]')).toBeNull()
+
+    act(() => {
+      dndMocks.onDragEnd?.({
+        active: {
+          data: sortableData('item:session-a'),
+          id: 'item:session-a',
+          rect: { current: { initial: null, translated: { top: 100, height: 20 } } }
+        },
+        over: { data: sortableData('item:session-c'), id: 'item:session-c', rect: { top: 10, height: 20 } }
+      })
+    })
+
+    await vi.waitFor(() =>
+      expect(sessionDataMocks.updateSession).toHaveBeenCalledWith({ id: 'session-a', agentId: 'agent-b' })
+    )
+    // The ownership change must NOT also be attempted as a plain reorder of the source item.
+    expect(sessionDataMocks.reorderSession).not.toHaveBeenCalledWith('session-a', expect.anything())
+    // Position inside the new group rides the same gesture, silently.
+    await vi.waitFor(() =>
+      expect(sessionDataMocks.reorderSession).toHaveBeenCalledWith(
+        'session-a',
+        { after: 'session-c' },
+        {
+          silent: true
+        }
+      )
+    )
+  })
+
+  it('keeps reordering without touching ownership when dropped inside the same agent group', async () => {
+    preferenceMocks.values.set('agent.session.display_mode', 'agent')
+    agentDataMocks.useAgents.mockReturnValue({
+      agents: [{ id: 'agent-a', model: 'model-a', name: 'Alpha agent' }],
+      isLoading: false,
+      error: undefined
+    })
+    setupSessions({
+      sessions: [
+        createSession({ id: 'session-a', name: 'Alpha session', agentId: 'agent-a', orderKey: 'a' }),
+        createSession({ id: 'session-b', name: 'Beta session', agentId: 'agent-a', orderKey: 'b' })
+      ]
+    })
+
+    render(<SessionsForTest />)
+    startDraggingSession('session-a')
 
     act(() => {
       dndMocks.onDragEnd?.({
@@ -3177,6 +3224,41 @@ describe('Sessions', () => {
     await vi.waitFor(() =>
       expect(sessionDataMocks.reorderSession).toHaveBeenCalledWith('session-a', { after: 'session-b' })
     )
+    expect(sessionDataMocks.updateSession).not.toHaveBeenCalled()
+  })
+
+  it('refuses a cross-agent drop onto a session whose owner is missing from the list', async () => {
+    preferenceMocks.values.set('agent.session.display_mode', 'agent')
+    agentDataMocks.useAgents.mockReturnValue({
+      agents: [{ id: 'agent-a', model: 'model-a', name: 'Alpha agent' }],
+      isLoading: false,
+      error: undefined
+    })
+    setupSessions({
+      sessions: [
+        createSession({ id: 'session-a', name: 'Alpha session', agentId: 'agent-a', orderKey: 'a' }),
+        // Owner absent from the list, so the resolver files it under the orphan group. That group id
+        // resolves no agent, and the drop must stay inert rather than move to an invented owner.
+        createSession({ id: 'session-orphan', name: 'Ghost session', agentId: 'agent-gone', orderKey: 'b' })
+      ]
+    })
+
+    render(<SessionsForTest />)
+    startDraggingSession('session-a')
+
+    act(() => {
+      dndMocks.onDragEnd?.({
+        active: {
+          data: sortableData('item:session-a'),
+          id: 'item:session-a',
+          rect: { current: { initial: null, translated: { top: 100, height: 20 } } }
+        },
+        over: { data: sortableData('item:session-orphan'), id: 'item:session-orphan', rect: { top: 10, height: 20 } }
+      })
+    })
+
+    expect(sessionDataMocks.updateSession).not.toHaveBeenCalled()
+    expect(sessionDataMocks.reorderSession).not.toHaveBeenCalled()
   })
 
   it('rejects drops onto pinned sessions within an agent group', () => {
