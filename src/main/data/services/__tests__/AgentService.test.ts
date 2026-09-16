@@ -351,15 +351,43 @@ describe('AgentService', () => {
       expect(activeBuiltinRows()).toHaveLength(1)
     })
 
-    it('restores the assistant after the Agent delete endpoint removed its row', () => {
+    it('keeps a user-deleted assistant deleted instead of reviving it', () => {
       const first = agentService.ensureBuiltinAgent(defaults)
 
       expect(agentService.deleteAgent(first.id, { deleteSessions: true })).toMatchObject({ deleted: true })
-
-      const restored = agentService.ensureBuiltinAgent(defaults)
-
-      expect(restored.id).not.toBe(first.id)
       expect(agentService.getAgent(first.id)).toBeNull()
+
+      // The delete endpoint removed the row, so the tombstone is the only memory of the user's
+      // choice. Recreating here would undo a deliberate deletion behind the user's back.
+      expect(() => agentService.ensureBuiltinAgent(defaults)).toThrow(/deleted by the user/)
+      expect(activeBuiltinRows()).toHaveLength(0)
+      expect(builtinRows()).toHaveLength(0)
+    })
+
+    it('keeps a user-deleted support agent deleted even though its id is reserved', () => {
+      const support = agentService.ensureBuiltinAgent({ ...defaults, builtinRole: 'support' })
+      expect(support.id).toBe(CHERRY_SUPPORT_AGENT_ID)
+
+      agentService.deleteAgent(support.id, { deleteSessions: true })
+
+      expect(() => agentService.ensureBuiltinAgent({ ...defaults, builtinRole: 'support' })).toThrow(
+        /deleted by the user/
+      )
+      expect(agentService.getAgent(CHERRY_SUPPORT_AGENT_ID)).toBeNull()
+    })
+
+    it('does not record a tombstone when an ordinary agent is deleted', () => {
+      const ordinary = createAgentForTest({
+        type: 'claude-code',
+        name: 'Ordinary Agent',
+        model: TEST_MODEL_ID
+      })
+
+      agentService.deleteAgent(ordinary.id, { deleteSessions: true })
+
+      // No builtin role → nothing to tombstone, so the builtin ensure paths stay untouched.
+      const builtin = agentService.ensureBuiltinAgent(defaults)
+      expect(builtin.configuration?.builtin_role).toBe('assistant')
       expect(activeBuiltinRows()).toHaveLength(1)
     })
 

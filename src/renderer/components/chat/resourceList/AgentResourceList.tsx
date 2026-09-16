@@ -17,7 +17,6 @@ import { ipcApi } from '@renderer/ipc'
 import { popup } from '@renderer/services/popup'
 import { toast } from '@renderer/services/toast'
 import { formatErrorMessageWithPrefix } from '@renderer/utils/error'
-import { isProtectedBuiltinAgentRole } from '@shared/ai/builtinAgent'
 import type { AgentSessionEntity } from '@shared/data/api/schemas/agentSessions'
 import type { AssistantIconType } from '@shared/data/preference/preferenceTypes'
 import { Pin, PinOff, Plus, Smile, SquarePen, Trash2 } from 'lucide-react'
@@ -217,15 +216,11 @@ export function AgentResourceList({
     async (agentId: string) => {
       if (deletingAgentId) return
 
-      const deleteTasksOnly = isProtectedBuiltinAgentRole(
-        agents.find((agent) => agent.id === agentId)?.configuration?.builtin_role
-      )
-
       setDeletingAgentId(agentId)
       try {
         const confirmed = await popup.confirm({
-          title: t(deleteTasksOnly ? 'agent.session.agent.delete.title' : 'agent.delete.title'),
-          content: t(deleteTasksOnly ? 'agent.session.agent.delete.content' : 'agent.delete.content'),
+          title: t('agent.delete.title'),
+          content: t('agent.delete.content'),
           okText: t('common.delete'),
           cancelText: t('common.cancel'),
           centered: true,
@@ -235,13 +230,8 @@ export function AgentResourceList({
         })
         if (!confirmed) return
 
-        if (deleteTasksOnly) {
-          const result = await ipcApi.request('ai.agent.sessions.delete', { agentId })
-          closeConversationTabs('agents', result.deletedIds)
-        } else {
-          const result = await ipcApi.request('ai.agent.delete', { agentId, deleteSessions: true })
-          closeConversationTabs('agents', result.deletedSessionIds ?? [])
-        }
+        const result = await ipcApi.request('ai.agent.delete', { agentId, deleteSessions: true })
+        closeConversationTabs('agents', result.deletedSessionIds ?? [])
         try {
           await Promise.all(
             ['/agents', '/agent-sessions', '/agent-workspaces', '/pins', '/agent-channels'].map((key) =>
@@ -260,7 +250,7 @@ export function AgentResourceList({
         }
 
         try {
-          await Promise.all([...(deleteTasksOnly ? [] : [refetchAgents()]), reload()])
+          await Promise.all([refetchAgents(), reload()])
         } catch (err) {
           logger.warn('Failed to reload resources after deleting Agent from classic-layout rail', { agentId, err })
         }
@@ -289,9 +279,6 @@ export function AgentResourceList({
     (item: ResourceEntityRailItem): ResolvedAction[] => {
       const pinned = agentPinnedIdSet.has(item.id)
       const sidebarPinned = sidebarAgentFavoriteIdSet.has(item.id)
-      const deleteTasksOnly = isProtectedBuiltinAgentRole(
-        agents.find((agent) => agent.id === item.id)?.configuration?.builtin_role
-      )
 
       return [
         buildResolvedResourceEntityMenuAction({
@@ -323,7 +310,7 @@ export function AgentResourceList({
         ),
         buildResolvedResourceEntityMenuAction({
           id: AGENT_ENTITY_DELETE_ACTION_ID,
-          label: t(deleteTasksOnly ? 'agent.session.agent.delete.trigger' : 'agent.delete.title'),
+          label: t('agent.delete.title'),
           icon: <Trash2 size={14} className="lucide-custom text-destructive" />,
           group: 'danger',
           order: 30,

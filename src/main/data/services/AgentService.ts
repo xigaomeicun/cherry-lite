@@ -1,5 +1,6 @@
 import { application } from '@application'
 import { notifyDataApiDataChange } from '@data/dataApiDataChange'
+import { isBuiltinAgentDeletedTx, markBuiltinAgentDeletedTx } from '@data/db/builtinAgentTombstone'
 import { type AgentRow, agentTable as agentsTable, type InsertAgentRow } from '@data/db/schemas/agent'
 import { agentKnowledgeBaseTable, agentMcpServerTable } from '@data/db/schemas/assistantRelations'
 import { knowledgeBaseTable } from '@data/db/schemas/knowledge'
@@ -17,7 +18,12 @@ import { nullsToUndefined, timestampToISO } from '@data/services/utils/rowMapper
 import { loggerService } from '@logger'
 import { Emitter, type Event } from '@main/core/lifecycle'
 import { t } from '@main/i18n'
-import { BUILTIN_AGENT_ROLE, type BuiltinAgentRole, CHERRY_SUPPORT_AGENT_ID } from '@shared/ai/builtinAgent'
+import {
+  BUILTIN_AGENT_ROLE,
+  type BuiltinAgentRole,
+  CHERRY_SUPPORT_AGENT_ID,
+  isProtectedBuiltinAgentRole
+} from '@shared/ai/builtinAgent'
 import { resolveReasoningEffortForModel } from '@shared/ai/reasoning'
 import { DataApiErrorFactory } from '@shared/data/api/errors'
 import type { OrderRequest } from '@shared/data/api/schemas/_endpointHelpers'
@@ -407,6 +413,13 @@ export class AgentService {
   }
 
   /** Claim the reserved Support ID without replacing user-owned fields or relations. */
+  /**
+   * Claim the reserved Support ID without replacing user-owned fields or relations.
+   *
+   * `restoreDeleted` repairs a row parked at `deletedAt` by anything OTHER than a user deletion;
+   * user intent is recorded by the tombstone, which `ensureBuiltinAgentTx` checks separately, so
+   * this repair can never undo a deliberate delete.
+   */
   claimBuiltinSupportIdentityTx(tx: DbOrTx, options: { restoreDeleted?: boolean } = {}): AgentRow | null {
     const [existing] = tx.select().from(agentsTable).where(eq(agentsTable.id, CHERRY_SUPPORT_AGENT_ID)).limit(1).all()
     if (!existing) return null
@@ -456,6 +469,15 @@ export class AgentService {
         agent: rowToAgent(existing, modelName, mcps, knowledgeBaseIds),
         created: false
       }
+    }
+
+    // No active row. When the user deleted this built-in Agent on purpose, recreating it here would
+    // undo a deliberate choice behind their back — refuse so the caller can report it instead.
+    if (isBuiltinAgentDeletedTx(tx, input.builtinRole)) {
+      throw DataApiErrorFactory.invalidOperation(
+        'restore built-in Agent',
+        `built-in Agent '${input.builtinRole}' was deleted by the user`
+      )
     }
 
     const preferredModel = input.preferredModelId ? modelService.findByIdTx(tx, input.preferredModelId) : null
@@ -794,7 +816,7 @@ export class AgentService {
       () =>
         application.get('DbService').withWriteTx((tx) => {
           const [agent] = tx
-            .select({ id: agentsTable.id })
+            .select({ id: agentsTable.id, configuration: agentsTable.configuration })
             .from(agentsTable)
             .where(and(eq(agentsTable.id, id), isNull(agentsTable.deletedAt)))
             .limit(1)
@@ -804,7 +826,14 @@ export class AgentService {
           const sessionImpact = agentSessionService.prepareForAgentDeletionTx(tx, id, {
             deleteSessions: options.deleteSessions === true
           })
-          return { ...this.deleteAgentTx(tx, id), sessionImpact }
+          const removal = this.deleteAgentTx(tx, id)
+          // The row is gone, so the only remaining memory that the USER removed this built-in Agent
+          // is the tombstone — without it the seeders and the ensure path would recreate it.
+          const builtinRole = getBuiltinRole(agent.configuration)
+          if (removal.rowsAffected > 0 && isProtectedBuiltinAgentRole(builtinRole)) {
+            markBuiltinAgentDeletedTx(tx, builtinRole)
+          }
+          return { ...removal, sessionImpact }
         }),
       defaultHandlersFor('Agent', id)
     )

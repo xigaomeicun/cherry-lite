@@ -1,3 +1,4 @@
+import { markBuiltinAgentDeletedTx } from '@data/db/builtinAgentTombstone'
 import { agentTable } from '@data/db/schemas/agent'
 import { agentSessionTable } from '@data/db/schemas/agentSession'
 import { agentWorkspaceTable } from '@data/db/schemas/agentWorkspace'
@@ -130,6 +131,20 @@ describe('CherrySupportSeeder', () => {
       builtin_role: 'support'
     })
     expect(dbh.db.select().from(agentSessionTable).all()).toHaveLength(1)
+  })
+
+  it('does not recreate Cherry Support once the user deletion is tombstoned', () => {
+    new CherrySupportSeeder().run(dbh.db)
+    expect(builtinAgents(dbh.db, BUILTIN_AGENT_ROLE.SUPPORT)).toHaveLength(1)
+
+    // Mirrors what the delete endpoint leaves behind: the row is gone and the tombstone is the only
+    // memory of the user's choice. A version bump re-runs this seeder, which must respect it.
+    markBuiltinAgentDeletedTx(dbh.db, BUILTIN_AGENT_ROLE.SUPPORT)
+    dbh.db.delete(agentTable).where(eq(agentTable.id, CHERRY_SUPPORT_AGENT_ID)).run()
+
+    new CherrySupportSeeder().run(dbh.db)
+
+    expect(builtinAgents(dbh.db, BUILTIN_AGENT_ROLE.SUPPORT)).toHaveLength(0)
   })
 
   it('isolates a legacy forged role and preserves the ordinary Agent while creating official Support', () => {

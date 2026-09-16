@@ -891,7 +891,7 @@ describe('classic layout entity resource list actions', () => {
     expect(onShowMissingAgentSelection).not.toHaveBeenCalled()
   })
 
-  it('deletes only tasks for the built-in Cherry Assistant in the classic layout', async () => {
+  it('deletes the built-in Cherry Assistant itself in the classic layout, like any other agent', async () => {
     agentDataMocks.agents = [
       {
         id: 'agent-1',
@@ -903,7 +903,7 @@ describe('classic layout entity resource list actions', () => {
       }
     ]
     const onActiveAgentDeleted = vi.fn()
-    agentDataMocks.deleteAgentSessions.mockResolvedValueOnce({ deletedIds: ['session-1', 'session-not-loaded'] })
+    agentDataMocks.deleteAgent.mockResolvedValueOnce({ deletedSessionIds: ['session-1', 'session-not-loaded'] })
 
     render(
       <AgentResourceList
@@ -916,23 +916,27 @@ describe('classic layout entity resource list actions', () => {
       />
     )
 
-    expect(screen.getByTestId('agent-1-context-menu')).toHaveTextContent('agent.session.agent.delete.trigger')
-    expect(screen.getByTestId('agent-1-context-menu')).not.toHaveTextContent('agent.delete.title')
+    // No builtin downgrade: the menu offers the real delete, not a tasks-only surrogate.
+    expect(screen.getByTestId('agent-1-context-menu')).toHaveTextContent('agent.delete.title')
+    expect(screen.getByTestId('agent-1-context-menu')).not.toHaveTextContent('agent.session.agent.delete.trigger')
 
-    fireEvent.click(screen.getAllByRole('button', { name: 'agent.session.agent.delete.trigger' })[0])
+    fireEvent.click(screen.getAllByRole('button', { name: 'agent.delete.title' })[0])
 
     await waitFor(() =>
       expect(popup.confirm).toHaveBeenCalledWith(
         expect.objectContaining({
-          title: 'agent.session.agent.delete.title',
-          content: 'agent.session.agent.delete.content'
+          title: 'agent.delete.title',
+          content: 'agent.delete.content'
         })
       )
     )
     await waitFor(() =>
-      expect(agentDataMocks.deleteAgentSessions).toHaveBeenCalledWith({ params: { agentId: 'agent-1' } })
+      expect(agentDataMocks.deleteAgent).toHaveBeenCalledWith({
+        params: { agentId: 'agent-1' },
+        query: { deleteSessions: true }
+      })
     )
-    expect(agentDataMocks.deleteAgent).not.toHaveBeenCalled()
+    expect(agentDataMocks.deleteAgentSessions).not.toHaveBeenCalled()
     expect(tabsContextMocks.closeConversationTabs).toHaveBeenCalledWith('agents', ['session-1', 'session-not-loaded'])
     expect(onActiveAgentDeleted).toHaveBeenCalledWith('agent-1')
   })

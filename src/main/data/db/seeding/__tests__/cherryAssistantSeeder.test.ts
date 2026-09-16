@@ -1,3 +1,4 @@
+import { markBuiltinAgentDeletedTx } from '@data/db/builtinAgentTombstone'
 import { agentTable } from '@data/db/schemas/agent'
 import { agentSessionTable } from '@data/db/schemas/agentSession'
 import { agentWorkspaceTable } from '@data/db/schemas/agentWorkspace'
@@ -221,6 +222,23 @@ describe('CherryAssistantSeeder', () => {
     expect(builtinAgents(dbh.db)).toHaveLength(1)
     const [journal] = dbh.db.select().from(appStateTable).where(eq(appStateTable.key, 'seed:cherryAssistant')).all()
     expect(journal?.value).toMatchObject({ version: '2' })
+  })
+
+  it('does not recreate Cherry Assistant once the user deletion is tombstoned', () => {
+    new CherryAssistantSeeder().run(dbh.db)
+    const [assistant] = builtinAgents(dbh.db)
+    expect(assistant).toBeDefined()
+
+    // Mirrors what the delete endpoint leaves behind: the row is gone and the tombstone is the only
+    // memory of the user's choice. A version bump re-runs this seeder, which must respect it.
+    markBuiltinAgentDeletedTx(dbh.db, 'assistant')
+    dbh.db.delete(agentTable).where(eq(agentTable.id, assistant.id)).run()
+    dbh.db.delete(agentSessionTable).run()
+
+    new CherryAssistantSeeder().run(dbh.db)
+
+    expect(builtinAgents(dbh.db)).toHaveLength(0)
+    expect(dbh.db.select().from(agentSessionTable).all()).toHaveLength(0)
   })
 
   it('falls back to a null model when the CherryAI default model is absent', () => {

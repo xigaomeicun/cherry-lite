@@ -1,3 +1,4 @@
+import { isBuiltinAgentDeletedTx } from '@data/db/builtinAgentTombstone'
 import { agentService } from '@data/services/AgentService'
 import { agentSessionService } from '@data/services/AgentSessionService'
 import { BUILTIN_AGENT_ROLE, CHERRY_SUPPORT_AGENT_ID } from '@shared/ai/builtinAgent'
@@ -32,6 +33,10 @@ export class CherrySupportSeeder implements ISeeder {
     db.transaction((tx) => {
       agentService.clearUntrustedBuiltinSupportRolesTx(tx)
       agentService.claimBuiltinSupportIdentityTx(tx)
+      // A user deletion is durable: the row is gone, so the tombstone is the only memory of it. A
+      // future version bump re-runs this seeder, and without this guard it would resurrect an Agent
+      // the user deliberately removed.
+      if (isBuiltinAgentDeletedTx(tx, BUILTIN_AGENT_ROLE.SUPPORT)) return
       const existing = agentService.findBuiltinAgentByRoleTx(tx, BUILTIN_AGENT_ROLE.SUPPORT, {
         includeDeleted: true
       })

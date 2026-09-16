@@ -13,7 +13,6 @@ import { Pin, PinOff, Smile, SquarePen, Trash2 } from 'lucide-react'
 export interface AgentGroupActionContext {
   agentId: string
   assistantIconType: AssistantIconType
-  deleteTasksOnly?: boolean
   deleteAgentDisabled?: boolean
   onEdit: (agentId: string) => void
   onDeleteAgent: (agentId: string) => void | Promise<void>
@@ -106,7 +105,7 @@ agentGroupActionRegistry.registerAction(
   buildResourceEntityMenuActionDescriptor({
     id: 'agent-group.delete-agent',
     commandId: 'agent-group.delete-agent',
-    label: ({ deleteTasksOnly, t }) => t(deleteTasksOnly ? 'agent.session.agent.delete.trigger' : 'agent.delete.title'),
+    label: ({ t }) => t('agent.delete.title'),
     icon: () => <Trash2 size={14} className="lucide-custom text-destructive" />,
     group: 'danger',
     order: 40,

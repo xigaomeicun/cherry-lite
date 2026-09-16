@@ -80,7 +80,6 @@ import {
 import { formatErrorMessage, formatErrorMessageWithPrefix } from '@renderer/utils/error'
 import { removeSpecialCharactersForFileName } from '@renderer/utils/file'
 import { findLatestActive, pickNeighbourAfterRemoval } from '@renderer/utils/resourceEntity'
-import { isProtectedBuiltinAgentRole } from '@shared/ai/builtinAgent'
 import type { AgentSessionEntity } from '@shared/data/api/schemas/agentSessions'
 import {
   AGENT_WORKSPACE_TYPE,
@@ -155,7 +154,6 @@ function AgentGroupMoreMenu({
   agentId,
   assistantIconType,
   deleteAgentDisabled,
-  deleteTasksOnly,
   pinDisabled,
   pinned,
   onDeleteAgent,
@@ -168,7 +166,6 @@ function AgentGroupMoreMenu({
   agentId: string
   assistantIconType: AssistantIconType
   deleteAgentDisabled?: boolean
-  deleteTasksOnly?: boolean
   pinDisabled?: boolean
   pinned: boolean
   sidebarPinned: boolean
@@ -183,7 +180,6 @@ function AgentGroupMoreMenu({
     agentId,
     assistantIconType,
     deleteAgentDisabled,
-    deleteTasksOnly,
     onDeleteAgent,
     onEdit,
     onSetAgentIconType,
@@ -1213,8 +1209,6 @@ const Sessions = ({
     async (agentId: string) => {
       if (deletingAgentId) return
 
-      const deleteTasksOnly = isProtectedBuiltinAgentRole(agentById.get(agentId)?.configuration?.builtin_role)
-
       const currentActiveSessionId = activeSessionIdRef.current
       const currentActiveSession = currentActiveSessionId
         ? sessionItemsRef.current.find((session) => session.id === currentActiveSessionId)
@@ -1223,8 +1217,8 @@ const Sessions = ({
       setDeletingAgentId(agentId)
       try {
         const confirmed = await popup.confirm({
-          title: t(deleteTasksOnly ? 'agent.session.agent.delete.title' : 'agent.delete.title'),
-          content: t(deleteTasksOnly ? 'agent.session.agent.delete.content' : 'agent.delete.content'),
+          title: t('agent.delete.title'),
+          content: t('agent.delete.content'),
           okText: t('common.delete'),
           cancelText: t('common.cancel'),
           centered: true,
@@ -1234,13 +1228,8 @@ const Sessions = ({
         })
         if (!confirmed) return
 
-        if (deleteTasksOnly) {
-          const result = await ipcApi.request('ai.agent.sessions.delete', { agentId })
-          closeConversationTabs('agents', result.deletedIds)
-        } else {
-          const result = await ipcApi.request('ai.agent.delete', { agentId, deleteSessions: true })
-          closeConversationTabs('agents', result.deletedSessionIds ?? [])
-        }
+        const result = await ipcApi.request('ai.agent.delete', { agentId, deleteSessions: true })
+        closeConversationTabs('agents', result.deletedSessionIds ?? [])
         try {
           await Promise.all(
             ['/agents', '/agent-sessions', '/agent-workspaces', '/pins', '/agent-channels'].map((key) =>
@@ -1266,7 +1255,7 @@ const Sessions = ({
         }
 
         try {
-          await Promise.all([...(deleteTasksOnly ? [] : [refetchAgents()]), reload(), refetchWorkspaces()])
+          await Promise.all([refetchAgents(), reload(), refetchWorkspaces()])
         } catch (err) {
           logger.warn('Failed to reload resources after deleting Agent from session group', { agentId, err })
         }
@@ -1696,7 +1685,6 @@ const Sessions = ({
                 agentId={agentGroupId}
                 assistantIconType={assistantIconType}
                 deleteAgentDisabled={deletingAgentId !== null}
-                deleteTasksOnly={isProtectedBuiltinAgentRole(agentById.get(agentGroupId)?.configuration?.builtin_role)}
                 pinDisabled={isAgentPinActionDisabled}
                 pinned={agentPinnedIdSet.has(agentGroupId)}
                 onDeleteAgent={handleDeleteAgent}
@@ -1865,7 +1853,6 @@ const Sessions = ({
           agentId,
           assistantIconType,
           deleteAgentDisabled: deletingAgentId !== null,
-          deleteTasksOnly: isProtectedBuiltinAgentRole(agentById.get(agentId)?.configuration?.builtin_role),
           onDeleteAgent: handleDeleteAgent,
           onEdit: openAgentEditor,
           onSetAgentIconType: setAssistantIconType,
