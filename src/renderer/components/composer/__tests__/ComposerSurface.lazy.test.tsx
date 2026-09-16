@@ -139,7 +139,9 @@ describe('deferred ComposerSurface', () => {
     expect(input).toBeEnabled()
     expect(input).toHaveClass('w-full')
     expect(input).toHaveAttribute('rows', '1')
-    expect(input).toHaveStyle({ height: '46px', minHeight: '46px', lineHeight: '1.4' })
+    // 54px is `getComposerEditorMinHeight(14)` at the ~2.4-line idle height the surfaces share
+    // (Cherry-Lite raised it from the stock 2-line 46px); the rich-runtime suites assert 54 too.
+    expect(input).toHaveStyle({ height: '54px', minHeight: '54px', lineHeight: '1.4' })
     expect(narrowLayout).toHaveClass('max-w-[calc(800px+3rem)]', 'px-6')
     expect(narrowLayout).toContainElement(inputbar)
     expect(inputbar).toContainElement(screen.getByText('Composer tools'))
