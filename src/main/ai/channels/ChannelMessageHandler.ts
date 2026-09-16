@@ -19,6 +19,7 @@ import type { FileAttachment, ImageAttachment } from '@main/utils/downloadAsBase
 import { AGENT_SESSION_SLASH_COMMANDS_CACHE_KEY } from '@shared/ai/agentSessionSlashCommands'
 import type { AgentChannelEntity } from '@shared/data/api/schemas/agentChannels'
 import type { AgentSessionEntity } from '@shared/data/api/schemas/agentSessions'
+import type { UniqueModelId } from '@shared/data/types/model'
 import mime from 'mime'
 
 import type {
@@ -233,15 +234,31 @@ export class ChannelMessageHandler {
       return Promise.resolve()
     }
 
-    // Telegram: if a turn is already streaming for this session, auto-abort the previous turn
-    // and seamlessly insert the new instruction (aligned with Copilot bridge style & emoji).
+    // Telegram: if a turn is already streaming for this session,
+    // first attempt mid-turn steering (⌘Enter steer equivalent);
+    // if steering is not accepted by the current runtime, queue it cleanly (Enter queue equivalent).
     if (adapter.channelType === 'telegram') {
       const sid = this.peekSessionId(adapter.agentId, adapter.channelId, conversationIdOf(message))
       if (sid && this.activeAbortControllers.has(sid)) {
-        this.abortSession(sid)
-        void adapter.dismissToolProgress(message.chatId).catch(() => {})
+        // Try steering into the running turn (PreToolUse/PostToolBatch hook)
+        const runtimeService = application.get('AgentSessionRuntimeService')
+        const steerAccepted = message.text ? runtimeService.trySteer?.(sid, message.text) : false
+
+        if (steerAccepted) {
+          void adapter
+            .sendMessage(message.chatId, '⚡️ <i>已将新指令插入当前任务，正在引导执行...</i>', {
+              ...responseOptionsFor(message),
+              parseMode: 'html'
+            })
+            .catch(() => {})
+          // The running turn absorbed the steer into its tool loop; no separate turn needed.
+          return Promise.resolve()
+        }
+
+        // Steer was declined or unavailable (e.g. pure text turn / no tool boundary);
+        // seamlessly queue for execution once the current turn completes.
         void adapter
-          .sendMessage(message.chatId, '⚡️ <i>已收到新指令，正在顺序处理...</i>', {
+          .sendMessage(message.chatId, '⏳ <i>当前任务正在执行中，新指令已自动排队，完成后紧接着执行...</i>', {
             ...responseOptionsFor(message),
             parseMode: 'html'
           })
@@ -963,7 +980,7 @@ export class ChannelMessageHandler {
           return
         }
         agentService.updateAgent(adapter.agentId, {
-          model: modelId as import('@shared/data/types/model').UniqueModelId
+          model: modelId as UniqueModelId
         })
         await cb.answerCallbackQuery({ text: '模型已切换' })
         await cb.editReplyMarkup({
@@ -984,12 +1001,12 @@ export class ChannelMessageHandler {
         const mode = target.configuration?.permission_mode
         if (target.type === 'pi' && mode === 'plan') {
           agentService.updateAgent(targetAgentId, {
-            configuration: { ...(target.configuration || {}), permission_mode: 'auto' }
+            configuration: { ...target.configuration, permission_mode: 'auto' }
           })
         }
         if (target.type === 'dsh' && mode === 'auto') {
           agentService.updateAgent(targetAgentId, {
-            configuration: { ...(target.configuration || {}), permission_mode: 'plan' }
+            configuration: { ...target.configuration, permission_mode: 'plan' }
           })
         }
         await cb.answerCallbackQuery({ text: `已切换至 ${target.name || targetAgentId}` })
@@ -1203,9 +1220,7 @@ export class ChannelMessageHandler {
 
   /** Abort an active stream for the given session. Returns true if a stream was in flight. */
   abortSession(sessionId: string): boolean {
-    const controller = this.activeAbortControllers.get(sessionId)
-    if (!controller) return false
-    controller.abort()
+    if (!this.activeAbortControllers.has(sessionId)) return false
     this.abortSessionStream(sessionId, 'channel-session-aborted')
     return true
   }
@@ -1381,7 +1396,7 @@ export class ChannelMessageHandler {
   private async collectStreamResponse(
     session: AgentSessionEntity,
     content: string,
-    abortController: AbortController,
+    _abortController: AbortController,
     adapter: ChannelAdapter,
     chatId: string,
     responseOptions?: SendMessageOptions,
@@ -1413,7 +1428,7 @@ export class ChannelMessageHandler {
       onError(result) {
         rejectExecution(new Error(result.error.message ?? 'Execution failed'))
       },
-      isAlive: () => !abortController.signal.aborted
+      isAlive: () => true
     }
 
     try {

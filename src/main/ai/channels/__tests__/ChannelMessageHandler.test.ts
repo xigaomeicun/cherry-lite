@@ -53,10 +53,16 @@ vi.mock('../security/OutputSanitizer', () => ({
 
 // The global mock (tests/main.setup.ts) wires the default service set, which omits
 // AiStreamManager; the abort path reads it, so override locally with a captured spy.
-const { mockStreamAbort } = vi.hoisted(() => ({ mockStreamAbort: vi.fn() }))
+const { mockStreamAbort, mockTrySteer } = vi.hoisted(() => ({
+  mockStreamAbort: vi.fn(),
+  mockTrySteer: vi.fn()
+}))
 vi.mock('@application', async () => {
   const { mockApplicationFactory } = await import('@test-mocks/main/application')
-  return mockApplicationFactory({ AiStreamManager: { abort: mockStreamAbort } } as never)
+  return mockApplicationFactory({
+    AiStreamManager: { abort: mockStreamAbort },
+    AgentSessionRuntimeService: { trySteer: mockTrySteer }
+  } as never)
 })
 
 vi.mock('@data/services/AgentService', () => ({
@@ -265,7 +271,7 @@ describe('ChannelMessageHandler', () => {
     expect(adapter.sendMessage).toHaveBeenCalledWith('chat-1', 'second completed', undefined)
   })
 
-  it('auto-aborts the active turn and immediately inserts when a new Telegram message arrives', async () => {
+  it('steers mid-turn when runtime accepts the steer for a busy Telegram session', async () => {
     const adapter = createMockAdapter({ channelType: 'telegram' })
     const session = {
       id: 'session-tg-busy',
@@ -277,28 +283,63 @@ describe('ChannelMessageHandler', () => {
     }
     vi.mocked(agentSessionService.create).mockReturnValue(session as any)
 
-    // Simulate an active abort controller registered for the session
+    // Simulate an active abort controller registered for the session (turn in flight)
     const abortController = new AbortController()
     ;(channelMessageHandler as any).activeAbortControllers.set('session-tg-busy', abortController)
     persistedChannelSessions.bindings.set('channel-1:chat-1', 'session-tg-busy')
     persistedChannelSessions.sessions.set('session-tg-busy', session as any)
 
-    adapter.dismissToolProgress = vi.fn().mockResolvedValue(undefined)
-
-    simulateStream([{ type: 'text-delta', delta: 'new instruction output' }])
+    mockTrySteer.mockReturnValueOnce(true)
 
     await handleIncomingAndFlush(adapter, {
       chatId: 'chat-1',
       userId: 'user-1',
       userName: 'User',
-      text: 'interrupting message'
+      text: 'steer into tool boundary'
     })
 
-    expect(abortController.signal.aborted).toBe(true)
-    expect(adapter.dismissToolProgress).toHaveBeenCalledWith('chat-1')
+    // Steer must NOT abort the running turn
+    expect(abortController.signal.aborted).toBe(false)
+    expect(mockTrySteer).toHaveBeenCalledWith('session-tg-busy', 'steer into tool boundary')
     expect(adapter.sendMessage).toHaveBeenCalledWith(
       'chat-1',
-      '⚡️ <i>已收到新指令，正在顺序处理...</i>',
+      '⚡️ <i>已将新指令插入当前任务，正在引导执行...</i>',
+      expect.objectContaining({ parseMode: 'html' })
+    )
+  })
+
+  it('queues cleanly when runtime cannot steer mid-turn, without aborting the running turn', async () => {
+    const adapter = createMockAdapter({ channelType: 'telegram' })
+    const session = {
+      id: 'session-tg-busy-queue',
+      agentId: 'agent-1',
+      agentType: 'claude-code',
+      model: 'openai::gpt-4',
+      workspace: { path: '/tmp/test-workspace' },
+      configuration: {}
+    }
+    vi.mocked(agentSessionService.create).mockReturnValue(session as any)
+
+    // Simulate an active turn in flight
+    const abortController = new AbortController()
+    ;(channelMessageHandler as any).activeAbortControllers.set('session-tg-busy-queue', abortController)
+    persistedChannelSessions.bindings.set('channel-1:chat-1', 'session-tg-busy-queue')
+    persistedChannelSessions.sessions.set('session-tg-busy-queue', session as any)
+
+    mockTrySteer.mockReturnValueOnce(false)
+
+    await handleIncomingAndFlush(adapter, {
+      chatId: 'chat-1',
+      userId: 'user-1',
+      userName: 'User',
+      text: 'followup to queue'
+    })
+
+    // Must NOT abort the running turn
+    expect(abortController.signal.aborted).toBe(false)
+    expect(adapter.sendMessage).toHaveBeenCalledWith(
+      'chat-1',
+      '⏳ <i>当前任务正在执行中，新指令已自动排队，完成后紧接着执行...</i>',
       expect.objectContaining({ parseMode: 'html' })
     )
   })

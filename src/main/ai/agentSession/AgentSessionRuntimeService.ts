@@ -1378,6 +1378,50 @@ export class AgentSessionRuntimeService extends BaseService {
     return true
   }
 
+  /**
+   * Try to steer a running turn by injecting a text instruction into its active connection
+   * (e.g. ClaudeCode PreToolUse/PostToolBatch hook or Pi redirect).
+   * Returns true if the steer was accepted into the live turn's pending steer buffer.
+   * Returns false if no turn is live, the connection cannot steer, or the turn cannot accept steers.
+   */
+  trySteer(sessionId: string, text: string): boolean {
+    const entry = this.entries.get(sessionId)
+    if (!entry) return false
+
+    const turn = this.currentTurn(entry)
+    if (
+      entry.runtimeState.execution.kind !== 'turn' ||
+      entry.runtimeState.execution.stream !== 'open' ||
+      !turn ||
+      !this.isTurnLive(entry, turn)
+    ) {
+      return false
+    }
+
+    const connection = this.currentConnection(entry)
+    if (!connection?.redirect) return false
+
+    let userMessage: AgentSessionMessageEntity
+    try {
+      userMessage = agentSessionMessageService.saveMessage({
+        sessionId,
+        message: {
+          role: 'user',
+          status: 'success',
+          data: { parts: [{ type: 'text', text }] }
+        }
+      })
+    } catch (error) {
+      logger.warn('Failed to persist steer message in channel', { sessionId, error })
+      return false
+    }
+
+    return connection.redirect({
+      message: userMessage,
+      systemReminder: true
+    })
+  }
+
   protected async onStop(): Promise<void> {
     this.isShuttingDown = true
     this.disposeWarmLeases()

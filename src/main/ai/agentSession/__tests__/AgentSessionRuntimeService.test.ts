@@ -5660,4 +5660,49 @@ describe('AgentSessionRuntimeService', () => {
       expect(releaseIdle).not.toHaveBeenCalled()
     })
   })
+
+  describe('trySteer', () => {
+    it('returns false when the session has no entry or no live turn', () => {
+      const service = new AgentSessionRuntimeService()
+      expect(service.trySteer('non-existent', 'hello')).toBe(false)
+    })
+
+    it('injects text into the running connection redirect and returns true', async () => {
+      const events = createAsyncQueue<any>()
+      const redirect = vi.fn().mockReturnValue(true)
+      const connection = { events: events.iterable, send: vi.fn(), redirect, close: vi.fn() }
+      runtimeDriverRegistry.register({
+        type: 'test-runtime',
+        capabilities: ['agent-session'],
+        connect: vi.fn().mockResolvedValue(connection),
+        validateSession: vi.fn(),
+        listAvailableTools: vi.fn().mockResolvedValue([])
+      })
+      const service = new AgentSessionRuntimeService()
+      const handle = service.beginTurn({ ...baseTurnInput, userMessage: userMessage('user-1') })
+      const stream = service.openTurnStream({
+        sessionId: 'session-1',
+        turnId: handle.turnId,
+        signal: new AbortController().signal
+      })
+      const reader = stream.getReader()
+      await expect(reader.read()).resolves.toMatchObject({ value: { type: 'start' }, done: false })
+      await vi.waitFor(() => expect(connection.send).toHaveBeenCalledOnce())
+
+      const result = service.trySteer('session-1', 'new direction')
+      expect(result).toBe(true)
+      expect(redirect).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: expect.objectContaining({
+            role: 'user',
+            data: { parts: [{ type: 'text', text: 'new direction' }] }
+          }),
+          systemReminder: true
+        })
+      )
+
+      void service.closeSession('session-1')
+      await reader.cancel().catch(() => undefined)
+    })
+  })
 })
