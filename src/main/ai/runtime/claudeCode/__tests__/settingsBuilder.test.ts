@@ -9,6 +9,7 @@ import {
   toMcpRuntimeName
 } from '@main/ai/toolApproval/builtinToolPolicy'
 import type * as UserDataSqliteGuard from '@main/ai/toolApproval/userDataSqliteGuard'
+import type * as FileUtils from '@main/utils/file'
 import { KB_MANAGE_TOOL_NAME } from '@shared/ai/builtinTools'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -203,7 +204,8 @@ vi.mock('@main/utils/asar', () => ({
   toAsarUnpackedPath: (input: string) => input
 }))
 
-vi.mock('@main/utils/file', () => ({
+vi.mock('@main/utils/file', async (importOriginal) => ({
+  ...(await importOriginal<typeof FileUtils>()),
   getPathStatus: mocks.getPathStatus,
   isPathInside: (child: string, parent: string) => {
     const relative = path.relative(path.resolve(parent), path.resolve(child))
