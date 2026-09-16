@@ -105,7 +105,10 @@ export const CodeBlockView: React.FC<Props> = memo((props) => {
   })
 
   const canEdit = codeEditor.enabled && editable
-  const hasSpecialView = useMemo(() => SPECIAL_VIEWS.includes(language), [language])
+  const hasSpecialView = SPECIAL_VIEWS.includes(language)
+  const specialViewDefinition = hasSpecialView
+    ? SPECIAL_VIEW_COMPONENTS[language as keyof typeof SPECIAL_VIEW_COMPONENTS]
+    : undefined
   const startedStreamingRef = useRef(isStreaming)
 
   const [viewState, setViewState] = useState({
@@ -245,9 +248,8 @@ export const CodeBlockView: React.FC<Props> = memo((props) => {
       })
   }, [codeExecutionTimeoutMinutes])
 
-  const showPreviewTools = useMemo(() => {
-    return hasSpecialView && (viewMode === 'special' || viewMode === 'split')
-  }, [hasSpecialView, viewMode])
+  const showPreviewTools =
+    Boolean(specialViewDefinition?.supportsImageActions) && (viewMode === 'special' || viewMode === 'split')
 
   const handleToggleExpanded = useCallback(() => setExpandOverride((current) => !current), [])
   const handleToggleWrapped = useCallback(() => setWrapOverride((current) => !current), [])
@@ -368,18 +370,20 @@ export const CodeBlockView: React.FC<Props> = memo((props) => {
 
   // 特殊视图组件映射
   const specialView = useMemo(() => {
-    const SpecialView = SPECIAL_VIEW_COMPONENTS[language as keyof typeof SPECIAL_VIEW_COMPONENTS]
-
-    if (!SpecialView) return null
+    if (!specialViewDefinition) return null
+    const SpecialView = specialViewDefinition.component
 
     return (
       <Suspense fallback={null}>
-        <SpecialView ref={specialViewRef} enableToolbar={codeImageTools} isStreaming={isStreaming}>
+        <SpecialView
+          ref={specialViewDefinition.supportsImageActions ? specialViewRef : undefined}
+          enableToolbar={codeImageTools}
+          isStreaming={isStreaming}>
           {children}
         </SpecialView>
       </Suspense>
     )
-  }, [children, codeImageTools, isStreaming, language])
+  }, [children, codeImageTools, isStreaming, specialViewDefinition])
 
   const renderHeader = useMemo(() => {
     if (isInSpecialView) {
