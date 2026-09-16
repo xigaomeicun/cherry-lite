@@ -19,7 +19,7 @@ import type { FileAttachment, ImageAttachment } from '@main/utils/downloadAsBase
 import { AGENT_SESSION_SLASH_COMMANDS_CACHE_KEY } from '@shared/ai/agentSessionSlashCommands'
 import type { AgentChannelEntity } from '@shared/data/api/schemas/agentChannels'
 import type { AgentSessionEntity } from '@shared/data/api/schemas/agentSessions'
-import type { UniqueModelId } from '@shared/data/types/model'
+import { MODEL_CAPABILITY, type UniqueModelId } from '@shared/data/types/model'
 import mime from 'mime'
 
 import type {
@@ -876,17 +876,40 @@ export class ChannelMessageHandler {
         case 'model': {
           onAdmitted()
           const { modelService } = await import('@data/services/ModelService')
-          const models = modelService.list({ enabled: true }).slice(0, MODEL_PICK_LIMIT)
+          const agent = agentService.getAgent(agentId)
+          const currentModelId = agent?.model
+          const models = modelService
+            .list({ enabled: true })
+            .filter((m) => {
+              // Chat-only picker: non-conversational models (embedding / rerank / image generation)
+              // can never answer a turn, so they must not appear as a base-model choice.
+              const caps = m.capabilities ?? []
+              return !(
+                caps.includes(MODEL_CAPABILITY.EMBEDDING) ||
+                caps.includes(MODEL_CAPABILITY.RERANK) ||
+                caps.includes(MODEL_CAPABILITY.IMAGE_GENERATION) ||
+                m.imageGeneration !== undefined
+              )
+            })
+            .slice(0, MODEL_PICK_LIMIT)
           if (models.length === 0) {
             await adapter.sendMessage(command.chatId, '未找到已启用模型。', { ...replyOpts, parseMode: 'plain' })
             break
           }
-          const rows = models.map((m) => {
-            const id = `${m.providerId}::${m.id}`
-            const label = `${m.name || m.id}`.slice(0, 40)
-            return [{ text: label, callback_data: `mdl:${id}`.slice(0, 64) }]
+          const buttons = models.map((m) => {
+            // `Model.id` is ALREADY the canonical `providerId::modelId` unique id — re-prefixing it
+            // with `m.providerId` produced a malformed double-prefixed id that the switch handler
+            // stored verbatim, so the picker could never actually change the base model.
+            const id = m.id
+            const isCurrent = id === currentModelId
+            const label = `${isCurrent ? '✅ ' : ''}${m.name || id}`.slice(0, 30)
+            return { text: label, callback_data: `mdl:${id}`.slice(0, 64) }
           })
-          await adapter.sendMessage(command.chatId, '🧠 <b>选择底座模型</b>（仅显示前 30 个已启用）', {
+          const rows: Array<Array<{ text: string; callback_data: string }>> = []
+          for (let i = 0; i < buttons.length; i += 2) {
+            rows.push(buttons.slice(i, i + 2))
+          }
+          await adapter.sendMessage(command.chatId, '🧠 <b>选择底座模型</b>', {
             ...replyOpts,
             parseMode: 'html',
             replyMarkup: { inline_keyboard: rows }

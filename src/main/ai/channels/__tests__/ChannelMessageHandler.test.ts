@@ -98,6 +98,11 @@ vi.mock('@shared/data/types/model', async (importOriginal) => {
   }
 })
 
+const { mockModelList } = vi.hoisted(() => ({ mockModelList: vi.fn() }))
+vi.mock('@data/services/ModelService', () => ({
+  modelService: { list: (...args: unknown[]) => mockModelList(...args) }
+}))
+
 const { mockStartAgentSessionRun } = vi.hoisted(() => ({ mockStartAgentSessionRun: vi.fn() }))
 vi.mock('@main/ai/streamManager/api/startAgentSessionRun', () => ({
   startAgentSessionRun: (...args: unknown[]) => mockStartAgentSessionRun(...args)
@@ -607,6 +612,43 @@ describe('ChannelMessageHandler', () => {
     // also sends it (would have been a double-send once the `.delta` read was fixed).
     expect(adapter.sendMessage).toHaveBeenCalledTimes(1)
     expect(adapter.sendMessage).toHaveBeenCalledWith('chat-1', 'Compacted.', undefined)
+  })
+
+  it('handleCommand /model lists chat models two per row, hides embedding/image, and marks the current one', async () => {
+    const adapter = createMockAdapter({ channelType: 'telegram' })
+    mockModelList.mockReturnValueOnce([
+      { id: 'p::kimi-k3', providerId: 'p', name: 'Kimi K3', capabilities: ['reasoning'] },
+      { id: 'p::gemini-flash', providerId: 'p', name: 'Gemini Flash', capabilities: ['image-recognition'] },
+      { id: 'p::gemini-image', providerId: 'p', name: 'Gemini Image', capabilities: ['image-generation'] },
+      { id: 'p::qwen-embed', providerId: 'p', name: 'Qwen3 Embedding 0.6B', capabilities: ['embedding'] },
+      { id: 'p::rerank-x', providerId: 'p', name: 'Rerank X', capabilities: ['rerank'] },
+      { id: 'openai::gpt-4', providerId: 'openai', name: 'GPT-4', capabilities: ['function-call'] }
+    ])
+
+    await channelMessageHandler.handleCommand(adapter, {
+      chatId: 'chat-1',
+      userId: 'user-1',
+      userName: 'User',
+      command: 'model'
+    })
+
+    // The hint suffix is gone; only the plain title remains.
+    expect(adapter.sendMessage).toHaveBeenCalledWith(
+      'chat-1',
+      '🧠 <b>选择底座模型</b>',
+      expect.objectContaining({ parseMode: 'html' })
+    )
+    const markup = vi.mocked(adapter.sendMessage).mock.calls.at(-1)?.[2]?.replyMarkup as {
+      inline_keyboard: Array<Array<{ text: string; callback_data: string }>>
+    }
+    // Embedding / rerank / image-generation models are never offered as a base model.
+    const flat = markup.inline_keyboard.flat()
+    expect(flat.map((b) => b.callback_data)).toEqual(['mdl:p::kimi-k3', 'mdl:p::gemini-flash', 'mdl:openai::gpt-4'])
+    // Two buttons per row (last row may hold the odd one out).
+    expect(markup.inline_keyboard.map((row) => row.length)).toEqual([2, 1])
+    // The agent's current model is flagged so the picker shows current state.
+    expect(flat[2].text).toContain('✅')
+    expect(flat[2].text).toContain('GPT-4')
   })
 
   it('serializes commands after earlier messages in the same conversation', async () => {
