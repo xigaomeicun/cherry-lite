@@ -3,6 +3,7 @@ import { agentService } from '@data/services/AgentService'
 import { AgentSessionDeliveryRoutingError, agentSessionMessageService } from '@data/services/AgentSessionMessageService'
 import { agentSessionService } from '@data/services/AgentSessionService'
 import { loggerService } from '@logger'
+import { removeAgentDataDirectory } from '@main/ai/agents/agentDataDirectory'
 import { isAgentSessionWorkspaceError } from '@main/ai/runtime/agentSessionWorkspace'
 import { BaseService, DependsOn, type Disposable, Injectable, Phase, ServicePhase } from '@main/core/lifecycle'
 import { ErrorCode, isDataApiError } from '@shared/data/api/errors'
@@ -278,6 +279,17 @@ export class AgentSessionDeliveryService extends BaseService {
       result.deliveryResults,
       deleteSessions ? [] : result.affectedSessionIds
     )
+    // The DB row is gone, so its `Data/Agents/<id>/` identity + memory data is now unreachable
+    // garbage that nothing would ever claim again (the id is a fresh UUID per Agent). Mirrors the
+    // create-side pairing in `ai/agents/createAgent.ts`; best-effort because a filesystem failure
+    // must not resurrect a row the user already deleted.
+    if (result.deleted) {
+      try {
+        await removeAgentDataDirectory(application.getPath('feature.agents.data'), agentId)
+      } catch (error) {
+        logger.warn('Failed to remove the deleted Agent data directory', { agentId, error })
+      }
+    }
     return {
       deleted: result.deleted,
       ...(result.deletedSessionIds ? { deletedSessionIds: result.deletedSessionIds } : {})

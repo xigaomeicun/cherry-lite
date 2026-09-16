@@ -2,7 +2,7 @@ import { markBuiltinAgentDeletedTx } from '@data/db/builtinAgentTombstone'
 import { agentTable } from '@data/db/schemas/agent'
 import { agentSessionTable } from '@data/db/schemas/agentSession'
 import { agentWorkspaceTable } from '@data/db/schemas/agentWorkspace'
-import { CherryAiDefaultModelSeeder } from '@data/db/seeding/seeders/cherryaiDefaultModelSeeder'
+import { ensureCherryAiDefaultProviderAndModelTx } from '@data/db/seeding/seeders/cherryaiDefaultModelSeeder'
 import { CherryAssistantSeeder } from '@data/db/seeding/seeders/cherryAssistantSeeder'
 import { CherrySupportSeeder } from '@data/db/seeding/seeders/cherrySupportSeeder'
 import { BUILTIN_AGENT_ROLE, CHERRY_SUPPORT_AGENT_ID } from '@shared/ai/builtinAgent'
@@ -28,8 +28,18 @@ describe('CherrySupportSeeder', () => {
     vi.mocked(app.getPreferredSystemLanguages).mockReturnValue(['en-US'])
   })
 
+  /**
+   * Materialize the managed CherryAI provider + default model WITHOUT `CherryAiDefaultModelSeeder.run()`,
+   * which Cherry-Lite deliberately neuters so a fresh library never auto-installs the vendor's
+   * provider. The rows still exist in a real library (the v1→v2 migration writes them), and these
+   * assertions are about how a built-in Agent treats that model — not about who created it.
+   */
+  function seedCherryAiDefaultModelRows(): void {
+    dbh.db.transaction((tx) => ensureCherryAiDefaultProviderAndModelTx(tx))
+  }
+
   it('creates Cherry Support beside Cherry Assistant with a system session and copied model', () => {
-    new CherryAiDefaultModelSeeder().run(dbh.db)
+    seedCherryAiDefaultModelRows()
     new CherryAssistantSeeder().run(dbh.db)
     const [assistant] = builtinAgents(dbh.db, BUILTIN_AGENT_ROLE.ASSISTANT)
     dbh.db

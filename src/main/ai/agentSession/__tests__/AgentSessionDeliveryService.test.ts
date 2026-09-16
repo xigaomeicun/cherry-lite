@@ -1,3 +1,4 @@
+import type * as AgentDataDirectoryModule from '@main/ai/agents/agentDataDirectory'
 import { BaseService } from '@main/core/lifecycle/BaseService'
 import { DataApiErrorFactory } from '@shared/data/api/errors'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -10,6 +11,8 @@ const mocks = vi.hoisted(() => ({
   finalize: vi.fn(),
   findByTurnRef: vi.fn(),
   getMessage: vi.fn(),
+  getPath: vi.fn((key: string) => `/mock/${key}`),
+  removeAgentDataDirectory: vi.fn().mockResolvedValue(undefined),
   markTerminalError: vi.fn(),
   publishDispatchChanges: vi.fn(),
   listAccepted: vi.fn(),
@@ -117,9 +120,15 @@ vi.mock('@application', () => ({
       if (name === 'AiStreamManager') return manager
       if (name === 'DbService') return dbService
       throw new Error(`Unexpected application.get(${name})`)
-    }
+    },
+    getPath: mocks.getPath
   }
 }))
+
+vi.mock('@main/ai/agents/agentDataDirectory', async (importOriginal) => {
+  const actual = await importOriginal<typeof AgentDataDirectoryModule>()
+  return { ...actual, removeAgentDataDirectory: mocks.removeAgentDataDirectory }
+})
 
 const { AgentSessionDeliveryService } = await import('../AgentSessionDeliveryService')
 
@@ -727,6 +736,53 @@ describe('AgentSessionDeliveryService', () => {
     expect(mocks.pauseRuntimeTurn.mock.invocationCallOrder[0]).toBeLessThan(
       mocks.closeSession.mock.invocationCallOrder[0]
     )
+  })
+
+  it('removes the deleted Agent data directory so its memory is not left as garbage', async () => {
+    mocks.deleteAgent.mockReturnValue({
+      deleted: true,
+      deletedSessionIds: [],
+      affectedSessionIds: [],
+      deliveryResults: []
+    })
+    const service = new AgentSessionDeliveryService()
+    await service._doInit()
+
+    await service.deleteAgent('agent-1', true)
+
+    expect(mocks.getPath).toHaveBeenCalledWith('feature.agents.data')
+    expect(mocks.removeAgentDataDirectory).toHaveBeenCalledWith('/mock/feature.agents.data', 'agent-1')
+  })
+
+  it('keeps the Agent data directory when the delete removed no row', async () => {
+    // A no-op delete (already gone, stale id) must never wipe a directory that still belongs to a
+    // live Agent — the id is the only link, so a wrong removal is unrecoverable.
+    mocks.deleteAgent.mockReturnValue({
+      deleted: false,
+      affectedSessionIds: [],
+      deliveryResults: []
+    })
+    const service = new AgentSessionDeliveryService()
+    await service._doInit()
+
+    await service.deleteAgent('agent-1', true)
+
+    expect(mocks.removeAgentDataDirectory).not.toHaveBeenCalled()
+  })
+
+  it('still reports the Agent as deleted when its data directory cannot be removed', async () => {
+    mocks.deleteAgent.mockReturnValue({
+      deleted: true,
+      deletedSessionIds: [],
+      affectedSessionIds: [],
+      deliveryResults: []
+    })
+    mocks.removeAgentDataDirectory.mockRejectedValueOnce(new Error('EACCES'))
+    const service = new AgentSessionDeliveryService()
+    await service._doInit()
+
+    // The row is already gone; a filesystem failure must not surface as a failed delete.
+    await expect(service.deleteAgent('agent-1', true)).resolves.toMatchObject({ deleted: true })
   })
 
   it('deletes every Session owned by a protected Agent through the delivery owner', async () => {
