@@ -1,3 +1,18 @@
+import {
+  Button,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle
+} from '@cherrystudio/ui'
+import { cn } from '@cherrystudio/ui/lib/utils'
+import i18n from '@renderer/i18n/resolver'
+import type { ConfirmPopupEntry, ConfirmPopupProps, ConfirmPopupType } from '@renderer/services/popup'
+import { popupService } from '@renderer/services/popup'
+import { AlertCircle, Info, TriangleAlert, XCircle } from 'lucide-react'
+import type React from 'react'
 import { useCallback, useRef } from 'react'
 
 function getIcon(type: ConfirmPopupType, icon: React.ReactNode) {

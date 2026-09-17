@@ -37,7 +37,6 @@ import { IpcChannel } from '@shared/IpcChannel'
 import type { CreateTreeIpcResult, DirectoryTreeOptions, TreeMutationPushPayload } from '@shared/utils/file'
 import { DirectoryTreeOptionsSchema } from '@shared/utils/file'
 import type { WebContents } from 'electron'
-import type { WebContents } from 'electron'
 
 import { createDirectoryTree, type DirectoryTreeBuilder } from './builder'
 
