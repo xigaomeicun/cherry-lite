@@ -77,6 +77,7 @@ import {
 } from '../streamManager'
 import { type DispatchDecision, toolApprovalRegistry } from '../toolApproval/ToolApprovalRegistry'
 import type { ApprovalRequestedEvent, InProcessUsageContext } from '../types'
+import { prepareTurnMessageWithPriorHistory } from './agentSessionPriorHistory'
 import {
   type AgentSessionRuntimeConnectionTarget,
   type AgentSessionRuntimeLaunchTarget,
@@ -2462,8 +2463,23 @@ export class AgentSessionRuntimeService extends BaseService {
     // A fresh request starts clean — drop any retry status left over from the previous turn.
     this.clearApiRetry(entry)
     await this.refreshTurnTraceContext(entry, turn)
+
+    let messageToSend = turn.userMessage
+    try {
+      messageToSend = prepareTurnMessageWithPriorHistory({
+        sessionId: entry.sessionId,
+        agentId: entry.agentId,
+        userMessage: turn.userMessage
+      })
+    } catch (error) {
+      logger.warn('Failed to prepare turn message with prior history', {
+        sessionId: entry.sessionId,
+        error
+      })
+    }
+
     await this.currentConnection(entry)?.send({
-      message: turn.userMessage,
+      message: messageToSend,
       systemReminder: turn.systemReminder === true
     })
   }
