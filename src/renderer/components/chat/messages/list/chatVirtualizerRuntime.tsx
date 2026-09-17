@@ -340,6 +340,7 @@ export function useChatVirtualizerRuntime<T>({
       suppressNextAutoscrollConfirm()
     }
     el.scrollTop = target
+    vlistHandleRef.current?.scrollTo(target)
     lastScrollOffsetRef.current = target
     hideScrollToBottomButton()
   }, [hideScrollToBottomButton, smoothScroll, suppressNextAutoscrollConfirm])
@@ -1013,8 +1014,14 @@ export function useChatVirtualizerRuntime<T>({
       const index = items.findIndex((item, itemIndex) => getItemKey(item, itemIndex) === key)
       if (index >= 0) indices.add(index)
     }
+    // Protect live edge: while following bottom, keep the latest item mounted
+    // so massive size differences before layout measurement never cause virtua
+    // to unmount the active message and display blank content.
+    if (viewportFollow.isFollowing() && items.length > 0) {
+      indices.add(items.length - 1)
+    }
     return [...indices].filter((index) => Number.isInteger(index) && index >= 0 && index < items.length)
-  }, [getItemKey, items, keepMountedKeys, selectionIndex])
+  }, [getItemKey, items, keepMountedKeys, selectionIndex, viewportFollow])
 
   // ---- imperative API -------------------------------------------------
 
