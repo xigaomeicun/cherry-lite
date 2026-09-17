@@ -118,7 +118,7 @@ const ResourceEditDialogHost = lazy(() =>
 const IMAGE_CAPTURE_START_DELAY_MS = 160
 
 const EMPTY_COLLAPSED_TOPIC_STATE: readonly string[] = []
-const DEFAULT_TOPIC_GROUP_VISIBLE_COUNT = 5
+const DEFAULT_TOPIC_GROUP_VISIBLE_COUNT = Number.POSITIVE_INFINITY
 const LEFT_PANEL_TIME_TOPIC_GROUP_VISIBLE_COUNT = 50
 const TOPIC_ASSISTANT_GROUP_SECTION_PREFIX = 'topic:section:assistant-group:'
 const TOPIC_ASSISTANT_UNGROUPED_SECTION_ID = `${TOPIC_ASSISTANT_GROUP_SECTION_PREFIX}ungrouped`
@@ -1474,8 +1474,16 @@ export function Topics({
         canDragItem={canDragTopicItem}
         canDropItem={canDropTopicItem}
         groupEmptyLabel={t('chat.topics.empty.title')}
-        groupShowMoreLabel={isRightPanel ? undefined : t('chat.topics.group.show_more')}
-        groupCollapseLabel={isRightPanel ? undefined : t('chat.topics.group.collapse')}
+        groupShowMoreLabel={
+          isRightPanel || defaultGroupVisibleCount === Number.POSITIVE_INFINITY
+            ? undefined
+            : t('chat.topics.group.show_more')
+        }
+        groupCollapseLabel={
+          isRightPanel || defaultGroupVisibleCount === Number.POSITIVE_INFINITY
+            ? undefined
+            : t('chat.topics.group.collapse')
+        }
         onRenameItem={handleRenameTopic}
         onGroupHeaderSelectItem={handleGroupHeaderSelectTopic}
         onReorder={handleTopicReorder}

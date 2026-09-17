@@ -1938,27 +1938,29 @@ describe('Sessions', () => {
   })
 
   it('reveals a history-selected session hidden by search and show-more with row focus', async () => {
+    preferenceMocks.values.set('agent.session.display_mode', 'time')
     setupSessions({
-      sessions: Array.from({ length: 6 }, (_, index) =>
+      sessions: Array.from({ length: 51 }, (_, index) =>
         createSession({
           id: `session-${index + 1}`,
           name: `Session ${index + 1}`,
-          orderKey: `${index + 1}`
+          orderKey: `${index + 1}`,
+          updatedAt: CURRENT_SESSION_ISO
         })
       )
     })
 
     const { rerender } = render(<SessionsForTest />)
 
-    expect(screen.queryByText('Session 6')).not.toBeInTheDocument()
+    expect(screen.queryByText('Session 51')).not.toBeInTheDocument()
 
     vi.useFakeTimers()
     rerender(
-      <SessionsForTest revealRequest={{ itemId: 'session-6', requestId: 1, clearFilters: true, clearQuery: true }} />
+      <SessionsForTest revealRequest={{ itemId: 'session-51', requestId: 1, clearFilters: true, clearQuery: true }} />
     )
 
-    expect(screen.getByText('Session 6')).toBeInTheDocument()
-    const revealedRow = screen.getByText('Session 6').closest('[role="option"]')
+    expect(screen.getByText('Session 51')).toBeInTheDocument()
+    const revealedRow = screen.getByText('Session 51').closest('[role="option"]')
     expect(revealedRow).not.toBeNull()
     expect(revealedRow!).toHaveAttribute('data-reveal-focus', 'true')
     expect(virtualMocks.scrollToIndex).toHaveBeenCalledWith(expect.any(Number), { align: 'center' })
