@@ -1,4 +1,4 @@
-import { remarkLatexMath } from '@renderer/components/markdown'
+import { remarkLatexMath } from '@renderer/utils/remarkLatexMath'
 import type { Root } from 'mdast'
 import remarkParse from 'remark-parse'
 import { unified } from 'unified'

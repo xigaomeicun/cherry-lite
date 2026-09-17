@@ -1,7 +1,7 @@
 import '@cherrystudio/ui/components/composites/markdown/styles'
 
 import { Markdown, withMath } from '@cherrystudio/ui'
-import { remarkLatexMath } from '@renderer/components/markdown'
+import { remarkLatexMath } from '@renderer/utils/remarkLatexMath'
 import type { Root } from 'mdast'
 import { memo, useId } from 'react'
 import type { Plugin } from 'unified'

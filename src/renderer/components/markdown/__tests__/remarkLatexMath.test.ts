@@ -1,4 +1,5 @@
 import { defaultMarkdownPlugins, Markdown, StreamingMarkdown, withMath } from '@cherrystudio/ui'
+import { remarkLatexMath } from '@renderer/utils/remarkLatexMath'
 import { render } from '@testing-library/react'
 import type { InlineMath, Math, Nodes, Root } from 'mdast'
 import { createElement } from 'react'
@@ -8,7 +9,6 @@ import { visit } from 'unist-util-visit'
 import { describe, expect, it, vi } from 'vitest'
 
 import { createLatexMarkdownBlockParser } from '../parseLatexMarkdownBlocks'
-import { remarkLatexMath } from '../remarkLatexMath'
 
 vi.unmock('@cherrystudio/ui')
 

@@ -5,10 +5,11 @@ import {
   useMessageRenderConfig,
   useOptionalMessageListActions
 } from '@renderer/components/chat/messages/MessageListProvider'
-import { createLatexMarkdownBlockParser, remarkLatexMath } from '@renderer/components/markdown'
+import { createLatexMarkdownBlockParser } from '@renderer/components/markdown'
 import { removeSvgEmptyLines } from '@renderer/utils/formats'
 import { openFileTarget } from '@renderer/utils/openFileTarget'
 import { isWin } from '@renderer/utils/platform'
+import { remarkLatexMath } from '@renderer/utils/remarkLatexMath'
 import { isEmpty } from 'es-toolkit/compat'
 import { type FC, useMemo, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
