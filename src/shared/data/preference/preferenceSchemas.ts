@@ -46,6 +46,10 @@ export interface PreferenceSchemas {
     'agent.session.display_mode': PreferenceTypes.AgentSessionDisplayMode
     // target-key-definitions/complex/complex
     'agent.session.position': PreferenceTypes.TopicTabPosition
+    // target-key-definitions/complex/complex
+    'app.browser.agent_control.enabled': boolean
+    // target-key-definitions/complex/complex
+    'app.browser.open_links_in_browser': boolean
     // redux/settings/enableDeveloperMode
     'app.developer_mode.enabled': boolean
     // redux/settings/autoCheckUpdate
@@ -589,6 +593,8 @@ export const DefaultPreferences: PreferenceSchemas = {
     'agent.language': null,
     'agent.session.display_mode': 'agent',
     'agent.session.position': 'left',
+    'app.browser.agent_control.enabled': true,
+    'app.browser.open_links_in_browser': true,
     'app.developer_mode.enabled': false,
     // cherry-lite: default off. The build keeps upstream's version number, so auto-download
     // would fetch the official package and replace this fork (see electron-builder.yml publish).

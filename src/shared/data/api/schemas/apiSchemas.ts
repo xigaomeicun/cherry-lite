@@ -27,6 +27,7 @@ import type { AgentSessionSchemas } from './agentSessions'
 import type { AgentWorkspaceSchemas } from './agentWorkspaces'
 import type { AiUsageRecordSchemas } from './aiUsageRecords'
 import type { AssistantSchemas } from './assistants'
+import type { BrowserVisitSchemas } from './browserVisits'
 import type { FileSchemas } from './files'
 import type { GroupSchemas } from './groups'
 import type { JobSchemas } from './jobs'
@@ -60,7 +61,8 @@ import type { TranslateSchemas } from './translate'
  * 2. Import and add to intersection below
  */
 export type ApiSchemas = AssertValidSchemas<
-  TopicSchemas &
+  BrowserVisitSchemas &
+    TopicSchemas &
     MessageSchemas &
     TemporaryChatSchemas &
     ModelSchemas &
