@@ -28,7 +28,7 @@ import {
   type AgentWorkspaceReferenceItem
 } from '@shared/data/api/schemas/agentWorkspaces'
 import type { JobScheduleSnapshot, JobSnapshot } from '@shared/data/api/schemas/jobs'
-import type { ListOptions } from '@shared/data/api/types'
+import type { DataApiDataChangeEffect, ListOptions } from '@shared/data/api/types'
 
 const AGENT_TASK_TYPE = 'agent.task' as const
 
@@ -131,16 +131,31 @@ function deriveStatus(snapshot: JobScheduleSnapshot): 'active' | 'paused' | 'com
   return 'active'
 }
 
+function taskReadModelEffects(
+  entityIds: string[],
+  kind: 'membership' | 'projection' = 'projection'
+): DataApiDataChangeEffect[] {
+  return [
+    { endpoint: '/agent-tasks', kind, entityIds },
+    { endpoint: '/agents/:agentId/tasks', kind, entityIds },
+    { endpoint: '/agent-tasks/:taskId', entityIds },
+    { endpoint: '/agents/:agentId/tasks/:taskId', entityIds }
+  ]
+}
+
 export class AgentTaskService {
   /** Publish every DataApi projection backed by the composed task read model. */
-  notifyReadModelChange(taskIds: readonly string[]): void {
+  notifyReadModelChange(taskIds: readonly string[], kind: 'membership' | 'projection' = 'projection'): void {
     const entityIds = [...new Set(taskIds)]
     if (entityIds.length === 0) return
+    notifyDataApiDataChange(taskReadModelEffects(entityIds, kind))
+  }
+
+  /** Publish task and run-log projections together: membership on enqueue, projection on state changes. */
+  notifyRunChange(taskId: string, jobId: string, kind: 'membership' | 'projection'): void {
     notifyDataApiDataChange([
-      { endpoint: '/agent-tasks', kind: 'projection', entityIds },
-      { endpoint: '/agents/:agentId/tasks', kind: 'projection', entityIds },
-      { endpoint: '/agent-tasks/:taskId', entityIds },
-      { endpoint: '/agents/:agentId/tasks/:taskId', entityIds }
+      ...taskReadModelEffects([taskId]),
+      { endpoint: '/agents/:agentId/tasks/:taskId/logs', kind, routeParams: { taskId }, entityIds: [jobId] }
     ])
   }
 
