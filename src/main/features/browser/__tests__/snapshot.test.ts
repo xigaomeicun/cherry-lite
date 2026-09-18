@@ -82,7 +82,8 @@ function fixture(): RawSnapshot {
             backendNodeId: [1, 2, 3, 4, 5, 6],
             parentIndex: [-1, -1, -1, -1, 3, -1],
             nodeName: [3, 1, 2, 1, 3, 2],
-            attributes: [[], [], [], [4, 5], [], []]
+            attributes: [[], [], [], [4, 5], [], []],
+            isClickable: { index: [] }
           },
           layout: {
             nodeIndex: [0, 1, 2, 3, 4, 5],
