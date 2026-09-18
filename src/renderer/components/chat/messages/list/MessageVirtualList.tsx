@@ -368,7 +368,7 @@ export function MessageVirtualList<T>({
                 scrollRef={runtime.scrollerRef}
                 data={runtime.wrappedItems}
                 itemSize={estimateSize}
-                bufferSize={Math.max(800, overscan * (estimateSize ?? 200))}
+                bufferSize={Math.max(2400, overscan * (estimateSize ?? 200))}
                 shift={runtime.shift}
                 keepMounted={runtime.keepMounted}
                 startMargin={topPadding}
