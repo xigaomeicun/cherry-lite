@@ -1,3 +1,4 @@
+import { applyTableRules } from '@main/utils/htmlToMarkdown'
 import type TurndownService from 'turndown'
 
 import { type BrowserScreenshot, captureScreenshot, type ScreenshotOptions } from '../actions/screenshot'
@@ -23,8 +24,8 @@ export abstract class BrowserPageController {
   abstract validateUrl(url: string): string
 
   private getTurndownService(): Promise<TurndownService> {
-    return (this.turndownServicePromise ??= import('turndown').then(
-      ({ default: TurndownService }) => new TurndownService()
+    return (this.turndownServicePromise ??= import('turndown').then(({ default: TurndownService }) =>
+      applyTableRules(new TurndownService())
     ))
   }
 
