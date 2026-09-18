@@ -3,7 +3,11 @@ import { agentService } from '@data/services/AgentService'
 import { AgentSessionDeliveryRoutingError, agentSessionMessageService } from '@data/services/AgentSessionMessageService'
 import { agentSessionService } from '@data/services/AgentSessionService'
 import { loggerService } from '@logger'
-import { removeAgentDataDirectory } from '@main/ai/agents/agentDataDirectory'
+import {
+  removeAgentDataDirectory,
+  removeAgentSessionPhysicalDirectories,
+  sweepOrphanAgentDirectories
+} from '@main/ai/agents/agentDataDirectory'
 import { isAgentSessionWorkspaceError } from '@main/ai/runtime/agentSessionWorkspace'
 import { BaseService, DependsOn, type Disposable, Injectable, Phase, ServicePhase } from '@main/core/lifecycle'
 import { ErrorCode, isDataApiError } from '@shared/data/api/errors'
@@ -290,6 +294,12 @@ export class AgentSessionDeliveryService extends BaseService {
       } catch (error) {
         logger.warn('Failed to remove the deleted Agent data directory', { agentId, error })
       }
+      try {
+        const activeIds = agentService.listAgents().agents.map((a) => a.id)
+        await sweepOrphanAgentDirectories(application.getPath('feature.agents.data'), activeIds)
+      } catch {
+        /* best effort */
+      }
     }
     return {
       deleted: result.deleted,
@@ -325,6 +335,18 @@ export class AgentSessionDeliveryService extends BaseService {
     const failures = closed.flatMap((result) => (result.status === 'rejected' ? [result.reason] : []))
     if (failures.length > 0) {
       throw new AggregateError(failures, 'One or more deleted Agent Session runtimes failed to close')
+    }
+
+    if (sessionIds.length > 0) {
+      try {
+        await removeAgentSessionPhysicalDirectories(
+          application.getPath('feature.agents.data'),
+          application.getPath('feature.agents.system_workspaces'),
+          sessionIds
+        )
+      } catch (error) {
+        logger.warn('Failed to remove physical directories for deleted sessions', { sessionIds, error })
+      }
     }
   }
 

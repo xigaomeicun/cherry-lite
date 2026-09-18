@@ -1,4 +1,4 @@
-import { open } from 'node:fs/promises'
+import { open, readdir } from 'node:fs/promises'
 import path from 'node:path'
 
 import { ensureDir, isPathInside, lstat, mkdir, realpath, removeDir } from '@main/utils/file'
@@ -195,4 +195,82 @@ export async function removeAgentDataDirectory(agentsDataRoot: string, agentId: 
     throw new Error(`Refusing to recursively remove unsafe agent data path: ${agentDataPath}`)
   }
   await removeDir(asAbsolutePath(agentDataPath))
+}
+
+export async function removeAgentSessionPhysicalDirectories(
+  agentsDataRoot: string,
+  systemWorkspacesRoot: string,
+  sessionIds: readonly string[]
+): Promise<void> {
+  if (sessionIds.length === 0) return
+  const sessionIdSet = new Set(sessionIds)
+
+  // 1. Delete system workspaces matching session IDs
+  try {
+    const dates = await readdir(systemWorkspacesRoot, { withFileTypes: true }).catch(() => [])
+    for (const dateEntry of dates) {
+      if (!dateEntry.isDirectory()) continue
+      const dateDir = path.join(systemWorkspacesRoot, dateEntry.name)
+      const sessions = await readdir(dateDir, { withFileTypes: true }).catch(() => [])
+      for (const sessionEntry of sessions) {
+        if (!sessionEntry.isDirectory()) continue
+        if (sessionIdSet.has(sessionEntry.name)) {
+          await removeDir(asAbsolutePath(path.join(dateDir, sessionEntry.name))).catch(() => {})
+        }
+      }
+      // If date directory becomes empty, clean it up too
+      const remaining = await readdir(dateDir).catch(() => [])
+      if (remaining.length === 0) {
+        await removeDir(asAbsolutePath(dateDir)).catch(() => {})
+      }
+    }
+  } catch {
+    /* best effort */
+  }
+
+  // 2. Clean Claude Code project cache matching session IDs
+  try {
+    const claudeProjectsRoot = path.join(agentsDataRoot, '.claude', 'projects')
+    const claudeProjects = await readdir(claudeProjectsRoot, { withFileTypes: true }).catch(() => [])
+    for (const proj of claudeProjects) {
+      if (!proj.isDirectory()) continue
+      const matches = sessionIds.some((sid) => proj.name.endsWith(sid))
+      if (matches) {
+        await removeDir(asAbsolutePath(path.join(claudeProjectsRoot, proj.name))).catch(() => {})
+      }
+    }
+  } catch {
+    /* best effort */
+  }
+
+  // 3. Clean DSH sessions cache matching session IDs
+  try {
+    const dshSessionsRoot = path.join(agentsDataRoot, '.dsh', 'sessions')
+    const dshSessions = await readdir(dshSessionsRoot, { withFileTypes: true }).catch(() => [])
+    for (const dshSess of dshSessions) {
+      if (!dshSess.isDirectory()) continue
+      const matches = sessionIds.some((sid) => dshSess.name.includes(sid))
+      if (matches) {
+        await removeDir(asAbsolutePath(path.join(dshSessionsRoot, dshSess.name))).catch(() => {})
+      }
+    }
+  } catch {
+    /* best effort */
+  }
+}
+
+export async function sweepOrphanAgentDirectories(agentsDataRoot: string, activeAgentIds: readonly string[]): Promise<void> {
+  const activeSet = new Set(activeAgentIds)
+  const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+  try {
+    const entries = await readdir(agentsDataRoot, { withFileTypes: true }).catch(() => [])
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue
+      if (UUID_REGEX.test(entry.name) && !activeSet.has(entry.name)) {
+        await removeDir(asAbsolutePath(path.join(agentsDataRoot, entry.name))).catch(() => {})
+      }
+    }
+  } catch {
+    /* best effort */
+  }
 }
