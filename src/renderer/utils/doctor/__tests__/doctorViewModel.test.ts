@@ -2,7 +2,7 @@ import type { DoctorAction, DoctorCheckResult, DoctorReport, DoctorState } from 
 import { DOCTOR_CHECK_CATALOG, DOCTOR_CHECK_IDS } from '@shared/types/doctor'
 import { describe, expect, it } from 'vitest'
 
-import { buildDoctorViewModel, defaultExpandedDoctorDomains } from '../doctorViewModel'
+import { buildDoctorViewModel } from '../doctorViewModel'
 
 const NOW = Date.parse('2026-09-04T09:00:00.000Z')
 const QUICK_CHECK_IDS = DOCTOR_CHECK_IDS.filter((id) => DOCTOR_CHECK_CATALOG[id].tier === 'quick')
@@ -28,8 +28,10 @@ function result(
 function report(results: readonly DoctorCheckResult[], expiresAt = '2026-09-04T09:10:00.000Z'): DoctorReport {
   return {
     schemaVersion: 1,
+    scope: 'global',
     runId: 'run-1',
     tier: 'quick',
+    selectedCheckIds: results.map((item) => item.id),
     startedAt: '2026-09-04T08:59:00.000Z',
     finishedAt: '2026-09-04T08:59:01.000Z',
     expiresAt,
@@ -55,7 +57,15 @@ describe('buildDoctorViewModel', () => {
       status: 'running',
       runId: 'run-1',
       tier: 'live',
+      selectedCheckIds: [
+        'install-version-channel',
+        'install-update-available',
+        'permission-screen-capture',
+        'permission-accessibility',
+        'network-online'
+      ],
       startedAt: '2026-09-04T08:59:00.000Z',
+      activeCheckIds: ['permission-accessibility', 'network-online'],
       results: [result('permission-screen-capture', 'fail'), result('install-version-channel', 'pass')]
     }
 
@@ -67,6 +77,7 @@ describe('buildDoctorViewModel', () => {
     expect(viewModel.rows.find((row) => row.id === 'network-model-endpoint')).toBeUndefined()
     expect(viewModel.rows.find((row) => row.id === 'install-version-channel')).toMatchObject({ status: 'pass' })
     expect(viewModel.rows.find((row) => row.id === 'install-update-available')).toMatchObject({ status: 'pending' })
+    expect(viewModel.activeCheckIds).toEqual(['permission-accessibility', 'network-online'])
     expect(viewModel.groups.find((group) => group.domain === 'permission')?.status).toBe('fail')
   })
 
@@ -75,7 +86,9 @@ describe('buildDoctorViewModel', () => {
       status: 'running',
       runId: 'run-1',
       tier: 'quick',
+      selectedCheckIds: QUICK_CHECK_IDS,
       startedAt: '2026-09-04T08:59:00.000Z',
+      activeCheckIds: [],
       results: []
     }
 
@@ -92,11 +105,31 @@ describe('buildDoctorViewModel', () => {
       status: 'running',
       runId: 'run-1',
       tier: 'live',
+      selectedCheckIds: [],
       startedAt: '2026-09-04T08:59:00.000Z',
+      activeCheckIds: [],
       results: []
     }
 
     expect(buildDoctorViewModel(state, NOW).canCancel).toBe(true)
+  })
+
+  it('shows only the checks Main selected for a contextual run', () => {
+    const selectedCheckIds = ['network-online', 'network-model-endpoint'] as const
+    const state: DoctorState = {
+      status: 'running',
+      runId: 'run-context',
+      tier: 'live',
+      selectedCheckIds,
+      startedAt: '2026-09-04T08:59:00.000Z',
+      activeCheckIds: ['network-model-endpoint'],
+      results: [result('network-online', 'pass')]
+    }
+
+    expect(buildDoctorViewModel(state, NOW).rows.map((row) => [row.id, row.status])).toEqual([
+      ['network-online', 'pass'],
+      ['network-model-endpoint', 'pending']
+    ])
   })
 
   it('never synthesizes actions for findings', () => {
@@ -178,6 +211,5 @@ describe('buildDoctorViewModel', () => {
       error: 1,
       skip: 1
     })
-    expect(defaultExpandedDoctorDomains(viewModel.groups)).toEqual(['permission', 'network', 'logs'])
   })
 })

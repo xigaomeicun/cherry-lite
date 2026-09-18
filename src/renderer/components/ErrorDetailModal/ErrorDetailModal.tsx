@@ -33,26 +33,27 @@ import {
   isSerializedError
 } from '@renderer/types/error'
 import { formatAiSdkError, formatError, safeToString } from '@renderer/utils/error'
-import type { DiagnosisContext, DiagnosisResult } from '@renderer/utils/errorDiagnosis'
-import type { DoctorNavigateTarget } from '@shared/types/doctor'
+import type { DiagnosisContext } from '@renderer/utils/errorDiagnosis'
+import type { DoctorNavigateTarget, DoctorSubjectRef } from '@shared/types/doctor'
 import { parseDataUrl } from '@shared/utils/dataUrl'
-import { ArrowLeft, Copy, FileUp } from 'lucide-react'
-import React, { memo, useCallback, useEffect, useRef, useState } from 'react'
-import { useTranslation } from 'react-i18next'
+import { doctorScopeKey } from '@shared/utils/doctor'
 
 import Scrollbar from '../Scrollbar'
-import { buildDiagnosticReportDescription, type DiagnosticReportConfig } from './diagnosticReportDescription'
+import {
+  buildDiagnosticReportDescription,
+  type DiagnosticReportConfig,
+  resolveDiagnosticReportLocation
+} from './diagnosticReportDescription'
 import { ErrorBasicInformation } from './ErrorBasicInformation'
-import { ErrorDiagnosticsPanel } from './ErrorDiagnosticsPanel'
+import { ErrorDoctorDiagnostics } from './ErrorDoctorDiagnostics'
 
 interface ErrorDetailContentProps {
   error?: SerializedError
+  localizedErrorMessage?: string
   diagnosisContext?: DiagnosisContext
   diagnosticReport?: DiagnosticReportConfig
-  blockId?: string
-  onDiagnosisComplete?: (partId: string, diagnosis: DiagnosisResult) => void | Promise<void>
+  subject?: DoctorSubjectRef
   onOpenDiagnosticReport?: (description: string) => void
-  cachedDiagnosis?: DiagnosisResult
   onDoctorNavigate?: (target: DoctorNavigateTarget) => void
 }
 
@@ -60,6 +61,8 @@ interface ErrorDetailContentInternalProps extends ErrorDetailContentProps {
   readonly doctorCloseBlocked?: boolean
   readonly onDoctorCloseBlockedChange?: (blocked: boolean) => void
 }
+
+const ignoreDoctorNavigation = () => undefined
 
 const truncateLargeData = (
   data: string,
@@ -507,12 +510,11 @@ const AiSdkError = memo(({ error }: { error: SerializedAiSdkErrorUnion }) => {
 
 const ErrorDetailContent: React.FC<ErrorDetailContentInternalProps> = ({
   error,
+  localizedErrorMessage,
   diagnosisContext,
+  subject,
   diagnosticReport,
-  blockId,
-  onDiagnosisComplete,
   onOpenDiagnosticReport,
-  cachedDiagnosis,
   onDoctorNavigate,
   doctorCloseBlocked = false,
   onDoctorCloseBlockedChange
@@ -520,7 +522,6 @@ const ErrorDetailContent: React.FC<ErrorDetailContentInternalProps> = ({
   const { t } = useTranslation()
   const [detailsOpen, setDetailsOpen] = useState(false)
   const viewDetailsButtonRef = useRef<HTMLButtonElement>(null)
-
   const copyErrorDetails = useCallback(() => {
     if (!error) {
       return
@@ -545,18 +546,16 @@ const ErrorDetailContent: React.FC<ErrorDetailContentInternalProps> = ({
       buildDiagnosticReportDescription({
         diagnosisContext,
         error,
+        localizedErrorMessage,
         labels: {
           errorMessage: t('error.message'),
-          errorName: t('error.name'),
           location: t('error.diagnostic_report.location'),
-          model: t('error.modelId'),
-          provider: t('error.provider'),
-          statusCode: t('error.statusCode')
+          model: t('error.modelId')
         },
-        location: diagnosticReport.location
+        location: resolveDiagnosticReportLocation(t, diagnosticReport.location, i18n.language)
       })
     )
-  }, [diagnosticReport, diagnosisContext, doctorCloseBlocked, error, onOpenDiagnosticReport, t])
+  }, [diagnosticReport, diagnosisContext, doctorCloseBlocked, error, localizedErrorMessage, onOpenDiagnosticReport, t])
 
   const showDetails = () => {
     setDetailsOpen(true)
@@ -585,23 +584,25 @@ const ErrorDetailContent: React.FC<ErrorDetailContentInternalProps> = ({
       </DialogHeader>
       <ErrorDetailContainer>
         <div className="space-y-4">
+          {subject ? (
+            <ErrorDoctorDiagnostics
+              key={doctorScopeKey(subject)}
+              subject={subject}
+              onNavigate={onDoctorNavigate ?? ignoreDoctorNavigation}
+              onReportProblem={onOpenDiagnosticReport}
+              onCloseBlockedChange={onDoctorCloseBlockedChange}
+            />
+          ) : (
+            <p className="text-muted-foreground text-sm">{t('error.diagnostics.context_unavailable')}</p>
+          )}
           <ErrorBasicInformation
             viewDetailsButtonRef={viewDetailsButtonRef}
             error={error}
+            localizedErrorMessage={localizedErrorMessage}
             diagnosisContext={diagnosisContext}
             diagnosticReport={diagnosticReport}
             onCopy={copyErrorDetails}
             onViewDetails={showDetails}
-          />
-          <ErrorDiagnosticsPanel
-            blockId={blockId}
-            cachedDiagnosis={cachedDiagnosis}
-            diagnosisContext={diagnosisContext}
-            error={error}
-            onCloseBlockedChange={onDoctorCloseBlockedChange}
-            onDiagnosisComplete={onDiagnosisComplete}
-            onNavigate={onDoctorNavigate}
-            onReportProblem={onOpenDiagnosticReport}
           />
         </div>
       </ErrorDetailContainer>

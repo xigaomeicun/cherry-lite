@@ -189,7 +189,7 @@ describe('ErrorDiagnosisService', () => {
 
       await diagnoseError(makeError({ statusCode: 401 }), 'zh-CN', {
         errorSource: 'chat',
-        providerName: 'openai',
+        providerId: 'openai',
         modelId: 'gpt-4'
       })
 

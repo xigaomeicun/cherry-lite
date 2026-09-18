@@ -2,7 +2,6 @@ import {
   Badge,
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogHeader,
   DialogTitle,
   Item,
@@ -107,10 +106,9 @@ export function FeedbackDialog({ open, onOpenChange }: FeedbackDialogProps) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent size="lg">
+      <DialogContent size="lg" aria-describedby={undefined}>
         <DialogHeader>
           <DialogTitle>{t('settings.about.feedback.dialog.title')}</DialogTitle>
-          <DialogDescription>{t('settings.about.feedback.dialog.description')}</DialogDescription>
         </DialogHeader>
 
         <ItemGroup className="gap-3 px-2">

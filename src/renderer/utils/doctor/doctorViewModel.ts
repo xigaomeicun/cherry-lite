@@ -5,6 +5,7 @@ import {
   type DoctorCheckId,
   type DoctorCheckResult,
   type DoctorCheckStatus,
+  type DoctorPendingCheck,
   type DoctorReport,
   type DoctorRunTier,
   type DoctorState
@@ -35,6 +36,7 @@ interface DoctorViewModel {
   readonly tier?: DoctorRunTier
   readonly report?: DoctorReport
   readonly rows: readonly DoctorRowViewModel[]
+  readonly activeCheckIds: readonly DoctorCheckId[]
   readonly groups: readonly DoctorGroupViewModel[]
   readonly problemCount: number
   readonly summary: {
@@ -46,6 +48,7 @@ interface DoctorViewModel {
   }
   readonly canCancel: boolean
   readonly isStale: boolean
+  readonly pendingChecks: readonly DoctorPendingCheck[]
 }
 
 export function canCancelDoctorRun(state: DoctorState): state is Extract<DoctorState, { status: 'running' }> {
@@ -68,33 +71,41 @@ function groupStatus(rows: readonly DoctorRowViewModel[]): DoctorGroupStatus {
 }
 
 function rowsForState(state: DoctorState, isStale: boolean): readonly DoctorRowViewModel[] {
-  if (state.status === 'idle' || state.status === 'canceled') return []
+  if (state.status !== 'running' && state.status !== 'completed') return []
 
   if (state.status === 'completed') {
     const resultById = new Map(state.report.results.map((result) => [result.id, result]))
-    return DOCTOR_CHECK_IDS.flatMap((id) => {
+    const pendingIds = new Set((state.report.pendingChecks ?? []).map((pending) => pending.checkId))
+    return DOCTOR_CHECK_IDS.flatMap<DoctorRowViewModel>((id) => {
       const result = resultById.get(id)
-      return result
-        ? [
-            {
-              id,
-              domain: DOCTOR_CHECK_CATALOG[id].domain,
-              status: result.status,
-              result,
-              actions: resultActions(result),
-              actionsDisabled: isStale
-            }
-          ]
-        : []
+      if (result) {
+        return [
+          {
+            id,
+            domain: DOCTOR_CHECK_CATALOG[id].domain,
+            status: result.status,
+            result,
+            actions: resultActions(result),
+            actionsDisabled: isStale
+          }
+        ]
+      }
+      if (!pendingIds.has(id)) return []
+      return [
+        {
+          id,
+          domain: DOCTOR_CHECK_CATALOG[id].domain,
+          status: 'pending',
+          result: undefined,
+          actions: [],
+          actionsDisabled: true
+        }
+      ]
     })
   }
 
   const resultById = new Map(state.results.map((result) => [result.id, result]))
-  return DOCTOR_CHECK_IDS.filter(
-    (id) =>
-      !('includeByDefault' in DOCTOR_CHECK_CATALOG[id]) &&
-      (state.tier === 'live' || DOCTOR_CHECK_CATALOG[id].tier === 'quick')
-  ).map((id) => {
+  return state.selectedCheckIds.map<DoctorRowViewModel>((id) => {
     const result = resultById.get(id)
     return {
       id,
@@ -105,22 +116,6 @@ function rowsForState(state: DoctorState, isStale: boolean): readonly DoctorRowV
       actionsDisabled: true
     }
   })
-}
-
-export function defaultExpandedDoctorDomains(
-  groups: readonly DoctorGroupViewModel[]
-): readonly DisplayedDoctorDomain[] {
-  return groups.filter((group) => group.rows.some(isDoctorRowExpandedByDefault)).map((group) => group.domain)
-}
-
-export function isDoctorRowExpandedByDefault(row: DoctorRowViewModel): boolean {
-  return (
-    row.status === 'warn' ||
-    row.status === 'fail' ||
-    row.status === 'error' ||
-    row.status === 'skip' ||
-    row.actions.length > 0
-  )
 }
 
 export function buildDoctorViewModel(state: DoctorState, now = Date.now()): DoctorViewModel {
@@ -160,10 +155,12 @@ export function buildDoctorViewModel(state: DoctorState, now = Date.now()): Doct
     tier: state.status === 'running' ? state.tier : report?.tier,
     report,
     rows,
+    activeCheckIds: state.status === 'running' ? state.activeCheckIds : [],
     groups,
     problemCount: rows.filter((row) => row.status === 'warn' || row.status === 'fail').length,
     summary,
     canCancel: canCancelDoctorRun(state),
-    isStale
+    isStale,
+    pendingChecks: report?.pendingChecks ?? []
   }
 }

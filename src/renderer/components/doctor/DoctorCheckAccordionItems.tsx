@@ -20,11 +20,9 @@ import {
 import type { DoctorController } from '@renderer/hooks/doctor'
 import { useMcpServers } from '@renderer/hooks/useMcpServer'
 import {
-  defaultExpandedDoctorDomains,
-  DOCTOR_DOMAIN_LABEL_KEYS,
   DOCTOR_NAVIGATION_LABEL_KEYS,
   DOCTOR_STATUS_LABEL_KEYS,
-  isDoctorRowExpandedByDefault,
+  doctorCheckDetailParams,
   resolveDoctorFixLabel
 } from '@renderer/utils/doctor'
 import { type DoctorAction, type DoctorCheckId, type DoctorCheckResult } from '@shared/types/doctor'
@@ -43,90 +41,71 @@ function useDoctorFixTargetName(): DoctorFixTargetNameResolver {
   return useCallback((target) => mcpServers.find((server) => server.id === target)?.name, [mcpServers])
 }
 
-export function DoctorCheckResults({ controller }: { readonly controller: DoctorController }) {
-  const { t } = useTranslation()
-  const { viewModel } = controller
-  const defaultExpandedDomains = defaultExpandedDoctorDomains(viewModel.groups)
+/** Renders check items inside an existing Accordion root owned by the host. */
+export function DoctorCheckAccordionItems({
+  compact = false,
+  controller,
+  defaultLocalDetailsExpanded = false,
+  rows = controller.viewModel.rows,
+  showActionRequiredTag = false,
+  showEvidence = true,
+  showStatusIcon = true
+}: {
+  readonly compact?: boolean
+  readonly controller: DoctorController
+  readonly defaultLocalDetailsExpanded?: boolean
+  readonly rows?: DoctorController['viewModel']['rows']
+  readonly showActionRequiredTag?: boolean
+  readonly showEvidence?: boolean
+  readonly showStatusIcon?: boolean
+}) {
   const resolveFixTargetName = useDoctorFixTargetName()
-
   return (
-    <Accordion
-      key={viewModel.report?.runId ?? `${viewModel.status}-${viewModel.tier ?? 'none'}`}
-      type="multiple"
-      defaultValue={[...defaultExpandedDomains]}
-      className="rounded-xl border border-border px-4 [&>[data-slot=accordion-item]:first-child]:border-t-0">
-      {viewModel.groups.map((group) => {
-        const defaultRow = group.rows.find(isDoctorRowExpandedByDefault)
-
-        return (
-          <AccordionItem key={group.domain} value={group.domain}>
-            <AccordionTrigger className="py-3">
-              <span className="flex min-w-0 items-center gap-2">
-                <StatusIcon status={group.status} />
-                <span>{t(DOCTOR_DOMAIN_LABEL_KEYS[group.domain])}</span>
-                <span className="sr-only">
-                  {t(
-                    group.status === 'running'
-                      ? DOCTOR_STATUS_LABEL_KEYS.pending
-                      : group.status === 'neutral'
-                        ? DOCTOR_STATUS_LABEL_KEYS.skip
-                        : DOCTOR_STATUS_LABEL_KEYS[group.status]
-                  )}
-                </span>
-                <Badge variant="outline" className="text-xs font-normal">
-                  {group.rows.length}
-                </Badge>
-              </span>
-            </AccordionTrigger>
-            <AccordionContent className="pb-3">
-              <Accordion
-                type="single"
-                collapsible
-                defaultValue={`doctor-${defaultRow?.id ?? group.rows[0]?.id}`}
-                className="rounded-lg border border-border px-2 [&>[data-slot=accordion-item]:first-child]:border-t-0">
-                <DoctorCheckListItems
-                  controller={controller}
-                  rows={group.rows}
-                  resolveFixTargetName={resolveFixTargetName}
-                />
-              </Accordion>
-            </AccordionContent>
-          </AccordionItem>
-        )
-      })}
-    </Accordion>
+    <DoctorCheckListItems
+      compact={compact}
+      controller={controller}
+      defaultLocalDetailsExpanded={defaultLocalDetailsExpanded}
+      rows={rows}
+      resolveFixTargetName={resolveFixTargetName}
+      showActionRequiredTag={showActionRequiredTag}
+      showEvidence={showEvidence}
+      showStatusIcon={showStatusIcon}
+    />
   )
 }
 
-/** Renders check items inside an existing Accordion root owned by the host. */
-export function DoctorCheckAccordionItems({
-  controller,
-  rows = controller.viewModel.rows
-}: {
-  readonly controller: DoctorController
-  readonly rows?: DoctorController['viewModel']['rows']
-}) {
-  const resolveFixTargetName = useDoctorFixTargetName()
-  return <DoctorCheckListItems controller={controller} rows={rows} resolveFixTargetName={resolveFixTargetName} />
-}
-
 function DoctorCheckListItems({
+  compact = false,
   controller,
+  defaultLocalDetailsExpanded = false,
   resolveFixTargetName,
-  rows
+  rows,
+  showActionRequiredTag,
+  showEvidence,
+  showStatusIcon
 }: {
+  readonly compact?: boolean
   readonly controller: DoctorController
+  readonly defaultLocalDetailsExpanded?: boolean
   readonly resolveFixTargetName: DoctorFixTargetNameResolver
   readonly rows: DoctorController['viewModel']['rows']
+  readonly showActionRequiredTag: boolean
+  readonly showEvidence: boolean
+  readonly showStatusIcon: boolean
 }) {
   return (
     <>
       {rows.map((row) => (
         <DoctorCheckListItem
           key={row.id}
+          compact={compact}
           controller={controller}
+          defaultLocalDetailsExpanded={defaultLocalDetailsExpanded}
           resolveFixTargetName={resolveFixTargetName}
           row={row}
+          showActionRequiredTag={showActionRequiredTag}
+          showEvidence={showEvidence}
+          showStatusIcon={showStatusIcon}
         />
       ))}
     </>
@@ -134,30 +113,56 @@ function DoctorCheckListItems({
 }
 
 function DoctorCheckListItem({
+  compact,
   controller,
+  defaultLocalDetailsExpanded,
   resolveFixTargetName,
-  row
+  row,
+  showActionRequiredTag,
+  showEvidence,
+  showStatusIcon
 }: {
+  readonly compact: boolean
   readonly controller: DoctorController
+  readonly defaultLocalDetailsExpanded: boolean
   readonly resolveFixTargetName: DoctorFixTargetNameResolver
   readonly row: DoctorController['viewModel']['rows'][number]
+  readonly showActionRequiredTag: boolean
+  readonly showEvidence: boolean
+  readonly showStatusIcon: boolean
 }) {
   const { t } = useTranslation()
   return (
-    <AccordionItem value={`doctor-${row.id}`} className="px-2">
-      <AccordionTrigger className="py-3 font-normal">
+    <AccordionItem value={`doctor-${row.id}`} className={compact ? 'px-4' : 'px-2'}>
+      <AccordionTrigger className="rounded-none py-3 font-normal hover:bg-transparent focus:bg-transparent focus-visible:bg-transparent">
         <span className="flex min-w-0 items-center gap-2">
-          <StatusIcon status={row.status} />
-          <span className="min-w-0 truncate text-sm font-medium">{t(doctorCheckTitleKey(row.id))}</span>
-          <Badge variant="outline" className="shrink-0 text-xs font-normal">
-            {t(DOCTOR_STATUS_LABEL_KEYS[row.status])}
-          </Badge>
+          {showStatusIcon ? <StatusIcon status={row.status} /> : null}
+          <span className={compact ? 'min-w-0 truncate text-xs font-medium' : 'min-w-0 truncate text-sm font-medium'}>
+            {t(doctorCheckTitleKey(row.id))}
+          </span>
+          {showActionRequiredTag ? (
+            <Badge variant="outline" className="shrink-0 border-warning-border text-xs font-normal text-warning">
+              {t('error.diagnostics.action_required_tag')}
+            </Badge>
+          ) : (
+            <Badge
+              variant="outline"
+              className={`shrink-0 text-xs font-normal ${showStatusIcon ? '' : statusBadgeClass(row.status)}`}>
+              {t(DOCTOR_STATUS_LABEL_KEYS[row.status])}
+            </Badge>
+          )}
         </span>
       </AccordionTrigger>
-      <AccordionContent className="space-y-2 pb-3 pl-6">
+      <AccordionContent className={`space-y-2 pb-3 ${compact ? '' : 'pl-6'}`}>
         <CheckDescription result={row.result} />
-        <DoctorCheckEvidence controller={controller} row={row} />
-        <DoctorCheckActions
+        {showEvidence ? (
+          <DoctorCheckEvidence
+            controller={controller}
+            defaultLocalDetailsExpanded={defaultLocalDetailsExpanded}
+            row={row}
+          />
+        ) : null}
+        <DoctorCheckActionButtons
           controller={controller}
           resolveFixTargetName={resolveFixTargetName}
           row={row}
@@ -170,9 +175,11 @@ function DoctorCheckListItem({
 
 function DoctorCheckEvidence({
   controller,
+  defaultLocalDetailsExpanded,
   row
 }: {
   readonly controller: DoctorController
+  readonly defaultLocalDetailsExpanded: boolean
   readonly row: DoctorController['viewModel']['rows'][number]
 }) {
   const { t } = useTranslation()
@@ -185,7 +192,7 @@ function DoctorCheckEvidence({
   const sensitiveEvidence = result?.evidence?.filter((item) => item.dataClass === 'consent_required') ?? []
   const sensitiveEvidenceRef = useRef<HTMLDListElement>(null)
   const evidenceItemValue = `doctor-evidence-${row.id}`
-  const [isEvidenceExpanded, setIsEvidenceExpanded] = useState(isEvidenceRevealed)
+  const [isEvidenceExpanded, setIsEvidenceExpanded] = useState(isEvidenceRevealed || defaultLocalDetailsExpanded)
   const isConfirming =
     controller.session.interaction.kind === 'confirm-evidence' && controller.session.interaction.checkId === row.id
 
@@ -272,7 +279,27 @@ function DoctorCheckEvidence({
   )
 }
 
-function DoctorCheckActions({
+export function DoctorCheckActions({
+  className = 'flex flex-wrap justify-end gap-2',
+  controller,
+  row
+}: {
+  readonly className?: string
+  readonly controller: DoctorController
+  readonly row: DoctorController['viewModel']['rows'][number]
+}) {
+  const resolveFixTargetName = useDoctorFixTargetName()
+  return (
+    <DoctorCheckActionButtons
+      className={className}
+      controller={controller}
+      resolveFixTargetName={resolveFixTargetName}
+      row={row}
+    />
+  )
+}
+
+function DoctorCheckActionButtons({
   className,
   controller,
   resolveFixTargetName,
@@ -296,7 +323,6 @@ function DoctorCheckActions({
         resolveFixTargetName={resolveFixTargetName}
         row={row}
         action={primaryAction}
-        primary
         runId={runId}
       />
       {row.actions.length > 1 ? (
@@ -326,14 +352,12 @@ function DoctorCheckActions({
 function DoctorActionButton({
   action,
   controller,
-  primary,
   resolveFixTargetName,
   row,
   runId
 }: {
   readonly action: DoctorAction
   readonly controller: DoctorController
-  readonly primary?: boolean
   readonly resolveFixTargetName: DoctorFixTargetNameResolver
   readonly row: DoctorController['viewModel']['rows'][number]
   readonly runId?: string
@@ -345,7 +369,7 @@ function DoctorActionButton({
     (controller.session.interaction.kind === 'action' && controller.session.interaction.checkId === row.id)
   return (
     <Button
-      variant={primary ? 'emphasis' : 'outline'}
+      variant="outline"
       size="sm"
       loading={loading}
       disabled={disabled}
@@ -370,7 +394,11 @@ function CheckDescription({ result }: { readonly result?: DoctorCheckResult }) {
     )
   }
   if (!result.detail) return <p className={className}>{t(DOCTOR_STATUS_LABEL_KEYS[result.status])}</p>
-  return <p className={className}>{t(doctorCheckDetailKey(result.id, result.detail.variant), result.detail.params)}</p>
+  return (
+    <p className={className}>
+      {t(doctorCheckDetailKey(result.id, result.detail.variant), doctorCheckDetailParams(t, result.detail.params))}
+    </p>
+  )
 }
 
 function Evidence({ name, value }: { readonly name: string; readonly value: string }) {
@@ -443,25 +471,41 @@ function actionLabel(
   }
 }
 
+function statusBadgeClass(status: DoctorStatusIconStatus): string {
+  switch (status) {
+    case 'pass':
+      return 'border-success-border text-success'
+    case 'fail':
+    case 'error':
+      return 'border-error-border text-error'
+    case 'pending':
+    case 'running':
+    case 'warn':
+      return 'border-warning-border text-warning'
+    default:
+      return ''
+  }
+}
+
 function StatusIcon({ status }: { readonly status: DoctorStatusIconStatus }): ReactNode {
   switch (status) {
     case 'pass':
-      return <CircleCheck className="mt-0.5 size-4 shrink-0 text-success" aria-hidden />
+      return <CircleCheck className="size-4 shrink-0 text-success" aria-hidden />
     case 'warn':
-      return <CircleAlert className="mt-0.5 size-4 shrink-0 text-warning" aria-hidden />
+      return <CircleAlert className="size-4 shrink-0 text-warning" aria-hidden />
     case 'fail':
     case 'error':
-      return <CircleX className="text-error mt-0.5 size-4 shrink-0" aria-hidden />
+      return <CircleX className="text-error size-4 shrink-0" aria-hidden />
     case 'pending':
     case 'running':
       return (
-        <span className="mt-0.5 inline-flex shrink-0 motion-safe:animate-spin" aria-hidden>
+        <span className="inline-flex shrink-0 motion-safe:animate-spin" aria-hidden>
           <CircleDashed className="text-muted-foreground size-4" />
         </span>
       )
     case 'skip':
     case 'neutral':
-      return <CircleMinus className="text-muted-foreground mt-0.5 size-4 shrink-0" aria-hidden />
+      return <CircleMinus className="text-muted-foreground size-4 shrink-0" aria-hidden />
     default:
       return assertNever(status)
   }

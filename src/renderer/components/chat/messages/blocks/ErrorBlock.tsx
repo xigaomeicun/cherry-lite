@@ -12,7 +12,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { Trans, useTranslation } from 'react-i18next'
 
 import { useMessageListActions } from '../MessageListProvider'
-import type { MessageErrorDiagnosisResult, MessageListItem } from '../types'
+import type { MessageListItem } from '../types'
 import { getMessageListItemModel } from '../utils/messageListItem'
 
 const logger = loggerService.withContext('ErrorBlock')
@@ -24,11 +24,10 @@ interface Props {
   partId: string
   error: SerializedError | undefined
   message: MessageListItem
-  cachedDiagnosis?: MessageErrorDiagnosisResult
 }
 
-const ErrorBlock: React.FC<Props> = ({ partId, error, message, cachedDiagnosis }) => {
-  return <MessageErrorInfo partId={partId} error={error} message={message} cachedDiagnosis={cachedDiagnosis} />
+const ErrorBlock: React.FC<Props> = ({ partId, error, message }) => {
+  return <MessageErrorInfo partId={partId} error={error} message={message} />
 }
 
 const ErrorMessage: React.FC<{ error: Props['error'] }> = ({ error }) => {
@@ -86,8 +85,7 @@ const MessageErrorInfo: React.FC<{
   partId: string
   error: Props['error']
   message: MessageListItem
-  cachedDiagnosis?: MessageErrorDiagnosisResult
-}> = ({ partId, error, message, cachedDiagnosis }) => {
+}> = ({ partId, error, message }) => {
   const { diagnoseMessageError, removeMessageErrorPart, openErrorDetail, navigateErrorTarget, notifyError } =
     useMessageListActions()
   const { setTimeoutTimer } = useTimer()
@@ -96,13 +94,16 @@ const MessageErrorInfo: React.FC<{
 
   const errorMessage = error?.message ?? undefined
   const errorProviderId = (error as Record<string, unknown> | undefined)?.providerId as string | undefined
-  const errorModelId = (error as Record<string, unknown> | undefined)?.modelId as string | undefined
   const errorI18nKey = (error as Record<string, unknown> | undefined)?.i18nKey
   const claudeCodeExitCategory = getClaudeCodeExitCategory(error)
   const hasAppOwnedI18nKey = typeof errorI18nKey === 'string' && i18n.exists(`error.${errorI18nKey}`)
 
   const providerId = getMessageListItemModel(message)?.provider ?? errorProviderId
   const classification = useMemo(() => classifyError(error, providerId), [error, providerId])
+  const localizedErrorMessage = useMemo(
+    () => t(classification.i18nKey, providerId ? { provider: t(getProviderLabelKey(providerId)) } : undefined),
+    [classification.i18nKey, providerId, t]
+  )
 
   useEffect(() => {
     if (
@@ -143,15 +144,6 @@ const MessageErrorInfo: React.FC<{
     partId
   ])
 
-  const diagnosisContext = useMemo(
-    () => ({
-      errorSource: 'chat' as const,
-      providerName: errorProviderId,
-      modelId: errorModelId
-    }),
-    [errorProviderId, errorModelId]
-  )
-
   const onRemoveErrorPart = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation()
@@ -176,8 +168,7 @@ const MessageErrorInfo: React.FC<{
       message,
       error,
       partId,
-      cachedDiagnosis,
-      diagnosisContext
+      localizedErrorMessage
     })
   }
 
@@ -216,7 +207,7 @@ const MessageErrorInfo: React.FC<{
         <div className="flex shrink-0 items-center justify-center text-error">
           <AlertTriangle size={15} className="lucide-custom" />
         </div>
-        <div className="pr-5 font-medium text-[13px] leading-[1.4]">{aiSummary || t(classification.i18nKey)}</div>
+        <div className="pr-5 font-medium text-[13px] leading-[1.4]">{aiSummary || localizedErrorMessage}</div>
       </div>
 
       {/* Description */}

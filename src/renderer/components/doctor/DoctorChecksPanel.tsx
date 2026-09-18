@@ -1,37 +1,36 @@
 import {
   Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-  Badge,
   Button,
   DialogFooter,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
-  Scrollbar,
-  Skeleton
+  Scrollbar
 } from '@cherrystudio/ui'
-import { DiagnosticsPanel } from '@renderer/components/DiagnosticsPanel'
 import type { DoctorController } from '@renderer/hooks/doctor'
 import { loggerService } from '@renderer/services/LoggerService'
 import { toast } from '@renderer/services/toast'
 import { DOCTOR_STATUS_LABEL_KEYS, formatDoctorReportForCopy } from '@renderer/utils/doctor'
 import { doctorCheckTitleKey } from '@shared/utils/doctor'
-import { ChevronDown, Copy, Download } from 'lucide-react'
+import { ChevronDown, Copy, Download, FileText, FolderOpen, Terminal } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
+import { DoctorCheckAccordionItems } from './DoctorCheckAccordionItems'
 import { DoctorCheckNotices } from './DoctorCheckNotices'
-import { DoctorCheckResults } from './DoctorCheckResults'
 
 const logger = loggerService.withContext('DoctorChecksPanel')
+
+const CHECK_STATUS_PRIORITY = { fail: 0, error: 0, warn: 1, pending: 2, skip: 2, pass: 2 }
 
 export function DoctorChecksPanel({ controller }: { readonly controller: DoctorController }) {
   const { t } = useTranslation()
   const { session, viewModel } = controller
   const dataPath = viewModel.report?.basics.userDataPath
-
+  const sortedRows = viewModel.rows.toSorted(
+    (a, b) => CHECK_STATUS_PRIORITY[a.status] - CHECK_STATUS_PRIORITY[b.status]
+  )
   const copyResults = async () => {
     if (!viewModel.report) return
     try {
@@ -71,46 +70,27 @@ export function DoctorChecksPanel({ controller }: { readonly controller: DoctorC
     <div className="grid min-h-0 flex-1 grid-rows-[minmax(0,1fr)_auto] gap-0 overflow-hidden">
       <Scrollbar className="min-h-0 px-6 py-2">
         <div className="space-y-4 pb-2">
-          <DoctorSummary controller={controller} />
+          {viewModel.status !== 'running' ? <DoctorCheckNotices controller={controller} /> : null}
 
-          <DoctorCheckNotices controller={controller} />
-
-          {viewModel.rows.length > 0 ? <DoctorCheckResults controller={controller} /> : null}
-
-          <Accordion type="single" collapsible className="rounded-xl border border-border px-4">
-            <AccordionItem value="advanced-tools" className="border-0 first:border-t-0">
-              <AccordionTrigger className="py-3 font-medium">{t('settings.doctor.advanced.title')}</AccordionTrigger>
-              <AccordionContent className="flex flex-wrap gap-2 pt-0 pb-3">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={controller.isInteracting}
-                  onClick={() => void controller.toggleDevTools()}>
-                  {t('settings.about.debug.title')}
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={controller.isInteracting}
-                  onClick={() => void controller.openLogsPath()}>
-                  {t('settings.about.diagnostics.sources.logs.title')}
-                </Button>
-                {dataPath ? (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={controller.isInteracting}
-                    onClick={() => void controller.openPath(dataPath)}>
-                    {t('settings.doctor.basics.data_path')}
-                  </Button>
-                ) : null}
-              </AccordionContent>
-            </AccordionItem>
-          </Accordion>
+          {viewModel.rows.length > 0 ? (
+            <Accordion
+              type="single"
+              collapsible
+              role="region"
+              aria-label={t('settings.doctor.copy.checks_heading')}
+              className="min-w-0 overflow-hidden rounded-xl border border-border bg-background [&>[data-slot=accordion-item]:first-child]:border-t-0">
+              <DoctorCheckAccordionItems
+                compact
+                defaultLocalDetailsExpanded
+                controller={controller}
+                rows={sortedRows}
+              />
+            </Accordion>
+          ) : null}
         </div>
       </Scrollbar>
 
-      <DialogFooter className="border-t border-border px-6 py-4">
+      <DialogFooter className="px-6 py-4">
         {viewModel.canCancel ? (
           <Button
             variant="outline"
@@ -131,7 +111,7 @@ export function DoctorChecksPanel({ controller }: { readonly controller: DoctorC
               <ChevronDown className="size-3.5" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
+          <DropdownMenuContent align="end" side="top">
             {viewModel.report ? (
               <DropdownMenuItem onSelect={() => void copyResults()}>
                 <Copy className="size-4" />
@@ -142,6 +122,21 @@ export function DoctorChecksPanel({ controller }: { readonly controller: DoctorC
               <Download className="size-4" />
               {t('settings.doctor.panels.export')}
             </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem disabled={controller.isInteracting} onSelect={() => void controller.toggleDevTools()}>
+              <Terminal className="size-4" />
+              {t('settings.about.debug.title')}
+            </DropdownMenuItem>
+            <DropdownMenuItem disabled={controller.isInteracting} onSelect={() => void controller.openLogsPath()}>
+              <FileText className="size-4" />
+              {t('settings.about.diagnostics.sources.logs.title')}
+            </DropdownMenuItem>
+            {dataPath ? (
+              <DropdownMenuItem disabled={controller.isInteracting} onSelect={() => void controller.openPath(dataPath)}>
+                <FolderOpen className="size-4" />
+                {t('settings.doctor.basics.data_path')}
+              </DropdownMenuItem>
+            ) : null}
           </DropdownMenuContent>
         </DropdownMenu>
         <Button
@@ -154,106 +149,4 @@ export function DoctorChecksPanel({ controller }: { readonly controller: DoctorC
       </DialogFooter>
     </div>
   )
-}
-
-function DoctorSummary({ controller }: { readonly controller: DoctorController }) {
-  const { t } = useTranslation()
-  const { appUpdateState, viewModel } = controller
-  if (viewModel.status === 'running') {
-    const completed = viewModel.rows.filter((row) => row.status !== 'pending').length
-    return (
-      <DiagnosticsPanel
-        role="status"
-        aria-live="polite"
-        title={t(
-          viewModel.tier === 'live' ? 'settings.doctor.summary.running_full' : 'settings.doctor.summary.running_basic'
-        )}
-        description={t('settings.doctor.summary.progress', { completed, total: viewModel.rows.length })}
-        bodyClassName="px-4 pb-4">
-        <div className="grid grid-cols-3 gap-2">
-          <Skeleton className="h-2" />
-          <Skeleton className="h-2" />
-          <Skeleton className="h-2" />
-        </div>
-      </DiagnosticsPanel>
-    )
-  }
-
-  if (viewModel.report) {
-    const { basics } = viewModel.report
-    const dataPath = basics.userDataPath
-    const summaryItems = [
-      ['userFixable', 'settings.doctor.summary.user_fixable'],
-      ['appBug', 'settings.doctor.summary.app_bug'],
-      ['transient', 'settings.doctor.summary.transient'],
-      ['error', 'settings.doctor.summary.error'],
-      ['skip', 'settings.doctor.summary.skip']
-    ] as const
-    const title =
-      viewModel.problemCount > 0
-        ? t('settings.doctor.summary.problems', { count: viewModel.problemCount })
-        : viewModel.summary.error > 0 || viewModel.summary.skip > 0
-          ? t('settings.doctor.summary.incomplete')
-          : t(
-              viewModel.report.tier === 'quick'
-                ? 'settings.doctor.summary.basic_healthy'
-                : 'settings.doctor.summary.live_healthy'
-            )
-    return (
-      <DiagnosticsPanel
-        title={title}
-        description={t('settings.doctor.summary.version', { version: viewModel.report.basics.version })}
-        actions={
-          appUpdateState.downloading ? (
-            <Badge variant="outline">
-              {t('settings.doctor.actions.downloading_update', {
-                progress: Math.round(appUpdateState.downloadProgress)
-              })}
-            </Badge>
-          ) : undefined
-        }
-        bodyClassName="space-y-4 px-4 pb-4">
-        {summaryItems.some(([key]) => viewModel.summary[key] > 0) ? (
-          <div className="flex flex-wrap gap-2">
-            {summaryItems.map(([key, label]) =>
-              viewModel.summary[key] > 0 ? (
-                <Badge key={key} variant="outline" className="font-normal">
-                  {t(label, { count: viewModel.summary[key] })}
-                </Badge>
-              ) : null
-            )}
-          </div>
-        ) : null}
-
-        <dl className="grid gap-2 text-xs sm:grid-cols-[auto_minmax(0,1fr)]">
-          <dt className="text-muted-foreground">{t('settings.doctor.basics.app')}</dt>
-          <dd>
-            {basics.version} · {basics.channel}
-          </dd>
-          <dt className="text-muted-foreground">{t('settings.doctor.basics.system')}</dt>
-          <dd>
-            {basics.platform} {basics.osRelease} · {basics.arch}
-          </dd>
-          {dataPath ? (
-            <>
-              <dt className="text-muted-foreground">{t('settings.doctor.basics.data_path')}</dt>
-              <dd className="flex min-w-0 items-center gap-2">
-                <span className="selectable min-w-0 flex-1 truncate" title={dataPath}>
-                  {dataPath}
-                </span>
-                <Button
-                  variant="link"
-                  className="h-auto shrink-0 px-0 py-0 text-xs"
-                  disabled={controller.isInteracting}
-                  onClick={() => void controller.openPath(dataPath)}>
-                  {t('settings.doctor.actions.open_path')}
-                </Button>
-              </dd>
-            </>
-          ) : null}
-        </dl>
-      </DiagnosticsPanel>
-    )
-  }
-  return null
 }

@@ -8,24 +8,39 @@ export interface DiagnosticReportConfig {
   location: string
 }
 
+const AGENT_LOCATION_LABELS = new Set(['agent', 'Agent 对话', 'Agent 對話'])
+
+export function resolveDiagnosticReportLocation(
+  t: (key: string, options?: { defaultValue?: string }) => string,
+  location: string,
+  language?: string
+): string {
+  if (AGENT_LOCATION_LABELS.has(location.trim())) {
+    return t('error.diagnostic_report.locations.work', {
+      defaultValue: language?.toLowerCase().startsWith('zh') ? '工作对话' : 'Work conversation'
+    })
+  }
+  if (location.trim() === 'home') return t('error.diagnostic_report.locations.home')
+  return location
+}
+
 export interface DiagnosticReportDescriptionLabels {
   errorMessage: string
-  errorName: string
   location: string
   model: string
-  provider: string
-  statusCode: string
 }
 
 interface BuildDiagnosticReportDescriptionInput extends DiagnosticReportConfig {
   diagnosisContext?: DiagnosisContext
   error?: SerializedError
+  localizedErrorMessage?: string
   labels: DiagnosticReportDescriptionLabels
 }
 
 interface DiagnosticReportFieldsInput {
   diagnosisContext?: DiagnosisContext
   error?: SerializedError
+  localizedErrorMessage?: string
   location?: string
 }
 
@@ -46,6 +61,24 @@ function diagnosticReportField(id: DiagnosticReportField['id'], value: unknown):
   return text ? { id, value: text } : undefined
 }
 
+function combineErrorParts(localized: unknown, name: unknown, message: unknown): string | undefined {
+  const errorName = nonEmptyText(name)
+  const errorMessage = nonEmptyText(message)
+  const raw = errorName && errorMessage ? `${errorName}: ${errorMessage}` : (errorName ?? errorMessage)
+  const localizedMessage = nonEmptyText(localized)
+  if (localizedMessage && errorMessage && localizedMessage !== errorMessage) {
+    return `${localizedMessage} (${errorMessage})`
+  }
+  return localizedMessage ?? raw
+}
+
+function combineModelParts(provider: unknown, model: unknown): string | undefined {
+  const providerName = nonEmptyText(provider)
+  const modelId = nonEmptyText(model)
+  if (providerName && modelId) return `${providerName}:${modelId}`
+  return providerName ?? modelId
+}
+
 function truncateUtf8(value: string): string {
   const encoder = new TextEncoder()
   let byteLength = 0
@@ -64,17 +97,13 @@ function truncateUtf8(value: string): string {
 export function diagnosticReportFields({
   diagnosisContext,
   error,
-  location
+  location,
+  localizedErrorMessage
 }: DiagnosticReportFieldsInput): DiagnosticReportField[] {
-  const errorRecord = error as Record<string, unknown> | undefined
-
   return [
     diagnosticReportField('location', location),
-    diagnosticReportField('provider', diagnosisContext?.providerName),
-    diagnosticReportField('model', diagnosisContext?.modelId),
-    diagnosticReportField('errorName', error?.name),
-    diagnosticReportField('statusCode', errorRecord?.status ?? errorRecord?.statusCode),
-    diagnosticReportField('errorMessage', error?.message)
+    diagnosticReportField('model', combineModelParts(diagnosisContext?.providerId, diagnosisContext?.modelId)),
+    diagnosticReportField('errorMessage', combineErrorParts(localizedErrorMessage, error?.name, error?.message))
   ].filter((field): field is DiagnosticReportField => field !== undefined)
 }
 
@@ -82,9 +111,10 @@ export function buildDiagnosticReportDescription({
   diagnosisContext,
   error,
   labels,
-  location
+  location,
+  localizedErrorMessage
 }: BuildDiagnosticReportDescriptionInput): string {
-  const lines = diagnosticReportFields({ diagnosisContext, error, location }).map(
+  const lines = diagnosticReportFields({ diagnosisContext, error, location, localizedErrorMessage }).map(
     ({ id, value }) => `${labels[id]}: ${value}`
   )
 

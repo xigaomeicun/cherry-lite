@@ -3,6 +3,7 @@ import '@testing-library/jest-dom/vitest'
 import { Accordion, Dialog, DialogContent, DialogTitle } from '@cherrystudio/ui'
 import type { DoctorController } from '@renderer/hooks/doctor'
 import type { DoctorInteraction } from '@renderer/hooks/doctor/doctorSessionReducer'
+import { buildDoctorViewModel } from '@renderer/utils/doctor'
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { useState } from 'react'
@@ -20,15 +21,18 @@ vi.mock('@renderer/hooks/useMcpServer', () => ({
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
-    t: (key: string, params?: { name?: string }) => {
+    t: (key: string, params?: { name?: string; check?: string; count?: number }) => {
       if (key === 'settings.doctor.fixes.restart_mcp') return `Restart ${params?.name}`
       if (key === 'settings.doctor.fixes.restart_mcp_generic') return 'Restart MCP service'
+      if (key === 'error.diagnostics.checking_progress') return `Checking: ${params?.check}`
+      if (key === 'settings.doctor.summary.needs_attention') return `Needs attention: ${params?.count}`
+      if (key === 'settings.doctor.summary.fixed') return `Fixed: ${params?.count}`
       return key
     }
   })
 }))
 
-import { DoctorCheckAccordionItems, DoctorCheckResults } from '../DoctorCheckResults'
+import { DoctorCheckAccordionItems } from '../DoctorCheckAccordionItems'
 import { DoctorChecksPanel } from '../DoctorChecksPanel'
 
 type ControllerOverrides = {
@@ -55,8 +59,10 @@ function createController(overrides: ControllerOverrides = {}) {
     cancel: vi.fn<DoctorController['cancel']>(),
     canChangePanel: true,
     cancelConfirmation: vi.fn<DoctorController['cancelConfirmation']>(),
+    confirmCheck: vi.fn<DoctorController['confirmCheck']>(),
     confirmEvidence: vi.fn<DoctorController['confirmEvidence']>(),
     executeAction: vi.fn<DoctorController['executeAction']>(),
+    isAutoRunPending: false,
     isInteracting: false,
     isCloseBlocked: false,
     openLogsPath: vi.fn<DoctorController['openLogsPath']>(),
@@ -66,6 +72,7 @@ function createController(overrides: ControllerOverrides = {}) {
     session: {
       activePanel: 'checks',
       descriptionDraft: '',
+      fixedCheckIds: [],
       interaction: { kind: 'idle' },
       relaunchRequired: false
     },
@@ -74,9 +81,11 @@ function createController(overrides: ControllerOverrides = {}) {
     setPanelInteraction: vi.fn<DoctorController['setPanelInteraction']>(),
     toggleDevTools: vi.fn<DoctorController['toggleDevTools']>(),
     viewModel: {
+      activeCheckIds: [],
       canCancel: false,
       groups: [],
       isStale: false,
+      pendingChecks: [],
       problemCount: 1,
       rows: [
         {
@@ -113,7 +122,11 @@ function createController(overrides: ControllerOverrides = {}) {
     ...baseController,
     ...overrides,
     session: { ...baseController.session, ...overrides.session },
-    viewModel: { ...baseController.viewModel, ...overrides.viewModel }
+    viewModel: {
+      ...baseController.viewModel,
+      ...overrides.viewModel,
+      pendingChecks: overrides.viewModel?.pendingChecks ?? baseController.viewModel.pendingChecks
+    }
   } satisfies DoctorController
 }
 
@@ -140,8 +153,10 @@ function createCompletedPanelController() {
       problemCount: 1,
       report: {
         schemaVersion: 1,
+        scope: 'global',
         runId: 'run-1',
         tier: 'quick',
+        selectedCheckIds: ['config-boot-config-valid', 'storage-disk-space'],
         startedAt: '2026-09-05T00:00:00.000Z',
         finishedAt: '2026-09-05T00:00:01.000Z',
         expiresAt: '2026-09-05T00:10:00.000Z',
@@ -231,33 +246,75 @@ describe('DoctorCheckAccordionItems interactions', () => {
     expectTypeOf<keyof ReturnType<typeof createController>>().toEqualTypeOf<keyof DoctorController>()
   })
 
-  it('keeps standalone results grouped while each check remains a disclosure', async () => {
-    const user = userEvent.setup()
+  it('shows all check results and updates a repaired check to passed', async () => {
     const controller = createCompletedPanelController()
-    const groupedController = createController({
-      viewModel: {
-        ...controller.viewModel,
-        groups: [{ domain: 'runtime', status: 'warn', rows: controller.viewModel.rows }]
-      }
-    })
+    const report = controller.viewModel.report!
+    const actionable = report.results[0]
+    const mixedReport = {
+      ...report,
+      results: [
+        actionable,
+        { id: 'install-version-channel', status: 'pass', durationMs: 1 },
+        {
+          id: 'logs-recent-findings',
+          status: 'warn',
+          durationMs: 1,
+          attribution: 'app-bug',
+          detail: { variant: 'findings' },
+          actions: [{ kind: 'report' }]
+        },
+        {
+          id: 'network-online',
+          status: 'warn',
+          durationMs: 1,
+          attribution: 'transient',
+          detail: { variant: 'offline' },
+          actions: []
+        }
+      ],
+      summary: { pass: 1, warn: 3, fail: 0, skip: 0, error: 0 }
+    } satisfies NonNullable<DoctorController['viewModel']['report']>
+    const viewModel = buildDoctorViewModel({ status: 'completed', report: mixedReport }, Date.parse(report.finishedAt))
+    const view = render(<DoctorChecksPanel controller={{ ...controller, viewModel }} />)
 
-    render(<DoctorCheckResults controller={groupedController} />)
+    expect(screen.queryByRole('region', { name: 'error.diagnostics.result' })).not.toBeInTheDocument()
+    const otherChecks = screen.getByRole('region', { name: 'settings.doctor.copy.checks_heading' })
+    for (const id of ['install-version-channel', 'runtime-claude-login', 'logs-recent-findings', 'network-online']) {
+      expect(
+        within(otherChecks).getByRole('button', { name: new RegExp(`settings.doctor.checks.${id}.title`) })
+      ).toBeVisible()
+    }
+    await userEvent
+      .setup()
+      .click(within(otherChecks).getByRole('button', { name: /settings\.doctor\.checks\.logs-recent-findings\.title/ }))
+    expect(within(otherChecks).getByRole('button', { name: 'settings.doctor.actions.report_problem' })).toBeVisible()
+    expect(screen.queryByText('settings.doctor.summary.basic_healthy')).not.toBeInTheDocument()
 
-    const group = screen.getByRole('button', {
-      name: /settings\.doctor\.domains\.runtime.*settings\.doctor\.status\.warn/
-    })
-    expect(group).toHaveAttribute('aria-expanded', 'true')
-
-    await user.click(group)
-    expect(group).toHaveAttribute('aria-expanded', 'false')
-
-    await user.click(group)
+    view.rerender(
+      <DoctorChecksPanel
+        controller={{
+          ...controller,
+          session: { ...controller.session, fixedCheckIds: [actionable.id] },
+          viewModel: buildDoctorViewModel(
+            {
+              status: 'completed',
+              report: {
+                ...report,
+                results: [{ id: 'runtime-claude-login', status: 'pass', durationMs: 1 }],
+                summary: { pass: 1, warn: 0, fail: 0, skip: 0, error: 0 }
+              }
+            },
+            Date.parse(report.finishedAt)
+          )
+        }}
+      />
+    )
 
     expect(
       screen.getByRole('button', {
-        name: /settings\.doctor\.checks\.runtime-claude-login\.title.*settings\.doctor\.status\.warn/
+        name: /settings\.doctor\.checks\.runtime-claude-login\.title.*settings\.doctor\.status\.pass/
       })
-    ).toHaveAttribute('aria-expanded', 'true')
+    ).toBeVisible()
   })
 
   it('exposes local evidence through an accessible accordion trigger', async () => {
@@ -285,6 +342,7 @@ describe('DoctorCheckAccordionItems interactions', () => {
         interaction: {
           kind: 'fixing',
           request: {
+            scope: 'global',
             runId: 'run-1',
             checkId: 'permission-screen-capture',
             fixId: 'request'
@@ -437,7 +495,7 @@ describe('DoctorCheckAccordionItems interactions', () => {
     })
     if (checkTrigger.getAttribute('aria-expanded') === 'false') await user.click(checkTrigger)
     const localDetails = screen.getByRole('button', { name: 'settings.doctor.evidence.local_details' })
-    await user.click(localDetails)
+    expect(localDetails).toHaveAttribute('aria-expanded', 'true')
     expect(screen.getByText('••••••')).toBeInTheDocument()
     const showDetails = screen.getByRole('button', { name: 'settings.doctor.actions.show_details' })
     await user.click(showDetails)
@@ -467,7 +525,7 @@ describe('DoctorCheckAccordionItems interactions', () => {
     })
     if (checkTrigger.getAttribute('aria-expanded') === 'false') await user.click(checkTrigger)
     const localDetails = screen.getByRole('button', { name: 'settings.doctor.evidence.local_details' })
-    await user.click(localDetails)
+    expect(localDetails).toHaveAttribute('aria-expanded', 'true')
     await user.click(screen.getByRole('button', { name: 'settings.doctor.actions.show_details' }))
 
     const confirmation = await screen.findByRole('dialog', { name: 'settings.doctor.confirm_evidence.title' })

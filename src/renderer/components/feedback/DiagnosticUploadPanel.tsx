@@ -15,8 +15,6 @@ import type { FormEvent } from 'react'
 import { useCallback, useEffect, useId, useImperativeHandle, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { DiagnosticSourceSelector, useDiagnosticSourceSelection } from './DiagnosticSourceSelector'
-
 const logger = loggerService.withContext('DiagnosticUploadPanel')
 type UploadResult = Exclude<OutputFor<'diagnostics.bundle.upload'>, { status: 'busy' }>
 type SavedUploadResult = Extract<OutputFor<'diagnostics.bundle.save_upload'>, { status: 'saved' }>
@@ -47,8 +45,7 @@ export const DiagnosticUploadPanel = function DiagnosticUploadPanel({
   const { t } = useTranslation()
   const uploadFormId = useId()
   const [hasAttemptedSubmit, setHasAttemptedSubmit] = useState(false)
-  const [acknowledged, setAcknowledged] = useState(false)
-  const sourceSelection = useDiagnosticSourceSelection(() => setAcknowledged(false))
+  const [acknowledged, setAcknowledged] = useState(true)
   const [operationStatus, setOperationStatus] = useState<OperationStatus>('idle')
   const [result, setResult] = useState<UploadResult | null>(null)
   const [savedUpload, setSavedUpload] = useState<SavedUploadResult | null>(null)
@@ -74,14 +71,13 @@ export const DiagnosticUploadPanel = function DiagnosticUploadPanel({
     if (result) primaryActionRef.current?.focus()
   }, [result])
 
-  const { effectiveIncludeChatRecords, effectiveIncludeLogs, effectiveIncludeTraces, range } = sourceSelection
   const normalizedDescription = description.trim()
   const descriptionValid =
     normalizedDescription.length > 0 &&
     diagnosticDescriptionByteLength(normalizedDescription) <= DIAGNOSTIC_DESCRIPTION_MAX_BYTES
   const showDescriptionError = hasAttemptedSubmit && !descriptionValid
   const isBusy = operationStatus !== 'idle'
-  const canAttemptUpload = sourceSelection.isReady && operationStatus === 'idle' && acknowledged
+  const canAttemptUpload = operationStatus === 'idle' && acknowledged
 
   useEffect(() => onBusyChange?.(isBusy), [isBusy, onBusyChange])
 
@@ -166,10 +162,10 @@ export const DiagnosticUploadPanel = function DiagnosticUploadPanel({
     try {
       const uploadResult = await ipcApi.request('diagnostics.bundle.upload', {
         description: normalizedDescription,
-        includeChatRecords: effectiveIncludeChatRecords,
-        includeLogs: effectiveIncludeLogs,
-        includeTraces: effectiveIncludeTraces,
-        range
+        includeChatRecords: true,
+        includeLogs: true,
+        includeTraces: true,
+        range: '24h'
       })
       acceptSubmissionResult(uploadResult)
     } catch (error) {
@@ -231,15 +227,13 @@ export const DiagnosticUploadPanel = function DiagnosticUploadPanel({
         ) : (
           <form id={uploadFormId} className="space-y-4" onSubmit={handleSubmit}>
             <section className="space-y-2">
-              <label htmlFor="diagnostic-description" className="block text-sm font-medium">
-                {t('settings.about.diagnostics.report.description_label')}
-              </label>
               <Textarea.Input
                 id="diagnostic-description"
+                aria-label={t('settings.about.diagnostics.report.description_label')}
                 value={description}
                 onValueChange={changeDescription}
                 placeholder={t('settings.about.diagnostics.report.description_placeholder')}
-                rows={4}
+                className="min-h-48"
                 disabled={isBusy}
                 hasError={showDescriptionError}
                 aria-describedby={showDescriptionError ? 'diagnostic-description-error' : undefined}
@@ -255,7 +249,6 @@ export const DiagnosticUploadPanel = function DiagnosticUploadPanel({
               ) : null}
             </section>
 
-            <DiagnosticSourceSelector disabled={isBusy} selection={sourceSelection} />
             <label className="flex cursor-pointer items-start gap-3 text-sm" htmlFor="diagnostic-acknowledgement">
               <Checkbox
                 id="diagnostic-acknowledgement"
@@ -269,7 +262,7 @@ export const DiagnosticUploadPanel = function DiagnosticUploadPanel({
         )}
       </Scrollbar>
 
-      <DialogFooter className="mt-4 border-t border-border px-6 py-4">
+      <DialogFooter className="mt-4 px-6 py-4">
         {isBusy ? (
           <Button variant={operationStatus === 'discarding' ? 'destructive' : 'emphasis'} loading disabled>
             {t(

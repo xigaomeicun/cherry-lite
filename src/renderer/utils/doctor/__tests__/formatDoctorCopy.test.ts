@@ -7,8 +7,10 @@ describe('formatDoctorReportForCopy', () => {
   it('copies only public basics, visible identity, status, and public evidence', () => {
     const report: DoctorReport = {
       schemaVersion: 1,
+      scope: 'global',
       runId: 'secret-run-id',
       tier: 'quick',
+      selectedCheckIds: ['storage-userdata-location', 'config-boot-config-valid'],
       startedAt: '2026-09-04T08:59:00.000Z',
       finishedAt: '2026-09-04T08:59:01.000Z',
       expiresAt: '2026-09-04T09:09:01.000Z',
