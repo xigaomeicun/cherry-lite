@@ -128,29 +128,14 @@ export const PRESETS_BINARY_TOOLS: BinaryToolPreset[] = [
     homepage: 'https://www.rtk-ai.app/'
   },
   {
-    name: 'lark-cli',
-    displayName: 'Lark CLI',
-    tool: 'github:larksuite/cli',
-    // No recognizable Feishu/Lark brand glyph exists in the icon sets we ship, so
-    // fall back to the default tool icon rather than an unrelated or invisible one.
-    repoUrl: 'https://github.com/larksuite/cli'
-  },
-  {
     name: 'gh',
     displayName: 'GitHub CLI',
     tool: 'gh',
     icon: 'simple-icons:github',
     repoUrl: 'https://github.com/cli/cli',
     homepage: 'https://cli.github.com'
-  },
-  {
-    name: 'ntn',
-    displayName: 'Notion CLI',
-    tool: 'npm:ntn',
-    icon: 'simple-icons:notion',
-    repoUrl: 'https://github.com/makenotion/cli',
-    homepage: 'https://ntn.dev'
   }
+  // Lark CLI (lark-cli) 与 Notion CLI (ntn) 已从 Cherry-Lite 预设中彻底移除
   // BabelDOC Stream 已从 Cherry-Lite 预设中彻底移除
   // Managed Code CLIs are listed in codeCliTools.ts instead of here.
 ]
