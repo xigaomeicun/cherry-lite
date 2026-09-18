@@ -18,8 +18,6 @@ import { doctorSettingsPath } from '@shared/utils/doctor'
 import type { BrowserWindow } from 'electron'
 import { app, Menu, shell } from 'electron'
 
-const logger = loggerService.withContext('AppMenuService')
-
 const appMenuCommands: CommandId[] = ['app.settings.open', 'app.zoom.in', 'app.zoom.out', 'app.zoom.reset']
 
 const appMenuShortcutCommands = new Set(appMenuCommands)

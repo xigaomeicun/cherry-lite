@@ -11,7 +11,7 @@ import { createAgent as createAgentCommand } from '@main/ai/agents/createAgent'
 import { type AssistantToolName, DEFAULT_ASSISTANT_TOOL_NAMES } from '@main/ai/toolApproval/assistantToolNames'
 import { providerChatBaseUrl } from '@main/utils/providerEndpoint'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
-import type { Tool } from '@modelcontextprotocol/sdk/types.js'
+import type { CallToolResult, Tool } from '@modelcontextprotocol/sdk/types.js'
 import { CallToolRequestSchema, ErrorCode, ListToolsRequestSchema, McpError } from '@modelcontextprotocol/sdk/types.js'
 import { ErrorCode as DataApiErrorCode, isDataApiError } from '@shared/data/api/errors'
 import { ThemeMode } from '@shared/data/preference/preferenceTypes'
@@ -692,9 +692,9 @@ class AssistantServer {
     }
 
     // Check cache first (30s TTL)
-    const cached = healthCache.get(providerId)
-    if (cached && Date.now() - cached.timestamp < HEALTH_CACHE_TTL) {
-      return cached.result as ReturnType<typeof this.diagnoseHealth>
+    const cached = application.get('CacheService').get<CallToolResult>(healthCacheKey(providerId))
+    if (cached) {
+      return cached
     }
 
     try {
@@ -717,7 +717,7 @@ class AssistantServer {
 
       if (provider.apiKeys.length === 0) {
         const result = this.jsonResult({ providerId, status: 'error', error: 'No API key configured', host })
-        cacheService.set(healthCacheKey(providerId), result, HEALTH_CACHE_TTL)
+        application.get('CacheService').set(healthCacheKey(providerId), result, HEALTH_CACHE_TTL)
         return result
       }
 
@@ -746,7 +746,7 @@ class AssistantServer {
           ...(diagnosis.http.status === 'ok' ? { httpStatus: diagnosis.http.data.status } : {})
         }
       })
-      cacheService.set(healthCacheKey(providerId), result, HEALTH_CACHE_TTL)
+      application.get('CacheService').set(healthCacheKey(providerId), result, HEALTH_CACHE_TTL)
       return result
     } catch (error) {
       return {

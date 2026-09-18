@@ -37,6 +37,9 @@ import type { DiagnosisContext } from '@renderer/utils/errorDiagnosis'
 import type { DoctorNavigateTarget, DoctorSubjectRef } from '@shared/types/doctor'
 import { parseDataUrl } from '@shared/utils/dataUrl'
 import { doctorScopeKey } from '@shared/utils/doctor'
+import { ArrowLeft, Copy, FileUp } from 'lucide-react'
+import React, { memo, useCallback, useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 
 import Scrollbar from '../Scrollbar'
 import {

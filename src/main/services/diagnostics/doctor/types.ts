@@ -6,6 +6,7 @@ import type {
   DoctorEvidenceItem,
   DoctorFixId,
   DoctorFixTarget,
+  DoctorSubject,
   DoctorSubjectFor
 } from '@shared/types/doctor'
 

@@ -190,7 +190,6 @@ const AgentChat = ({
   const [modelSwitchTarget, setModelSwitchTarget] = useState<ModelSwitchTarget>()
   const [modelSwitchConfirmOpen, setModelSwitchConfirmOpen] = useState(false)
   const [skipModelSwitchConfirmation, setSkipModelSwitchConfirmation] = useState(false)
-  const [sessionAgentChanging, setSessionAgentChanging] = useState(false)
 
   const sessionSnapshot = conversationBootstrap.session
   const visibleAgentId = sessionSnapshot?.agentId ?? null

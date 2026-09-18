@@ -16,7 +16,6 @@ import { getAgentAvatarFromConfiguration } from '@renderer/utils/agent'
 import { buildAgentSessionTopicId } from '@renderer/utils/agentSession'
 import type { CherryMessagePart, CherryUIMessage } from '@shared/data/types/message'
 import { memo, useEffect, useMemo } from 'react'
-import { memo, useEffect, useMemo } from 'react'
 
 import { useAgentMessageListProviderValue } from '../messages/agentMessageListAdapter'
 import AgentSessionBackgroundTasks from '../messages/AgentSessionBackgroundTasks'

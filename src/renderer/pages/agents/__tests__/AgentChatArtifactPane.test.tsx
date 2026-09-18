@@ -1,3 +1,5 @@
+import type * as ChatPrimitives from '@renderer/components/chat/primitives'
+import { BUILTIN_AGENT_ROLE } from '@shared/ai/builtinAgent'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type * as MotionReact from 'motion/react'

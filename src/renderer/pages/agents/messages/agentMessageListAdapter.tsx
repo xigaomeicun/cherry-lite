@@ -34,8 +34,6 @@ import type { DoctorSubjectRef } from '@shared/types/doctor'
 import { type AbsoluteFilePath, AbsoluteFilePathSchema } from '@shared/types/file'
 import { createFilePathHandle } from '@shared/utils/file'
 import { type ReactNode, useCallback, useEffect, useMemo, useRef } from 'react'
-import { type ReactNode, useCallback, useEffect, useMemo, useRef } from 'react'
-import { useTranslation } from 'react-i18next'
 import { useTranslation } from 'react-i18next'
 
 import AgentSessionApiRetryStatus from './AgentSessionApiRetryStatus'
