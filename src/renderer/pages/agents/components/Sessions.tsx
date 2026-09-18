@@ -141,7 +141,7 @@ const logger = loggerService.withContext('AgentSessions')
 const EMPTY_WORKSPACE_ROWS: AgentWorkspaceEntity[] = []
 // Let the context menu close before mounting the heavier offscreen message list.
 const IMAGE_CAPTURE_START_DELAY_MS = 160
-const DEFAULT_SESSION_GROUP_VISIBLE_COUNT = Number.POSITIVE_INFINITY
+const DEFAULT_SESSION_GROUP_VISIBLE_COUNT = 5
 const LEFT_PANEL_TIME_SESSION_GROUP_VISIBLE_COUNT = 50
 
 type CreateSessionSeed = {
