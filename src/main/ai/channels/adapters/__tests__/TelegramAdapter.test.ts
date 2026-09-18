@@ -100,7 +100,7 @@ describe('TelegramAdapter', () => {
     expect(mockBot.on).toHaveBeenCalledWith('message:text', expect.any(Function))
     expect(mockBot.api.setMyCommands).toHaveBeenCalledWith([
       { command: 'new', description: '🆕 开启全新会话' },
-      { command: 'stop', description: '✋ 终止当前生成' },
+      { command: 'stop', description: '✋ 终止当前任务' },
       { command: 'model', description: '🧠 切换底座模型' },
       { command: 'switch', description: '🤖 切换执行后端' },
       { command: 'mode', description: '🎮 切换权限模式' },

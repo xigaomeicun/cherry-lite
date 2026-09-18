@@ -1243,7 +1243,11 @@ export class ChannelMessageHandler {
 
   /** Abort an active stream for the given session. Returns true if a stream was in flight. */
   abortSession(sessionId: string): boolean {
-    if (!this.activeAbortControllers.has(sessionId)) return false
+    const hasLocal = this.activeAbortControllers.has(sessionId)
+    const topicId = buildAgentSessionTopicId(sessionId)
+    const streamManager = application.get('AiStreamManager')
+    const hasStream = streamManager.isTopicLive(topicId)
+    if (!hasLocal && !hasStream) return false
     this.abortSessionStream(sessionId, 'channel-session-aborted')
     return true
   }
@@ -1256,7 +1260,14 @@ export class ChannelMessageHandler {
    * which settles the turn as `paused` and lets the still-alive sentinel resolve.
    */
   private abortSessionStream(sessionId: string, reason: string): void {
-    application.get('AiStreamManager').abort(buildAgentSessionTopicId(sessionId), reason)
+    const topicId = buildAgentSessionTopicId(sessionId)
+    application.get('AiStreamManager').abort(topicId, reason)
+    try {
+      application.get('AgentSessionRuntimeService').abortPendingTurn(sessionId, reason)
+    } catch {
+      /* ignore */
+    }
+    void application.get('AiStreamManager').abortAndDrain(topicId, reason).catch(() => {})
   }
 
   /**

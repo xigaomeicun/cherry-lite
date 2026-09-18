@@ -1193,6 +1193,12 @@ export class AiStreamManager extends BaseService {
 
   // ── Public: abort ─────────────────────────────────────────────────
 
+  /** Returns true when the given topic has an active, live stream. */
+  isTopicLive(topicId: string): boolean {
+    const stream = this.activeStreams.get(topicId)
+    return !!stream && isLiveStatus(stream.status)
+  }
+
   /** Abort all executions in a topic. */
   abort(topicId: string, reason: string): void {
     const stream = this.activeStreams.get(topicId)
@@ -1207,6 +1213,13 @@ export class AiStreamManager extends BaseService {
       if (exec.status === 'streaming') {
         exec.status = 'aborted'
         exec.abortController.abort(reason)
+      }
+    }
+    if (isAgentSessionTopic(topicId)) {
+      try {
+        application.get('AgentSessionRuntimeService').abortPendingTurn(extractAgentSessionId(topicId), reason)
+      } catch {
+        /* ignore */
       }
     }
     // Flip status to 'aborted' synchronously here, where Stop's fate is decided — `onExecutionPaused`

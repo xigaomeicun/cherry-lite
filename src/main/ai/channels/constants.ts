@@ -1,6 +1,6 @@
 export const SLASH_COMMANDS = [
   { name: 'new', description: '🆕 开启全新会话' },
-  { name: 'stop', description: '✋ 终止当前生成' },
+  { name: 'stop', description: '✋ 终止当前任务' },
   { name: 'model', description: '🧠 切换底座模型' },
   { name: 'switch', description: '🤖 切换执行后端' },
   { name: 'mode', description: '🎮 切换权限模式' },
