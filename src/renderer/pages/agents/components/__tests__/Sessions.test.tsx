@@ -1130,9 +1130,9 @@ describe('Sessions', () => {
     expect(screen.getByRole('button', { name: 'Today' })).toHaveAttribute('aria-expanded', 'true')
   })
 
-  it.each(['time', 'agent', 'workdir'])('expands all sessions in %s groups with one click', async (displayMode) => {
+  it('expands all sessions in time groups with one click', async () => {
     const user = userEvent.setup()
-    preferenceMocks.values.set('agent.session.display_mode', displayMode)
+    preferenceMocks.values.set('agent.session.display_mode', 'time')
     setupSessions({
       sessions: [
         ...Array.from({ length: 56 }, (_, index) =>
@@ -1150,13 +1150,35 @@ describe('Sessions', () => {
     render(<SessionsForTest />)
 
     expect(screen.getByText('Session 1')).toBeInTheDocument()
-    expect(screen.getByText(displayMode === 'time' ? 'Session 50' : 'Session 5')).toBeInTheDocument()
-    expect(screen.queryByText(displayMode === 'time' ? 'Session 51' : 'Session 6')).not.toBeInTheDocument()
+    expect(screen.getByText('Session 50')).toBeInTheDocument()
+    expect(screen.queryByText('Session 51')).not.toBeInTheDocument()
     expect(screen.queryByText('Session 56')).not.toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Expand display' }))
 
     expect(screen.getByText('Session 56')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Expand display' })).not.toBeInTheDocument()
+  })
+
+  it.each(['agent', 'workdir'])('shows all sessions in %s groups without folding', async (displayMode) => {
+    preferenceMocks.values.set('agent.session.display_mode', displayMode)
+    setupSessions({
+      sessions: [
+        ...Array.from({ length: 10 }, (_, index) =>
+          createSession({
+            id: `session-${index + 1}`,
+            name: `Session ${index + 1}`,
+            orderKey: String(index + 1).padStart(3, '0'),
+            updatedAt: CURRENT_SESSION_ISO
+          })
+        )
+      ]
+    })
+
+    render(<SessionsForTest />)
+
+    expect(screen.getByText('Session 1')).toBeInTheDocument()
+    expect(screen.getByText('Session 10')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Expand display' })).not.toBeInTheDocument()
   })
 
