@@ -28,7 +28,7 @@ export const KnowledgeCitationCard: React.FC<{ citation: Citation; actions?: Cit
   }
 
   return (
-    <SelectionContextMenu>
+    <SelectionContextMenu openBrowserUrl={actions?.openBrowserUrl ?? providerActions?.openBrowserUrl}>
       <div className="group relative flex w-full flex-col py-3 transition-all duration-300">
         <div className="relative mb-1.5 flex w-full flex-row items-center gap-2">
           {citation.showFavicon && <FileSearch width={16} />}
@@ -70,7 +70,7 @@ export const KnowledgeCitationHoverContent: React.FC<{ citation: KnowledgeCitati
     <div style={{ userSelect: 'text' }}>
       {title && (
         <div className="mb-2 flex items-center gap-2">
-          <FileSearch size={16} className="shrink-0 text-muted-foreground" />
+          <FileSearch size={16} className="text-muted-foreground shrink-0" />
           <div
             className="overflow-hidden text-ellipsis whitespace-nowrap text-foreground text-sm leading-[1.4]"
             role="heading"

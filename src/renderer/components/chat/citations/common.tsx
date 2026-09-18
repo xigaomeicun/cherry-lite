@@ -9,6 +9,7 @@ import type { MessageListActions } from '../messages/types'
 
 export type CitationCopyActions = Pick<MessageListActions, 'copyText' | 'notifyError'>
 export type CitationPanelActions = CitationCopyActions & {
+  openBrowserUrl?: MessageListActions['openBrowserUrl']
   openPath?: (path: string) => void | Promise<void>
   openExternalUrl?: (url: string) => void | Promise<void>
 }

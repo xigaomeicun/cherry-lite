@@ -48,7 +48,7 @@ export const WebCitationCard: React.FC<{
   const titleContent = displayTitle || citation.hostname || citation.content || citation.url
 
   return (
-    <SelectionContextMenu>
+    <SelectionContextMenu openBrowserUrl={actions?.openBrowserUrl ?? providerActions?.openBrowserUrl}>
       <div className="group relative flex w-full flex-col py-3 transition-all duration-300">
         <div className="relative mb-1.5 flex w-full flex-row items-center gap-2">
           {citation.showFavicon && getCitationHostname(citation) && (

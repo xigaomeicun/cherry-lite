@@ -206,6 +206,8 @@ interface AgentRightPaneActions {
   canOpenArtifactFile: boolean
   openAgentToolFlow: (input: AgentToolFlowOpenInput) => void
   openArtifactFile: (path: string) => void
+  openBrowserUrl?: (url: string) => void
+  openExternalUrl: (url: string) => void
   closeFilePreview: () => void
   setFileEditMode: (mode: AgentFileEditorMode) => void
   setSelectedFile: (file: string | null) => void
@@ -308,6 +310,9 @@ function AgentRightPaneActionsProvider({
 }: AgentRightPaneActionsProviderProps) {
   const { t } = useTranslation()
   const panelActions = useRightPanelActions()
+  const openExternalUrl = useCallback((url: string) => {
+    window.open(url, '_blank', 'noopener,noreferrer')
+  }, [])
   // Invalidate in-flight artifact-open requests when the session or workspace
   // changes (and on unmount), so a late getMetadata resolution cannot restore a
   // preview that the switch just cleared.
@@ -374,6 +379,8 @@ function AgentRightPaneActionsProvider({
       canOpenArtifactFile,
       openAgentToolFlow,
       openArtifactFile,
+      openBrowserUrl: undefined,
+      openExternalUrl,
       closeFilePreview,
       setFileEditMode,
       setSelectedFile: selectFile,
@@ -383,6 +390,7 @@ function AgentRightPaneActionsProvider({
     [
       canOpenAgentToolFlow,
       canOpenArtifactFile,
+      openExternalUrl,
       closeFilePreview,
       openAgentToolFlow,
       openArtifactFile,
@@ -777,6 +785,8 @@ const AgentToolFlowMessageList = memo(function AgentToolFlowMessageList({
     hasOlder: false,
     openAgentToolFlow: actions.openAgentToolFlow,
     openArtifactFile: actions.canOpenArtifactFile ? actions.openArtifactFile : undefined,
+    openBrowserUrl: actions.openBrowserUrl,
+    openExternalUrl: actions.openExternalUrl,
     messageNavigation,
     // Tool output is commonly workspace-relative (`dist/report.md`). Without the
     // root, open/reveal cannot resolve it and the directory probe fails closed.
@@ -858,7 +868,7 @@ function AgentFlowPanelTitle({ title }: { title: string }) {
           type="button"
           variant="ghost"
           size="icon-sm"
-          className="shrink-0 text-muted-foreground hover:bg-accent hover:text-foreground"
+          className="text-muted-foreground shrink-0 hover:bg-accent hover:text-foreground"
           aria-label={t('common.back')}
           onClick={() => panelActions.tryOpen(STATUS_PANE_ID)}>
           <ArrowLeft size={16} />
@@ -889,7 +899,7 @@ function RunTaskStopButton({ sessionId, taskId }: { sessionId?: string; taskId: 
         variant="ghost"
         disabled={stopping}
         aria-label={label}
-        className="-mt-0.5 shrink-0 text-muted-foreground"
+        className="text-muted-foreground -mt-0.5 shrink-0"
         onClick={async () => {
           setStopping(true)
           try {
@@ -936,10 +946,10 @@ function RunTaskList({ tasks, sessionId }: { tasks: AgentRunTask[]; sessionId?: 
             <TaskStatusIcon status={task.status} />
             <div className="min-w-0 flex-1">
               {/* Rows persisted before summaries were kept out of titles can carry prose here — clamp it. */}
-              <div className="wrap-break-word line-clamp-2 text-foreground text-xs leading-5">
+              <div className="line-clamp-2 text-xs leading-5 wrap-break-word text-foreground">
                 {task.status === 'in_progress' && task.activeText ? task.activeText : task.title}
               </div>
-              <div className="mt-0.5 truncate text-[11px] text-muted-foreground">
+              <div className="text-muted-foreground mt-0.5 truncate text-[11px]">
                 {[task.subagentType ?? task.workflowName ?? task.taskType, formatRunTaskUsage(task.usage)]
                   .filter(Boolean)
                   .join(' · ')}
@@ -986,20 +996,20 @@ function WorkflowRunTaskList({ tasks, sessionId }: { tasks: AgentRunTask[]; sess
             className="flex min-w-0 items-start gap-2 rounded-md border border-border-subtle bg-background-subtle px-2.5 py-2">
             <TaskStatusIcon status={task.status} />
             <div className="min-w-0 flex-1">
-              <div className="wrap-break-word line-clamp-2 text-foreground text-xs leading-5">
+              <div className="line-clamp-2 text-xs leading-5 wrap-break-word text-foreground">
                 {task.workflowName ?? task.title}
               </div>
               {task.summary && task.summary !== task.workflowName && task.summary !== task.title ? (
-                <div className="wrap-break-word mt-0.5 line-clamp-2 text-[11px] text-muted-foreground leading-4">
+                <div className="text-muted-foreground mt-0.5 line-clamp-2 text-[11px] leading-4 wrap-break-word">
                   {task.summary}
                 </div>
               ) : null}
               {activity && activity !== task.title && activity !== task.summary ? (
-                <div className="wrap-break-word mt-0.5 line-clamp-2 text-[11px] text-muted-foreground leading-4">
+                <div className="text-muted-foreground mt-0.5 line-clamp-2 text-[11px] leading-4 wrap-break-word">
                   {activity}
                 </div>
               ) : null}
-              {metadata ? <div className="mt-0.5 truncate text-[11px] text-muted-foreground">{metadata}</div> : null}
+              {metadata ? <div className="text-muted-foreground mt-0.5 truncate text-[11px]">{metadata}</div> : null}
             </div>
             {task.status === 'in_progress' && <RunTaskStopButton sessionId={sessionId} taskId={task.id} />}
           </div>
@@ -1156,7 +1166,7 @@ export function AgentTaskProgressCapsule() {
                     <TaskStatusIcon status={displayStatus} />
                     <span
                       className={cn(
-                        'wrap-break-word min-w-0 flex-1 whitespace-normal text-xs leading-5',
+                        'min-w-0 flex-1 text-xs leading-5 wrap-break-word whitespace-normal',
                         displayStatus === 'completed' ? 'text-muted-foreground' : 'text-foreground'
                       )}>
                       {displayStatus === 'in_progress' && task.activeText ? task.activeText : task.title}
@@ -1292,10 +1302,10 @@ function AgentRightPaneHighlightSection({
       className={cn(
         'space-y-1.5',
         compact
-          ? 'border-border-subtle border-t pt-2.5 first:border-t-0 first:pt-0'
+          ? 'border-t border-border-subtle pt-2.5 first:border-t-0 first:pt-0'
           : 'rounded-md border border-border-subtle px-3 py-2'
       )}>
-      <h3 className="flex items-center gap-1.5 font-medium text-foreground text-xs">
+      <h3 className="flex items-center gap-1.5 text-xs font-medium text-foreground">
         {icon}
         {title}
       </h3>
@@ -1320,7 +1330,7 @@ function AgentRightPaneArtifactsSection({ artifacts, compact }: { artifacts: Age
               type="button"
               onClick={() => actions.openArtifactFile(artifact.path)}
               title={artifact.path}
-              className="flex w-full min-w-0 items-center gap-1.5 rounded-md px-1 py-1 text-left text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground">
+              className="text-muted-foreground flex w-full min-w-0 items-center gap-1.5 rounded-md px-1 py-1 text-left transition-colors hover:bg-accent hover:text-accent-foreground">
               <FileText size={14} className="shrink-0" />
               <span className="min-w-0 flex-1 truncate text-xs">{artifact.name}</span>
             </button>

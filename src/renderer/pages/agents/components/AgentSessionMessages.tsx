@@ -41,6 +41,8 @@ type Props = {
   onOpenCitationsPanel?: MessageListActions['openCitationsPanel']
   openAgentToolFlow?: MessageListActions['openAgentToolFlow']
   openArtifactFile?: MessageListActions['openArtifactFile']
+  openBrowserUrl?: MessageListActions['openBrowserUrl']
+  openExternalUrl?: MessageListActions['openExternalUrl']
   openDiagnosticReport?: MessageListActions['openDiagnosticReport']
   deleteMessage?: MessageListActions['deleteMessage']
   respondToolApproval?: MessageListActions['respondToolApproval']
@@ -61,6 +63,8 @@ const AgentSessionMessages = ({
   onOpenCitationsPanel,
   openAgentToolFlow,
   openArtifactFile,
+  openBrowserUrl,
+  openExternalUrl,
   openDiagnosticReport,
   deleteMessage,
   respondToolApproval
@@ -134,6 +138,8 @@ const AgentSessionMessages = ({
     openCitationsPanel: onOpenCitationsPanel,
     openAgentToolFlow,
     openArtifactFile,
+    openBrowserUrl,
+    openExternalUrl,
     openDiagnosticReport,
     diagnosticReport,
     deleteMessage,

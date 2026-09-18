@@ -805,7 +805,7 @@ const MessageList = ({ enableSearch = false }: MessageListProps) => {
           scopeRef={messageListScopeRef}
         />
       )}
-      <SelectionContextMenu>
+      <SelectionContextMenu openBrowserUrl={actions.openBrowserUrl}>
         <div ref={messageListScopeRef} style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
           <MessageVirtualList
             handleRef={messageListRef}
