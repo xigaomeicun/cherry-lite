@@ -14,8 +14,11 @@ import {
   resolveCommandKeybinding,
   resolveMenu
 } from '@shared/utils/command'
+import { doctorSettingsPath } from '@shared/utils/doctor'
 import type { BrowserWindow } from 'electron'
 import { app, Menu, shell } from 'electron'
+
+const logger = loggerService.withContext('AppMenuService')
 
 const appMenuCommands: CommandId[] = ['app.settings.open', 'app.zoom.in', 'app.zoom.out', 'app.zoom.reset']
 
@@ -158,6 +161,13 @@ export class AppMenuService extends BaseService {
             label: t('appMenu.documentation'),
             click: () => {
               void shell.openExternal('https://cherry-ai.com/docs')
+            }
+          },
+          {
+            type: 'custom',
+            label: t('appMenu.doctor'),
+            click: () => {
+              openSettingsInMainWindow(doctorSettingsPath('checks'))
             }
           },
           {
