@@ -5,7 +5,7 @@ import {
   type ImageAttachment,
   MAX_FILE_SIZE_BYTES
 } from '@main/utils/downloadAsBase64'
-import { Bot, InputFile } from 'grammy'
+import { Bot, GrammyError, InputFile } from 'grammy'
 
 import {
   ChannelAdapter,
@@ -357,16 +357,47 @@ class TelegramAdapter extends ChannelAdapter {
       const isLast = i === chunks.length - 1
       const markupParams = isLast && opts?.replyMarkup ? { reply_markup: opts.replyMarkup } : {}
 
-      try {
-        await this.bot.api.sendMessage(chatId, chunk, {
-          parse_mode: 'HTML',
-          ...replyParams,
-          ...markupParams
-        })
-      } catch (error) {
-        this.log.warn('HTML send failed, falling back to plain text', {
+      let sent = false
+      let lastError: unknown
+
+      // 1. 先尝试发送 HTML 消息，网络瞬断时支持指数退避重试 (最多 3 次)，避免因瞬时代理抖动误判降级
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+          await this.bot.api.sendMessage(chatId, chunk, {
+            parse_mode: 'HTML',
+            ...replyParams,
+            ...markupParams
+          })
+          sent = true
+          break
+        } catch (error) {
+          lastError = error
+          const isParseError =
+            error instanceof GrammyError &&
+            error.error_code === 400 &&
+            /can('t| not) parse entities|unmatched end tag|unsupported start tag/i.test(error.description ?? '')
+
+          // 若明确是 Telegram API 无法解析的 HTML 语法错误，则无需盲目重试，立即进入降级
+          if (isParseError) {
+            break
+          }
+
+          // 否则是网络抖动、连接断开或限流，进行指数重试 (500ms, 1000ms)
+          if (attempt < 3) {
+            this.log.warn(`Telegram HTML sendMessage attempt ${attempt} failed, retrying...`, {
+              chatId,
+              error: error instanceof Error ? error.message : String(error)
+            })
+            await new Promise((resolve) => setTimeout(resolve, attempt * 500))
+          }
+        }
+      }
+
+      // 2. 只有在重试仍失败且确属 HTML 解析异常时，才向纯文本降级
+      if (!sent) {
+        this.log.warn('HTML send failed after attempts, falling back to plain text', {
           chatId,
-          error: error instanceof Error ? error.message : String(error)
+          error: lastError instanceof Error ? lastError.message : String(lastError)
         })
         const plainChunks = splitMessage(text, TELEGRAM_MAX_LENGTH)
         for (const plain of plainChunks) {

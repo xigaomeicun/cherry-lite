@@ -34,11 +34,39 @@ vi.mock('grammy', () => {
       readonly filename: string
     ) {}
   }
+  class MockGrammyError extends Error {
+    constructor(
+      message: string,
+      readonly payload: { ok: boolean; error_code: number; description: string },
+      readonly method: string,
+      readonly parameters: Record<string, unknown>
+    ) {
+      super(message)
+      this.name = 'GrammyError'
+    }
+    get error_code() {
+      return this.payload.error_code
+    }
+    get description() {
+      return this.payload.description
+    }
+  }
+  class MockHttpError extends Error {
+    constructor(
+      message: string,
+      readonly error: unknown
+    ) {
+      super(message)
+      this.name = 'HttpError'
+    }
+  }
   return {
     Bot: vi.fn().mockImplementation(function BotMock() {
       return mockBot
     }),
-    InputFile: MockInputFile
+    InputFile: MockInputFile,
+    GrammyError: MockGrammyError,
+    HttpError: MockHttpError
   }
 })
 
@@ -335,5 +363,48 @@ describe('TelegramAdapter', () => {
       text: 'Hello bot',
       messageId: '42'
     })
+  })
+
+  it('retries HTML sendMessage on network failure before giving up', async () => {
+    const adapter = createAdapter()
+    await adapter.connect()
+
+    mockBot.api.sendMessage
+      .mockRejectedValueOnce(new Error('Network request failed'))
+      .mockResolvedValueOnce({ message_id: 101 })
+
+    await adapter.sendMessage('123', 'Hello **bold**')
+
+    expect(mockBot.api.sendMessage).toHaveBeenCalledTimes(2)
+    expect(mockBot.api.sendMessage).toHaveBeenNthCalledWith(1, '123', expect.stringContaining('<b>bold</b>'), {
+      parse_mode: 'HTML'
+    })
+    expect(mockBot.api.sendMessage).toHaveBeenNthCalledWith(2, '123', expect.stringContaining('<b>bold</b>'), {
+      parse_mode: 'HTML'
+    })
+  })
+
+  it('falls back to plain text immediately on parse entities error', async () => {
+    const { GrammyError } = await import('grammy')
+    const adapter = createAdapter()
+    await adapter.connect()
+
+    const parseError = new GrammyError(
+      'Bad Request',
+      { ok: false, error_code: 400, description: "Bad Request: can't parse entities: unclosed tag" },
+      'sendMessage',
+      {}
+    )
+    mockBot.api.sendMessage
+      .mockRejectedValueOnce(parseError)
+      .mockResolvedValueOnce({ message_id: 102 })
+
+    await adapter.sendMessage('123', 'Hello **bold**')
+
+    expect(mockBot.api.sendMessage).toHaveBeenCalledTimes(2)
+    expect(mockBot.api.sendMessage).toHaveBeenNthCalledWith(1, '123', expect.stringContaining('<b>bold</b>'), {
+      parse_mode: 'HTML'
+    })
+    expect(mockBot.api.sendMessage).toHaveBeenNthCalledWith(2, '123', 'Hello **bold**', {})
   })
 })
