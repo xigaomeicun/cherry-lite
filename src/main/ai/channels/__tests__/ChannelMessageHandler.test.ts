@@ -771,6 +771,32 @@ describe('ChannelMessageHandler', () => {
     }
   })
 
+  it('handleCommand /reboot notifies user and triggers application.relaunch', async () => {
+    vi.useFakeTimers()
+    try {
+      const adapter = createMockAdapter()
+      const { application } = await import('@application')
+
+      await channelMessageHandler.handleCommand(adapter, {
+        chatId: 'oc_123',
+        userId: 'user-1',
+        userName: 'User',
+        command: 'reboot'
+      })
+
+      expect(adapter.sendMessage).toHaveBeenCalledWith('oc_123', '♻️ 正在重启无头服务', {
+        replyToMessageId: undefined,
+        parseMode: 'plain'
+      })
+
+      expect(application.relaunch).not.toHaveBeenCalled()
+      vi.advanceTimersByTime(1000)
+      expect(application.relaunch).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('handleCommand /whoami sends the current chat ID', async () => {
     const adapter = createMockAdapter()
 

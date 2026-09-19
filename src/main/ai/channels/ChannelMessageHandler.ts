@@ -737,6 +737,43 @@ export class ChannelMessageHandler {
           }
           break
         }
+        case 'reboot': {
+          onAdmitted()
+          if (typeof adapter.dismissToolProgress === 'function') {
+            void adapter.dismissToolProgress(command.chatId).catch(() => {})
+          }
+          try {
+            const dataDir = application.getPath ? application.getPath('feature.agents.data') : null
+            if (dataDir) {
+              const rebootNotifyPath = path.join(dataDir, 'reboot-notify.json')
+              await fs.writeFile(
+                rebootNotifyPath,
+                JSON.stringify({ channelId: adapter.channelId, chatId: command.chatId, at: Date.now() }),
+                'utf-8'
+              )
+            }
+          } catch (err) {
+            logger.warn('Failed to save reboot notify file', { err })
+          }
+
+          try {
+            await adapter.sendMessage(command.chatId, '♻️ 正在重启无头服务', {
+              ...replyOpts,
+              parseMode: 'plain'
+            })
+          } catch (err) {
+            logger.error('Failed to send rebooting message to channel', { err })
+          }
+
+          setTimeout(() => {
+            try {
+              application.relaunch()
+            } catch (err) {
+              logger.error('Failed to relaunch application', { err })
+            }
+          }, 800)
+          break
+        }
         case 'status': {
           onAdmitted()
           const agent = agentService.getAgent(agentId)
@@ -1267,7 +1304,14 @@ export class ChannelMessageHandler {
     } catch {
       /* ignore */
     }
-    void application.get('AiStreamManager').abortAndDrain(topicId, reason).catch(() => {})
+    try {
+      const streamMgr = application.get('AiStreamManager')
+      if (typeof streamMgr.abortAndDrain === 'function') {
+        void streamMgr.abortAndDrain(topicId, reason).catch(() => {})
+      }
+    } catch {
+      /* ignore */
+    }
   }
 
   /**

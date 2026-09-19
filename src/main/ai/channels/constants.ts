@@ -6,7 +6,8 @@ export const SLASH_COMMANDS = [
   { name: 'mode', description: '🎮 切换权限模式' },
   { name: 'status', description: '📊 查看当前状态' },
   { name: 'rename', description: '✏️ 命名当前会话' },
-  { name: 'compact', description: '🗜️ 压缩会话记忆' }
+  { name: 'compact', description: '🗜️ 压缩会话记忆' },
+  { name: 'reboot', description: '🧿 重启樱桃服务' }
 ] as const
 
 /**
@@ -26,7 +27,8 @@ const DETECTED_COMMANDS = [
   'switch',
   'mode',
   'status',
-  'rename'
+  'rename',
+  'reboot'
 ] as const
 
 const COMMAND_REGEX = new RegExp(`^\\/(${DETECTED_COMMANDS.join('|')})\\b`)

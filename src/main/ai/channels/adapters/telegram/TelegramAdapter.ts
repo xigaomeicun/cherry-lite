@@ -1,3 +1,7 @@
+import fs from 'node:fs/promises'
+import path from 'node:path'
+
+import { application } from '@application'
 import {
   downloadFileAsBase64,
   downloadImageAsBase64,
@@ -103,6 +107,8 @@ class TelegramAdapter extends ChannelAdapter {
     bot.command('status', (ctx) => emitCommand(ctx, 'status'))
     bot.command('rename', (ctx) => emitCommand(ctx, 'rename', true))
     bot.command('compact', (ctx) => emitCommand(ctx, 'compact'))
+    bot.command('reboot', (ctx) => emitCommand(ctx, 'reboot'))
+    bot.command('restart', (ctx) => emitCommand(ctx, 'reboot'))
 
     bot.on('callback_query:data', async (ctx) => {
       const data = ctx.callbackQuery?.data
@@ -195,7 +201,8 @@ class TelegramAdapter extends ChannelAdapter {
       { command: 'mode', description: '🎮 切换权限模式' },
       { command: 'status', description: '📊 查看当前状态' },
       { command: 'rename', description: '✏️ 命名当前会话' },
-      { command: 'compact', description: '🗜️ 压缩会话记忆' }
+      { command: 'compact', description: '🗜️ 压缩会话记忆' },
+      { command: 'reboot', description: '🧿 重启樱桃服务' }
     ])
 
     // Error handler — err is a BotError wrapping the original cause in err.error
@@ -218,6 +225,9 @@ class TelegramAdapter extends ChannelAdapter {
     this.markConnected()
     this.log.info('Telegram bot polling started')
 
+    // Check for pending reboot notification and send online confirmation
+    void this.checkAndSendRebootOnlineNotification()
+
     // Reset the reconnect budget once this connection has stayed up for the stability window.
     // The `this.bot === bot` guard ensures a stale timer from a superseded connection no-ops.
     this.clearStabilityTimer()
@@ -225,6 +235,25 @@ class TelegramAdapter extends ChannelAdapter {
       this.stabilityTimer = null
       if (!this.shouldStop && this.bot === bot) this.reconnectAttempts = 0
     }, this.stabilityResetMs)
+  }
+
+  private async checkAndSendRebootOnlineNotification(): Promise<void> {
+    try {
+      const rebootNotifyPath = path.join(application.getPath('feature.agents.data'), 'reboot-notify.json')
+      const raw = await fs.readFile(rebootNotifyPath, 'utf-8').catch(() => null)
+      if (!raw) return
+      await fs.unlink(rebootNotifyPath).catch(() => {})
+      const data = JSON.parse(raw) as { channelId?: string; chatId?: string; at?: number }
+      if (!data.chatId || (data.channelId && data.channelId !== this.channelId)) return
+      // Only notify if within 5 minutes of the reboot trigger
+      if (typeof data.at === 'number' && Date.now() - data.at <= 300_000) {
+        await this.sendMessage(data.chatId, '♻️ 樱桃服务已上线', { parseMode: 'plain' })
+      }
+    } catch (error) {
+      this.log.warn('Failed to handle reboot online notification', {
+        error: error instanceof Error ? error.message : String(error)
+      })
+    }
   }
 
   private clearStabilityTimer(): void {

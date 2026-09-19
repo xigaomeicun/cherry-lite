@@ -37,6 +37,7 @@ export type ChannelCommandName =
   | 'mode'
   | 'status'
   | 'rename'
+  | 'reboot'
 
 export type ChannelCommandEvent = {
   chatId: string

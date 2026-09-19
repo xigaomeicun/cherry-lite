@@ -123,7 +123,7 @@ describe('TelegramAdapter', () => {
     await adapter.connect()
 
     expect(mockBot.use).toHaveBeenCalledTimes(1) // auth middleware
-    expect(mockBot.command).toHaveBeenCalledTimes(8) // new/stop/model/switch/mode/status/rename/compact
+    expect(mockBot.command).toHaveBeenCalledTimes(10) // new/stop/model/switch/mode/status/rename/compact/reboot/restart
     expect(mockBot.on).toHaveBeenCalledWith('callback_query:data', expect.any(Function))
     expect(mockBot.on).toHaveBeenCalledWith('message:text', expect.any(Function))
     expect(mockBot.api.setMyCommands).toHaveBeenCalledWith([
@@ -134,7 +134,8 @@ describe('TelegramAdapter', () => {
       { command: 'mode', description: '🎮 切换权限模式' },
       { command: 'status', description: '📊 查看当前状态' },
       { command: 'rename', description: '✏️ 命名当前会话' },
-      { command: 'compact', description: '🗜️ 压缩会话记忆' }
+      { command: 'compact', description: '🗜️ 压缩会话记忆' },
+      { command: 'reboot', description: '🧿 重启樱桃服务' }
     ])
     expect(mockBot.catch).toHaveBeenCalledTimes(1)
     expect(mockBot.start).toHaveBeenCalledTimes(1)
@@ -406,5 +407,30 @@ describe('TelegramAdapter', () => {
       parse_mode: 'HTML'
     })
     expect(mockBot.api.sendMessage).toHaveBeenNthCalledWith(2, '123', 'Hello **bold**', {})
+  })
+
+  it('reboot command handler emits command events', async () => {
+    const adapter = createAdapter()
+    await adapter.connect()
+
+    const commandSpy = vi.fn()
+    adapter.on('command', commandSpy)
+
+    const rebootCall = mockBot.command.mock.calls.find((call) => call[0] === 'reboot')
+    expect(rebootCall).toBeDefined()
+    const commandHandler = rebootCall![1] as (ctx: any) => void
+
+    commandHandler({
+      chat: { id: 123 },
+      from: { id: 456, first_name: 'TestUser' }
+    })
+
+    expect(commandSpy).toHaveBeenCalledWith({
+      chatId: '123',
+      userId: '456',
+      userName: 'TestUser',
+      command: 'reboot',
+      messageId: ''
+    })
   })
 })
