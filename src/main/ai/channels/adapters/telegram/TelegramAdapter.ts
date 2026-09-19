@@ -247,7 +247,7 @@ class TelegramAdapter extends ChannelAdapter {
       if (!data.chatId || (data.channelId && data.channelId !== this.channelId)) return
       // Only notify if within 5 minutes of the reboot trigger
       if (typeof data.at === 'number' && Date.now() - data.at <= 300_000) {
-        await this.sendMessage(data.chatId, '♻️ 樱桃服务已上线', { parseMode: 'plain' })
+        await this.sendMessage(data.chatId, '🍒 樱桃服务重启成功', { parseMode: 'plain' })
       }
     } catch (error) {
       this.log.warn('Failed to handle reboot online notification', {

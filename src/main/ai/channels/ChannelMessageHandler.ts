@@ -757,7 +757,7 @@ export class ChannelMessageHandler {
           }
 
           try {
-            await adapter.sendMessage(command.chatId, '♻️ 正在重启无头服务', {
+            await adapter.sendMessage(command.chatId, '🍒 正在重启樱桃服务', {
               ...replyOpts,
               parseMode: 'plain'
             })

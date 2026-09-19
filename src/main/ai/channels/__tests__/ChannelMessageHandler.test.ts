@@ -784,7 +784,7 @@ describe('ChannelMessageHandler', () => {
         command: 'reboot'
       })
 
-      expect(adapter.sendMessage).toHaveBeenCalledWith('oc_123', '♻️ 正在重启无头服务', {
+      expect(adapter.sendMessage).toHaveBeenCalledWith('oc_123', '🍒 正在重启樱桃服务', {
         replyToMessageId: undefined,
         parseMode: 'plain'
       })
