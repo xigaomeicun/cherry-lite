@@ -122,6 +122,15 @@ export function apply(ctx: Context): void {
         }
         return { events: session.snapshotEvents(SessionLogOffset(0), SessionLogOffset(boundary + 1)) }
       }
+      case 'session/flush': {
+        const { sessionId } = params as BridgeHostParams<'session/flush'>
+        const agent = requireAgent(sessionId)
+        if (ctx.sessionPersistence) {
+          await ctx.sessionPersistence.ensureMaterialized(agent.session)
+        }
+        await ctx.sessions.flush(agent.session)
+        return {}
+      }
       case 'session/open':
         return openSession(params as BridgeHostParams<'session/open'>)
       case 'session/prompt': {

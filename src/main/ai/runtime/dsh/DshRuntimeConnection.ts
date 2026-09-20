@@ -642,6 +642,17 @@ export class DshRuntimeConnection implements AgentRuntimeConnection {
     }
   }
 
+  async flushForFork(signal?: AbortSignal): Promise<void> {
+    if (this.startPromise) await this.waitForForkTransition(this.startPromise, signal)
+    signal?.throwIfAborted()
+    if (this.closePromise) {
+      await this.waitForForkTransition(this.closePromise, signal)
+      return
+    }
+    if (!this.bridge || this.closed) return
+    await this.bridge.request('session/flush', { sessionId: this.input.sessionId }, { timeoutMs: 10_000, signal })
+  }
+
   async snapshotForFork(boundary: number, signal?: AbortSignal): Promise<unknown[] | undefined> {
     if (this.startPromise) await this.waitForForkTransition(this.startPromise, signal)
     signal?.throwIfAborted()

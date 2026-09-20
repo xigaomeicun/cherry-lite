@@ -100,6 +100,10 @@ export interface BridgeHostRequestMap {
     params: { sessionId: string; boundary: number }
     result: { events: unknown[] }
   }
+  'session/flush': {
+    params: { sessionId: string }
+    result: Record<string, never>
+  }
   'session/open': {
     params: {
       sessionId: string
