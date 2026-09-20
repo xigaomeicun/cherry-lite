@@ -22,6 +22,7 @@ osascript -e 'quit app "Cherry Studio"' || true
 rm -rf "/Applications/Cherry Studio.app"
 ditto "dist/mac-arm64/Cherry Studio.app" "/Applications/Cherry Studio.app"
 xattr -cr "/Applications/Cherry Studio.app"
+sleep 3
 open -a "Cherry Studio"
 ```
 
