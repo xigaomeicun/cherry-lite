@@ -1,3 +1,4 @@
+import { isAgentSessionForkFailureReason } from '@shared/ai/agentSessionFork'
 import { type AiStreamAdmissionReason, isAiStreamAdmissionReason } from '@shared/ai/transport'
 import type { SerializedError } from '@shared/types/error'
 
@@ -10,6 +11,7 @@ import { IpcError } from './IpcError'
  * branches. Not aggregated through `errors/index.ts` (see ipc-overview.md).
  */
 export const aiErrorCodes = {
+  AI_AGENT_SESSION_FORK_FAILED: 'AI_AGENT_SESSION_FORK_FAILED',
   /**
    * A provider / AI SDK call failed. The full {@link SerializedError} (statusCode,
    * responseBody, AI SDK subtype, …) rides in `IpcError.data`, so the renderer can
@@ -50,6 +52,12 @@ export const aiErrorCodes = {
  */
 export function aiErrorDetail(e: unknown): SerializedError | undefined {
   return e instanceof IpcError && e.code === aiErrorCodes.AI_REQUEST_FAILED ? (e.data as SerializedError) : undefined
+}
+
+export function agentSessionForkFailureReason(e: unknown) {
+  if (!(e instanceof IpcError) || e.code !== aiErrorCodes.AI_AGENT_SESSION_FORK_FAILED) return undefined
+  const reason = e.data && typeof e.data === 'object' && 'reason' in e.data ? e.data.reason : undefined
+  return isAgentSessionForkFailureReason(reason) ? reason : undefined
 }
 
 export function aiStreamAdmissionReason(e: unknown): AiStreamAdmissionReason | undefined {

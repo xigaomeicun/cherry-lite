@@ -1,3 +1,8 @@
+import { useNavigate } from '@tanstack/react-router'
+import { type ReactNode, useCallback, useEffect, useMemo, useRef } from 'react'
+import { useTranslation } from 'react-i18next'
+
+import { dataApiService } from '@data/DataApiService'
 import { isHiddenPart } from '@renderer/components/chat/messages/blocks/messagePartLayouts'
 import { useMessageListAdapterCapabilities } from '@renderer/components/chat/messages/hooks/useMessageListAdapterCapabilities'
 import {
@@ -28,15 +33,17 @@ import { EVENT_NAMES, EventEmitter } from '@renderer/services/EventService'
 import { openRoute } from '@renderer/services/mainWindowNavigation'
 import type { Topic } from '@renderer/types/topic'
 import { extractAgentSessionIdFromTopicId } from '@renderer/utils/agentSession'
+import { formatErrorMessage } from '@renderer/utils/error'
 import { normalizeInlineFilePath, resolveInlineFilePath } from '@renderer/utils/filePath'
+import { isDataApiNotFoundError } from '@shared/data/api/errors'
 import type { CherryMessagePart, CherryUIMessage } from '@shared/data/types/message'
+import { agentSessionForkFailureReason } from '@shared/ipc/errors/ai'
 import type { DoctorSubjectRef } from '@shared/types/doctor'
 import { type AbsoluteFilePath, AbsoluteFilePathSchema } from '@shared/types/file'
 import { createFilePathHandle } from '@shared/utils/file'
-import { type ReactNode, useCallback, useEffect, useMemo, useRef } from 'react'
-import { useTranslation } from 'react-i18next'
 
 import AgentSessionApiRetryStatus from './AgentSessionApiRetryStatus'
+import { agentSessionForkAvailability, agentSessionForkReasonLabel } from './agentSessionFork'
 import {
   consumePendingAgentSessionImageActions,
   rejectPendingAgentSessionImageActions,
@@ -55,7 +62,7 @@ function withTerminalErrorFallback(
   for (const message of messages) {
     if (message.role !== 'assistant') continue
     const status = message.metadata?.status
-    const parts = partsByMessageId[message.id] ?? ((message.parts ?? []) as CherryMessagePart[])
+    const parts = partsByMessageId[message.id] ?? message.parts ?? []
     const hasVisiblePart = parts.some((part) => !isHiddenPart(part))
     const needsFallback =
       (status === 'error' && !parts.some((part) => part.type === 'data-error')) ||
@@ -172,6 +179,7 @@ export function useAgentMessageListProviderValue({
   const { t } = useTranslation()
   const normalInteractionsEnabled = imageActionConsumer !== 'capture'
   const sessionId = useMemo(() => extractAgentSessionIdFromTopicId(topic.id), [topic.id])
+  const navigate = useNavigate()
   const resolvedAgentId = assistantId ?? topic.assistantId
   const messageItemCacheRef = useRef(
     new WeakMap<
@@ -202,7 +210,7 @@ export function useAgentMessageListProviderValue({
   const visibleMessages = useMemo(
     () =>
       messages.filter((message) => {
-        const parts = displayPartsByMessageId[message.id] ?? ((message.parts ?? []) as CherryMessagePart[])
+        const parts = displayPartsByMessageId[message.id] ?? message.parts ?? []
         if (parts.length === 0) return true
         return parts.some((part) => !hasPartParentToolCallId(part))
       }),
@@ -361,6 +369,43 @@ export function useAgentMessageListProviderValue({
     [sessionId]
   )
 
+  const { notifyError } = leafCapabilities
+  const openForkSourceSession = useCallback(
+    async (sourceSessionId: string) => {
+      try {
+        await dataApiService.get(`/agent-sessions/${sourceSessionId}`)
+        await navigate({
+          to: '/app/agents',
+          search: { sessionId: sourceSessionId, forkReturnSessionId: sessionId ?? undefined }
+        })
+      } catch (error) {
+        notifyError?.(
+          isDataApiNotFoundError(error) ? t('agent_session_fork.source_not_found') : formatErrorMessage(error)
+        )
+      }
+    },
+    [navigate, notifyError, sessionId, t]
+  )
+  const forkSession = useCallback(
+    async (messageId: string) => {
+      if (!sessionId) return
+      try {
+        const result = await ipcApi.request('ai.agent.session.fork', {
+          sourceSessionId: sessionId,
+          messageId
+        })
+        openRoute('/app/agents', { sessionId: result.sessionId })
+      } catch (error) {
+        const reason = agentSessionForkFailureReason(error)
+        if (reason) {
+          notifyError?.(agentSessionForkReasonLabel(t, reason))
+          return
+        }
+        throw error
+      }
+    },
+    [sessionId, t, notifyError]
+  )
   const state = useMemo<MessageListState>(
     () => ({
       topic,
@@ -406,6 +451,14 @@ export function useAgentMessageListProviderValue({
 
   const actions = useMemo<MessageListActions>(
     () => ({
+      openForkSourceSession: normalInteractionsEnabled ? openForkSourceSession : undefined,
+      forkSession: normalInteractionsEnabled
+        ? {
+            label: t('agent_session_fork.label'),
+            availability: (message) => agentSessionForkAvailability(t, message),
+            run: forkSession
+          }
+        : undefined,
       loadOlder,
       bindRuntime,
       deleteMessage,
@@ -433,6 +486,9 @@ export function useAgentMessageListProviderValue({
       updateRenderConfig
     }),
     [
+      forkSession,
+      openForkSourceSession,
+      t,
       abortTool,
       bindRuntime,
       bindMessageGroupRuntime,

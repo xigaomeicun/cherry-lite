@@ -1,12 +1,15 @@
 import { randomUUID } from 'node:crypto'
 
 import { application } from '@application'
+import { AgentSessionForkSourceError } from '@data/services/AgentSessionForkService'
 import { loggerService } from '@logger'
 import { createAgent } from '@main/ai/agents/createAgent'
 import { createBuiltinSupportSession } from '@main/ai/agents/createBuiltinSupportSession'
 import { findPersistedToolOutput } from '@main/ai/messages/persistedToolOutput'
+import { AgentSessionForkError } from '@main/ai/runtime/fork'
 import { AiStreamAdmissionError, WebContentsListener } from '@main/ai/streamManager'
 import { serializeError } from '@main/ai/utils/serializeError'
+import { isAgentSessionForkFailureReason } from '@shared/ai/agentSessionFork'
 import type { AiStreamOpenRequest } from '@shared/ai/transport'
 import { JOB_ERROR_CODES } from '@shared/data/api/schemas/jobs'
 import { aiErrorCodes } from '@shared/ipc/errors/ai'
@@ -169,6 +172,21 @@ export const aiHandlers: IpcHandlersFor<typeof aiRequestSchemas> = {
   },
   'ai.agent.session.close_warm': async ({ sessionId }, { senderId }) => {
     application.get('AgentSessionRuntimeService').releaseWarmLease(sessionId, senderWebContents(senderId))
+  },
+  'ai.agent.session.fork': async ({ sourceSessionId, messageId }) => {
+    try {
+      return {
+        sessionId: await application.get('AgentSessionRuntimeService').forkSession(sourceSessionId, messageId)
+      }
+    } catch (error) {
+      logger.warn('Agent session fork failed', { sourceSessionId, messageId, error })
+      const failure =
+        error instanceof AgentSessionForkError || error instanceof AgentSessionForkSourceError
+          ? error.reason
+          : undefined
+      const reason = isAgentSessionForkFailureReason(failure) ? failure : 'operation_failed'
+      throw new IpcError(aiErrorCodes.AI_AGENT_SESSION_FORK_FAILED, reason, { reason })
+    }
   },
   'ai.agent.session.delete': ({ sessionIds }) =>
     application.get('AgentSessionDeliveryService').deleteSessions(sessionIds),

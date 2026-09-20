@@ -65,12 +65,15 @@ import {
   toolPolicyFactsEqual
 } from './agentSessionWarmup'
 import { createClaudeCodeProcessDiagnostics, createSpawnClaudeCodeProcess } from './ClaudeCodeProcessManager'
+import { forkClaudeSession } from './claudeFork'
 import { effectiveContextWindowTokens } from './contextWindowSuffix'
+import { ClaudeForkCheckpointSchema } from './forkCheckpoint'
 import {
   type ClaudeCodeProcessDiagnostics,
   createClaudeCodeProcessExitError,
   isClaudeCodeProcessFailure
 } from './processExitDiagnostics'
+import { resolveClaudeConfigDirectory } from './queryOptions'
 import {
   AgentSessionWorkspaceError,
   disposeToolPolicySnapshot,
@@ -348,6 +351,7 @@ class ClaudeCodeRuntimeConnection implements AgentRuntimeConnection {
   private approvalEmitter?: ToolApprovalEmitterHolder
   private mcpToolMetadata?: Record<string, McpToolDisplayMetadata>
   private resumeToken?: string
+  private lastMainAssistantUuid?: string
   private toolPolicySnapshot?: ClaudeAgentToolPolicySnapshot
   private steerHolder?: SteerHolder
   private assistantFileToolsEnabled = false
@@ -483,6 +487,7 @@ class ClaudeCodeRuntimeConnection implements AgentRuntimeConnection {
   }
 
   async send(input: AgentRuntimeUserInput): Promise<void> {
+    this.lastMainAssistantUuid = undefined
     if (isFastSlashCommand(input)) {
       throw new Error('The /fast command is unavailable; use the host Fast control instead')
     }
@@ -721,7 +726,10 @@ class ClaudeCodeRuntimeConnection implements AgentRuntimeConnection {
 
         const messageAssociation = this.adapter!.isTurnActive ? 'current-turn' : 'stateless'
         if (message.type === 'stream_event') this.captureStreamInvocation(message, messageAssociation)
-        if (message.type === 'assistant') this.captureAssistantInvocation(message, messageAssociation)
+        if (message.type === 'assistant') {
+          this.captureAssistantInvocation(message, messageAssociation)
+          if (message.parent_tool_use_id == null) this.lastMainAssistantUuid = message.uuid
+        }
 
         let result: ReturnType<ClaudeCodeStreamAdapter['handleMessage']>
         try {
@@ -749,7 +757,15 @@ class ClaudeCodeRuntimeConnection implements AgentRuntimeConnection {
           // Steers not injected by the hook this turn (the turn called no tool after they arrived) →
           // hand them back so the host queues them as the next turn (the steer_undelivered fallback).
           this.emitPendingSteersAsUndelivered()
-          this.eventQueue.push({ type: 'turn-complete' })
+          const checkpoint = ClaudeForkCheckpointSchema.safeParse({
+            runtime: 'claude-code',
+            runtimeSessionId: result.sessionId,
+            messageUuid: this.lastMainAssistantUuid,
+            configDir: resolveClaudeConfigDirectory(this.spawnOptions?.env)
+          })
+          const forkAnchor = checkpoint.success ? { checkpoint: checkpoint.data } : undefined
+          this.lastMainAssistantUuid = undefined
+          this.eventQueue.push({ type: 'turn-complete', forkAnchor })
         }
       }
     } catch (error) {
@@ -1399,6 +1415,7 @@ function toClaudeImageMediaType(value: string | undefined) {
 }
 
 export class ClaudeCodeRuntimeDriver implements AgentSessionRuntimeDriver {
+  readonly fork = forkClaudeSession
   readonly type = 'claude-code'
   readonly capabilities = ['agent-session'] as const
 

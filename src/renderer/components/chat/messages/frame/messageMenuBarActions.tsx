@@ -1,21 +1,3 @@
-import { loggerService } from '@logger'
-import {
-  DEFAULT_MESSAGE_MENUBAR_BUTTON_IDS,
-  type MessageMenuBarButtonId,
-  STREAMING_DISABLED_BUTTON_IDS
-} from '@renderer/components/chat/messages/frame/messageMenuBarConfig'
-import { getMessageDeleteUnavailableText } from '@renderer/components/chat/messages/utils/messageDeleteAvailability'
-import CopyIcon from '@renderer/components/icons/CopyIcon'
-import DeleteIcon from '@renderer/components/icons/DeleteIcon'
-import EditIcon from '@renderer/components/icons/EditIcon'
-import RefreshIcon from '@renderer/components/icons/RefreshIcon'
-import type { MessageExportView } from '@renderer/types/messageExport'
-import { formatErrorMessageWithPrefix } from '@renderer/utils/error'
-import { removeTrailingDoubleSpaces } from '@renderer/utils/markdownLight'
-import { createComposerRichClipboardContentFromParts } from '@renderer/utils/message/composerClipboard'
-import { getTranslationFromParts } from '@renderer/utils/message/partsHelpers'
-import type { CherryMessagePart } from '@shared/data/types/message'
-import type { TranslateLanguage } from '@shared/data/types/translate'
 import dayjs from 'dayjs'
 import type { TFunction } from 'i18next'
 import {
@@ -34,6 +16,25 @@ import {
   Upload
 } from 'lucide-react'
 import type { ReactNode, RefObject } from 'react'
+
+import { loggerService } from '@logger'
+import {
+  DEFAULT_MESSAGE_MENUBAR_BUTTON_IDS,
+  type MessageMenuBarButtonId,
+  STREAMING_DISABLED_BUTTON_IDS
+} from '@renderer/components/chat/messages/frame/messageMenuBarConfig'
+import { getMessageDeleteUnavailableText } from '@renderer/components/chat/messages/utils/messageDeleteAvailability'
+import CopyIcon from '@renderer/components/icons/CopyIcon'
+import DeleteIcon from '@renderer/components/icons/DeleteIcon'
+import EditIcon from '@renderer/components/icons/EditIcon'
+import RefreshIcon from '@renderer/components/icons/RefreshIcon'
+import type { MessageExportView } from '@renderer/types/messageExport'
+import { formatErrorMessageWithPrefix } from '@renderer/utils/error'
+import { removeTrailingDoubleSpaces } from '@renderer/utils/markdownLight'
+import { createComposerRichClipboardContentFromParts } from '@renderer/utils/message/composerClipboard'
+import { getTranslationFromParts } from '@renderer/utils/message/partsHelpers'
+import type { CherryMessagePart } from '@shared/data/types/message'
+import type { TranslateLanguage } from '@shared/data/types/translate'
 
 import { createActionRegistry } from '../../actions/actionRegistry'
 import type { ActionAvailabilityInput, ActionDescriptor, ResolvedAction } from '../../actions/actionTypes'
@@ -222,6 +223,9 @@ registerCommand('message.abortTranslation', async ({ actions, message }) => {
 registerCommand('message.newBranch', async ({ actions, message, t }) => {
   await actions.startMessageBranch?.(message.id)
   actions.notifySuccess?.(t('chat.message.new.branch.created'))
+})
+registerCommand('message.forkSession', async ({ actions, message }) => {
+  await actions.forkSession?.run(message.id)
 })
 
 registerCommand('message.copyToNewTopic', async ({ actions, message, t }) => {
@@ -478,6 +482,17 @@ registerAction({
     if (!actions.startMessageBranch || !isAssistantMessage) return false
     return true
   }
+})
+
+registerAction({
+  id: 'fork-session',
+  commandId: 'message.forkSession',
+  label: ({ actions }) => actions.forkSession?.label ?? '',
+  icon: <Split size={15} />,
+  group: 'write',
+  order: 22,
+  surface: 'menu',
+  availability: ({ actions, message }) => actions.forkSession?.availability(message) ?? false
 })
 
 registerAction({

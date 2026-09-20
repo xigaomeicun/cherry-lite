@@ -327,6 +327,13 @@ export const aiRequestSchemas = {
     input: z.strictObject({ sessionId: z.string().min(1) }),
     output: z.void()
   }),
+  'ai.agent.session.fork': defineRoute({
+    input: z.strictObject({
+      sourceSessionId: z.uuid(),
+      messageId: z.uuid()
+    }),
+    output: z.strictObject({ sessionId: z.uuid() })
+  }),
   'ai.agent.session.delete': defineRoute({
     input: z.strictObject({ sessionIds: z.array(z.string().min(1)).min(1).max(200) }),
     output: z.strictObject({ deletedIds: z.array(z.string()) })
