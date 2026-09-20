@@ -125,9 +125,6 @@ export function apply(ctx: Context): void {
       case 'session/flush': {
         const { sessionId } = params as BridgeHostParams<'session/flush'>
         const agent = requireAgent(sessionId)
-        if (ctx.sessionPersistence) {
-          await ctx.sessionPersistence.ensureMaterialized(agent.session)
-        }
         await ctx.sessions.flush(agent.session)
         return {}
       }
