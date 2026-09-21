@@ -36,6 +36,8 @@ const baseProps = {
   stop: vi.fn(),
   isStreaming: false,
   sendDisabled: true,
+  cancelEditing: vi.fn(),
+  resendEditedMessage: vi.fn(),
   composerContext: {}
 }
 

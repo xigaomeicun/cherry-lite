@@ -5,7 +5,8 @@ import AgentComposer, { type AgentComposerLaunchOptions } from '@renderer/compon
 import type { GetAgentResponse } from '@renderer/types/agent'
 import type { AgentSessionEntity } from '@shared/data/api/schemas/agentSessions'
 import type { Model } from '@shared/data/types/model'
-import { memo } from 'react'
+import { memo, useMemo } from 'react'
+import { useTranslation } from 'react-i18next'
 
 import type { AgentChatRuntimeState } from './useAgentChatRuntimeState'
 
@@ -24,6 +25,10 @@ interface AgentComposerSlotProps {
   onCreateEmptySession?: () => void | Promise<unknown>
   composerContext: ComposerContextValue
   composerLaunchOptions?: AgentComposerLaunchOptions
+  editing?: AgentChatRuntimeState['editing']
+  editBusy?: boolean
+  cancelEditing: () => void
+  resendEditedMessage: AgentChatRuntimeState['sendMessage']
 }
 
 function AgentComposerSlot({
@@ -40,11 +45,32 @@ function AgentComposerSlot({
   sendDisabled,
   onCreateEmptySession,
   composerContext,
-  composerLaunchOptions
+  composerLaunchOptions,
+  editing,
+  editBusy,
+  cancelEditing,
+  resendEditedMessage
 }: AgentComposerSlotProps) {
   const compactWhenSingleLine = useRightPanelPresentationMaximized()
-  const fallback =
-    agentId && !isMultiSelectMode ? (
+  const { t } = useTranslation()
+  const editLaunchOptions = useMemo<AgentComposerLaunchOptions | undefined>(
+    () =>
+      editing
+        ? {
+            initialDraft: { text: '', tokens: [] },
+            initialParts: editing.parts,
+            editing: {
+              messageId: editing.messageId,
+              onCancel: cancelEditing,
+              description: t('agent.edit_resend.warning'),
+              sendLabel: t('agent.edit_resend.save')
+            }
+          }
+        : undefined,
+    [cancelEditing, editing, t]
+  )
+  const renderComposer = (isEditing = false) =>
+    agentId ? (
       <AgentComposer
         agentId={agentId}
         sessionId={sessionId}
@@ -53,17 +79,27 @@ function AgentComposerSlot({
         resolvedModel={activeModel}
         resolvedWorkspaceWarning={workspaceWarning ?? null}
         externalContextControls
-        sendMessage={sendMessage}
+        canChangeModel={!isEditing}
+        sendMessage={isEditing ? resendEditedMessage : sendMessage}
         stop={stop}
-        isStreaming={isStreaming}
-        sendDisabled={sendDisabled}
-        onCreateEmptySession={onCreateEmptySession}
+        isStreaming={!isEditing && isStreaming}
+        sendDisabled={sendDisabled || (isEditing && (isStreaming || editBusy))}
+        onCreateEmptySession={isEditing ? undefined : onCreateEmptySession}
         compactWhenSingleLine={compactWhenSingleLine}
-        launchOptions={composerLaunchOptions}
+        launchOptions={isEditing ? editLaunchOptions : composerLaunchOptions}
       />
     ) : undefined
+  const context: ComposerContextValue = {
+    ...composerContext,
+    overrides: [
+      ...(composerContext.overrides ?? []),
+      ...(editing && agentId
+        ? [{ id: `edit:${editing.messageId}`, priority: 10, render: () => renderComposer(true) }]
+        : [])
+    ]
+  }
 
-  return <ConversationComposerSlot composerContext={composerContext} fallback={fallback} />
+  return <ConversationComposerSlot composerContext={context} fallback={!isMultiSelectMode && renderComposer()} />
 }
 
 export default memo(AgentComposerSlot)

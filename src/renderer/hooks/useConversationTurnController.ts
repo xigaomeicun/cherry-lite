@@ -26,6 +26,7 @@ export interface UseConversationTurnControllerOptions<TInput, TConversation> {
   historyAdapter: ConversationHistoryAdapter
   ensureConversation: (input: TInput) => Promise<TConversation | null> | TConversation | null
   buildStreamRequest: (input: TInput, conversation: TConversation) => AiStreamOpenRequest
+  openStream?: (request: AiStreamOpenRequest, input: TInput) => Promise<AiStreamOpenResponse>
   refreshMetadata?: (conversation: TConversation, ack: AiStreamOpenResponse) => Promise<unknown> | unknown
 }
 
@@ -34,6 +35,7 @@ export function useConversationTurnController<TInput, TConversation>({
   historyAdapter,
   ensureConversation,
   buildStreamRequest,
+  openStream,
   refreshMetadata
 }: UseConversationTurnControllerOptions<TInput, TConversation>) {
   const [phase, setPhase] = useState<ConversationTurnPhase>('draft')
@@ -61,7 +63,8 @@ export function useConversationTurnController<TInput, TConversation>({
         }
 
         if (isCurrentScope()) setPhase('opening')
-        const ack = await ipcApi.request('ai.stream.open', buildStreamRequest(input, conversation))
+        const request = buildStreamRequest(input, conversation)
+        const ack = await (openStream ? openStream(request, input) : ipcApi.request('ai.stream.open', request))
         // The captured conversation may have committed even if the user switched scopes while
         // Main was opening the stream. Its metadata cache still must converge; only scope-owned
         // adapter/phase/toast state is suppressed below.
@@ -98,7 +101,7 @@ export function useConversationTurnController<TInput, TConversation>({
         throw err
       }
     },
-    [buildStreamRequest, ensureConversation, historyAdapter, refreshMetadata]
+    [buildStreamRequest, ensureConversation, historyAdapter, openStream, refreshMetadata]
   )
 
   return {

@@ -7,7 +7,7 @@ import {
   ConversationTopBarPortal,
   useConversationTopBarPortalLayout
 } from '@renderer/components/chat/shell/ConversationTopBarPortal'
-import { useActiveComposerOverride } from '@renderer/components/composer/ComposerContext'
+import { useActiveComposerOverride, useComposerLayerActive } from '@renderer/components/composer/ComposerContext'
 import ComposerSurface, { type ComposerSurfaceActions } from '@renderer/components/composer/ComposerSurface'
 import {
   ComposerPinnedToolsProvider,
@@ -562,6 +562,7 @@ const ChatComposerInner = ({
   const { railGutterPx } = useChatLayoutMode()
   const { available: topBarPortalAvailable, iconOnly: topBarPortalIconOnly } = useConversationTopBarPortalLayout()
   const composerOverridden = useActiveComposerOverride() !== null
+  const layerActive = useComposerLayerActive()
   const [searching, setSearching] = useCache('chat.web_search.searching')
   const [isMultiSelectMode] = useCache('chat.multi_select_mode')
   const { t } = useTranslation()
@@ -1394,12 +1395,13 @@ const ChatComposerInner = ({
   )
 
   useEffect(() => {
+    if (!layerActive) return
     return EventEmitter.on(EVENT_NAMES.FOCUS_CHAT_COMPOSER, (payload) => {
       const topicId = typeof payload === 'object' && payload ? (payload as { topicId?: string }).topicId : undefined
       if (topicId !== streamScopeKey) return
       actionsRef.current.focus('end')
     })
-  }, [actionsRef, streamScopeKey])
+  }, [actionsRef, layerActive, streamScopeKey])
 
   useEffect(() => {
     Object.assign(actionsRef.current, { addNewTopic })

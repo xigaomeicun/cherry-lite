@@ -4,6 +4,7 @@ import type { RefObject } from 'react'
 import { useEffect, useEffectEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { useComposerLayerActive } from '../../ComposerContext'
 import type { ComposerDraftToken } from '../../tokens'
 
 export const createQuoteToken = (selectedText: string, label: string): ComposerDraftToken => ({
@@ -21,10 +22,11 @@ interface QuoteInsertionActions {
 /**
  * Subscribes to the main-process quote IPC and inserts the quoted text as a quote token via
  * the composer's imperative actions ref. The insertion runs through `useEffectEvent` so the
- * IPC listener subscribes once and stays stable across renders.
+ * IPC listener stays stable across renders while this composer layer is active.
  */
 export function useComposerQuoteInsertion<T extends QuoteInsertionActions>(actionsRef: RefObject<T>): void {
   const { t } = useTranslation()
+  const layerActive = useComposerLayerActive()
 
   const insertQuote = useEffectEvent((selectedText: string) => {
     if (!selectedText) return
@@ -32,8 +34,9 @@ export function useComposerQuoteInsertion<T extends QuoteInsertionActions>(actio
   })
 
   useEffect(() => {
+    if (!layerActive) return
     return window.electron?.ipcRenderer.on(IpcChannel.App_QuoteToMain, (_, selectedText: string) => {
       insertQuote(selectedText)
     })
-  }, [insertQuote])
+  }, [insertQuote, layerActive])
 }
