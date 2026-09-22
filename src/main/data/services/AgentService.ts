@@ -511,6 +511,7 @@ export class AgentService {
 
   /** Publish an Agent creation only after the caller-owned transaction commits. */
   emitAgentCreated(agent: AgentEntity): void {
+    notifyDataApiDataChange([{ endpoint: '/agents', kind: 'membership', entityIds: [agent.id] }])
     this._onAgentCreated.fire({ agentId: agent.id, agent })
   }
 

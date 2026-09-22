@@ -6,7 +6,17 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { SkillsSettings } from '../SkillsSettings'
 
+const { launchSkillMock, navigateMock, resourceCatalogViewMock } = vi.hoisted(() => ({
+  launchSkillMock: vi.fn(),
+  navigateMock: vi.fn(),
+  resourceCatalogViewMock: vi.fn()
+}))
+
 vi.mock('@cherrystudio/ui', () => vi.importActual('@cherrystudio/ui'))
+
+vi.mock('@renderer/hooks/useSkillLauncher', () => ({
+  useSkillLauncher: () => launchSkillMock
+}))
 
 vi.mock('@renderer/components/resourceCatalog/catalog', () => ({
   ResourceCatalogView: ({ toolbarFooter, filterResource }: ResourceCatalogViewProps) => {
@@ -31,7 +41,11 @@ vi.mock('@renderer/components/resourceCatalog/catalog', () => ({
   }
 }))
 
-describe('SkillsSettings source tabs', () => {
+vi.mock('@tanstack/react-router', () => ({
+  useNavigate: () => navigateMock
+}))
+
+describe('SkillsSettings', () => {
   it('filters the supplied catalog by physical scope rather than import provenance', async () => {
     const user = userEvent.setup()
     render(<SkillsSettings />)
@@ -50,5 +64,19 @@ describe('SkillsSettings source tabs', () => {
 
     await user.click(screen.getByRole('tab', { name: '全部' }))
     expect(screen.getAllByRole('listitem')).toHaveLength(5)
+  })
+
+  it('opens the dedicated Skill route and exposes the shared launch action', () => {
+    render(<SkillsSettings />)
+
+    const props = resourceCatalogViewMock.mock.calls.at(-1)?.[0] as ResourceCatalogViewProps
+    expect(props.onLaunchSkill).toBe(launchSkillMock)
+    expect(props.allowColumnToggle).toBe(true)
+
+    props.onOpenSkill?.({ id: 'skill-1' } as Parameters<NonNullable<ResourceCatalogViewProps['onOpenSkill']>>[0])
+    expect(navigateMock).toHaveBeenCalledWith({
+      to: '/settings/skills/$skillId',
+      params: { skillId: 'skill-1' }
+    })
   })
 })
