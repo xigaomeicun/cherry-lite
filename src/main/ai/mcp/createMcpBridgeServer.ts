@@ -2,6 +2,8 @@ import { application } from '@application'
 import { mcpServerService } from '@data/services/McpServerService'
 import { loggerService } from '@logger'
 import { isMcpCancellation } from '@main/ai/mcp/mcpAbort'
+import { chatErrorContext } from '@main/ai/utils/chatErrorContext'
+import { redactToShape } from '@main/ai/utils/redactToShape'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import {
   CallToolRequestSchema,
@@ -195,7 +197,14 @@ export function createMcpBridgeServer(
         // Expected cancellation from the SDK side — the runtime already logged it at debug.
         logger.debug('MCP bridge: tool call aborted', { mcpId, tool: request.params.name })
       } else {
-        logger.error('MCP bridge: failed to call tool', { mcpId, tool: request.params.name, error })
+        // Every agent runtime (dsh / pi / Claude Code) reaches Cherry's tools through this
+        // handler, so this is the one place their tool failures are observable in-process.
+        logger.error('MCP bridge: failed to call tool', {
+          mcpId,
+          tool: request.params.name,
+          argsShape: redactToShape(request.params.arguments),
+          err: chatErrorContext(error)
+        })
       }
       throw error
     }
