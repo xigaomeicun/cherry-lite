@@ -46,6 +46,8 @@ interface HookProps {
   target: WebviewAnnotationTarget
   locale: WebviewAnnotationLocale
   theme: 'light' | 'dark'
+  accent: string
+  accentForeground: string
 }
 
 function createWebview(webviewId = 42): TestWebview {
@@ -98,6 +100,8 @@ const initialProps = (webviewRef: RefObject<WebviewTag | null>, overrides: Parti
   target,
   locale,
   theme: 'dark',
+  accent: 'rgb(0, 185, 107)',
+  accentForeground: '#000000',
   ...overrides
 })
 
