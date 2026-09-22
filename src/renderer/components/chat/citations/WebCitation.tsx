@@ -26,8 +26,8 @@ export const WebCitationCard: React.FC<{
   const previewUrl = citation.url && !isXPost ? citation.url : undefined
   const providerActions = useOptionalMessageListActions()
   const linkActions = {
-    openPath: actions?.openPath ?? providerActions?.openPath,
-    openExternalUrl: actions?.openExternalUrl ?? providerActions?.openExternalUrl
+    openBrowserUrl: actions?.openBrowserUrl ?? providerActions?.openBrowserUrl,
+    openPath: actions?.openPath ?? providerActions?.openPath
   }
 
   const { content: previewContent, isLoading: isPreviewLoading } = useCitationPreview(previewUrl, previewSession)
@@ -58,6 +58,7 @@ export const WebCitationCard: React.FC<{
             <a
               className="flex-1 text-nowrap text-foreground text-sm leading-[1.6] no-underline"
               href={citation.url}
+              onAuxClick={(e) => handleLinkClick(citation.url, e, linkActions)}
               onClick={(e) => handleLinkClick(citation.url, e, linkActions)}>
               {displayTitle || <span className="text-link">{citation.hostname}</span>}
             </a>

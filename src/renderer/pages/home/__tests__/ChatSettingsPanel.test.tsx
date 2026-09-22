@@ -5,6 +5,9 @@ import type { PropsWithChildren, ReactNode } from 'react'
 import type * as ReactI18next from 'react-i18next'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import type * as PaneShellModule from '@renderer/components/chat/panes/Shell'
+import { DEFAULT_ASSISTANT_SETTINGS } from '@shared/data/types/assistant'
+
 import Chat from '../Chat'
 
 const renderCounters = vi.hoisted(() => ({
@@ -14,6 +17,11 @@ const renderCounters = vi.hoisted(() => ({
   setBranchLiveState: vi.fn()
 }))
 const citationsPanelModuleLoads = vi.hoisted(() => ({ value: 0 }))
+
+vi.mock('@renderer/components/chat/panes/Shell', async (importOriginal) => ({
+  ...(await importOriginal<typeof PaneShellModule>()),
+  useRightPanelActions: () => ({ tryOpen: vi.fn() })
+}))
 
 vi.mock('@data/hooks/usePreference', () => ({
   usePreference: (key: string) => {
