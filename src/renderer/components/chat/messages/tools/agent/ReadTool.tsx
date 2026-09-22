@@ -74,8 +74,10 @@ export function ReadTool({
   const errorText = hasError ? extractToolErrorText(output) : undefined
   const outputString = errorText ?? normalizeOutputString(output)
   const stats = errorText ? null : getOutputStats(outputString)
-  const filename = input?.file_path?.split('/').pop()
-  const language = getLanguageByFilePath(input?.file_path ?? '')
+  const rawInput = input as unknown as Record<string, unknown> | undefined
+  const filePath = typeof rawInput?.file_path === 'string' ? rawInput.file_path : typeof rawInput?.path === 'string' ? rawInput.path : undefined
+  const filename = filePath?.split('/').pop()
+  const language = getLanguageByFilePath(filePath ?? '')
   const { data: truncatedOutput, isTruncated, originalLength } = truncateOutput(outputString)
   const strippedOutput = truncatedOutput ? (errorText ? truncatedOutput : stripLineNumbers(truncatedOutput)) : null
 
@@ -87,7 +89,7 @@ export function ReadTool({
         args={input}
         params={
           <SkeletonValue
-            value={input?.file_path ? <ClickableFilePath path={input.file_path} displayName={filename} /> : undefined}
+            value={filePath ? <ClickableFilePath path={filePath} displayName={filename} /> : undefined}
             width="120px"
           />
         }

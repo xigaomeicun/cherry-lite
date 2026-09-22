@@ -15,8 +15,10 @@ export function WriteTool({
   output?: WriteToolOutput
   hasError?: boolean
 }): ToolDisclosureItem {
-  const filename = input?.file_path?.split('/').pop()
-  const language = getLanguageByFilePath(input?.file_path ?? '')
+  const rawInput = input as unknown as Record<string, unknown> | undefined
+  const filePath = typeof rawInput?.file_path === 'string' ? rawInput.file_path : typeof rawInput?.path === 'string' ? rawInput.path : undefined
+  const filename = filePath?.split('/').pop()
+  const language = getLanguageByFilePath(filePath ?? '')
   // A Write creates the file: keep the path inert until the call finishes
   // successfully (output present and no error). While streaming the file may
   // not exist yet, and a failed write never created it — so neither is clickable.
@@ -31,8 +33,8 @@ export function WriteTool({
         params={
           <SkeletonValue
             value={
-              input?.file_path ? (
-                <ClickableFilePath path={input.file_path} displayName={filename} interactive={fileWritten} />
+              filePath ? (
+                <ClickableFilePath path={filePath} displayName={filename} interactive={fileWritten} />
               ) : undefined
             }
             width="200px"

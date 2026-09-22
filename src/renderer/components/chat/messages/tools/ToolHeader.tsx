@@ -446,15 +446,18 @@ export function getReadableToolActivity(
     case AgentToolsType.Search:
       return { label: labels.search, description: getReadableSearchTarget(searchText, t) }
     case AgentToolsType.Read:
-      return { label: labels.view, description: getReadablePathTarget(getStringArg(args, 'file_path'), t) }
+      return { label: labels.view, description: getReadablePathTarget(getStringArg(args, 'file_path') ?? getStringArg(args, 'path'), t) }
     case AgentToolsType.Write:
-      return { label: labels.write, description: getReadablePathTarget(getStringArg(args, 'file_path'), t) }
+      return { label: labels.write, description: getReadablePathTarget(getStringArg(args, 'file_path') ?? getStringArg(args, 'path'), t) }
     case AgentToolsType.Edit:
     case AgentToolsType.MultiEdit:
     case AgentToolsType.NotebookEdit:
       return {
         label: labels.modify,
-        description: getReadablePathTarget(getStringArg(args, 'file_path') ?? getStringArg(args, 'notebook_path'), t)
+        description: getReadablePathTarget(
+          getStringArg(args, 'file_path') ?? getStringArg(args, 'path') ?? getStringArg(args, 'notebook_path'),
+          t
+        )
       }
     case AgentToolsType.WebSearch:
     case PROVIDER_WEB_SEARCH_TOOL_NAME:
@@ -502,6 +505,7 @@ const getToolDescription = (toolName: string, args: unknown, t: Translate): stri
   return (
     argsRecord.description ||
     argsRecord.file_path ||
+    argsRecord.path ||
     argsRecord.pattern ||
     argsRecord.query ||
     argsRecord.command ||
