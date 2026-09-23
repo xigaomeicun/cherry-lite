@@ -4,9 +4,7 @@ import { Check, Copy } from 'lucide-react'
 import React from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { useTemporaryValue } from '@renderer/hooks/useTemporaryValue'
 import { openRoute } from '@renderer/services/mainWindowNavigation'
-import type { Citation } from '@renderer/types/message'
 import { isHttpUrl } from '@shared/utils/url'
 
 import { useOptionalMessageListActions } from '../messages/MessageListProvider'

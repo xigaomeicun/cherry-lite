@@ -6,7 +6,6 @@ import type * as ReactI18next from 'react-i18next'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type * as PaneShellModule from '@renderer/components/chat/panes/Shell'
-import { DEFAULT_ASSISTANT_SETTINGS } from '@shared/data/types/assistant'
 
 import Chat from '../Chat'
 
