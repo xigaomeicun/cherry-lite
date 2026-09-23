@@ -597,7 +597,7 @@ export const DefaultPreferences: PreferenceSchemas = {
     'agent.session.display_mode': 'agent',
     'agent.session.position': 'left',
     'app.browser.agent_control.enabled': true,
-    'app.browser.open_links_in_browser': true,
+    'app.browser.open_links_in_browser': false,
     'app.developer_mode.enabled': false,
     // cherry-lite: default off. The build keeps upstream's version number, so auto-download
     // would fetch the official package and replace this fork (see electron-builder.yml publish).

@@ -1,3 +1,4 @@
+import { preferenceService } from '@data/PreferenceService'
 import { useTemporaryValue } from '@renderer/hooks/useTemporaryValue'
 import type { Citation } from '@renderer/types/message'
 import { Check, Copy } from 'lucide-react'
@@ -39,6 +40,11 @@ export const handleLinkClick = (
   if (!url || (event.button !== 0 && event.button !== 1)) return
   if (isHttpUrl(url)) {
     event.preventDefault()
+    const openInBuiltin = preferenceService.getCachedValue('app.browser.open_links_in_browser') ?? false
+    if (!openInBuiltin) {
+      window.open(url, '_blank', 'noopener,noreferrer')
+      return
+    }
     if (event.button === 0 && actions?.openBrowserUrl) actions.openBrowserUrl(url)
     else openRoute('/app/browser', { url })
     return

@@ -28,6 +28,7 @@ export const mockPreferenceDefaults: Record<string, any> = {
   'feature.web_search': true,
   'feature.reasoning': false,
   'feature.tool_calling': true,
+  'app.browser.open_links_in_browser': true,
 
   // User preferences
   'user.name': 'MockUser',
