@@ -446,16 +446,43 @@ export class DshRuntimeConnection implements AgentRuntimeConnection {
       client.start()
       await client.initialize({ cwd: workspacePath, provider: injection.providerName, model: injection.modelId })
       await this.bridge.whenReady()
-      await this.bridge.request('session/open', {
-        sessionId: this.runtimeSessionId,
-        provider: injection.providerName,
-        model: injection.modelId,
-        cwd: workspacePath,
-        // The plugin degrades resume to a fresh create when no session log exists yet.
-        resume: Boolean(this.input.resumeToken),
-        policy: this.buildPolicy(),
-        tools: toolBridge.tools
-      })
+      try {
+        await this.bridge.request('session/open', {
+          sessionId: this.runtimeSessionId,
+          provider: injection.providerName,
+          model: injection.modelId,
+          cwd: workspacePath,
+          // The plugin degrades resume to a fresh create when no session log exists yet.
+          resume: Boolean(this.input.resumeToken),
+          policy: this.buildPolicy(),
+          tools: toolBridge.tools
+        })
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
+        const isNotFound = /not found/i.test(message) || /ENOENT/i.test(message)
+        if (this.input.resumeToken && isNotFound) {
+          logger.warn('DSH native session resume failed; creating fresh session', {
+            sessionId: this.runtimeSessionId,
+            error: message
+          })
+          this.resumeToken = undefined
+          await this.bridge.request('session/open', {
+            sessionId: this.runtimeSessionId,
+            provider: injection.providerName,
+            model: injection.modelId,
+            cwd: workspacePath,
+            resume: false,
+            policy: this.buildPolicy(),
+            tools: toolBridge.tools
+          })
+          this.eventQueue.push({
+            type: 'chunk',
+            chunk: { type: 'data-conversation-reset', id: randomUUID(), data: {} }
+          })
+        } else {
+          throw error
+        }
+      }
       if (this.permissionMode === 'plan') {
         // Activate dsh's plan surface (prompt section + exit tool); a resumed log
         // that already folds to plan makes this a no-op.
