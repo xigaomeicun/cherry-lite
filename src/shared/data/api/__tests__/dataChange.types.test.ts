@@ -19,6 +19,7 @@ import type { CollectionGetPaths, DataApiDataChangeEffect, GetMethodApiPaths, Sc
 describe('endpoint classification', () => {
   it('pins the collection classification snapshot (update deliberately on schema changes)', () => {
     expectTypeOf<CollectionGetPaths>().toEqualTypeOf<
+      | '/api-gateway/paired-devices'
       | '/agent-channels'
       | '/agent-sessions'
       | '/agent-sessions/:sessionId/messages'

@@ -31,6 +31,7 @@ import { Route as SettingsChannelsRouteImport } from './routes/settings/channels
 import { Route as SettingsCodeExecutionRouteImport } from './routes/settings/code-execution'
 import { Route as SettingsDataRouteImport } from './routes/settings/data'
 import { Route as SettingsDependenciesRouteImport } from './routes/settings/dependencies'
+import { Route as SettingsDeviceConnectionsRouteImport } from './routes/settings/device-connections'
 import { Route as SettingsFileProcessingRouteImport } from './routes/settings/file-processing'
 import { Route as SettingsGeneralRouteImport } from './routes/settings/general'
 import { Route as SettingsLocalModelsRouteImport } from './routes/settings/local-models'
@@ -177,6 +178,12 @@ const SettingsDependenciesRoute = SettingsDependenciesRouteImport.update({
   path: '/dependencies',
   getParentRoute: () => SettingsRoute,
 } as any)
+const SettingsDeviceConnectionsRoute =
+  SettingsDeviceConnectionsRouteImport.update({
+    id: '/device-connections',
+    path: '/device-connections',
+    getParentRoute: () => SettingsRoute,
+  } as any)
 const SettingsFileProcessingRoute = SettingsFileProcessingRouteImport.update({
   id: '/file-processing',
   path: '/file-processing',
@@ -379,6 +386,7 @@ export interface FileRoutesByFullPath {
   '/settings/code-execution': typeof SettingsCodeExecutionRoute
   '/settings/data': typeof SettingsDataRoute
   '/settings/dependencies': typeof SettingsDependenciesRoute
+  '/settings/device-connections': typeof SettingsDeviceConnectionsRoute
   '/settings/file-processing': typeof SettingsFileProcessingRoute
   '/settings/general': typeof SettingsGeneralRoute
   '/settings/local-models': typeof SettingsLocalModelsRoute
@@ -437,6 +445,7 @@ export interface FileRoutesByTo {
   '/settings/code-execution': typeof SettingsCodeExecutionRoute
   '/settings/data': typeof SettingsDataRoute
   '/settings/dependencies': typeof SettingsDependenciesRoute
+  '/settings/device-connections': typeof SettingsDeviceConnectionsRoute
   '/settings/file-processing': typeof SettingsFileProcessingRoute
   '/settings/general': typeof SettingsGeneralRoute
   '/settings/local-models': typeof SettingsLocalModelsRoute
@@ -494,6 +503,7 @@ export interface FileRoutesById {
   '/settings/code-execution': typeof SettingsCodeExecutionRoute
   '/settings/data': typeof SettingsDataRoute
   '/settings/dependencies': typeof SettingsDependenciesRoute
+  '/settings/device-connections': typeof SettingsDeviceConnectionsRoute
   '/settings/file-processing': typeof SettingsFileProcessingRoute
   '/settings/general': typeof SettingsGeneralRoute
   '/settings/local-models': typeof SettingsLocalModelsRoute
@@ -555,6 +565,7 @@ export interface FileRouteTypes {
     | '/settings/code-execution'
     | '/settings/data'
     | '/settings/dependencies'
+    | '/settings/device-connections'
     | '/settings/file-processing'
     | '/settings/general'
     | '/settings/local-models'
@@ -613,6 +624,7 @@ export interface FileRouteTypes {
     | '/settings/code-execution'
     | '/settings/data'
     | '/settings/dependencies'
+    | '/settings/device-connections'
     | '/settings/file-processing'
     | '/settings/general'
     | '/settings/local-models'
@@ -669,6 +681,7 @@ export interface FileRouteTypes {
     | '/settings/code-execution'
     | '/settings/data'
     | '/settings/dependencies'
+    | '/settings/device-connections'
     | '/settings/file-processing'
     | '/settings/general'
     | '/settings/local-models'
@@ -866,6 +879,13 @@ declare module '@tanstack/react-router' {
       path: '/dependencies'
       fullPath: '/settings/dependencies'
       preLoaderRoute: typeof SettingsDependenciesRouteImport
+      parentRoute: typeof SettingsRoute
+    }
+    '/settings/device-connections': {
+      id: '/settings/device-connections'
+      path: '/device-connections'
+      fullPath: '/settings/device-connections'
+      preLoaderRoute: typeof SettingsDeviceConnectionsRouteImport
       parentRoute: typeof SettingsRoute
     }
     '/settings/file-processing': {
@@ -1219,6 +1239,7 @@ interface SettingsRouteChildren {
   SettingsCodeExecutionRoute: typeof SettingsCodeExecutionRoute
   SettingsDataRoute: typeof SettingsDataRoute
   SettingsDependenciesRoute: typeof SettingsDependenciesRoute
+  SettingsDeviceConnectionsRoute: typeof SettingsDeviceConnectionsRoute
   SettingsFileProcessingRoute: typeof SettingsFileProcessingRoute
   SettingsGeneralRoute: typeof SettingsGeneralRoute
   SettingsLocalModelsRoute: typeof SettingsLocalModelsRoute
@@ -1250,6 +1271,7 @@ const SettingsRouteChildren: SettingsRouteChildren = {
   SettingsCodeExecutionRoute: SettingsCodeExecutionRoute,
   SettingsDataRoute: SettingsDataRoute,
   SettingsDependenciesRoute: SettingsDependenciesRoute,
+  SettingsDeviceConnectionsRoute: SettingsDeviceConnectionsRoute,
   SettingsFileProcessingRoute: SettingsFileProcessingRoute,
   SettingsGeneralRoute: SettingsGeneralRoute,
   SettingsLocalModelsRoute: SettingsLocalModelsRoute,

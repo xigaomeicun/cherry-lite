@@ -1012,6 +1012,18 @@ export class AgentSessionService {
     return result.deletedIds
   }
 
+  /**
+   * Remote-access reads a session by id without the delivery/archive distinction
+   * this branch models; `getById` is the equivalent lookup here.
+   */
+  getConversationById(id: string): AgentSessionEntity {
+    return this.getById(id)
+  }
+
+  listIdsByAgent(agentId: string): string[] {
+    return this.listIdsByAgentTx(application.get('DbService').getDb(), agentId)
+  }
+
   listIdsByAgentTx(tx: DbOrTx, agentId: string): string[] {
     return tx
       .select({ id: sessionsTable.id })

@@ -301,6 +301,8 @@ export type SharedCacheSchema = {
   'feature.openclaw.gateway_status': CacheValueTypes.OpenClawGatewayStatus
   // API gateway  runtime running state.
   'feature.api_gateway.running': boolean
+  'feature.remote_access.discovery_status': 'inactive' | 'starting' | 'available' | 'unavailable'
+  'feature.api_gateway.lan_running': boolean
   // Main-owned, session-only local model status and download progress.
   'local_model.statuses': LocalModelStatusSnapshots
   'feature.binary.latest_versions': Record<string, string>
@@ -357,6 +359,8 @@ export const DefaultSharedCache: SharedCacheSchema = {
   'topic.stream.last_seen_completion.${topicId}': null,
   'feature.openclaw.gateway_status': 'stopped',
   'feature.api_gateway.running': false,
+  'feature.remote_access.discovery_status': 'inactive',
+  'feature.api_gateway.lan_running': false,
   'local_model.statuses': {},
   'feature.binary.latest_versions': {},
   'web_search.provider.last_used_key.${providerId}': '',
