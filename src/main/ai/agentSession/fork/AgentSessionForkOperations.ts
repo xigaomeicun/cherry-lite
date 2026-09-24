@@ -13,7 +13,7 @@ import { agentSessionMessageService } from '@data/services/AgentSessionMessageSe
 import { agentSessionService } from '@data/services/AgentSessionService'
 import { agentWorkspaceService } from '@data/services/AgentWorkspaceService'
 import { loggerService } from '@logger'
-import { type RuntimeForkCheckpoint, RuntimeForkAnchorSchema } from '@main/ai/runtime/fork'
+import { type RuntimeForkCheckpoint, type RuntimeForkAnchor, RuntimeForkAnchorSchema } from '@main/ai/runtime/fork'
 import { AgentSessionForkError } from '@main/ai/runtime/fork'
 import { t } from '@main/i18n'
 import type { AgentSessionEditTarget } from '@shared/ai/agentSessionEdit'
@@ -104,44 +104,65 @@ export class AgentSessionForkOperations {
     let resources: AgentSessionForkResources | undefined
     try {
       if (prefix.length) {
-        const boundary = prefix.at(-1)!
-        const anchor = RuntimeForkAnchorSchema.safeParse(boundary.data.runtimeAnchor)
-        if (boundary.role !== 'assistant' || boundary.status !== 'success' || !anchor.success)
-          throw new AgentSessionForkError('legacy_history')
-        if (
-          anchor.data.checkpoint.runtime !== agent.type ||
-          anchor.data.excludedMessageIds?.some((id) => prefix.some((row) => row.id === id))
-        )
-          throw new AgentSessionForkError('history_changed')
-        const checkpoints = prefix.flatMap((row) => {
-          const parsed = RuntimeForkAnchorSchema.safeParse(row.data.runtimeAnchor)
-          return parsed.success ? [parsed.data.checkpoint] : []
-        })
-        resources = {
-          version: 1,
-          operationId,
-          targetSessionId: sessionId,
-          resumeToken: '',
-          createdAt: Date.now(),
-          artifactDirectory: path.join(application.getPath('feature.agents.forks'), operationId),
-          published: []
+        // Find the most recent assistant message with a valid fork checkpoint in prefix.
+        // If the immediate predecessor was paused/aborted before finishing, fall back to the
+        // last successfully checkpointed assistant boundary so editing remains possible.
+        let anchorIndex = -1
+        let anchorData: RuntimeForkAnchor | undefined
+
+        for (let i = prefix.length - 1; i >= 0; i--) {
+          const row = prefix[i]
+          if (row.role === 'assistant') {
+            const parsed = RuntimeForkAnchorSchema.safeParse(row.data.runtimeAnchor)
+            if (parsed.success && parsed.data.checkpoint.runtime === agent.type) {
+              anchorIndex = i
+              anchorData = parsed.data
+              break
+            }
+          }
         }
-        await this.prepareResources(resources)
-        const native = await driver.fork({
-          sourceSessionId: sessionId,
-          checkpoint: anchor.data.checkpoint,
-          checkpoints,
-          targetSessionId: nativeSessionId,
-          targetCwd: source.workspace.path,
-          artifactDirectory: resources.artifactDirectory,
-          signal
-        })
-        if (!native.resumeToken.trim() || native.checkpoints.length !== checkpoints.length)
-          throw new AgentSessionForkError('history_corrupt')
-        resources.resumeToken = native.resumeToken
-        await writeForkResources(resources)
-        remapNativeHistory(prefix, native.resumeToken, native.checkpoints)
-        await this.publish(resources, native.publish, signal)
+
+        if (anchorIndex >= 0 && anchorData) {
+          if (anchorData.excludedMessageIds?.some((id) => prefix.some((row) => row.id === id))) {
+            throw new AgentSessionForkError('history_changed')
+          }
+          const checkpoints = prefix.flatMap((row) => {
+            const parsed = RuntimeForkAnchorSchema.safeParse(row.data.runtimeAnchor)
+            return parsed.success ? [parsed.data.checkpoint] : []
+          })
+          resources = {
+            version: 1,
+            operationId,
+            targetSessionId: sessionId,
+            resumeToken: '',
+            createdAt: Date.now(),
+            artifactDirectory: path.join(application.getPath('feature.agents.forks'), operationId),
+            published: []
+          }
+          await this.prepareResources(resources)
+          const native = await driver.fork({
+            sourceSessionId: sessionId,
+            checkpoint: anchorData.checkpoint,
+            checkpoints,
+            targetSessionId: nativeSessionId,
+            targetCwd: source.workspace.path,
+            artifactDirectory: resources.artifactDirectory,
+            signal
+          })
+          if (!native.resumeToken.trim() || native.checkpoints.length !== checkpoints.length)
+            throw new AgentSessionForkError('history_corrupt')
+          resources.resumeToken = native.resumeToken
+          await writeForkResources(resources)
+          remapNativeHistory(prefix, native.resumeToken, native.checkpoints)
+          await this.publish(resources, native.publish, signal)
+        } else {
+          // If no assistant message in prefix has recorded a fork checkpoint (e.g. earlier turns
+          // were aborted before success, or session had no prior completed turns), clear runtime resume
+          // tokens on prefix so runtime starts fresh from the beginning without failing closed.
+          for (const row of prefix) {
+            row.runtimeResumeToken = null
+          }
+        }
       }
       signal.throwIfAborted()
       await closeSource()
