@@ -617,7 +617,7 @@ describe('AgentChat settings panel', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 
-  it('asks for confirmation before switching the model when the session has messages', async () => {
+  it('switches the model directly without confirmation dialog even when the session has messages', async () => {
     partsByMessageIdMock.value = {
       'message-1': [{ type: 'text', text: 'hello' }]
     }
@@ -626,20 +626,7 @@ describe('AgentChat settings panel', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'change topbar model' }))
 
-    expect(screen.getByRole('dialog')).toHaveTextContent('agent.session.model_switch_confirm.description')
-    expect(updateAgentMock.updateModel).not.toHaveBeenCalled()
-
-    fireEvent.click(screen.getByRole('checkbox', { name: 'agent.session.model_switch_confirm.skip_for_app_run' }))
-    fireEvent.click(screen.getByRole('button', { name: 'common.cancel' }))
-    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
-    expect(updateAgentMock.updateModel).not.toHaveBeenCalled()
-
-    fireEvent.click(screen.getByRole('button', { name: 'change topbar model' }))
-    expect(
-      screen.getByRole('checkbox', { name: 'agent.session.model_switch_confirm.skip_for_app_run' })
-    ).not.toBeChecked()
-    fireEvent.click(screen.getByRole('button', { name: 'agent.session.model_switch_confirm.confirm' }))
-
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     await waitFor(() =>
       expect(updateAgentMock.updateModel).toHaveBeenCalledWith(
         {
@@ -649,20 +636,6 @@ describe('AgentChat settings panel', () => {
         { showSuccessToast: false }
       )
     )
-  })
-
-  it('shares the model confirmation opt-out for the current app run when requested', async () => {
-    partsByMessageIdMock.value = {
-      'message-1': [{ type: 'text', text: 'hello' }]
-    }
-
-    renderAgentChat()
-
-    fireEvent.click(screen.getByRole('button', { name: 'change topbar model' }))
-    fireEvent.click(screen.getByRole('checkbox', { name: 'agent.session.model_switch_confirm.skip_for_app_run' }))
-    fireEvent.click(screen.getByRole('button', { name: 'agent.session.model_switch_confirm.confirm' }))
-
-    await waitFor(() => expect(modelSwitchConfirmationCacheMock.set).toHaveBeenCalledWith(true))
   })
 
   it('skips model confirmations when the app-run shared cache is enabled', async () => {
