@@ -16,8 +16,7 @@ import {
   resolveMenu
 } from '@shared/utils/command'
 import { doctorSettingsPath } from '@shared/utils/doctor'
-import type { BrowserWindow } from 'electron'
-import { app, Menu, shell } from 'electron'
+import { app, BrowserWindow, Menu, shell } from 'electron'
 
 const appMenuCommands: CommandId[] = ['app.settings.open', 'app.zoom.in', 'app.zoom.out', 'app.zoom.reset']
 
