@@ -1,5 +1,3 @@
-import { createHash } from 'node:crypto'
-
 import { application } from '@application'
 import type { BridgeToolCallResult, BridgeToolDescriptor } from '@cherrystudio/dsh-bridge'
 import { mcpServerService } from '@data/services/McpServerService'
@@ -10,7 +8,7 @@ import { listBuiltinToolPolicies } from '@main/ai/toolApproval/builtinToolPolicy
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import type { CallToolResult, Tool } from '@modelcontextprotocol/sdk/types.js'
-import { toCamelCase } from '@shared/ai/tools/mcpToolName'
+import { buildMcpBridgedToolName } from '@shared/ai/tools/mcpToolName'
 
 import { dshToolResultErrorText, projectDshToolResult } from './dshToolResultProjection'
 
@@ -34,15 +32,12 @@ export interface DshCherryToolBridgeOptions {
   toolResultRoot: string
 }
 
-/** Preserve MCP wire names when provider-safe; use a stable hash only after lossy normalization. */
+/**
+ * Preserve MCP wire names when provider-safe; fall back to a tag + tool-name
+ * shape otherwise. Shared with the Pi bridge — see `buildMcpBridgedToolName`.
+ */
 export function buildDshCherryToolName(serverName: string, toolName: string): string {
-  const wireName = `mcp__${serverName}__${toolName}`
-  if (/^[A-Za-z_][A-Za-z0-9_-]{0,62}$/.test(wireName)) return wireName
-
-  const prefix = `mcp__${toCamelCase(serverName)}__${toCamelCase(toolName)}`.replace(/[^A-Za-z0-9_-]/g, '')
-  const hash = createHash('sha256').update(`${serverName}\0${toolName}`).digest('hex').slice(0, 12)
-  const safePrefix = /^[A-Za-z_]/.test(prefix) ? prefix : `mcp_${prefix}`
-  return `${safePrefix.slice(0, 50)}_${hash}`
+  return buildMcpBridgedToolName(serverName, toolName)
 }
 
 export const DSH_AUTO_APPROVED_BRIDGED_TOOLS: ReadonlySet<string> = new Set(

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   buildFunctionCallToolName,
+  buildMcpBridgedToolName,
   buildMcpToolName,
   generateMcpToolFunctionName,
   parseFunctionCallToolName,
@@ -270,5 +271,75 @@ describe('buildFunctionCallToolName', () => {
       const result = buildFunctionCallToolName('@anthropic/mcp-server', 'chat')
       expect(result).toBe('mcp__AnthropicMcpServer__chat')
     })
+  })
+})
+
+describe('buildMcpBridgedToolName', () => {
+  /** A 36-char server name burns 43 of the 63-char budget, leaving 20 for the tool. */
+  const UUID_SERVER = 'b96bc771-d4f0-49f0-bc55-f3feaa90c063'
+
+  it('passes provider-safe wire names through untouched', () => {
+    expect(buildMcpBridgedToolName('github', 'search_issues')).toBe('mcp__github__search_issues')
+    expect(buildMcpBridgedToolName(UUID_SERVER, 'notion-fetch')).toBe(`mcp__${UUID_SERVER}__notion-fetch`)
+  })
+
+  it('spends the lossy budget on the tool name, not the server name', () => {
+    const name = buildMcpBridgedToolName(UUID_SERVER, 'notion-create-database')
+
+    expect(name).toMatch(/^mcp__s[0-9a-f]{8}__notionCreateDatabase_[0-9a-f]{4}$/)
+    expect(name.length).toBeLessThanOrEqual(63)
+  })
+
+  it('keeps every real Notion tool readable, including the longest', () => {
+    for (const tool of [
+      'notion-create-database',
+      'notion-update-data-source',
+      'notion-list-private-pages',
+      'notion-get-tool-access',
+      'notion-query-data-sources',
+      'notion-query-multiple-data-sources'
+    ]) {
+      const name = buildMcpBridgedToolName(UUID_SERVER, tool)
+      expect(name).toContain(toCamelCase(tool))
+      expect(name.length).toBeLessThanOrEqual(63)
+    }
+  })
+
+  it('keeps same-prefix siblings distinct via the tool digest', () => {
+    const prefix = 'tool with a shared prefix '.repeat(4)
+    const first = buildMcpBridgedToolName('server', `${prefix}first`)
+    const second = buildMcpBridgedToolName('server', `${prefix}second`)
+
+    expect(first).not.toBe(second)
+    expect(first).toMatch(/_[a-f0-9]{12}$/)
+    expect(first.length).toBeLessThanOrEqual(63)
+  })
+
+  it('separates two servers whose tool names are identical', () => {
+    expect(buildMcpBridgedToolName(UUID_SERVER, 'notion-create-database')).not.toBe(
+      buildMcpBridgedToolName('c46a7e11-2f0d-4a91-8b3e-77de5c904a2f', 'notion-create-database')
+    )
+  })
+
+  it('falls back to the fully-lossy shape when the tool name alone overflows', () => {
+    const name = buildMcpBridgedToolName('server', 'x'.repeat(200))
+
+    expect(name.length).toBeLessThanOrEqual(63)
+    expect(name).toMatch(/_[a-f0-9]{12}$/)
+  })
+
+  it('never merges identities for a non-ASCII tool name that slugs to nothing', () => {
+    // `toCamelCase` drops CJK, so the readable branch cannot run — the digest tail
+    // is the only thing left holding the identity apart.
+    const first = buildMcpBridgedToolName('server', '创建页面')
+    const second = buildMcpBridgedToolName('server', '删除页面')
+
+    expect(first).not.toBe(second)
+    expect(first).toMatch(/_[a-f0-9]{12}$/)
+    expect(first.length).toBeLessThanOrEqual(63)
+  })
+
+  it('emits only provider-safe characters for a long server name', () => {
+    expect(buildMcpBridgedToolName(UUID_SERVER, 'notion-create-database')).toMatch(/^[A-Za-z_][A-Za-z0-9_-]{0,62}$/)
   })
 })

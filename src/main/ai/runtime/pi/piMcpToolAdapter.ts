@@ -1,5 +1,3 @@
-import { createHash } from 'node:crypto'
-
 import { application } from '@application'
 import { mcpServerService } from '@data/services/McpServerService'
 import type { ToolDefinition } from '@earendil-works/pi-coding-agent'
@@ -9,7 +7,7 @@ import type { AgentMcpServer } from '@main/ai/runtime/agentMcpServers'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import type { CallToolResult, ContentBlock, Tool } from '@modelcontextprotocol/sdk/types.js'
-import { toCamelCase } from '@shared/ai/tools/mcpToolName'
+import { buildMcpBridgedToolName } from '@shared/ai/tools/mcpToolName'
 
 const logger = loggerService.withContext('PiMcpToolAdapter')
 type PiToolContent = { type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string }
@@ -24,15 +22,12 @@ export interface PiMcpToolBridge {
   close(): Promise<void>
 }
 
-/** Preserve MCP wire names when provider-safe; sanitize only names that cannot be sent as functions. */
+/**
+ * Preserve MCP wire names when provider-safe; sanitize only names that cannot
+ * be sent as functions. Shared with the DSH bridge — see `buildMcpBridgedToolName`.
+ */
 export function buildPiMcpToolName(serverName: string, toolName: string): string {
-  const wireName = `mcp__${serverName}__${toolName}`
-  if (/^[A-Za-z_][A-Za-z0-9_-]{0,62}$/.test(wireName)) return wireName
-
-  const prefix = `mcp__${toCamelCase(serverName)}__${toCamelCase(toolName)}`.replace(/[^A-Za-z0-9_-]/g, '')
-  const hash = createHash('sha256').update(`${serverName}\0${toolName}`).digest('hex').slice(0, 12)
-  const safePrefix = /^[A-Za-z_]/.test(prefix) ? prefix : `mcp_${prefix}`
-  return `${safePrefix.slice(0, 50)}_${hash}`
+  return buildMcpBridgedToolName(serverName, toolName)
 }
 
 /** Warm user-configured MCP catalogs before their in-process bridge takes its initial tool snapshot. */

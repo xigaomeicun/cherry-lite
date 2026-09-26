@@ -165,3 +165,72 @@ export function parseFunctionCallToolName(toolName: string | undefined): McpFunc
     toolPart: rest.slice(delimiterIndex + 2)
   }
 }
+
+/** Hex chars kept from the server digest when a bridged name must be lossy. */
+const BRIDGED_SERVER_TAG_LENGTH = 8
+/** Hex chars kept from the (server, tool) digest — keeps same-prefix siblings distinct. */
+const BRIDGED_TOOL_TAG_LENGTH = 4
+/** `mcp__s` + server tag + `__` + `_` + tool tag. */
+const BRIDGED_TAG_OVERHEAD = 5 + 1 + BRIDGED_SERVER_TAG_LENGTH + 2 + 1 + BRIDGED_TOOL_TAG_LENGTH
+/** Tool-name budget once the tags are paid for. */
+const BRIDGED_TOOL_PART_MAX_LENGTH = FUNCTION_CALL_TOOL_NAME_MAX_LENGTH - BRIDGED_TAG_OVERHEAD
+/** Tail cap of the fully-lossy fallback kept for names that still do not fit. */
+const BRIDGED_FALLBACK_PREFIX_LENGTH = 50
+const BRIDGED_FALLBACK_TAG_LENGTH = 12
+
+/**
+ * FNV-1a extended to `length` hex chars by folding each 32-bit word back in.
+ *
+ * Hand-rolled on purpose: this module is bundled into the renderer (see
+ * `parseFunctionCallToolName` callers), so `node:crypto` is not an option.
+ * Identifier-safe (`[0-9a-f]`), so it can sit inside a tool name.
+ */
+function fnv1aHex(value: string, length: number): string {
+  let h = 0x811c9dc5
+  for (let i = 0; i < value.length; i++) {
+    h ^= value.charCodeAt(i)
+    h = Math.imul(h, 0x01000193)
+  }
+  let out = ''
+  while (out.length < length) {
+    out += (h >>> 0).toString(16).padStart(8, '0')
+    // Fold the last emitted digit back in so the next word is not a constant.
+    h = Math.imul(h ^ out.charCodeAt(out.length - 1), 0x01000193)
+  }
+  return out.slice(0, length)
+}
+
+/**
+ * Name an MCP tool for a model-facing runtime bridge (DSH, Pi) while staying
+ * inside the provider's function-name limit.
+ *
+ * A provider-safe wire name passes through untouched. When it does not fit, the
+ * server name collapses to a short digest tag and the budget is spent on the
+ * **tool** name instead: a model can only act on the tool name, while server
+ * identity merely has to stay distinguishable. The 4-hex tool digest keeps
+ * same-prefix siblings apart, preserving the fail-closed uniqueness the
+ * previous fully-lossy `_<digest>` tail provided.
+ *
+ * Names that still do not fit — or that slug to nothing, e.g. CJK — keep the
+ * fully-lossy shape, so no two identities are ever silently merged.
+ *
+ * @example
+ * buildMcpBridgedToolName('github', 'search_issues')            // 'mcp__github__search_issues'
+ * buildMcpBridgedToolName('<36-char uuid>', 'create_database')  // 'mcp__s1a2b3c4d__createDatabase_9f3e'
+ */
+export function buildMcpBridgedToolName(serverName: string, toolName: string): string {
+  const wireName = `mcp__${serverName}__${toolName}`
+  if (/^[A-Za-z_][A-Za-z0-9_-]{0,62}$/.test(wireName)) return wireName
+
+  const toolPart = toCamelCase(toolName)
+  if (toolPart && toolPart.length <= BRIDGED_TOOL_PART_MAX_LENGTH) {
+    const serverTag = fnv1aHex(serverName, BRIDGED_SERVER_TAG_LENGTH)
+    const toolTag = fnv1aHex(`${serverName}\0${toolName}`, BRIDGED_TOOL_TAG_LENGTH)
+    return `mcp__s${serverTag}__${toolPart}_${toolTag}`
+  }
+
+  const prefix = `mcp__${toCamelCase(serverName)}__${toolPart}`.replace(/[^A-Za-z0-9_-]/g, '')
+  const safePrefix = /^[A-Za-z_]/.test(prefix) ? prefix : `mcp_${prefix}`
+  const tail = fnv1aHex(`${serverName}\0${toolName}`, BRIDGED_FALLBACK_TAG_LENGTH)
+  return `${safePrefix.slice(0, BRIDGED_FALLBACK_PREFIX_LENGTH).replace(/_+$/, '')}_${tail}`
+}
