@@ -6,3 +6,4 @@ jobs:
   noop:
     runs-on: ubuntu-latest
     steps:
+      - run: echo "neutralized for cherry-lite"
