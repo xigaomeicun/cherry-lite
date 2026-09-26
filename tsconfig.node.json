@@ -51,6 +51,7 @@
     "packages/aiCore/src/**/*",
     "packages/ai-sdk-provider/src/**/*",
     "src/shared/**/*",
+    "src/renderer/data/utils/dataApiPath.ts",
     "tests/__mocks__/**/*",
     "tests/helpers/**/*"
   ],
