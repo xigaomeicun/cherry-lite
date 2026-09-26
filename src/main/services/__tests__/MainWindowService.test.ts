@@ -122,7 +122,9 @@ vi.mock('@application', () => ({
 }))
 
 vi.mock('electron', () => ({
-  app: { dock: { hide: vi.fn(), show: vi.fn() }, on: vi.fn(), removeListener: vi.fn() },
+  // cherry-lite: showMainWindow calls app.focus({ steal: true }) on macOS to cancel
+  // the setVisibleOnAllWorkspaces jitter (#19588), so the mock must expose it.
+  app: { dock: { hide: vi.fn(), show: vi.fn() }, focus: vi.fn(), on: vi.fn(), removeListener: vi.fn() },
   BrowserWindow: { fromWebContents: vi.fn() },
   nativeImage: { createFromPath: vi.fn(() => ({})) },
   nativeTheme: { shouldUseDarkColors: false },
@@ -176,6 +178,8 @@ interface MockBrowserWindow extends EventEmitter {
   maximize: ReturnType<typeof vi.fn>
   setVisibleOnAllWorkspaces: ReturnType<typeof vi.fn>
   setFullScreen: ReturnType<typeof vi.fn>
+  // cherry-lite: the macOS dock-click path raises the window with moveTop().
+  moveTop: ReturnType<typeof vi.fn>
   webContents: {
     id: number
     reload: ReturnType<typeof vi.fn>
@@ -202,6 +206,7 @@ function createMockWindow(): MockBrowserWindow {
   win.maximize = vi.fn()
   win.setVisibleOnAllWorkspaces = vi.fn()
   win.setFullScreen = vi.fn()
+  win.moveTop = vi.fn()
   win.webContents = {
     id: 1,
     reload: vi.fn(),
@@ -608,6 +613,18 @@ describe('MainWindowService', () => {
   })
 
   describe('showMainWindow init data', () => {
+    it('restores a hidden macOS window without transforming the app process type', () => {
+      platformState.isMac = true
+      win.isVisible.mockReturnValue(false)
+      ;(svc as any).mainWindow = win
+
+      svc.showMainWindow()
+
+      expect(win.setVisibleOnAllWorkspaces).not.toHaveBeenCalled()
+      expect(win.show).toHaveBeenCalledOnce()
+      expect(win.focus).toHaveBeenCalledOnce()
+    })
+
     it('pushes init data to an existing main window', () => {
       const initData = { kind: 'navigation' as const, to: '/settings/about' as const, requestId: 1 }
       ;(svc as any).mainWindow = win
