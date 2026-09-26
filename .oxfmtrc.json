@@ -42,21 +42,6 @@
   "quoteProps": "as-needed",
   "semi": false,
   "singleQuote": true,
-  "sortImports": {
-    "internalPattern": [
-      "@application",
-      "@logger",
-      "@main/",
-      "@data/",
-      "@renderer/",
-      "@shared/",
-      "@types/",
-      "@cherrystudio/",
-      "@/",
-      "~/",
-      "#"
-    ]
-  },
   "sortPackageJson": {
     "sortScripts": true
   },
