@@ -224,6 +224,66 @@ The v2 refactor has landed. v1 data reaches v2 only through the migrators in `sr
 
 When a v2 change is user-perceivable and affects how users use the app, add an entry under `v2-refactor-temp/docs/breaking-changes/`. See [v2-refactor-temp/docs/breaking-changes/README.md](v2-refactor-temp/docs/breaking-changes/README.md) for conventions.
 
+## cherry-lite Branch Divergences (this repo is NOT stock upstream)
+
+This checkout tracks a **fork**: branch `feat/node24-toolchain` on `xigaomeicun/cherry-lite`, built as Cherry Lite. It is hundreds of commits ahead of `CherryHQ/cherry-studio` and deliberately does **not** carry every upstream feature. `AGENTS.md` is a symlink to this file — edit here only.
+
+Everything below is a settled decision, not a TODO. Re-deriving any of it wastes a full sync cycle, and "restoring parity with upstream" is a regression unless the owner asks for it.
+
+### 1. `AgentSessionService` keeps the `*ForDelivery` naming — do NOT rename to `*WithImpact`
+
+Upstream (#16746) renamed the deletion methods to `*WithImpact` and added a trash/restore/purge surface. This fork never took #16746: it has **no soft-delete columns** and its deletion pipeline is owned by `AgentSessionDeliveryService`. The upstream names were deliberately rejected during the #20717 sync.
+
+`getConversationById` and `listIdsByAgent` were added as thin wrappers over the local `getById` / `listIdsByAgentTx` purely because the remote-access subsystem needs them. They are aliases, not the upstream type-filtered versions — there is no `session.type` column to filter on here.
+
+### 2. The migration `idx` sequence is intentionally non-contiguous — do NOT "fix" it
+
+The journal runs `… 0020 → 0021 → 0025`. Migrations `0022`–`0024` are **deliberately absent** from both `_journal.json` and disk: they belong to features this fork does not carry (`browser_visit`, `deleted_at` soft delete, `session.type`). `0021` exists only because `0025_remote-access` alters the `api_gateway_paired_device` table that `0021` creates.
+
+Drizzle's migrator iterates `journal.entries` **in array order** and resolves each file by `tag`; it never reads `idx`. So the gap is inert, and `idx` keeps upstream's numbering for traceability. **Do not backfill 0022–0024** — their SQL would reference columns and tables that do not exist in this fork's schema.
+
+`0025_snapshot.json` is the only paired-device snapshot and it already contains both `api_gateway_paired_device` and `remote_command`, so `0021_snapshot.json` is intentionally missing.
+
+### 3. Commit hooks run **Oxfmt**, not Biome
+
+`package.json` drives `oxfmt`, and `.pre-commit-config.yaml` calls `pnpm oxfmt --write --no-error-on-unmatched-pattern`. `@biomejs/biome` is gone from every workspace. `.oxfmtrc.json` is mandatory — without it `oxfmt` falls back to defaults and re-sorts imports across the whole tree. It carries an extra `v2-refactor-temp/**` ignore that upstream dropped in #20385, because this fork still tracks that directory.
+
+Format like this, never bare `pnpm oxfmt --write .`:
+
+```bash
+git diff --name-only --cached | grep -E '\.(ts|tsx)$' | tr '\n' ' ' | xargs pnpm oxfmt --write
+```
+
+### 4. `src/renderer/routeTree.gen.ts` needs `scripts/generate-route-tree.mjs`
+
+The TanStack plugin only generates the route tree during a vite build, and this repo ships no `tsr` binary. After adding or removing a file under `src/renderer/routes/`, run:
+
+```bash
+node scripts/generate-route-tree.mjs
+```
+
+Skipping it leaves typecheck failing on an unknown route. The script resolves `@tanstack/router-generator` through the pnpm store because it is not a declared dependency and pnpm blocks deep subpath imports.
+
+### 5. Tests that open SQLite cannot run under plain Node — this is not a regression
+
+The checked-in `better_sqlite3.node` is compiled for **Electron ABI 149**; plain Node 24 is **ABI 137**. Every suite that constructs a real database (`SkillService*`, `remoteAccess/*`, anything using `tests/helpers/db/testDatabase.ts`) dies at import with `NODE_MODULE_VERSION` mismatch. This predates any current work — confirm against a backup tag before blaming a change.
+
+### 6. Known-failing baseline: 19 tests, unrelated to your change
+
+`AgentSessionDeliveryService.test.ts` (10) and `AgentSessionRuntimeService.test.ts` (9) fail on a clean tree. Diff against that baseline rather than assuming you broke them.
+
+### 7. Upstream CI workflows stay neutralized
+
+`.github/workflows/release-packages.yml` and `snapshot.yml` keep their `run: echo "neutralized for cherry-lite"` steps. Do not restore the upstream `actions/checkout` + `setup-node` steps when syncing — the lite build does not publish packages from this branch.
+
+`pnpm-workspace.yaml` takes only patches whose `.patch` file actually exists in this tree. `@elysia/node` is required (pulled in transitively via `elysia`); `dsh-sdk-client` and `docx-preview` patches are not — adding them breaks `pnpm install`.
+
+### 8. Remote access (#20717) is in, and its prerequisites are in
+
+`feat/remote-access` with LAN device pairing lives in `src/main/services/remoteAccess/`, `src/main/features/apiGateway/routes/remote.ts`, and `packages/remote-{protocol,transport}`. It builds on upstream #20262, whose DataApi schema/handler for `/api-gateway/paired-devices`, the `/settings/device-connections` route, and `ApiGateway.getPort()` were all pulled in alongside it.
+
+Five files upstream has since deleted were **not** restored: `ApiGatewayPairing`, `pairedDeviceToken`, `routes/pairing`, `routes/providerExport`, and `ApiGatewayPairing.test.ts`. If you re-derive the pairing flow, read `routes/remote.ts` — the older modules are dead upstream too.
+
 ## Local Instructions
 
 If `CLAUDE.local.md` exists in the repository root (gitignored, may be absent), read it in full before acting on anything in this file — it holds the developer's private instructions and **OVERRIDES this file wherever they conflict**. Tools that auto-load it (e.g. Claude Code) need not re-read it.
