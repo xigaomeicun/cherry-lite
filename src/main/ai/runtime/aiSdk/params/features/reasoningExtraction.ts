@@ -1,6 +1,5 @@
 import { definePlugin } from '@cherrystudio/ai-core'
 import { ENDPOINT_TYPE } from '@shared/data/types/model'
-import { extractReasoningMiddleware } from 'ai'
 
 import { getReasoningTagName } from '../../../../utils/reasoning'
 import type { RequestFeature } from '../feature'
