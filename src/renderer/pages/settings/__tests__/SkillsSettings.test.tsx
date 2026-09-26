@@ -19,7 +19,8 @@ vi.mock('@renderer/hooks/useSkillLauncher', () => ({
 }))
 
 vi.mock('@renderer/components/resourceCatalog/catalog', () => ({
-  ResourceCatalogView: ({ toolbarFooter, filterResource }: ResourceCatalogViewProps) => {
+  ResourceCatalogView: (props: ResourceCatalogViewProps) => {
+    resourceCatalogViewMock(props)
     const installed = [
       { name: 'System import', scope: 'system', source: 'system', sourceUrl: null },
       { name: 'Builtin skill', scope: 'builtin', source: 'builtin', sourceUrl: null },
@@ -29,11 +30,11 @@ vi.mock('@renderer/components/resourceCatalog/catalog', () => ({
     ]
     return (
       <>
-        {toolbarFooter}
+        {props.toolbarFooter}
         <ul aria-label="Installed skills">
           {installed.map((skill) => {
             const resource = { id: skill.name, type: 'skill', raw: skill } as ResourceItem
-            return filterResource?.(resource) && <li key={skill.name}>{skill.name}</li>
+            return props.filterResource?.(resource) && <li key={skill.name}>{skill.name}</li>
           })}
         </ul>
       </>

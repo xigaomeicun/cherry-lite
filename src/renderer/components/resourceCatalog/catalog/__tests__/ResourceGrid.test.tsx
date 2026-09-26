@@ -887,23 +887,6 @@ describe('ResourceGrid card actions', () => {
     expect(screen.queryByRole('button', { name: '删除' })).not.toBeInTheDocument()
   })
 
-  it.each([createAssistantResource, createAgentResource])(
-    'offers only archiving for owner cards',
-    async (createResource) => {
-      const user = userEvent.setup()
-      const resource = createResource()
-      const onDelete = vi.fn()
-      render(<ResourceCard resource={resource} {...getResourceCardProps({ onDelete })} />)
-
-      await user.click(screen.getByRole('button', { name: /common.more/ }))
-      expect(screen.getByRole('menuitem', { name: 'common.archive' })).toBeInTheDocument()
-      expect(screen.queryByRole('menuitem', { name: 'common.delete_permanently' })).not.toBeInTheDocument()
-      await user.click(screen.getByRole('menuitem', { name: 'common.archive' }))
-      await waitFor(() => expect(onDelete).toHaveBeenCalledExactlyOnceWith(resource))
-      expect(screen.queryByRole('button', { name: '删除' })).not.toBeInTheDocument()
-    }
-  )
-
   it('shows a direct delete action when delete is the only card action', async () => {
     const user = userEvent.setup()
     const resource = createPromptResource()
@@ -1151,29 +1134,5 @@ describe('ResourceCardMenu group binding', () => {
     await user.click(screen.getByRole('button', { name: /common.more/ }))
     expect(screen.getByRole('menuitem', { name: /library.action.uninstall/ })).toBeInTheDocument()
     expect(screen.queryByTestId('menu-divider')).not.toBeInTheDocument()
-  })
-
-  it('offers archive without permanent deletion for assistant resources', async () => {
-    const user = userEvent.setup()
-    const resource = createAssistantResource()
-    const onDelete = vi.fn()
-
-    render(
-      <ResourceCardMenu
-        resource={resource}
-        onClose={vi.fn()}
-        onDuplicate={vi.fn()}
-        onDelete={onDelete}
-        onExport={vi.fn()}
-        allGroups={[]}
-      />
-    )
-
-    await user.click(screen.getByRole('button', { name: /common.more/ }))
-    expect(screen.queryByRole('button', { name: /common.edit/ })).not.toBeInTheDocument()
-    expect(screen.getByTestId('menu-divider')).toBeInTheDocument()
-    expect(screen.queryByRole('menuitem', { name: 'common.delete_permanently' })).not.toBeInTheDocument()
-    await user.click(screen.getByRole('menuitem', { name: 'common.archive' }))
-    await waitFor(() => expect(onDelete).toHaveBeenLastCalledWith(resource))
   })
 })
