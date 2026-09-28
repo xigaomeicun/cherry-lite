@@ -9,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import PdfFilePreview from '../PdfFilePreview'
 import { PdfRangeTooLargeError } from '../PdfFileRangeTransport'
+import { PdfjsBundledCMapReaderFactory, PdfjsBundledStandardFontDataFactory } from '../pdfjsResourceFactories'
 
 const mocks = vi.hoisted(() => ({
   eventBusOff: vi.fn(),
@@ -296,7 +297,9 @@ describe('PdfFilePreview', () => {
       range: rangeTransport,
       rangeChunkSize: 1024 * 1024,
       disableAutoFetch: true,
-      disableStream: true
+      disableStream: true,
+      CMapReaderFactory: PdfjsBundledCMapReaderFactory,
+      StandardFontDataFactory: PdfjsBundledStandardFontDataFactory
     })
     expect(mocks.pdfViewerConstructor).toHaveBeenCalledWith(
       expect.objectContaining({
