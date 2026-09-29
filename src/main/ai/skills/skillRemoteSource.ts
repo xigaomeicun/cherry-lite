@@ -14,6 +14,7 @@ import { BINARY_INSTALL_PREFERENCE_KEY } from '@shared/data/presets/binaryTools'
 import { ClawhubSkillDetailSchema } from '@shared/types/skill'
 import { encodeGithubPath, parseGithubSkillUrl } from '@shared/utils/skillMarketplace'
 import {
+  assertNoFoldedPathCollisions,
   assertSkillDirectoryWithinLimits,
   extractZip,
   MAX_EXTRACTED_SIZE,
@@ -404,7 +405,6 @@ function assertGithubTargetTree(
   target: GithubSkillTarget,
   descriptorFileName: 'SKILL.md' | 'skill.md'
 ): void {
-  const foldKey = (value: string) => value.normalize('NFC').toLowerCase()
   const targetParts = target.kind === 'root' ? [] : target.path.split('/')
 
   const sizedEntries = sizedTree.split('\0').flatMap((record) => {
@@ -418,21 +418,7 @@ function assertGithubTargetTree(
     return [{ path: relativePath, size: Number(rawSize) }]
   })
 
-  const seenPaths = new Map<string, string>()
-  for (const entry of sizedEntries) {
-    const parts = entry.path.split('/')
-    for (let length = 1; length <= parts.length; length++) {
-      const prefix = parts.slice(0, length).join('/')
-      const key = parts.slice(0, length).map(foldKey).join('/')
-      const previous = seenPaths.get(key)
-      if (previous && previous !== prefix) {
-        throw new Error(
-          `The commit contains paths that collide once case and Unicode are normalized (${previous}, ${prefix}).`
-        )
-      }
-      seenPaths.set(key, prefix)
-    }
-  }
+  assertNoFoldedPathCollisions(sizedEntries.map((entry) => entry.path))
 
   if (!sizedEntries.some((entry) => entry.path === descriptorFileName)) {
     const location = target.kind === 'root' ? descriptorFileName : `${target.path}/${descriptorFileName}`
