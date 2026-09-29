@@ -3650,6 +3650,10 @@
       "providerId": "claude-code"
     },
     {
+      "modelId": "claude-sonnet-5-5",
+      "providerId": "claude-code"
+    },
+    {
       "apiModelId": "claude-fable-5",
       "modelId": "claude-fable-5",
       "pricing": {
@@ -3813,6 +3817,29 @@
     {
       "apiModelId": "claude-sonnet-5",
       "modelId": "claude-sonnet-5",
+      "pricing": {
+        "cacheRead": {
+          "currency": "USD",
+          "perMillionTokens": 0.2
+        },
+        "cacheWrite": {
+          "currency": "USD",
+          "perMillionTokens": 2.5
+        },
+        "input": {
+          "currency": "USD",
+          "perMillionTokens": 2
+        },
+        "output": {
+          "currency": "USD",
+          "perMillionTokens": 10
+        }
+      },
+      "providerId": "copilot"
+    },
+    {
+      "apiModelId": "claude-sonnet-5.5",
+      "modelId": "claude-sonnet-5-5",
       "pricing": {
         "cacheRead": {
           "currency": "USD",
@@ -12409,6 +12436,29 @@
     {
       "apiModelId": "anthropic/claude-sonnet-5",
       "modelId": "claude-sonnet-5",
+      "pricing": {
+        "cacheRead": {
+          "currency": "USD",
+          "perMillionTokens": 0.2
+        },
+        "cacheWrite": {
+          "currency": "USD",
+          "perMillionTokens": 2.5
+        },
+        "input": {
+          "currency": "USD",
+          "perMillionTokens": 2
+        },
+        "output": {
+          "currency": "USD",
+          "perMillionTokens": 10
+        }
+      },
+      "providerId": "gateway"
+    },
+    {
+      "apiModelId": "anthropic/claude-sonnet-5.5",
+      "modelId": "claude-sonnet-5-5",
       "pricing": {
         "cacheRead": {
           "currency": "USD",
@@ -24082,6 +24132,44 @@
             ],
             "defaultEffort": "high",
             "supportedEfforts": ["max", "xhigh", "high", "medium", "low", "none"]
+          }
+        }
+      }
+    },
+    {
+      "apiModelId": "anthropic/claude-sonnet-5.5",
+      "modelId": "claude-sonnet-5-5",
+      "pricing": {
+        "cacheRead": {
+          "currency": "USD",
+          "perMillionTokens": 0.2
+        },
+        "cacheWrite": {
+          "currency": "USD",
+          "perMillionTokens": 2.5
+        },
+        "input": {
+          "currency": "USD",
+          "perMillionTokens": 2
+        },
+        "output": {
+          "currency": "USD",
+          "perMillionTokens": 10
+        }
+      },
+      "providerId": "openrouter",
+      "reasoningContracts": {
+        "openai-chat-completions": {
+          "support": {
+            "controls": [
+              {
+                "default": "high",
+                "kind": "effort",
+                "values": ["max", "xhigh", "high", "medium", "low"]
+              }
+            ],
+            "defaultEffort": "high",
+            "supportedEfforts": ["max", "xhigh", "high", "medium", "low"]
           }
         }
       }
@@ -40229,6 +40317,29 @@
     {
       "apiModelId": "claude-sonnet-5@default",
       "modelId": "claude-sonnet-5",
+      "pricing": {
+        "cacheRead": {
+          "currency": "USD",
+          "perMillionTokens": 0.2
+        },
+        "cacheWrite": {
+          "currency": "USD",
+          "perMillionTokens": 2.5
+        },
+        "input": {
+          "currency": "USD",
+          "perMillionTokens": 2
+        },
+        "output": {
+          "currency": "USD",
+          "perMillionTokens": 10
+        }
+      },
+      "providerId": "vertexai"
+    },
+    {
+      "apiModelId": "claude-sonnet-5-5@default",
+      "modelId": "claude-sonnet-5-5",
       "pricing": {
         "cacheRead": {
           "currency": "USD",
