@@ -14,7 +14,7 @@ import { agentSessionService } from '@data/services/AgentSessionService'
 import { aiUsageRecordService } from '@data/services/AiUsageRecordService'
 import { createAiUsageCaptureContext } from '@main/ai/utils/usageCapture'
 import { setupTestDatabase } from '@test-helpers/db'
-import { eq } from 'drizzle-orm'
+import { asc, eq } from 'drizzle-orm'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { notifyDataApiDataChangeMock } = vi.hoisted(() => ({
@@ -929,6 +929,56 @@ describe('AgentSessionMessageService', () => {
     agentSessionMessageService.deleteSessionMessage(SESSION_ID, USER_MESSAGE_ID)
     const [emptySession] = await dbh.db.select().from(agentSessionTable).where(eq(agentSessionTable.id, SESSION_ID))
     expect(emptySession.lastActivityAt).toBe(3_000)
+  })
+
+  // The edit tail is the (createdAt, id) suffix of the session, so same-millisecond turns split by
+  // id: the single boundary DELETE must drop exactly the rows the per-row loop dropped, and leave
+  // every surviving anchor alone (nothing at or past the boundary remains to invalidate).
+  it('replaces the edit tail at the exact (createdAt, id) boundary and keeps surviving anchors', () => {
+    const anchor = (leafId: string) => ({
+      checkpoint: { runtime: 'pi', runtimeSessionId: 'native-parent', leafId }
+    })
+    const message = (id: string, role: 'user' | 'assistant', text: string, createdAt: number) => ({
+      id,
+      sessionId: SESSION_ID,
+      role,
+      data: {
+        parts: [{ type: 'text' as const, text }],
+        ...(role === 'assistant' ? { runtimeAnchor: anchor(`leaf-${text}`) } : {})
+      },
+      status: 'success' as const,
+      createdAt,
+      updatedAt: createdAt
+    })
+    dbh.db
+      .insert(agentSessionMessageTable)
+      .values([
+        message('tie-1', 'user', 'q1', 500),
+        message('tie-2', 'assistant', 'a1', 500),
+        message('tie-3', 'user', 'q2', 500),
+        message('tie-4', 'assistant', 'a2', 500),
+        message('tie-5', 'user', 'q3', 501)
+      ])
+      .run()
+
+    const snapshot = agentSessionMessageService.readEditSnapshotTx(dbh.db, SESSION_ID, 'tie-3')
+    expect(snapshot.prefix.map((row) => row.id)).toEqual(['tie-1', 'tie-2'])
+    agentSessionMessageService.replaceEditTailTx(
+      dbh.db,
+      SESSION_ID,
+      { messageId: 'tie-3', version: snapshot.version },
+      snapshot.prefix.map((row) => ({ ...row, runtimeResumeToken: row.role === 'assistant' ? 'native-child' : null }))
+    )
+
+    const rows = dbh.db
+      .select()
+      .from(agentSessionMessageTable)
+      .where(eq(agentSessionMessageTable.sessionId, SESSION_ID))
+      .orderBy(asc(agentSessionMessageTable.createdAt), asc(agentSessionMessageTable.id))
+      .all()
+    expect(rows.map((row) => row.id)).toEqual(['tie-1', 'tie-2'])
+    expect(rows.map((row) => row.runtimeResumeToken)).toEqual([null, 'native-child'])
+    expect(rows[1].data.runtimeAnchor).toEqual(anchor('leaf-a1'))
   })
 
   it('publishes the data change derived from an inserted or updated message', () => {

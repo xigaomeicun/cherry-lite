@@ -223,6 +223,14 @@ export const aiHandlers: IpcHandlersFor<typeof aiRequestSchemas> = {
             editTarget: target
           })
       } catch (error) {
+        // The renderer only receives a canned reason, so the runtime's own message — the only
+        // account of why a fork/resume failed — has to be recorded here or it is lost.
+        logger.warn('Agent session edit-resend failed', {
+          sessionId,
+          messageId: target?.messageId,
+          reason: error instanceof AgentSessionForkError ? error.reason : undefined,
+          error
+        })
         if (error instanceof AgentSessionForkError) {
           const reason = isAgentSessionForkFailureReason(error.reason) ? error.reason : 'operation_failed'
           throw new IpcError(aiErrorCodes.AI_AGENT_SESSION_FORK_FAILED, reason, { reason })

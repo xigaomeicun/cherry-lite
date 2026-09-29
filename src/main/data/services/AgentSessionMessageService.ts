@@ -293,6 +293,18 @@ function publicMessageData(data: SessionMessageRow['data']): AgentSessionMessage
   return result
 }
 
+/**
+ * Rows at or after a message in the `(createdAt, id)` order every fork read uses — the inclusive
+ * boundary of `readForkPrefixTx`, and therefore exactly the rows whose fork anchors stop being
+ * reachable once the boundary row is gone. Shared by both writers so they cannot drift apart.
+ */
+function forkPrefixSuffixCondition(createdAt: number, id: string) {
+  return or(
+    gt(sessionMessagesTable.createdAt, createdAt),
+    and(eq(sessionMessagesTable.createdAt, createdAt), gte(sessionMessagesTable.id, id))
+  )
+}
+
 export class AgentSessionMessageService {
   readEditSnapshotTx(tx: DbOrTx, sessionId: string, messageId: string) {
     this.assertActiveSession(tx, sessionId)
@@ -339,8 +351,24 @@ export class AgentSessionMessageService {
   ): void {
     const snapshot = this.readEditSnapshotTx(tx, sessionId, target.messageId)
     if (snapshot.version !== target.version) throw new AgentSessionEditError('history_changed')
-    for (const row of snapshot.rows.slice(snapshot.prefix.length)) {
-      this.deleteSessionMessageTx(tx, sessionId, row.id)
+    // An edit drops the target and every later row, which is exactly the inclusive (createdAt, id)
+    // suffix of the snapshot: one boundary DELETE replaces the per-row delete loop. Nothing at or
+    // after the boundary survives, so the per-row anchor invalidation deleteSessionMessageTx runs
+    // is a provable no-op here — and paying it per row made an edit O(tail × session rows) of JSON
+    // scans inside this write transaction (measured: 12.3s of blocked main process on a
+    // 714-message Session, which froze the window until the edited message could be sent again).
+    const boundary = snapshot.rows[snapshot.prefix.length]
+    if (boundary) {
+      const removed = tx
+        .delete(sessionMessagesTable)
+        .where(
+          and(eq(sessionMessagesTable.sessionId, sessionId), forkPrefixSuffixCondition(boundary.createdAt, boundary.id))
+        )
+        .run()
+      // Fail closed: the snapshot in this same transaction defines the tail, so a different count
+      // means the table changed underneath the edit and the native prefix must not be republished.
+      if (removed.changes !== snapshot.rows.length - snapshot.prefix.length)
+        throw new AgentSessionEditError('history_changed')
     }
     for (const row of prefix) {
       tx.update(sessionMessagesTable)
@@ -440,11 +468,7 @@ export class AgentSessionMessageService {
       .where(
         and(
           eq(sessionMessagesTable.sessionId, sessionId),
-          // Match readForkPrefixTx's inclusive (createdAt, id) boundary.
-          or(
-            gt(sessionMessagesTable.createdAt, row.createdAt),
-            and(eq(sessionMessagesTable.createdAt, row.createdAt), gte(sessionMessagesTable.id, row.id))
-          ),
+          forkPrefixSuffixCondition(row.createdAt, row.id),
           sql`json_type(${sessionMessagesTable.data}, '$.runtimeAnchor') is not null`
         )
       )
