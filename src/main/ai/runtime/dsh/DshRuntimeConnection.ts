@@ -686,7 +686,11 @@ export class DshRuntimeConnection implements AgentRuntimeConnection {
       return
     }
     if (!this.bridge || this.closed) return
-    await this.bridge.request('session/flush', { sessionId: this.input.sessionId }, { timeoutMs: 10_000, signal })
+    // The bridge registers the live agent under the native session id it opened (`session/open`)
+    // and `requireAgent` looks it up by that same key, so flushing the host Session id found no
+    // live agent for every Session that had already been forked once — the fork after an edit
+    // then failed with the generic "operation_failed" copy.
+    await this.bridge.request('session/flush', { sessionId: this.runtimeSessionId }, { timeoutMs: 10_000, signal })
   }
 
   async snapshotForFork(_boundary: number, signal?: AbortSignal): Promise<unknown[] | undefined> {
