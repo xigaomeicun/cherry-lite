@@ -3,6 +3,7 @@ import type { ResolvedAction } from '@renderer/components/chat/actions/actionTyp
 import DeleteIcon from '@renderer/components/icons/DeleteIcon'
 import EditIcon from '@renderer/components/icons/EditIcon'
 import { OpenInNewWindowIcon } from '@renderer/components/icons/WindowIcons'
+import { copySessionId } from '@renderer/services/copy'
 import type { TopicTabPosition } from '@shared/data/preference/preferenceTypes'
 import type { TFunction } from 'i18next'
 import {
@@ -10,6 +11,7 @@ import {
   Database,
   ExternalLink,
   FileText,
+  Hash,
   Image,
   NotebookPen,
   PanelLeft,
@@ -59,6 +61,8 @@ export interface SessionActionContext {
   onTogglePin?: () => void
   panePosition?: TopicTabPosition
   pinned?: boolean
+  /** 会话 UUID。与 sessionName 同为纯值字段（非回调），供「复制会话 ID」直接取用。 */
+  sessionId: string
   sessionName: string
   startEdit: (value: string) => void
   t: TFunction
@@ -88,7 +92,14 @@ const hasExportOption = ({
   (exportMenuOptions?.joplin && !!onExportJoplin) ||
   (exportMenuOptions?.siyuan && !!onExportSiyuan)
 
-const hasCopyOption = ({ exportMenuOptions, onCopyImage, onCopyMarkdown, onCopyPlainText }: SessionActionContext) =>
+const hasCopyOption = ({
+  exportMenuOptions,
+  onCopyImage,
+  onCopyMarkdown,
+  onCopyPlainText,
+  sessionId
+}: SessionActionContext) =>
+  !!sessionId ||
   !!onCopyMarkdown ||
   (!!exportMenuOptions?.image && !!onCopyImage) ||
   (!!exportMenuOptions?.plain_text && !!onCopyPlainText)
@@ -250,6 +261,12 @@ sessionActionRegistry.registerCommand({
     enabled: !!exportMenuOptions?.plain_text && !!onCopyPlainText
   }),
   run: ({ onCopyPlainText }) => onCopyPlainText?.()
+})
+
+sessionActionRegistry.registerCommand({
+  id: 'session.copy.session-id',
+  availability: ({ sessionId }) => ({ visible: !!sessionId, enabled: !!sessionId }),
+  run: ({ sessionId }) => copySessionId(sessionId)
 })
 
 sessionActionRegistry.registerCommand({
@@ -471,6 +488,14 @@ sessionActionRegistry.registerAction({
       label: ({ t }) => t('chat.topics.copy.plain_text'),
       icon: () => <FileText size={14} />,
       order: 30,
+      surface: 'menu'
+    },
+    {
+      id: 'session.copy.session-id',
+      commandId: 'session.copy.session-id',
+      label: ({ t }) => t('chat.topics.copy.session_id'),
+      icon: () => <Hash size={14} />,
+      order: 40,
       surface: 'menu'
     }
   ]

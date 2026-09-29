@@ -840,6 +840,7 @@
   "chat.topics.copy.image": "画像としてコピー",
   "chat.topics.copy.md": "Markdownとしてコピー",
   "chat.topics.copy.plain_text": "プレーンテキストとしてコピー（Markdownを除去）",
+  "chat.topics.copy.session_id": "セッションIDをコピー",
   "chat.topics.copy.title": "コピー",
   "chat.topics.delete.blocked_generation": "この会話を完全に削除する前に、生成を停止してください。",
   "chat.topics.delete.shortcut": "{{key}}キーを押しながらで直接削除",

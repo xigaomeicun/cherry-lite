@@ -840,6 +840,7 @@
   "chat.topics.copy.image": "Αντιγραφή ως εικόνα",
   "chat.topics.copy.md": "Αντιγραφή ως Markdown",
   "chat.topics.copy.plain_text": "Αντιγραφή ως απλό κείμενο (αφαίρεση Markdown)",
+  "chat.topics.copy.session_id": "Αντιγραφή ID συνεδρίας",
   "chat.topics.copy.title": "Αντιγραφή",
   "chat.topics.delete.blocked_generation": "Σταματήστε τη δημιουργία πριν διαγράψετε οριστικά αυτή τη συνομιλία.",
   "chat.topics.delete.shortcut": "Πατήστε {{key}} για να διαγράψετε αμέσως",

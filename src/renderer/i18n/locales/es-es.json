@@ -840,6 +840,7 @@
   "chat.topics.copy.image": "Copiar como imagen",
   "chat.topics.copy.md": "Copiar como Markdown",
   "chat.topics.copy.plain_text": "Copiar como texto sin formato (eliminar Markdown)",
+  "chat.topics.copy.session_id": "Copiar ID de la sesión",
   "chat.topics.copy.title": "Copiar",
   "chat.topics.delete.blocked_generation": "Detén la generación antes de eliminar permanentemente esta conversación.",
   "chat.topics.delete.shortcut": "Mantén presionada {{key}} para eliminar directamente",

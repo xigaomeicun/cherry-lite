@@ -166,6 +166,7 @@ const AgentHistoryRecords = ({
           void handleToggleSessionPin(session.id)
         },
         pinned: isSessionPinned(session.id),
+        sessionId: session.id,
         sessionName: session.name ?? session.id,
         startEdit: () => undefined,
         t

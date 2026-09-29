@@ -40,6 +40,7 @@ function createSessionActionFixture(overrides: Partial<SessionActionContext> = {
     onSetPanePosition: vi.fn(),
     panePosition: 'left',
     pinned: false,
+    sessionId: '11111111-2222-4333-8444-555555555555',
     sessionName: 'Session title',
     startEdit: vi.fn(),
     t,
@@ -191,7 +192,11 @@ describe('session item actions', () => {
     expect(actions.map((action) => action.id)).toContain('session.save-notes')
 
     const copyAction = actions.find((action) => action.id === 'session.copy')
-    expect(copyAction?.children.map((action) => action.id)).toEqual(['session.copy.markdown'])
+    // session.copy.session-id 不依赖任何 export/copy 偏好，始终可见
+    expect(copyAction?.children.map((action) => action.id)).toEqual([
+      'session.copy.markdown',
+      'session.copy.session-id'
+    ])
 
     const exportAction = actions.find((action) => action.id === 'session.export')
     expect(exportAction?.children.map((action) => action.id)).not.toContain('session.export.image')

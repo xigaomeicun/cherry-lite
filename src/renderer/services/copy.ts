@@ -23,3 +23,12 @@ export const copyMessageAsPlainText = async (message: ExportableMessage) => {
   await navigator.clipboard.writeText(plainText)
   toast.success(i18next.t('message.copy.success'))
 }
+
+/**
+ * 复制会话 ID —— 用于把某个 Agent 会话 / Topic 的 UUID 交给外部工具定位
+ * （如 cherrystudio-ops 的 cherry-session-tool.py --session <UUID>）。
+ */
+export const copySessionId = async (sessionId: string) => {
+  await navigator.clipboard.writeText(sessionId)
+  toast.success(i18next.t('message.copy.success'))
+}

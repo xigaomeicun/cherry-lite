@@ -171,6 +171,7 @@ const SessionItem = ({
       onTogglePin: onTogglePin ? handleTogglePin : undefined,
       panePosition,
       pinned,
+      sessionId: session.id,
       sessionName,
       startEdit: startMenuEdit,
       t

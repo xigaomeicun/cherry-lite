@@ -3,7 +3,7 @@ import type { Message } from '@renderer/types/newMessage'
 import type { Topic } from '@renderer/types/topic'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { copyMessageAsPlainText, copyTopicAsMarkdown, copyTopicAsPlainText } from '../copy'
+import { copyMessageAsPlainText, copySessionId, copyTopicAsMarkdown, copyTopicAsPlainText } from '../copy'
 
 // Mock dependencies
 vi.mock('@renderer/services/ExportService', () => ({
@@ -131,6 +131,18 @@ describe('copy', () => {
 
       expect(messageToPlainText).toHaveBeenCalledWith(message)
       expect(mockClipboard.writeText).toHaveBeenCalledWith(plainTextContent)
+      expect(toast.success).toHaveBeenCalledWith('message.copy.success')
+    })
+  })
+
+  describe('copySessionId', () => {
+    it('should copy the raw session id verbatim without transforming it', async () => {
+      const sessionId = '11111111-2222-4333-8444-555555555555'
+      mockClipboard.writeText.mockResolvedValue(undefined)
+
+      await copySessionId(sessionId)
+
+      expect(mockClipboard.writeText).toHaveBeenCalledExactlyOnceWith(sessionId)
       expect(toast.success).toHaveBeenCalledWith('message.copy.success')
     })
   })

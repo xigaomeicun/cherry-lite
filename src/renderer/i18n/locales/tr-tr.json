@@ -840,6 +840,7 @@
   "chat.topics.copy.image": "Görsel olarak kopyala",
   "chat.topics.copy.md": "Markdown olarak kopyala",
   "chat.topics.copy.plain_text": "Düz metin olarak kopyala (Markdown'ı kaldır)",
+  "chat.topics.copy.session_id": "Oturum Kimliğini Kopyala",
   "chat.topics.copy.title": "Kopyala",
   "chat.topics.delete.blocked_generation": "Bu konuşmayı kalıcı olarak silmeden önce üretimi durdurun.",
   "chat.topics.delete.shortcut": "Doğrudan silmek için {{key}} tuşunu basılı tutun",
