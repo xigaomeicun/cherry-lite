@@ -692,6 +692,40 @@ describe('AgentRightPane', () => {
     expect(screen.queryByText('Collecting context')).toBeNull()
   })
 
+  // An open plan must stay visible after the turn ends: a card that silently shows "progress"
+  // while nothing is running is exactly how "done" drifts away from the plan.
+  it('flags the plan as unclosed once the turn ends with open tasks', () => {
+    const parts = [createTaskPart(1, 'Collect context'), createTaskPart(2, 'Build capsule')]
+
+    const view = render(
+      <TestAgentRightPane
+        sessionId="session-a"
+        messages={createTaskMessages(parts, 'pending')}
+        partsByMessageId={{ m1: parts }}>
+        <AgentTaskProgressCapsule />
+      </TestAgentRightPane>
+    )
+
+    const running = screen.getByTestId('agent-task-progress-capsule')
+    expect(running).toHaveAttribute('data-state', 'running')
+    expect(within(running).getByRole('progressbar')).toBeInTheDocument()
+
+    view.rerender(
+      <TestAgentRightPane
+        sessionId="session-a"
+        messages={createTaskMessages(parts, 'success')}
+        partsByMessageId={{ m1: parts }}>
+        <AgentTaskProgressCapsule />
+      </TestAgentRightPane>
+    )
+
+    const unclosed = screen.getByTestId('agent-task-progress-capsule')
+    expect(unclosed).toHaveAttribute('data-state', 'unclosed')
+    expect(within(unclosed).getByTestId('agent-task-unclosed-icon')).toBeInTheDocument()
+    expect(within(unclosed).queryByRole('progressbar')).toBeNull()
+    expect(within(unclosed).getByText('agent.right_pane.status.task_progress_unclosed')).toBeInTheDocument()
+  })
+
   it('uses a title header and keeps stable shortcuts available while the pane is open', () => {
     render(
       <TestAgentRightPane

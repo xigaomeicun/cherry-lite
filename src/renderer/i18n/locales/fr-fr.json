@@ -187,6 +187,7 @@
   "agent.right_pane.status.stop_run_task_failed": "Impossible d'arrêter la tâche",
   "agent.right_pane.status.task_count": "{{completed}} / {{total}} terminé",
   "agent.right_pane.status.task_progress_compact": "Étape {{current}}/{{total}}",
+  "agent.right_pane.status.task_progress_unclosed": "{{count}} non clos",
   "agent.right_pane.status.tool_uses_one": "{{count}} appel d'outil",
   "agent.right_pane.status.tool_uses_other": "{{count}} appels d'outils",
   "agent.right_pane.tabs.browser": "Navigateur",

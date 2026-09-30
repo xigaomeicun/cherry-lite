@@ -187,6 +187,7 @@
   "agent.right_pane.status.stop_run_task_failed": "Aufgabe konnte nicht gestoppt werden",
   "agent.right_pane.status.task_count": "{{completed}} / {{total}} abgeschlossen",
   "agent.right_pane.status.task_progress_compact": "Schritt {{current}}/{{total}}",
+  "agent.right_pane.status.task_progress_unclosed": "{{count}} offen",
   "agent.right_pane.status.tool_uses_one": "{{count}} Tool-Aufruf",
   "agent.right_pane.status.tool_uses_other": "{{count}} Tool-Aufrufe",
   "agent.right_pane.tabs.browser": "Browser",

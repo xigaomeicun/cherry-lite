@@ -187,6 +187,7 @@
   "agent.right_pane.status.stop_run_task_failed": "Không thể dừng tác vụ",
   "agent.right_pane.status.task_count": "{{completed}} / {{total}} hoàn thành",
   "agent.right_pane.status.task_progress_compact": "Bước {{current}}/{{total}}",
+  "agent.right_pane.status.task_progress_unclosed": "{{count}} chưa đóng",
   "agent.right_pane.status.tool_uses_one": "{{count}} lệnh gọi công cụ",
   "agent.right_pane.status.tool_uses_other": "{{count}} lệnh gọi công cụ",
   "agent.right_pane.tabs.browser": "Trình duyệt",

@@ -106,6 +106,7 @@ import {
   transitionAgentSessionRuntime,
   willAgentSessionRuntimeContinue
 } from './agentSessionRuntimeState'
+import { prepareTurnMessageWithTodoReminder, recordTurnTodoState } from './agentSessionTodoState'
 import { validateEditedInput } from './editInput'
 import { AgentSessionMessageBackend } from './persistence/AgentSessionMessageBackend'
 import { buildAgentSessionTopicId, extractAgentSessionId, isAgentSessionTopic } from './topic'
@@ -1033,6 +1034,9 @@ export class AgentSessionRuntimeService extends BaseService {
     if (completedTurn) this.markFlowMessagePersisted(entry, completedTurn.assistantMessageId)
     if (completedTurn) {
       this.applyRuntimeStateEvent(entry, { type: 'turn-terminal', turn: completedTurn, status })
+      // Adopt the list this turn wrote and record whether it left items open; the next turn's
+      // reminder and the UI badge both read that record instead of trusting the model's recall.
+      recordTurnTodoState(entry.sessionId, completedTurn.assistantMessageId)
       this._onTurnTerminal.fire({
         sessionId: entry.sessionId,
         assistantMessageId: completedTurn.assistantMessageId,
@@ -2622,6 +2626,8 @@ export class AgentSessionRuntimeService extends BaseService {
         error
       })
     }
+    // The host — not the model's memory — is what keeps an open task list in front of the turn.
+    messageToSend = prepareTurnMessageWithTodoReminder(entry.sessionId, messageToSend)
 
     await this.currentConnection(entry)?.send({
       message: messageToSend,

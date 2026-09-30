@@ -78,6 +78,7 @@ import {
   Loader2,
   Package,
   Terminal,
+  TriangleAlert,
   Waypoints,
   Workflow
 } from 'lucide-react'
@@ -1104,6 +1105,12 @@ export function AgentTaskProgressCapsule() {
   const hasActiveAssistantRun = runtime.messages.some(
     (message) => message.role === 'assistant' && message.metadata?.status === 'pending'
   )
+  // The plan outlives the turn that wrote it. Once no assistant run is live the list is either
+  // closed (hidden by the guard above) or left open — and an open list that nobody can see is how
+  // a "finished" report drifts away from the card. Name it instead of trusting the reader to
+  // scroll back for the last TodoWrite.
+  const unclosedTaskCount = status.totalTaskCount - status.completedTaskCount
+  const isUnclosed = !hasActiveAssistantRun
   const explicitActiveTaskIndex = status.tasks.findIndex((task) => task.status === 'in_progress')
   const inferredActiveTaskIndex =
     hasActiveAssistantRun && explicitActiveTaskIndex < 0
@@ -1126,29 +1133,41 @@ export function AgentTaskProgressCapsule() {
     current: currentTaskNumber,
     total: status.totalTaskCount
   })
+  const capsuleLabel = isUnclosed
+    ? t('agent.right_pane.status.task_progress_unclosed', { count: unclosedTaskCount })
+    : compactProgressLabel
 
   return (
-    <div className="pointer-events-none flex w-full justify-center px-4 pb-2" data-testid="agent-task-progress-capsule">
+    <div
+      className="pointer-events-none flex w-full justify-center px-4 pb-2"
+      data-testid="agent-task-progress-capsule"
+      data-state={isUnclosed ? 'unclosed' : 'running'}>
       <HoverCard openDelay={120} closeDelay={100}>
         <HoverCardTrigger asChild>
-          <ComposerFloatingCapsule tabIndex={0} className="gap-1.5 px-2.5">
-            <span
-              role="progressbar"
-              aria-label={progressLabel}
-              aria-valuemin={0}
-              aria-valuemax={status.totalTaskCount}
-              aria-valuenow={status.completedTaskCount}
-              className="flex shrink-0 items-center justify-center">
-              <CircularProgress
-                value={progressPercentage}
-                size={17}
-                strokeWidth={2}
-                className="stroke-border"
-                progressClassName="stroke-info transition-[stroke-dashoffset] duration-300 motion-reduce:transition-none"
-              />
-            </span>
+          <ComposerFloatingCapsule
+            tabIndex={0}
+            className={cn('gap-1.5 px-2.5', isUnclosed && 'bg-warning-subtle text-warning-subtle-foreground')}>
+            {isUnclosed ? (
+              <TriangleAlert aria-hidden="true" className="size-3.5 shrink-0" data-testid="agent-task-unclosed-icon" />
+            ) : (
+              <span
+                role="progressbar"
+                aria-label={progressLabel}
+                aria-valuemin={0}
+                aria-valuemax={status.totalTaskCount}
+                aria-valuenow={status.completedTaskCount}
+                className="flex shrink-0 items-center justify-center">
+                <CircularProgress
+                  value={progressPercentage}
+                  size={17}
+                  strokeWidth={2}
+                  className="stroke-border"
+                  progressClassName="stroke-info transition-[stroke-dashoffset] duration-300 motion-reduce:transition-none"
+                />
+              </span>
+            )}
             <span aria-live="polite" className="tabular-nums">
-              {compactProgressLabel}
+              {capsuleLabel}
             </span>
           </ComposerFloatingCapsule>
         </HoverCardTrigger>
