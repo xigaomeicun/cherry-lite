@@ -1482,7 +1482,7 @@ describe('AgentSessionRuntimeService', () => {
     attempts.set('session-1', { id: 'live', promise: never, startedAt: Date.now() })
     expect(() => service.assertSessionEditable('session-1')).toThrowError(/busy/)
 
-    attempts.set('session-1', { id: 'stale', promise: never, startedAt: Date.now() - 60_000 })
+    attempts.set('session-1', { id: 'stale', promise: never, startedAt: Date.now() - 5 * 60_000 })
     expect(() => service.assertSessionEditable('session-1')).not.toThrow()
     expect(attempts.has('session-1')).toBe(false)
   })

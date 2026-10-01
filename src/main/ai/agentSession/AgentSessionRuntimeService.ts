@@ -352,6 +352,13 @@ const CONNECTION_ATTEMPT_LIMIT = 4
 const CONNECTION_ATTEMPT_BACKOFF_MS = [250, 500, 1_000] as const
 /** Wall-clock budget for one `ensureConnection` call, checked on every iteration. */
 const CONNECTION_DEADLINE_MS = 15_000
+/**
+ * How long a `connectionAttempts` entry may look live before the busy guard treats it as leaked.
+ * Far larger than {@link CONNECTION_DEADLINE_MS} on purpose: this covers an attempt whose promise
+ * never settles, which no other signal can detect, so it must not be able to fire on a connect that
+ * is merely slow. See {@link AgentSessionRuntimeService.hasLiveConnectionAttempt}.
+ */
+const CONNECTION_ATTEMPT_STALE_MS = 60_000
 
 @Injectable('AgentSessionRuntimeService')
 @ServicePhase(Phase.WhenReady)
@@ -397,7 +404,13 @@ export class AgentSessionRuntimeService extends BaseService {
   private hasLiveConnectionAttempt(sessionId: string): boolean {
     const attempt = this.connectionAttempts.get(sessionId)
     if (!attempt) return false
-    if (Date.now() - attempt.startedAt < CONNECTION_DEADLINE_MS) return true
+    if (Date.now() - attempt.startedAt < CONNECTION_ATTEMPT_STALE_MS) return true
+    // Nothing distinguishes "still connecting, just slow" from "will never settle" except time, so
+    // the threshold is sized to make the first reading impossible in practice: every observed
+    // connect finishes in single-digit seconds (measured 1–8 s for DSH, and the drivers' own RPCs
+    // time out between 5 s and 60 s), while the case this exists for is unbounded by definition.
+    // Erring long is deliberate — a late release costs one slow edit, an early one would let an
+    // edit run against a connection that is still coming up.
     logger.warn('Releasing a stale agent runtime connection attempt', {
       sessionId,
       attemptId: attempt.id,
