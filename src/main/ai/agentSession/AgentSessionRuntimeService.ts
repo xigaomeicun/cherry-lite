@@ -347,7 +347,7 @@ class AgentSessionRuntimeTerminalListener implements StreamListener {
  * Both bounds trade "eventually, maybe" for a resumable failure: `ensureConnection` returns `false`,
  * and both callers already answer that by closing the session.
  */
-const CONNECTION_ATTEMPT_LIMIT = 4
+const CONNECTION_ATTEMPT_LIMIT = 3
 /** Delay before attempt N+1; the last entry is reused once the list runs out. */
 const CONNECTION_ATTEMPT_BACKOFF_MS = [250, 500, 1_000] as const
 /** Wall-clock budget for one `ensureConnection` call, checked on every iteration. */

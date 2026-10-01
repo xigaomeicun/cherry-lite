@@ -1464,9 +1464,9 @@ describe('AgentSessionRuntimeService', () => {
     // It must genuinely retry — one connect would mean the loop never re-entered.
     await vi.waitFor(() => expect(connect.mock.calls.length).toBeGreaterThanOrEqual(2), { timeout: 10_000 })
     // …and then stop at the cap rather than reconnecting forever.
-    await vi.waitFor(() => expect(connect.mock.calls.length).toBe(4), { timeout: 10_000 })
+    await vi.waitFor(() => expect(connect.mock.calls.length).toBe(3), { timeout: 10_000 })
     await new Promise((resolve) => setTimeout(resolve, 2_000))
-    expect(connect.mock.calls.length).toBe(4)
+    expect(connect.mock.calls.length).toBe(3)
     expect((service as any).connectionAttempts.size).toBe(0)
 
     await reader.cancel().catch(() => undefined)
