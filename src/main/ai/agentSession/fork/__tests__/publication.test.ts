@@ -400,4 +400,40 @@ describe('Agent fork publication', () => {
     expect(await readdir(forkRoot)).toEqual([])
     expect(dbh.db.select().from(appStateTable).all()).toEqual([])
   })
+
+  it('releases the staging directory when the published target moved on, leaving the target alone', async () => {
+    // Regression: a fork cancelled between publishing a file and committing its DB row leaves a
+    // record whose target identity can never match again — a live session owns that artifact and
+    // keeps writing to it. Cleanup used to throw on the mismatch, which skipped the staging removal
+    // below it, so `.forks/<operationId>` stayed forever and re-warned on every boot (40 dirs /
+    // 17 MB accumulated over two weeks before this was found).
+    const operationId = randomUUID()
+    const artifactDirectory = path.join(forkRoot, operationId)
+    await mkdir(artifactDirectory, { recursive: true })
+    const { forkFileIdentity } = await import('../files')
+
+    const target = path.join(directory, 'live', 'session.jsonl')
+    await mkdir(path.dirname(target), { recursive: true })
+    await writeFile(target, 'the live session kept writing')
+    const source = path.join(artifactDirectory, 'native.jsonl')
+    await writeFile(source, 'the copy we published')
+
+    await writeForkResources({
+      version: 1 as const,
+      operationId,
+      targetSessionId: randomUUID(),
+      createdAt: Date.now(),
+      artifactDirectory,
+      artifactIdentity: await forkFileIdentity(artifactDirectory),
+      published: [{ source, target, identity: 'an-identity-that-can-no-longer-match' }]
+    })
+
+    await new AgentSessionForkOperations().recover()
+
+    // Our own staging is ours to release…
+    expect(await readdir(forkRoot)).toEqual([])
+    expect(await readForkResources()).toEqual([])
+    // …and the file we could not prove we own is untouched.
+    expect(await readFile(target, 'utf8')).toBe('the live session kept writing')
+  })
 })

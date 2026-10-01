@@ -353,8 +353,19 @@ export class AgentSessionForkOperations {
       if (!isInside(resources.artifactDirectory, artifact.source)) throw new Error('Unowned fork file')
       try {
         const targetIdentity = await forkFileIdentity(artifact.target)
-        if (targetIdentity !== (artifact.identity ?? (await forkFileIdentity(artifact.source))))
-          throw new Error('Fork file ownership changed')
+        if (targetIdentity !== (artifact.identity ?? (await forkFileIdentity(artifact.source)))) {
+          // The target moved on after we published to it: a live session owns its own artifact and
+          // keeps writing, so the identity we recorded can no longer prove the file is still ours.
+          // Leave the target strictly alone — but do NOT abort the cleanup. Throwing here skipped the
+          // staging removal at the end of this method, so every fork cancelled between publishing and
+          // its DB commit kept `.forks/<operationId>` forever and re-warned on every boot (40 dirs /
+          // 17 MB accumulated over two weeks before this was found).
+          logger.warn('Fork target changed after publish; retaining it and releasing the staging directory', {
+            operationId: resources.operationId,
+            target: artifact.target
+          })
+          continue
+        }
         await rm(artifact.target)
       } catch (error) {
         if (!isMissing(error)) throw error
