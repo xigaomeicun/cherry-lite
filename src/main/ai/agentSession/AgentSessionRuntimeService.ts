@@ -953,7 +953,16 @@ export class AgentSessionRuntimeService extends BaseService {
           this.applyRuntimeStateEvent(entry, { type: 'flush-transition' })
           if (!this.isTurnLive(entry, turn)) return
           const connected = await this.ensureConnection(entry)
-          if (!connected || !this.isCurrentEntry(entry) || !this.isTurnLive(entry, turn)) return
+          if (!connected || !this.isCurrentEntry(entry) || !this.isTurnLive(entry, turn)) {
+            // `!connected` while the entry and turn are still ours means the reconnect budget ran out
+            // (see CONNECTION_ATTEMPT_LIMIT). Settle the turn loudly — returning silently left the
+            // renderer waiting on a stream nothing would ever write to.
+            if (!connected && this.isCurrentEntry(entry) && this.isTurnLive(entry, turn)) {
+              void this.closeSession(entry.sessionId)
+              throw new Error('Unable to connect the agent runtime')
+            }
+            return
+          }
           await this.admitTurn(entry, turn)
         } catch (error) {
           controller.error(error)
