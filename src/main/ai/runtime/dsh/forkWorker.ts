@@ -8,7 +8,8 @@ export interface DshForkWorkerInput {
   targetSessionId: string
   targetCwd: string
   boundary: number
-  checkpoints: Array<{ boundary: number }>
+  formatVersion: 0 | 4
+  checkpoints: Array<{ boundary: number; formatVersion: 0 | 4 }>
   events?: unknown[]
 }
 

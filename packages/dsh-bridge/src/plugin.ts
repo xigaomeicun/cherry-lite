@@ -34,7 +34,16 @@ import {
 } from './protocol'
 
 export const name = 'cherry-bridge'
-export const inject = ['approval', 'agents', 'tools', 'tokenMeter', 'subagents', 'userQuestions', 'planMode', 'sessions']
+export const inject = [
+  'approval',
+  'agents',
+  'tools',
+  'tokenMeter',
+  'subagents',
+  'userQuestions',
+  'planMode',
+  'sessions'
+]
 
 /** Canonical value a bridged execute resolves; `output.schema` states the same contract. */
 interface BridgeToolOutputValue {
@@ -166,7 +175,7 @@ export function apply(ctx: Context): void {
         const children: BridgeSubagentChild[] = []
         for (const entry of entries) {
           // One-shot children cannot be continued and diagnostics are not tasks.
-          if (entry.kind !== 'child' || entry.mode !== 'continuable') continue
+          if (entry.mode !== 'continuable') continue
           const live = ctx.agents.get(entry.id)
           children.push({
             id: entry.id,

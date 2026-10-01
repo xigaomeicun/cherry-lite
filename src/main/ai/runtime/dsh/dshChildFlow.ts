@@ -1,3 +1,7 @@
+import type { TokenUsage } from '@deepseek-ai/dsh-llm'
+import { lastAssistantStreamChunk } from '@deepseek-ai/dsh-llm/assistant-stream'
+import type { SessionEventMap } from '@deepseek-ai/dsh-session'
+
 /**
  * Subagent coordinator for one dsh runtime connection: admits descendant
  * sessions, binds each child to the root tool call that spawned it, projects
@@ -19,9 +23,7 @@
  * child's whole conversation stays under the tool card that introduced it.
  * Descendants of a child flatten into their ancestor's flow.
  */
-import type { BridgeNotificationMap } from '@cherrystudio/dsh-bridge'
-import type { TokenUsage } from '@deepseek-ai/dsh-llm'
-import type { SessionEvent, SessionEventMap } from '@deepseek-ai/dsh-session'
+import type { BridgeNotificationMap, DshAssistantChunk, DshRuntimeEvent } from '@cherrystudio/dsh-bridge'
 import { loggerService } from '@logger'
 import type { AgentSessionBackgroundTasks } from '@shared/ai/agentSessionBackgroundTasks'
 import type { CherryUIMessageChunk } from '@shared/data/types/message'
@@ -67,7 +69,7 @@ interface ChildState {
   /** Live residency epoch (one Activation at a time per child). */
   activeRunId?: string
   projection?: DshChildProjection
-  buffered: SessionEvent[]
+  buffered: DshRuntimeEvent[]
   bufferOverflow: boolean
 }
 
@@ -132,7 +134,7 @@ export class DshSubagentCoordinator {
   }
 
   /** Route one descendant `session.event`; unknown/unbound children buffer until bound. */
-  handleChildEvent(sessionId: string, event: SessionEvent): void {
+  handleChildEvent(sessionId: string, event: DshRuntimeEvent): void {
     const child = this.children.get(sessionId) ?? this.admit(sessionId, undefined)
     const projection = child.projection
     if (projection) {
@@ -289,7 +291,7 @@ class DshChildProjection {
     this.idPrefix = `dsh-c${childSessionId.slice(0, 8)}`
   }
 
-  handleEvent(event: SessionEvent): void {
+  handleEvent(event: DshRuntimeEvent): void {
     switch (event.type) {
       case 'assistant/chunk':
         this.handleAssistantChunk(event.data)
@@ -300,6 +302,18 @@ class DshChildProjection {
       case 'tool/result':
         this.handleToolResult(event.data)
         return
+      case 'assistant/attempt': {
+        const usage = lastAssistantStreamChunk(event.data.stream, 'usage')?.usage
+        if (usage) {
+          this.sink.recordChildUsage({
+            childSessionId: this.childSessionId,
+            turn: event.data.turn,
+            seq: event.seq,
+            usage
+          })
+        }
+        return
+      }
       case 'assistant/message': {
         const usage = event.data.usage
         if (usage) {
@@ -346,7 +360,7 @@ class DshChildProjection {
     }
   }
 
-  private handleAssistantChunk(data: SessionEventMap['assistant/chunk']): void {
+  private handleAssistantChunk(data: Omit<DshAssistantChunk, 'sessionId'>): void {
     const stepKey = `${data.turn}:${data.step}`
     if (stepKey !== this.lastStepKey) {
       this.lastStepKey = stepKey
@@ -438,8 +452,7 @@ class DshChildProjection {
   }
 
   private handleToolResult(data: SessionEventMap['tool/result']): void {
-    const block = data.message.content[0]
-    const toolCallId = block.toolCallId
+    const toolCallId = data.message.toolCallId
     if (!toolCallId) return
     if (!this.startedTools.has(toolCallId)) {
       this.handleToolCall({ callId: toolCallId, name: 'unknown', arguments: '{}' })
@@ -449,12 +462,12 @@ class DshChildProjection {
     // stream that never saw the input silently kills that stream's accumulator.
     const token = this.toolTurnTokens.get(toolCallId) ?? null
     this.toolTurnTokens.delete(toolCallId)
-    if (data.error !== undefined || block.isError === true) {
+    if (data.error !== undefined || data.message.isError === true) {
       this.emit(
         {
           type: 'tool-output-error',
           toolCallId,
-          errorText: stringifyChildToolOutput(block.content),
+          errorText: stringifyChildToolOutput(data.message.content),
           dynamic: true,
           providerExecuted: true,
           providerMetadata: this.toolMetadata(toolName, data.error ? { error: data.error } : {})
@@ -467,7 +480,7 @@ class DshChildProjection {
       {
         type: 'tool-output-available',
         toolCallId,
-        output: block.content,
+        output: data.message.content,
         dynamic: true,
         providerExecuted: true,
         providerMetadata: this.toolMetadata(toolName)
@@ -489,7 +502,7 @@ function parseChildToolArguments(raw: string): Record<string, unknown> {
   }
 }
 
-function stringifyChildToolOutput(output: SessionEventMap['tool/result']['message']['content'][0]['content']): string {
+function stringifyChildToolOutput(output: SessionEventMap['tool/result']['message']['content']): string {
   const text = output
     .filter((entry): entry is Extract<(typeof output)[number], { type: 'text' }> => entry.type === 'text')
     .map((entry) => entry.text)

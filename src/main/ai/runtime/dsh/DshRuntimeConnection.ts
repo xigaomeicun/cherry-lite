@@ -3,6 +3,7 @@ import { mkdir, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 
 import { application } from '@application'
+import type { DshAssistantChunk } from '@cherrystudio/dsh-bridge'
 import {
   BRIDGE_SOCKET_ENV,
   BRIDGE_TOKEN_ENV,
@@ -824,6 +825,13 @@ export class DshRuntimeConnection implements AgentRuntimeConnection {
           }
           continue
         }
+        if (notification.method === 'session.chunk') {
+          const { sessionId, ...data } = notification.params as unknown as DshAssistantChunk
+          const event = { type: 'assistant/chunk' as const, data }
+          if (sessionId === this.runtimeSessionId) this.adapter.handleEvent(event)
+          else this.subagents.handleChildEvent(sessionId, event)
+          continue
+        }
         if (notification.method !== 'session.event') continue
         const params = notification.params as { sessionId?: unknown; event?: unknown }
         if (typeof params?.sessionId !== 'string') continue
@@ -902,7 +910,8 @@ export class DshRuntimeConnection implements AgentRuntimeConnection {
         const checkpoint = DshForkCheckpointSchema.safeParse({
           runtime: 'dsh',
           runtimeSessionId: this.runtimeSessionId,
-          boundary
+          boundary,
+          formatVersion: 4
         })
         this.eventQueue.push({
           type: 'turn-complete',
