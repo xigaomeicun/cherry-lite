@@ -1424,6 +1424,69 @@ describe('AgentSessionRuntimeService', () => {
     await secondReader.cancel().catch(() => undefined)
   })
 
+  it('gives up after a bounded number of reconnect attempts instead of spinning forever', async () => {
+    // Regression: this loop had no cap and no delay. A runtime that could not be rebuilt kept it
+    // spinning — the main process pegged a core at 100%, every iteration spawned a fresh runtime,
+    // `connectionAttempts` never drained, and the busy guard reported "stop the task and handle
+    // pending messages" until the app was restarted.
+    //
+    // A volatile connection target reproduces it exactly: `connectionTarget` is captured at the top
+    // of the loop and `connectionTargetEquals` re-reads the agent after `connect`, so a configured
+    // value that changes under it invalidates every attempt and the loop reconnects forever.
+    // A connection target that moves under the connect reproduces it exactly: `connectionTarget` is
+    // captured at the top of the loop and compared again after `connect`, so every attempt is
+    // discarded and the loop reconnects forever — one fresh runtime per iteration.
+    let service: InstanceType<typeof AgentSessionRuntimeService>
+    const connect = vi.fn().mockImplementation(async () => {
+      const turn = getEntry(service).currentTurn
+      turn.reasoningEffort = turn.reasoningEffort === 'high' ? 'low' : 'high'
+      return {
+        events: createAsyncQueue<any>().iterable,
+        send: vi.fn(),
+        close: vi.fn(),
+        reconcile: vi.fn().mockResolvedValue('current')
+      }
+    })
+    runtimeDriverRegistry.register({
+      type: 'test-runtime',
+      capabilities: ['agent-session'],
+      connect,
+      validateSession: vi.fn(),
+      listAvailableTools: vi.fn().mockResolvedValue([])
+    })
+    service = new AgentSessionRuntimeService()
+    const turn = service.beginTurn(baseTurnInput)
+    const reader = service
+      .openTurnStream({ sessionId: 'session-1', turnId: turn.turnId, signal: new AbortController().signal })
+      .getReader()
+    await expect(reader.read()).resolves.toMatchObject({ value: { type: 'start' }, done: false })
+
+    // It must genuinely retry — one connect would mean the loop never re-entered.
+    await vi.waitFor(() => expect(connect.mock.calls.length).toBeGreaterThanOrEqual(2), { timeout: 10_000 })
+    // …and then stop at the cap rather than reconnecting forever.
+    await vi.waitFor(() => expect(connect.mock.calls.length).toBe(4), { timeout: 10_000 })
+    await new Promise((resolve) => setTimeout(resolve, 2_000))
+    expect(connect.mock.calls.length).toBe(4)
+    expect((service as any).connectionAttempts.size).toBe(0)
+
+    await reader.cancel().catch(() => undefined)
+  }, 30_000)
+
+  it('treats a leaked connection attempt as gone instead of holding the session busy', () => {
+    // Second half of the same regression: even with the loop bounded, one entry whose `finally`
+    // never ran must not keep `assertSessionEditable` throwing `busy` for the process's lifetime.
+    const service = new AgentSessionRuntimeService()
+    const attempts = (service as any).connectionAttempts as Map<string, unknown>
+    const never = new Promise(() => {})
+
+    attempts.set('session-1', { id: 'live', promise: never, startedAt: Date.now() })
+    expect(() => service.assertSessionEditable('session-1')).toThrowError(/busy/)
+
+    attempts.set('session-1', { id: 'stale', promise: never, startedAt: Date.now() - 60_000 })
+    expect(() => service.assertSessionEditable('session-1')).not.toThrow()
+    expect(attempts.has('session-1')).toBe(false)
+  })
+
   it('retries callers sharing an in-flight connect when a mid-flight model edit discards it', async () => {
     const firstConnection = {
       events: createAsyncQueue<any>().iterable,

@@ -335,6 +335,24 @@ class AgentSessionRuntimeTerminalListener implements StreamListener {
   }
 }
 
+/**
+ * Bounds for {@link AgentSessionRuntimeService.ensureConnection}.
+ *
+ * The reconnect loop has seven `continue` paths and each one re-runs real work (spawn a runtime,
+ * reconcile, close, retry). With no cap and no delay a runtime that could never be rebuilt — an
+ * aborted turn racing the connect, a wedged CLI child — turned that loop into a hot spin: the main
+ * process pegged a core at 100%, `connectionAttempts` stayed populated so `assertSessionEditable`
+ * reported `busy` for the rest of the process's life, and restarting the app was the only way out.
+ *
+ * Both bounds trade "eventually, maybe" for a resumable failure: `ensureConnection` returns `false`,
+ * and both callers already answer that by closing the session.
+ */
+const CONNECTION_ATTEMPT_LIMIT = 4
+/** Delay before attempt N+1; the last entry is reused once the list runs out. */
+const CONNECTION_ATTEMPT_BACKOFF_MS = [250, 500, 1_000] as const
+/** Wall-clock budget for one `ensureConnection` call, checked on every iteration. */
+const CONNECTION_DEADLINE_MS = 15_000
+
 @Injectable('AgentSessionRuntimeService')
 @ServicePhase(Phase.WhenReady)
 // The dependency is runtime, not lexical: this service's connections spawn CLI children through
@@ -370,6 +388,25 @@ export class AgentSessionRuntimeService extends BaseService {
     if (this.forks.edits.has(sessionId)) throw new AgentSessionEditError('busy')
   }
 
+  /**
+   * Whether a connect is genuinely in flight. An attempt that outlived its own deadline can no
+   * longer be doing useful work — its `finally` never ran, most likely because the reconnect loop
+   * gave up on it — so treat it as gone and drop it. Without this, one leaked entry kept
+   * `assertSessionEditable` reporting `busy` until the whole app was restarted.
+   */
+  private hasLiveConnectionAttempt(sessionId: string): boolean {
+    const attempt = this.connectionAttempts.get(sessionId)
+    if (!attempt) return false
+    if (Date.now() - attempt.startedAt < CONNECTION_DEADLINE_MS) return true
+    logger.warn('Releasing a stale agent runtime connection attempt', {
+      sessionId,
+      attemptId: attempt.id,
+      elapsedMs: Date.now() - attempt.startedAt
+    })
+    this.connectionAttempts.delete(sessionId)
+    return false
+  }
+
   assertSessionEditable(sessionId: string, ownEdit = false): void {
     if (this.failedClosures.has(sessionId)) throw new AgentSessionEditError('close_failed')
     if (!ownEdit) this.assertSessionWritable(sessionId)
@@ -378,7 +415,7 @@ export class AgentSessionRuntimeService extends BaseService {
       this.isShuttingDown ||
       this.isWriteQuiesced ||
       this.closingSessions.has(sessionId) ||
-      this.connectionAttempts.has(sessionId) ||
+      this.hasLiveConnectionAttempt(sessionId) ||
       [...this.forks.pending.values()].some((operation) => operation.sourceSessionId === sessionId) ||
       toolApprovalRegistry.hasSession(sessionId) ||
       [...this.pendingEditInputs.values()].some(({ counts }) => counts.has(sessionId)) ||
@@ -450,8 +487,12 @@ export class AgentSessionRuntimeService extends BaseService {
   private readonly inFlightTurnStarts = new Map<string, Promise<void>>()
   /** Detached-flow finalizers can outlive their runtime entry but still write message parts. */
   private readonly inFlightBackgroundFlowFlushes = new Map<Promise<void>, string>()
-  /** Async connection resources live outside the pure state; attempt ids reject stale completions. */
-  private readonly connectionAttempts = new Map<string, { id: string; promise: Promise<boolean> }>()
+  /**
+   * Async connection resources live outside the pure state; attempt ids reject stale completions.
+   * `startedAt` exists so a leaked entry (one whose `finally` never ran) can be told apart from live
+   * work by {@link hasLiveConnectionAttempt} instead of wedging the session as permanently busy.
+   */
+  private readonly connectionAttempts = new Map<string, { id: string; promise: Promise<boolean>; startedAt: number }>()
   /** Promise resources for a rebuild-blocked connection; the state only owns the blocked phase. */
   private readonly backgroundWorkWaiters = new Map<
     string,
@@ -1662,7 +1703,20 @@ export class AgentSessionRuntimeService extends BaseService {
   }
 
   private async ensureConnection(entry: AgentSessionRuntimeEntry): Promise<boolean> {
+    const deadline = Date.now() + CONNECTION_DEADLINE_MS
+    let attempts = 0
     while (this.isCurrentEntry(entry)) {
+      // Bounded reconnect (see CONNECTION_ATTEMPT_* above). Counted here rather than at the call
+      // site so every failure path — a false connect, a `failed` reconcile, a rebuild that never
+      // releases — shares one budget, while cheap re-checks stay free until the deadline passes.
+      if (attempts >= CONNECTION_ATTEMPT_LIMIT || Date.now() >= deadline) {
+        logger.warn('Giving up on the agent runtime connection after repeated failures', {
+          sessionId: entry.sessionId,
+          attempts,
+          elapsedMs: CONNECTION_DEADLINE_MS - Math.max(0, deadline - Date.now())
+        })
+        return false
+      }
       this.assertSessionWritable(entry.sessionId)
       const closing = this.closingSessions.get(entry.sessionId)
       if (closing) {
@@ -1754,12 +1808,26 @@ export class AgentSessionRuntimeService extends BaseService {
       // can't each spin up a connection (the second would leak/clobber the first). Whatever that
       // connect produces, loop and re-check it — a stale attempt self-discards in `connect()` and a
       // fresh one passes the reconcile above.
+      // Space the retries out: a runtime that cannot be rebuilt must not burn a core while it fails.
+      // The FIRST retry stays immediate — that is what lets a caller whose attempt just failed
+      // register the next attempt before a waiting caller resumes, so the two still share one
+      // connect instead of racing each other (see the in-flight sharing test). Every retry after it
+      // is delayed, and the deadline above bounds the whole call.
+      if (attempts > 1) {
+        const backoff =
+          CONNECTION_ATTEMPT_BACKOFF_MS[Math.min(attempts - 2, CONNECTION_ATTEMPT_BACKOFF_MS.length - 1)] ??
+          CONNECTION_ATTEMPT_BACKOFF_MS[CONNECTION_ATTEMPT_BACKOFF_MS.length - 1]
+        await new Promise((resolve) => setTimeout(resolve, backoff))
+        if (!this.isCurrentEntry(entry)) return false
+      }
+
       const existingAttempt = this.connectionAttempts.get(entry.sessionId)
       if (existingAttempt) {
         await existingAttempt.promise.catch(() => false)
         continue
       }
 
+      attempts += 1
       const attemptId = crypto.randomUUID()
       this.applyRuntimeStateEvent(entry, { type: 'connection-started', attemptId })
       const connecting = this.connect(entry, target, attemptId).finally(() => {
@@ -1774,7 +1842,7 @@ export class AgentSessionRuntimeService extends BaseService {
           this.applyRuntimeStateEvent(entry, { type: 'connection-disconnected' })
         }
       })
-      this.connectionAttempts.set(entry.sessionId, { id: attemptId, promise: connecting })
+      this.connectionAttempts.set(entry.sessionId, { id: attemptId, promise: connecting, startedAt: Date.now() })
       const connected = await connecting
       if (connected) return true
     }
