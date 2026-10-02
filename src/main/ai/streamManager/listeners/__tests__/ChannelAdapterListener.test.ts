@@ -1,6 +1,10 @@
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import path from 'node:path'
+
 import type { ChannelAdapter } from '@main/ai/channels/ChannelAdapter'
 import type { UIMessageChunk } from 'ai'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { StreamDoneResult, StreamPausedResult } from '../../types'
 import { ChannelAdapterListener } from '../ChannelAdapterListener'
@@ -18,6 +22,8 @@ function makeAdapter(overrides: Partial<ChannelAdapter> = {}): ChannelAdapter {
     onTextUpdate: vi.fn().mockResolvedValue(undefined),
     onStreamComplete: vi.fn().mockResolvedValue(false),
     sendMessage: vi.fn().mockResolvedValue(undefined),
+    sendImage: vi.fn().mockResolvedValue(undefined),
+    sendFile: vi.fn().mockResolvedValue(undefined),
     onToolProgress: vi.fn().mockResolvedValue(undefined),
     dismissToolProgress: vi.fn().mockResolvedValue(undefined),
     ...overrides
@@ -178,5 +184,78 @@ describe('ChannelAdapterListener', () => {
 
     await listener.onError({ error: new Error('boom') } as any)
     expect(adapter.dismissToolProgress).toHaveBeenCalledTimes(3)
+  })
+
+  describe('outbound local images', () => {
+    let workspace: string
+    let outside: string
+
+    beforeEach(async () => {
+      workspace = await mkdtemp(path.join(tmpdir(), 'cal-ws-'))
+      outside = await mkdtemp(path.join(tmpdir(), 'cal-out-'))
+    })
+
+    afterEach(async () => {
+      await rm(workspace, { recursive: true, force: true })
+      await rm(outside, { recursive: true, force: true })
+    })
+
+    it('sends workspace images via sendImage then delivers cleaned text on onDone', async () => {
+      const imagePath = path.join(workspace, 'out.png')
+      await writeFile(imagePath, Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))
+
+      const adapter = makeAdapter({ onStreamComplete: vi.fn().mockResolvedValue(false) })
+      const listener = new ChannelAdapterListener(adapter, 'chat-1', false, undefined, workspace)
+
+      listener.onChunk(delta(`Chart:\n\n![${imagePath}](${imagePath})\n\nDone.`))
+      await listener.onDone({ status: 'success' } as StreamDoneResult)
+
+      expect(adapter.sendImage).toHaveBeenCalledTimes(1)
+      const sent = vi.mocked(adapter.sendImage).mock.calls[0]
+      expect(sent[0]).toBe('chat-1')
+      expect(sent[1]).toMatchObject({ filename: 'out.png', media_type: 'image/png' })
+      expect(adapter.sendMessage).toHaveBeenCalledWith('chat-1', 'Chart:\n\nDone.', undefined)
+      expect(vi.mocked(adapter.sendMessage).mock.calls[0][1]).not.toContain(imagePath)
+    })
+
+    it('skips path→photo when workspacePath is unset', async () => {
+      const adapter = makeAdapter({ onStreamComplete: vi.fn().mockResolvedValue(false) })
+      const listener = new ChannelAdapterListener(adapter, 'chat-1')
+
+      listener.onChunk(delta('![/ws/out.png](/ws/out.png)'))
+      await listener.onDone({ status: 'success' } as StreamDoneResult)
+
+      expect(adapter.sendImage).not.toHaveBeenCalled()
+      expect(adapter.sendMessage).toHaveBeenCalledWith('chat-1', '![/ws/out.png](/ws/out.png)', undefined)
+    })
+
+    it('keeps failed paths in the text body and does not block text delivery', async () => {
+      const outsideImage = path.join(outside, 'secret.png')
+      await writeFile(outsideImage, Buffer.from('outside'))
+
+      const adapter = makeAdapter({ onStreamComplete: vi.fn().mockResolvedValue(false) })
+      const listener = new ChannelAdapterListener(adapter, 'chat-1', false, undefined, workspace)
+
+      listener.onChunk(delta(`Hi\n\n![${outsideImage}](${outsideImage})`))
+      await listener.onDone({ status: 'success' } as StreamDoneResult)
+
+      expect(adapter.sendImage).not.toHaveBeenCalled()
+      const delivered = vi.mocked(adapter.sendMessage).mock.calls[0][1] as string
+      expect(delivered).toContain('Hi')
+      expect(delivered).toContain(outsideImage)
+    })
+
+    it('does not upload images during streaming onTextUpdate', async () => {
+      const imagePath = path.join(workspace, 'out.png')
+      await writeFile(imagePath, Buffer.from('png'))
+
+      const adapter = makeAdapter()
+      const listener = new ChannelAdapterListener(adapter, 'chat-1', false, undefined, workspace)
+
+      listener.onChunk(delta(`![${imagePath}](${imagePath})`))
+
+      expect(adapter.sendImage).not.toHaveBeenCalled()
+      expect(adapter.onTextUpdate).toHaveBeenCalled()
+    })
   })
 })

@@ -3,7 +3,9 @@ import {
   askUserPending,
   type ChannelAdapter,
   escHtml,
+  extractOutboundLocalImages,
   normalizeToolKey,
+  resolveWorkspaceFile,
   sanitizeChannelOutput,
   type SendMessageOptions,
   toolPermSent
@@ -33,7 +35,12 @@ export class ChannelAdapterListener implements StreamListener {
      */
     private readonly suppressErrorMessage = false,
     /** Response context for the inbound message, including thread placement where supported. */
-    private readonly responseOptions?: SendMessageOptions
+    private readonly responseOptions?: SendMessageOptions,
+    /**
+     * Session workspace root for resolving local image paths before outbound upload.
+     * When unset (e.g. scheduled-task notify), path→photo conversion is skipped.
+     */
+    private readonly workspacePath?: string
   ) {
     const responseKey = this.responseOptions?.replyToMessageId ?? 'unthreaded'
     this.id = `channel:${adapter.channelId}:${this.platformChatId}:${responseKey}`
@@ -50,6 +57,64 @@ export class ChannelAdapterListener implements StreamListener {
 
   private completeStream(text: string): Promise<boolean> {
     return this.adapter.onStreamComplete(this.platformChatId, text, this.responseOptions)
+  }
+
+  /**
+   * On final delivery only: upload workspace-local images referenced in the
+   * markdown, strip successful paths from the body, and re-append failures so
+   * the IM user still sees something useful. Never called from onTextUpdate.
+   */
+  private async prepareOutboundDelivery(text: string): Promise<string> {
+    if (!this.workspacePath) return text
+
+    const { cleanedText, imagePaths } = extractOutboundLocalImages(text)
+    if (imagePaths.length === 0) return text
+
+    const failedPaths: string[] = []
+    for (const imagePath of imagePaths) {
+      try {
+        const file = await resolveWorkspaceFile(this.workspacePath, imagePath)
+        if (!file.media_type.startsWith('image/')) {
+          failedPaths.push(imagePath)
+          logger.warn('Outbound local image skipped: not image/*', {
+            channelId: this.adapter.channelId,
+            chatId: this.platformChatId,
+            imagePath,
+            mediaType: file.media_type
+          })
+          continue
+        }
+        await this.adapter.sendImage(this.platformChatId, file)
+      } catch (err) {
+        failedPaths.push(imagePath)
+        logger.warn('Failed to deliver outbound local image', {
+          channelId: this.adapter.channelId,
+          chatId: this.platformChatId,
+          imagePath,
+          err
+        })
+      }
+    }
+
+    let deliveryText = cleanedText
+    if (failedPaths.length > 0) {
+      const footnote = failedPaths.join('\n')
+      deliveryText = deliveryText ? `${deliveryText}\n\n${footnote}` : footnote
+    }
+    return deliveryText
+  }
+
+  /** Finalize streaming UI then fall back to sendMessage when the adapter did not handle it. */
+  private async finalizeDelivery(text: string): Promise<void> {
+    if (!text) {
+      // Image-only turn: still ask the adapter to close any streaming draft/card.
+      await this.completeStream('')
+      return
+    }
+    const handled = await this.completeStream(text)
+    if (!handled) {
+      await this.deliver(text)
+    }
   }
 
   // oxlint-disable-next-line no-unused-vars
@@ -237,11 +302,8 @@ export class ChannelAdapterListener implements StreamListener {
     }
 
     try {
-      // Adapter finalizes its streaming UI first (e.g. close Feishu card).
-      const handled = await this.completeStream(text)
-      if (!handled) {
-        await this.deliver(text)
-      }
+      const deliveryText = await this.prepareOutboundDelivery(text)
+      await this.finalizeDelivery(deliveryText)
     } catch (err) {
       logger.error('Failed to deliver message to channel', {
         channelId: this.adapter.channelId,
@@ -258,9 +320,17 @@ export class ChannelAdapterListener implements StreamListener {
     if (!text) return
 
     try {
-      const handled = await this.completeStream(text)
+      const deliveryText = await this.prepareOutboundDelivery(text)
+      // Keep historical contract: onStreamComplete gets body without the stopped
+      // suffix; sendMessage fallback appends it.
+      if (!deliveryText) {
+        await this.completeStream('')
+        await this.deliver('_(stopped)_')
+        return
+      }
+      const handled = await this.completeStream(deliveryText)
       if (!handled) {
-        await this.deliver(text + '\n\n_(stopped)_')
+        await this.deliver(`${deliveryText}\n\n_(stopped)_`)
       }
     } catch (err) {
       logger.error('Failed to deliver paused message to channel', {

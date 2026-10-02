@@ -1487,7 +1487,10 @@ export class ChannelMessageHandler {
       const started = await startAgentSessionRun({
         sessionId: session.id,
         userParts,
-        listeners: [sentinel, new ChannelAdapterListener(adapter, chatId, false, responseOptions)],
+        listeners: [
+          sentinel,
+          new ChannelAdapterListener(adapter, chatId, false, responseOptions, session.workspace?.path)
+        ],
         headless: true,
         requireIdle: { expectedAgentId: session.agentId }
       })

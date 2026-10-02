@@ -20,6 +20,7 @@ const mockBot = {
     sendMessage: vi.fn().mockResolvedValue(undefined),
     sendChatAction: vi.fn().mockResolvedValue(undefined),
     sendDocument: vi.fn().mockResolvedValue(undefined),
+    sendPhoto: vi.fn().mockResolvedValue(undefined),
     setMessageReaction: vi.fn().mockResolvedValue(undefined)
   },
   catch: vi.fn(),
@@ -93,6 +94,7 @@ describe('TelegramAdapter', () => {
     mockBot.api.sendMessage.mockClear().mockResolvedValue(undefined)
     mockBot.api.sendChatAction.mockClear().mockResolvedValue(undefined)
     mockBot.api.sendDocument.mockClear().mockResolvedValue(undefined)
+    mockBot.api.sendPhoto.mockClear().mockResolvedValue(undefined)
     mockBot.catch.mockClear()
     mockBot.start.mockClear().mockResolvedValue(undefined)
     mockBot.stop.mockClear().mockResolvedValue(undefined)
@@ -264,6 +266,49 @@ describe('TelegramAdapter', () => {
     expect(inputFile.data.toString()).toBe('file-bytes')
   })
 
+  it('sendImage() uses sendPhoto for JPEG/PNG/WebP under the photo size limit', async () => {
+    const adapter = createAdapter()
+    await adapter.connect()
+
+    const data = Buffer.from('fakepng').toString('base64')
+    await adapter.sendImage('123', { filename: 'shot.png', data, media_type: 'image/png', size: 7 })
+
+    expect(mockBot.api.sendPhoto).toHaveBeenCalledTimes(1)
+    expect(mockBot.api.sendDocument).not.toHaveBeenCalled()
+    const [chatId, inputFile] = mockBot.api.sendPhoto.mock.calls[0]
+    expect(chatId).toBe('123')
+    expect(inputFile).toBeInstanceOf(InputFile)
+    expect((inputFile as InstanceType<typeof InputFile>).filename).toBe('shot.png')
+  })
+
+  it('sendImage() falls back to sendDocument for GIF', async () => {
+    const adapter = createAdapter()
+    await adapter.connect()
+
+    const data = Buffer.from('fakegif').toString('base64')
+    await adapter.sendImage('123', { filename: 'anim.gif', data, media_type: 'image/gif', size: 7 })
+
+    expect(mockBot.api.sendDocument).toHaveBeenCalledTimes(1)
+    expect(mockBot.api.sendPhoto).not.toHaveBeenCalled()
+  })
+
+  it('sendImage() falls back to sendDocument when payload exceeds the photo limit', async () => {
+    const adapter = createAdapter()
+    await adapter.connect()
+
+    const big = Buffer.alloc(10 * 1024 * 1024 + 1, 1)
+    const data = big.toString('base64')
+    await adapter.sendImage('123', {
+      filename: 'huge.png',
+      data,
+      media_type: 'image/png',
+      size: big.length
+    })
+
+    expect(mockBot.api.sendDocument).toHaveBeenCalledTimes(1)
+    expect(mockBot.api.sendPhoto).not.toHaveBeenCalled()
+  })
+
   it('sendTypingIndicator() sends typing action', async () => {
     const adapter = createAdapter()
     await adapter.connect()
@@ -396,9 +441,7 @@ describe('TelegramAdapter', () => {
       'sendMessage',
       {}
     )
-    mockBot.api.sendMessage
-      .mockRejectedValueOnce(parseError)
-      .mockResolvedValueOnce({ message_id: 102 })
+    mockBot.api.sendMessage.mockRejectedValueOnce(parseError).mockResolvedValueOnce({ message_id: 102 })
 
     await adapter.sendMessage('123', 'Hello **bold**')
 

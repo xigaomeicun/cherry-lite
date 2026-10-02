@@ -261,6 +261,15 @@ export abstract class ChannelAdapter extends EventEmitter {
   }
 
   /**
+   * Send an image to a chat (album/photo UX when the platform supports it).
+   * Default falls back to sendFile so adapters without a dedicated photo API
+   * still receive the bytes.
+   */
+  async sendImage(chatId: string, file: FileAttachment): Promise<void> {
+    return this.sendFile(chatId, file)
+  }
+
+  /**
    * Called on every text update during streaming. The adapter decides
    * internally when/how to flush to the platform (throttle, mutex, etc.).
    * @param fullText - The full cumulative response text so far.

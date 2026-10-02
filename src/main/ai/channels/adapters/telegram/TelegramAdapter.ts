@@ -23,6 +23,10 @@ import { chunkMessage, renderTelegramHtml } from './markdownTg'
 import { TelegramToolBubbleController } from './TelegramToolBubble'
 
 const TELEGRAM_MAX_LENGTH = 4096
+/** Bot API soft limit for sendPhoto; larger images fall back to sendDocument. */
+const TELEGRAM_PHOTO_MAX_BYTES = 10 * 1024 * 1024
+/** MIME types Telegram accepts as photos (GIF → document / animation). */
+const TELEGRAM_PHOTO_MIME = new Set(['image/jpeg', 'image/png', 'image/webp'])
 
 import { splitMessage } from '../../utils'
 
@@ -461,6 +465,31 @@ class TelegramAdapter extends ChannelAdapter {
     const buffer = Buffer.from(file.data, 'base64')
     await this.bot.api.sendDocument(chatId, new InputFile(buffer, file.filename))
     this.log.info('Sent file', { chatId, filename: file.filename, size: file.size })
+  }
+
+  /**
+   * Prefer sendPhoto for album UX. Fall back to sendDocument when the MIME is
+   * not photo-friendly (e.g. GIF) or the payload exceeds the ~10MB photo limit.
+   */
+  override async sendImage(chatId: string, file: FileAttachment): Promise<void> {
+    if (!this.bot) {
+      throw new Error('Bot is not connected')
+    }
+    const buffer = Buffer.from(file.data, 'base64')
+    const mime = file.media_type.toLowerCase()
+    const usePhoto = TELEGRAM_PHOTO_MIME.has(mime) && buffer.length <= TELEGRAM_PHOTO_MAX_BYTES
+    if (usePhoto) {
+      await this.bot.api.sendPhoto(chatId, new InputFile(buffer, file.filename))
+      this.log.info('Sent photo', { chatId, filename: file.filename, size: file.size })
+      return
+    }
+    await this.bot.api.sendDocument(chatId, new InputFile(buffer, file.filename))
+    this.log.info('Sent image as document (fallback)', {
+      chatId,
+      filename: file.filename,
+      size: file.size,
+      mime
+    })
   }
 
   override async onTextUpdate(chatId: string, fullText: string): Promise<void> {
