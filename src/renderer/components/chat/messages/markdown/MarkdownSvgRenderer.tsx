@@ -1,6 +1,7 @@
 import { CommandContextMenu, type CommandContextMenuExtraItem } from '@renderer/components/command'
 import { ImagePreviewService } from '@renderer/services/ImagePreviewService'
-import { isKatexGeneratedSvg, makeSvgSizeAdaptive } from '@renderer/utils/image'
+import { getMarkdownSvgSourceKey, isKatexGeneratedSvg, makeSvgSizeAdaptive } from '@renderer/utils/image'
+import type { Element as HastElement } from 'hast'
 import { Eye } from 'lucide-react'
 import type { FC } from 'react'
 import React, { useCallback, useEffect, useMemo, useRef } from 'react'
@@ -9,6 +10,12 @@ import type { ExtraProps } from 'streamdown'
 
 interface SvgProps extends React.SVGProps<SVGSVGElement>, ExtraProps {
   'data-needs-measurement'?: 'true'
+  /**
+   * While true (chat streaming), skip source-key remount and DOM measurement.
+   * Measurement runs once when defer ends so incomplete SVGs are not remounted
+   * on every stream tick.
+   */
+  deferSourceRemeasure?: boolean
 }
 
 /**
@@ -22,28 +29,34 @@ interface SvgProps extends React.SVGProps<SVGSVGElement>, ExtraProps {
  * 2.  **SVGs needing measurement**: Complex SVGs are flagged with
  *     `data-needs-measurement`. This component mutates the mounted element to
  *     make it scalable, and re-runs that measurement whenever the rendered
- *     source changes. The same source key also remounts the `<svg>`, so the
- *     attributes written by a previous measurement cannot leak into the next
- *     SVG. To prevent React from reverting these changes during subsequent
- *     renders, it stops passing the original `width` and `height` props after
- *     the mutation is complete.
+ *     source changes (after streaming settles). The same source key also
+ *     remounts the `<svg>`, so the attributes written by a previous
+ *     measurement cannot leak into the next SVG. To prevent React from
+ *     reverting these changes during subsequent renders, it stops passing the
+ *     original `width` and `height` props after the mutation is complete.
  */
 const MarkdownSvgRenderer: FC<SvgProps> = (props) => {
-  const { 'data-needs-measurement': needsMeasurement, node, ...restProps } = props
+  const { 'data-needs-measurement': needsMeasurement, node, deferSourceRemeasure = false, ...restProps } = props
   const svgRef = useRef<SVGSVGElement>(null)
   const measuredSourceRef = useRef<string | null>(null)
   const { t } = useTranslation()
-  const sourceKey = useMemo(() => `${needsMeasurement ?? ''}:${JSON.stringify(node) ?? ''}`, [needsMeasurement, node])
-  const isMeasured = measuredSourceRef.current === sourceKey
+  const sourceKey = useMemo(
+    () =>
+      getMarkdownSvgSourceKey(needsMeasurement, node as HastElement | undefined, {
+        defer: deferSourceRemeasure
+      }),
+    [needsMeasurement, node, deferSourceRemeasure]
+  )
+  const isMeasured = Boolean(sourceKey) && measuredSourceRef.current === sourceKey
 
   useEffect(() => {
-    if (needsMeasurement && svgRef.current && measuredSourceRef.current !== sourceKey) {
-      // Directly mutate the DOM element to make it adaptive.
-      makeSvgSizeAdaptive(svgRef.current)
-      // Remember which source was measured. This does not trigger a re-render.
-      measuredSourceRef.current = sourceKey
-    }
-  }, [needsMeasurement, sourceKey])
+    if (!needsMeasurement || !sourceKey || deferSourceRemeasure) return
+    if (!svgRef.current || measuredSourceRef.current === sourceKey) return
+    // Directly mutate the DOM element to make it adaptive.
+    makeSvgSizeAdaptive(svgRef.current)
+    // Remember which source was measured. This does not trigger a re-render.
+    measuredSourceRef.current = sourceKey
+  }, [needsMeasurement, sourceKey, deferSourceRemeasure])
 
   const onPreview = useCallback(() => {
     if (!svgRef.current) return
@@ -68,7 +81,9 @@ const MarkdownSvgRenderer: FC<SvgProps> = (props) => {
     [t, onPreview]
   )
 
-  const svg = <svg key={sourceKey} ref={svgRef} {...finalProps} />
+  // Only key when we have a source identity; KaTeX / preprocessed SVGs skip
+  // remount thrashing from hast node reference churn during streaming.
+  const svg = sourceKey ? <svg key={sourceKey} ref={svgRef} {...finalProps} /> : <svg ref={svgRef} {...finalProps} />
   if (isKatexGeneratedSvg(node)) return svg
 
   return (

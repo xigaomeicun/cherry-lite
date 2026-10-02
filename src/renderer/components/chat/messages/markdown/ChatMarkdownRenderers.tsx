@@ -63,6 +63,11 @@ function ChatSpanRenderer({ node, children, ...props }: MarkdownRendererProps<'s
   return <span {...props}>{children}</span>
 }
 
+function ChatSvgRenderer(props: MarkdownRendererProps<'svg'>) {
+  const { isStreaming } = useChatMarkdownRenderContext()
+  return <MarkdownSvgRenderer {...props} deferSourceRemeasure={isStreaming} />
+}
+
 export const CHAT_MARKDOWN_COMPONENTS = {
   a: ChatLinkRenderer,
   sup: ChatCitationSupRenderer,
@@ -72,7 +77,7 @@ export const CHAT_MARKDOWN_COMPONENTS = {
   pre: ChatPreRenderer,
   p: ChatParagraphRenderer,
   span: ChatSpanRenderer,
-  svg: MarkdownSvgRenderer as Components['svg']
+  svg: ChatSvgRenderer as Components['svg']
 } satisfies Partial<Components>
 
 export const CHAT_MARKDOWN_COMPONENTS_WITH_STYLE = {

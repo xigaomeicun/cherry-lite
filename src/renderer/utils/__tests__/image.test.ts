@@ -16,6 +16,7 @@ import {
   convertToBase64,
   dataUrlToBlob,
   getImageBlobFromSource,
+  getMarkdownSvgSourceKey,
   IMAGE_CAPTURE_ATTRIBUTE,
   imageInputToPreviewUrl,
   isKatexGeneratedSvg,
@@ -1404,6 +1405,34 @@ describe('utils/image', () => {
       expect(
         isKatexGeneratedSvg({ ...katexNode, properties: { ...katexNode.properties, viewBox: '0 0 100 100' } })
       ).toBe(false)
+    })
+  })
+
+  describe('getMarkdownSvgSourceKey', () => {
+    const node = {
+      type: 'element',
+      tagName: 'svg',
+      properties: { width: '10em', height: '5em' },
+      children: [{ type: 'element', tagName: 'circle', properties: { r: '1' }, children: [] }]
+    } as HastElement
+
+    it('returns empty when measurement is not needed', () => {
+      expect(getMarkdownSvgSourceKey(undefined, node)).toBe('')
+      expect(getMarkdownSvgSourceKey(undefined, node, { defer: true })).toBe('')
+    })
+
+    it('returns a stable defer placeholder while streaming', () => {
+      expect(getMarkdownSvgSourceKey('true', node, { defer: true })).toBe('defer')
+      expect(getMarkdownSvgSourceKey('true', { ...node, children: [] }, { defer: true })).toBe('defer')
+    })
+
+    it('stringifies the hast node only on the measurement path', () => {
+      const key = getMarkdownSvgSourceKey('true', node)
+      expect(key.startsWith('1:')).toBe(true)
+      expect(key).toContain('"tagName":"svg"')
+      expect(getMarkdownSvgSourceKey('true', { ...node, properties: { ...node.properties, width: '12em' } })).not.toBe(
+        key
+      )
     })
   })
 })

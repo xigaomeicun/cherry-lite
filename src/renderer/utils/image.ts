@@ -1078,6 +1078,32 @@ export const makeSvgSizeAdaptive = (element: Element): Element => {
 }
 
 /**
+ * Stable identity for MarkdownSvgRenderer remount / remeasure.
+ *
+ * `data-needs-measurement` SVGs mutate the DOM (viewBox, width, …). A source
+ * key remounts the element when that source changes so prior mutations cannot
+ * leak. Callers previously used `JSON.stringify(node)` unconditionally — on
+ * every stream tick the hast `node` reference is new, so every SVG (including
+ * KaTeX glyphs and rehype-preprocessed diagrams that do **not** need
+ * measurement) paid a full-tree stringify, and growing sources remounted every
+ * delta.
+ *
+ * Rules:
+ * - No measurement flag → empty key (no remount; React owns all attributes).
+ * - `defer` (streaming) → stable placeholder; remount+measure once when defer ends.
+ * - Otherwise → stringify the hast node (only on the rare measurement path).
+ */
+export function getMarkdownSvgSourceKey(
+  needsMeasurement: string | undefined,
+  node: HastElement | undefined,
+  options?: { defer?: boolean }
+): string {
+  if (!needsMeasurement) return ''
+  if (options?.defer) return 'defer'
+  return `1:${JSON.stringify(node) ?? ''}`
+}
+
+/**
  * Whether an SVG node is a KaTeX stretchy glyph (square roots, extensible
  * arrows). KaTeX emits these with a `400em` width, a `0 0 400000 <h>`
  * viewBox, and a `* slice` preserveAspectRatio. They must render exactly
@@ -1203,7 +1229,7 @@ function decodeDataUrlBytes(data: string): Uint8Array {
   const encoder = new TextEncoder()
   const bytes: number[] = []
 
-  for (let index = 0; index < data.length; ) {
+  for (let index = 0; index < data.length;) {
     const hexByte = data[index] === '%' ? data.slice(index + 1, index + 3) : ''
     if (/^[\da-fA-F]{2}$/.test(hexByte)) {
       bytes.push(Number.parseInt(hexByte, 16))

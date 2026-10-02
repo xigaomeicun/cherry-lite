@@ -1,28 +1,38 @@
 import { CommandContextMenu, type CommandContextMenuExtraItem } from '@renderer/components/command'
 import { ImagePreviewService } from '@renderer/services/ImagePreviewService'
-import { isKatexGeneratedSvg, makeSvgSizeAdaptive } from '@renderer/utils/image'
+import { getMarkdownSvgSourceKey, isKatexGeneratedSvg, makeSvgSizeAdaptive } from '@renderer/utils/image'
+import type { Element as HastElement } from 'hast'
 import { Eye } from 'lucide-react'
 import { type FC, type SVGProps, useCallback, useEffect, useMemo, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { ExtraProps } from 'streamdown'
+
 interface SvgProps extends SVGProps<SVGSVGElement>, ExtraProps {
   'data-needs-measurement'?: 'true'
+  /**
+   * While true, skip source-key remount and DOM measurement until defer ends.
+   * Chat streaming passes this so incomplete SVGs are not remounted every tick.
+   */
+  deferSourceRemeasure?: boolean
 }
 
 const MarkdownSvgRenderer: FC<SvgProps> = (props) => {
-  const { 'data-needs-measurement': needsMeasurement, node, ...restProps } = props
+  const { 'data-needs-measurement': needsMeasurement, node, deferSourceRemeasure = false, ...restProps } = props
   const svgRef = useRef<SVGSVGElement>(null)
   const measuredSourceRef = useRef<string | null>(null)
   const { t } = useTranslation()
-  const sourceKey = useMemo(() => `${needsMeasurement ?? ''}:${JSON.stringify(node) ?? ''}`, [needsMeasurement, node])
-  const isMeasured = measuredSourceRef.current === sourceKey
+  const sourceKey = useMemo(
+    () => getMarkdownSvgSourceKey(needsMeasurement, node as HastElement | undefined, { defer: deferSourceRemeasure }),
+    [needsMeasurement, node, deferSourceRemeasure]
+  )
+  const isMeasured = Boolean(sourceKey) && measuredSourceRef.current === sourceKey
 
   useEffect(() => {
-    if (needsMeasurement && svgRef.current && measuredSourceRef.current !== sourceKey) {
-      makeSvgSizeAdaptive(svgRef.current)
-      measuredSourceRef.current = sourceKey
-    }
-  }, [needsMeasurement, sourceKey])
+    if (!needsMeasurement || !sourceKey || deferSourceRemeasure) return
+    if (!svgRef.current || measuredSourceRef.current === sourceKey) return
+    makeSvgSizeAdaptive(svgRef.current)
+    measuredSourceRef.current = sourceKey
+  }, [needsMeasurement, sourceKey, deferSourceRemeasure])
 
   const onPreview = useCallback(() => {
     if (!svgRef.current) return
@@ -42,7 +52,7 @@ const MarkdownSvgRenderer: FC<SvgProps> = (props) => {
     [onPreview, t]
   )
 
-  const svg = <svg key={sourceKey} ref={svgRef} {...finalProps} />
+  const svg = sourceKey ? <svg key={sourceKey} ref={svgRef} {...finalProps} /> : <svg ref={svgRef} {...finalProps} />
   if (isKatexGeneratedSvg(node)) return svg
 
   return (

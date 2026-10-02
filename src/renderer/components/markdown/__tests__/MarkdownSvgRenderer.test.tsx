@@ -104,4 +104,54 @@ describe('MarkdownSvgRenderer', () => {
 
     expect(screen.getByTestId('svg-context-menu')).toBeInTheDocument()
   })
+
+  it('does not remount when a non-measurement SVG only gets a new hast node reference', () => {
+    const { rerender } = render(
+      <MarkdownSvgRenderer node={userNode} role="img" aria-label="User SVG" viewBox="0 0 100 100" />
+    )
+    const first = screen.getByRole('img', { name: 'User SVG' })
+
+    rerender(
+      <MarkdownSvgRenderer
+        node={{ ...userNode, children: [...(userNode.children ?? [])] } as typeof userNode}
+        role="img"
+        aria-label="User SVG"
+        viewBox="0 0 100 100"
+      />
+    )
+
+    expect(screen.getByRole('img', { name: 'User SVG' })).toBe(first)
+  })
+
+  it('defers measurement while streaming and measures once defer ends', () => {
+    vi.spyOn(SVGElement.prototype, 'getBoundingClientRect').mockImplementation(() => createRect(120, 60))
+
+    const { rerender } = render(
+      <MarkdownSvgRenderer
+        node={firstNode}
+        data-needs-measurement="true"
+        deferSourceRemeasure
+        role="img"
+        aria-label="Deferred SVG"
+        width="10em"
+        height="5em"
+      />
+    )
+
+    expect(screen.getByRole('img', { name: 'Deferred SVG' })).not.toHaveAttribute('viewBox')
+
+    rerender(
+      <MarkdownSvgRenderer
+        node={firstNode}
+        data-needs-measurement="true"
+        deferSourceRemeasure={false}
+        role="img"
+        aria-label="Deferred SVG"
+        width="10em"
+        height="5em"
+      />
+    )
+
+    expect(screen.getByRole('img', { name: 'Deferred SVG' })).toHaveAttribute('viewBox', '0 0 120 60')
+  })
 })
