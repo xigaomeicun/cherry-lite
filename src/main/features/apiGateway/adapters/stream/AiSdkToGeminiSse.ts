@@ -38,6 +38,7 @@ interface GeminiUsageMetadata {
   candidatesTokenCount: number
   totalTokenCount: number
   thoughtsTokenCount?: number
+  cachedContentTokenCount?: number
 }
 
 interface GeminiCandidate {
@@ -157,6 +158,9 @@ export class AiSdkToGeminiSse extends BaseStreamAdapter<GeminiGenerateContentRes
     if (!metadata) return
     if (metadata.stats?.inputTokens !== undefined) this.state.inputTokens = metadata.stats.inputTokens
     if (metadata.stats?.outputTokens !== undefined) this.state.outputTokens = metadata.stats.outputTokens
+    if (metadata.stats?.inputTokenDetails?.cacheReadTokens !== undefined) {
+      this.state.cacheReadTokens = metadata.stats.inputTokenDetails.cacheReadTokens
+    }
     const reasoningTokens = metadata.stats?.outputTokenDetails?.reasoningTokens
     if (reasoningTokens !== undefined) this.thoughtsTokens = reasoningTokens
   }
@@ -175,6 +179,13 @@ export class AiSdkToGeminiSse extends BaseStreamAdapter<GeminiGenerateContentRes
       totalTokenCount: this.state.inputTokens + this.state.outputTokens
     }
     if (this.thoughtsTokens > 0) usage.thoughtsTokenCount = this.thoughtsTokens
+    // The projected `inputTokens` is Gemini's cache-inclusive prompt total
+    // (`promptTokenCount`), so cache reads are a subset of it — report them on
+    // their own field without touching the sum, mirroring the thoughtsTokenCount
+    // convention of staying absent when zero.
+    if (this.state.cacheReadTokens !== undefined && this.state.cacheReadTokens > 0) {
+      usage.cachedContentTokenCount = this.state.cacheReadTokens
+    }
     return usage
   }
 
