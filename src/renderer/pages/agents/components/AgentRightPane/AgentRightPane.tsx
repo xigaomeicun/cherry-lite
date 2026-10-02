@@ -122,14 +122,9 @@ const TracePane = lazy(() =>
   import('@renderer/components/chat/trace/TracePane').then((module) => ({ default: module.TracePane }))
 )
 
-function containsFile(root: TreeDirRoot | null): boolean {
-  let found = false
-  root?.walk((node) => {
-    if (!node.isTreeFile()) return
-    found = true
-    return false
-  })
-  return found
+/** Any non-ignored entry counts: a directory-only workspace is still browsable by expanding it. */
+function containsEntry(root: TreeDirRoot | null): boolean {
+  return (root?.childCount ?? 0) > 0
 }
 
 function getFlowTabValue(toolCallId: string): string {
@@ -218,7 +213,7 @@ interface AgentRightPaneActions {
 
 interface AgentRightPanelScope {
   developerMode: boolean
-  hasSystemWorkspaceFiles: boolean
+  hasSystemWorkspaceEntries: boolean
   filesTitle: string
   flowTab: AgentFlowTab | null
   meta: AgentRightPaneMeta
@@ -463,9 +458,9 @@ function AgentRightPaneStateProvider({
     systemWorkspacePath,
     ARTIFACT_MISSING_WORKSPACE_TREE_OPTIONS
   )
-  const hasSystemWorkspaceFiles = useMemo(() => {
+  const hasSystemWorkspaceEntries = useMemo(() => {
     void systemWorkspaceTreeVersion
-    return containsFile(systemWorkspaceRoot)
+    return containsEntry(systemWorkspaceRoot)
   }, [systemWorkspaceRoot, systemWorkspaceTreeVersion])
 
   useEffect(() => {
@@ -620,7 +615,7 @@ function AgentRightPaneStateProvider({
   const scope = useMemo<AgentRightPanelScope>(
     () => ({
       developerMode: enableDeveloperMode,
-      hasSystemWorkspaceFiles,
+      hasSystemWorkspaceEntries,
       filesTitle: t('agent.right_pane.tabs.files'),
       flowTab,
       meta,
@@ -628,7 +623,7 @@ function AgentRightPaneStateProvider({
       statusTitle: t('agent.right_pane.tabs.status'),
       traceTitle: t('trace.label')
     }),
-    [enableDeveloperMode, flowTab, hasSystemWorkspaceFiles, meta, resourcePane, t]
+    [enableDeveloperMode, flowTab, hasSystemWorkspaceEntries, meta, resourcePane, t]
   )
 
   return (
