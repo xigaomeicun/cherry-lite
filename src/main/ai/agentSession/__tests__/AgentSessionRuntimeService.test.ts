@@ -1,12 +1,11 @@
 import { EventEmitter } from 'node:events'
 
-import { mockMainLoggerService } from '@test-mocks/MainLoggerService'
-import { afterEach, beforeEach, describe, expect, it, type MockInstance, vi } from 'vitest'
-
 import type { StreamDoneResult, StreamErrorResult, StreamPausedResult } from '@main/ai/streamManager'
 import { BaseService } from '@main/core/lifecycle/BaseService'
 import { ServiceContainer } from '@main/core/lifecycle/ServiceContainer'
 import { AGENT_SESSION_API_RETRY_CACHE_KEY } from '@shared/ai/agentSessionApiRetry'
+import { mockMainLoggerService } from '@test-mocks/MainLoggerService'
+import { afterEach, beforeEach, describe, expect, it, type MockInstance, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   saveMessage: vi.fn(),
@@ -36,7 +35,6 @@ const mocks = vi.hoisted(() => ({
   closeWarmQueries: vi.fn(),
   closeAgentSessionWarm: vi.fn(),
   getSessionById: vi.fn(),
-  getConversationById: vi.fn(),
   getAgent: vi.fn(),
   ensureTraceId: vi.fn(),
   recordUsage: vi.fn(),
@@ -46,7 +44,6 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@data/services/AgentSessionService', () => ({
   agentSessionService: {
     getById: mocks.getSessionById,
-    getConversationById: mocks.getConversationById,
     ensureTraceId: mocks.ensureTraceId
   }
 }))
@@ -248,7 +245,7 @@ describe('AgentSessionRuntimeService', () => {
       id: message.id ?? 'generated-message-id',
       updatedAt: '2026-01-01T00:00:00.000Z'
     }))
-    mocks.getConversationById.mockReturnValue({ updatedAt: '2026-01-01T00:00:01.000Z' })
+    mocks.getSessionById.mockReturnValue({ updatedAt: '2026-01-01T00:00:01.000Z' })
     mocks.getSessionMessage.mockReturnValue({
       id: 'assistant-1',
       role: 'assistant',
@@ -1436,7 +1433,6 @@ describe('AgentSessionRuntimeService', () => {
     // A connection target that moves under the connect reproduces it exactly: `connectionTarget` is
     // captured at the top of the loop and compared again after `connect`, so every attempt is
     // discarded and the loop reconnects forever — one fresh runtime per iteration.
-    let service: InstanceType<typeof AgentSessionRuntimeService>
     const connect = vi.fn().mockImplementation(async () => {
       const turn = getEntry(service).currentTurn
       turn.reasoningEffort = turn.reasoningEffort === 'high' ? 'low' : 'high'
@@ -1454,7 +1450,7 @@ describe('AgentSessionRuntimeService', () => {
       validateSession: vi.fn(),
       listAvailableTools: vi.fn().mockResolvedValue([])
     })
-    service = new AgentSessionRuntimeService()
+    const service = new AgentSessionRuntimeService()
     const turn = service.beginTurn(baseTurnInput)
     const reader = service
       .openTurnStream({ sessionId: 'session-1', turnId: turn.turnId, signal: new AbortController().signal })
