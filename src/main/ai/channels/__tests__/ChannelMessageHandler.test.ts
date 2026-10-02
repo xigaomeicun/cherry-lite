@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -19,6 +19,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ChannelMessageEvent } from '../ChannelAdapter'
 import { channelMessageHandler } from '../ChannelMessageHandler'
 import { sanitizeChannelOutput } from '../security/OutputSanitizer'
+import { modelPickTokens, resetModelPickTokensForTests } from '../telegramChannelExtras'
 
 const { mockPrepareAgentSessionWorkspaceDirectory, MockAgentSessionWorkspaceError } = vi.hoisted(() => {
   class MockAgentSessionWorkspaceError extends Error {
@@ -75,7 +76,8 @@ vi.mock('@data/services/AgentService', () => ({
       id: 'agent-1',
       configuration: {},
       model: 'openai::gpt-4'
-    })
+    }),
+    updateAgent: vi.fn()
   }
 }))
 
@@ -189,6 +191,7 @@ describe('ChannelMessageHandler', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     vi.clearAllMocks()
+    resetModelPickTokensForTests()
     // Restore default agent mock after clearAllMocks
     vi.mocked(agentService.getAgent).mockReturnValue({
       id: 'agent-1',
@@ -739,12 +742,56 @@ describe('ChannelMessageHandler', () => {
     }
     // Embedding / rerank / image-generation models are never offered as a base model.
     const flat = markup.inline_keyboard.flat()
-    expect(flat.map((b) => b.callback_data)).toEqual(['mdl:p::kimi-k3', 'mdl:p::gemini-flash', 'mdl:openai::gpt-4'])
+    // callback_data uses short tokens (Telegram 64-byte cap) that map back to full UniqueModelIds.
+    expect(flat.every((b) => b.callback_data.startsWith('mdl:') && b.callback_data.length <= 64)).toBe(true)
+    expect(flat.map((b) => modelPickTokens.get(b.callback_data.slice(4))?.id)).toEqual([
+      'p::kimi-k3',
+      'p::gemini-flash',
+      'openai::gpt-4'
+    ])
     // Two buttons per row (last row may hold the odd one out).
     expect(markup.inline_keyboard.map((row) => row.length)).toEqual([2, 1])
     // The agent's current model is flagged so the picker shows current state.
     expect(flat[2].text).toContain('✅')
     expect(flat[2].text).toContain('GPT-4')
+  })
+
+  it('handleCallbackQuery mdl: stores the full UniqueModelId and shows the friendly name', async () => {
+    const adapter = createMockAdapter({ channelType: 'telegram' })
+    const longProvider = '3e39ea56-ea80-47ef-a301-42f2d196fed9'
+    const fullId = `${longProvider}::gemini-flash`
+    mockModelList.mockReturnValueOnce([
+      { id: fullId, providerId: longProvider, name: 'Gemini Flash', capabilities: ['image-recognition'] }
+    ])
+
+    await channelMessageHandler.handleCommand(adapter, {
+      chatId: 'chat-1',
+      userId: 'user-1',
+      userName: 'User',
+      command: 'model'
+    })
+
+    const markup = vi.mocked(adapter.sendMessage).mock.calls.at(-1)?.[2]?.replyMarkup as {
+      inline_keyboard: Array<Array<{ text: string; callback_data: string }>>
+    }
+    const callbackData = markup.inline_keyboard.flat()[0].callback_data
+    expect(callbackData.length).toBeLessThanOrEqual(64)
+    expect(callbackData).not.toContain(longProvider)
+
+    const answerCallbackQuery = vi.fn().mockResolvedValue(undefined)
+    const editReplyMarkup = vi.fn().mockResolvedValue(undefined)
+    await channelMessageHandler.handleCallbackQuery(adapter, {
+      chatId: 'chat-1',
+      userId: 'user-1',
+      data: callbackData,
+      answerCallbackQuery,
+      editReplyMarkup
+    } as any)
+
+    expect(agentService.updateAgent).toHaveBeenCalledWith('agent-1', { model: fullId })
+    expect(editReplyMarkup).toHaveBeenCalledWith({
+      inline_keyboard: [[{ text: '✅ Gemini Flash', callback_data: 'noop' }]]
+    })
   })
 
   it('serializes commands after earlier messages in the same conversation', async () => {

@@ -18,6 +18,7 @@ import { agentTaskService as taskService } from '@data/services/AgentTaskService
 import { loggerService } from '@logger'
 import { buildAgentSessionTopicId } from '@main/ai/agentSession/topic'
 import {
+  agentAssetsWorkspaceRoot,
   type ChannelAdapter,
   hasOutboundImageDelivered,
   markOutboundImageDelivered,
@@ -923,7 +924,9 @@ export class CherryAutonomyTools {
     }
 
     // Resolve the file once after recipient validation so a bad path fails before dispatch.
-    const file = filePath ? await resolveWorkspaceFile(this.workspacePath, filePath) : undefined
+    const file = filePath
+      ? await resolveWorkspaceFile(this.workspacePath, filePath, [agentAssetsWorkspaceRoot()])
+      : undefined
     const sanitizedMessage = message ? sanitizeChannelOutput(message).text : undefined
 
     let messagesSent = 0

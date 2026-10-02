@@ -1,5 +1,6 @@
 import { loggerService } from '@logger'
 import {
+  agentAssetsWorkspaceRoot,
   askUserPending,
   type ChannelAdapter,
   escHtml,
@@ -42,7 +43,12 @@ export class ChannelAdapterListener implements StreamListener {
      * Session workspace root for resolving local image paths before outbound upload.
      * When unset (e.g. scheduled-task notify), path→photo conversion is skipped.
      */
-    private readonly workspacePath?: string
+    private readonly workspacePath?: string,
+    /**
+     * Extra allowed roots for outbound image resolution (defaults to the CPA
+     * `~/.agents/workspace` dump). Pass `[]` in tests to disable.
+     */
+    private readonly additionalRoots: readonly string[] | undefined = undefined
   ) {
     const responseKey = this.responseOptions?.replyToMessageId ?? 'unthreaded'
     this.id = `channel:${adapter.channelId}:${this.platformChatId}:${responseKey}`
@@ -75,7 +81,8 @@ export class ChannelAdapterListener implements StreamListener {
     const failedPaths: string[] = []
     for (const imagePath of imagePaths) {
       try {
-        const file = await resolveWorkspaceFile(this.workspacePath, imagePath)
+        const extraRoots = this.additionalRoots ?? [agentAssetsWorkspaceRoot()]
+        const file = await resolveWorkspaceFile(this.workspacePath, imagePath, extraRoots)
         if (!file.media_type.startsWith('image/')) {
           failedPaths.push(imagePath)
           logger.warn('Outbound local image skipped: not image/*', {

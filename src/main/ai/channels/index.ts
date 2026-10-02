@@ -17,14 +17,17 @@ export type { OutboundLocalImages } from './outboundLocalImages'
 export { extractOutboundLocalImages } from './outboundLocalImages'
 export { resolveLocalFile } from './security/localFileResolver'
 export { sanitizeChannelOutput } from './security/OutputSanitizer'
-export { resolveWorkspaceFile } from './security/WorkspaceFileGuard'
-export type { BusyOffer } from './telegramChannelExtras'
+export { agentAssetsWorkspaceRoot, resolveWorkspaceFile } from './security/WorkspaceFileGuard'
+export type { BusyOffer, ModelPickEntry } from './telegramChannelExtras'
 export {
   askUserPending,
   busyOffers,
   escHtml,
   MODEL_PICK_LIMIT,
+  modelPickTokens,
   normalizeToolKey,
+  rememberModelPick,
+  resetModelPickTokensForTests,
   toolPermSent
 } from './telegramChannelExtras'
 // ChannelMessageHandler / ChannelManager after sanitize + extras so stream listeners

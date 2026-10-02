@@ -247,6 +247,32 @@ describe('ChannelAdapterListener', () => {
       expect(delivered).toContain(outsideImage)
     })
 
+    it('delivers absolute images under an additional allowed root (CPA agent assets)', async () => {
+      const assetsRoot = await mkdtemp(path.join(tmpdir(), 'cal-assets-'))
+      try {
+        const imagePath = path.join(assetsRoot, 'cute-girlfriend-23.jpg')
+        await writeFile(imagePath, Buffer.from([0xff, 0xd8, 0xff, 0xd9]))
+
+        const adapter = makeAdapter({ onStreamComplete: vi.fn().mockResolvedValue(false) })
+        // Pass assetsRoot explicitly; production defaults to ~/.agents/workspace.
+        const listener = new ChannelAdapterListener(adapter, 'chat-1', false, undefined, workspace, [assetsRoot])
+
+        listener.onChunk(delta(imagePath))
+        await listener.onDone({ status: 'success' } as StreamDoneResult)
+
+        expect(adapter.sendImage).toHaveBeenCalledTimes(1)
+        expect(vi.mocked(adapter.sendImage).mock.calls[0][1]).toMatchObject({
+          filename: 'cute-girlfriend-23.jpg',
+          media_type: 'image/jpeg'
+        })
+        // Path-only body becomes empty after successful photo delivery.
+        expect(adapter.sendMessage).not.toHaveBeenCalled()
+        expect(adapter.onStreamComplete).toHaveBeenCalledWith('chat-1', '', undefined)
+      } finally {
+        await rm(assetsRoot, { recursive: true, force: true })
+      }
+    })
+
     it('does not upload images during streaming onTextUpdate', async () => {
       const imagePath = path.join(workspace, 'out.png')
       await writeFile(imagePath, Buffer.from('png'))

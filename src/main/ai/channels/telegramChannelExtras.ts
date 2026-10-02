@@ -51,4 +51,28 @@ export function normalizeToolKey(name: string): string {
     .replace(/[_-]/g, '')
 }
 
+/** Telegram /model picker: short callback tokens → full UniqueModelId + display name.
+ * Telegram callback_data is capped at 64 bytes; UUID provider ids make `mdl:${id}` truncate
+ * and the confirm button was showing the truncated id instead of the friendly name.
+ */
+export type ModelPickEntry = { id: string; name: string }
+export const modelPickTokens = new Map<string, ModelPickEntry>()
+
+/** Remember a model for an inline-keyboard callback; returns a short opaque token. */
+export function rememberModelPick(id: string, name: string): string {
+  const token = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`
+  modelPickTokens.set(token, { id, name: name || id })
+  // Bound memory if users open /model repeatedly without clicking.
+  if (modelPickTokens.size > 300) {
+    const oldest = modelPickTokens.keys().next().value
+    if (oldest !== undefined) modelPickTokens.delete(oldest)
+  }
+  return token
+}
+
+/** Test helper — clear model-pick tokens. */
+export function resetModelPickTokensForTests(): void {
+  modelPickTokens.clear()
+}
+
 export const MODEL_PICK_LIMIT = 30

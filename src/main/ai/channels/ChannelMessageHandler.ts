@@ -32,7 +32,14 @@ import type {
   SendMessageOptions
 } from './ChannelAdapter'
 import { SLASH_COMMANDS } from './constants'
-import { askUserPending, busyOffers, escHtml, MODEL_PICK_LIMIT } from './telegramChannelExtras'
+import {
+  askUserPending,
+  busyOffers,
+  escHtml,
+  MODEL_PICK_LIMIT,
+  modelPickTokens,
+  rememberModelPick
+} from './telegramChannelExtras'
 
 const logger = loggerService.withContext('ChannelMessageHandler')
 
@@ -909,10 +916,14 @@ export class ChannelMessageHandler {
             // `Model.id` is ALREADY the canonical `providerId::modelId` unique id — re-prefixing it
             // with `m.providerId` produced a malformed double-prefixed id that the switch handler
             // stored verbatim, so the picker could never actually change the base model.
+            // Telegram callback_data is capped at 64 bytes, so we store a short token → full id/name
+            // instead of embedding the UniqueModelId (UUID providers truncate, e.g. `…::ge`).
             const id = m.id
             const isCurrent = id === currentModelId
-            const label = `${isCurrent ? '✅ ' : ''}${m.name || id}`.slice(0, 30)
-            return { text: label, callback_data: `mdl:${id}`.slice(0, 64) }
+            const displayName = m.name || id
+            const label = `${isCurrent ? '✅ ' : ''}${displayName}`.slice(0, 30)
+            const token = rememberModelPick(id, displayName)
+            return { text: label, callback_data: `mdl:${token}` }
           })
           const rows: Array<Array<{ text: string; callback_data: string }>> = []
           for (let i = 0; i < buttons.length; i += 2) {
@@ -1006,17 +1017,23 @@ export class ChannelMessageHandler {
       }
 
       if (data.startsWith('mdl:')) {
-        const modelId = data.slice(4)
+        const tokenOrId = data.slice(4)
+        const remembered = modelPickTokens.get(tokenOrId)
+        // Prefer the short-token map; fall back to a legacy embedded UniqueModelId for
+        // keyboards that were rendered before the token fix (only if still ≤64 and intact).
+        const modelId = remembered?.id ?? (tokenOrId.includes('::') ? tokenOrId : '')
+        const displayName = remembered?.name ?? modelId
         if (!modelId.includes('::')) {
           await cb.answerCallbackQuery({ text: '无效模型' })
           return
         }
+        if (remembered) modelPickTokens.delete(tokenOrId)
         agentService.updateAgent(adapter.agentId, {
           model: modelId as UniqueModelId
         })
         await cb.answerCallbackQuery({ text: '模型已切换' })
         await cb.editReplyMarkup({
-          inline_keyboard: [[{ text: `✅ ${modelId.slice(0, 40)}`, callback_data: 'noop' }]]
+          inline_keyboard: [[{ text: `✅ ${displayName.slice(0, 40)}`, callback_data: 'noop' }]]
         })
         return
       }
