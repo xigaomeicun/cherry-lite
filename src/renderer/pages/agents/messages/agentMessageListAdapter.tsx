@@ -1,7 +1,3 @@
-import { useNavigate } from '@tanstack/react-router'
-import { type ReactNode, useCallback, useEffect, useMemo, useRef } from 'react'
-import { useTranslation } from 'react-i18next'
-
 import { dataApiService } from '@data/DataApiService'
 import { isHiddenPart } from '@renderer/components/chat/messages/blocks/messagePartLayouts'
 import { useMessageListAdapterCapabilities } from '@renderer/components/chat/messages/hooks/useMessageListAdapterCapabilities'
@@ -41,6 +37,9 @@ import { agentSessionForkFailureReason } from '@shared/ipc/errors/ai'
 import type { DoctorSubjectRef } from '@shared/types/doctor'
 import { type AbsoluteFilePath, AbsoluteFilePathSchema } from '@shared/types/file'
 import { createFilePathHandle } from '@shared/utils/file'
+import { useNavigate } from '@tanstack/react-router'
+import { type ReactNode, useCallback, useEffect, useMemo, useRef } from 'react'
+import { useTranslation } from 'react-i18next'
 
 import AgentSessionApiRetryStatus from './AgentSessionApiRetryStatus'
 import { agentSessionForkAvailability, agentSessionForkReasonLabel } from './agentSessionFork'
@@ -274,13 +273,15 @@ export function useAgentMessageListProviderValue({
     selectAllPagination
   })
 
+  // Raw path to main, which resolves workspace-relative input against the session's workspace: the
+  // renderer must never join paths, and nothing unresolved may reach `shell.openPath`.
   const openPath = useCallback(
-    (path: string) => {
-      return window.api.file.openPath(requireWorkspaceFilePath(workspacePath, path))
-    },
-    [workspacePath]
+    (path: string) => ipcApi.request('ai.agent.session.open_path', { sessionId, path }),
+    [sessionId]
   )
 
+  // Still renderer-side: the open-target menu needs an absolute path to describe, and it is not a
+  // file-opening call.
   const resolvePath = useMemo<MessageListActions['resolvePath']>(
     () => (workspacePath ? (path) => requireWorkspaceFilePath(workspacePath, path) : undefined),
     [workspacePath]
