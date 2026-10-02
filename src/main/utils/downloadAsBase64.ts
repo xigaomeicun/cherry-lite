@@ -34,6 +34,8 @@ export type FileAttachment = {
   data: string // base64-encoded file bytes
   media_type: string // MIME type, e.g. 'application/pdf', 'text/plain'
   size: number // raw byte size (before base64 encoding)
+  /** Absolute realpath when resolved from disk; omitted for remote downloads. */
+  canonicalPath?: string
 }
 
 /** Maximum file size we'll download (100 MB). */

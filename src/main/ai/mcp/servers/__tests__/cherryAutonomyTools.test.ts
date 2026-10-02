@@ -2,6 +2,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 
+import { resetOutboundImageDeliveryForTests } from '@main/ai/channels/outboundImageDelivery'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 // Mock TaskService before importing CherryAutonomyTools
@@ -11,6 +12,7 @@ const mockDeleteTask = vi.fn()
 const mockGetNotifyAdapters = vi.fn()
 const mockSendMessage = vi.fn()
 const mockSendFile = vi.fn()
+const mockSendImage = vi.fn()
 const mockGetAgent = vi.fn()
 const mockListAgents = vi.fn()
 const mockUpdateAgent = vi.fn()
@@ -1001,7 +1003,8 @@ describe('CherryAutonomyTools', () => {
         connected,
         notifyChatIds: chatIds,
         sendMessage: mockSendMessage,
-        sendFile: mockSendFile
+        sendFile: mockSendFile,
+        sendImage: mockSendImage
       }
     }
 
@@ -1223,6 +1226,8 @@ describe('CherryAutonomyTools', () => {
       let outside: string
 
       beforeEach(async () => {
+        resetOutboundImageDeliveryForTests()
+        mockSendImage.mockReset()
         workspace = await mkdtemp(path.join(tmpdir(), 'cherry-notify-'))
         outside = await mkdtemp(path.join(tmpdir(), 'cherry-outside-'))
       })
@@ -1247,6 +1252,41 @@ describe('CherryAutonomyTools', () => {
         expect(file.media_type).toBe('text/plain')
         expect(Buffer.from(file.data, 'base64').toString()).toBe('hello')
         expect(result.content[0].text).toContain('File "report.txt" sent to 2 chat(s)')
+      })
+
+      it('should deliver workspace images via sendImage (not sendFile)', async () => {
+        mockSendImage.mockResolvedValue(undefined)
+        mockGetNotifyAdapters.mockReturnValue([makeAdapter('ch1', ['100'])])
+        await writeFile(path.join(workspace, 'shot.png'), Buffer.from([0x89, 0x50, 0x4e, 0x47]))
+
+        const server = createServer('agent_1', workspace)
+        const result = await callTool(server, { file_path: 'shot.png' }, 'notify')
+
+        expect(mockSendImage).toHaveBeenCalledTimes(1)
+        expect(mockSendFile).not.toHaveBeenCalled()
+        expect(mockSendImage.mock.calls[0][1]).toMatchObject({
+          filename: 'shot.png',
+          media_type: 'image/png'
+        })
+        expect(result.content[0].text).toContain('File "shot.png" sent to 1 chat(s)')
+      })
+
+      it('should skip sendImage when the body path already delivered the same realpath', async () => {
+        const { markOutboundImageDelivered } = await import('@main/ai/channels/outboundImageDelivery')
+        const { realpath } = await import('node:fs/promises')
+        mockSendImage.mockResolvedValue(undefined)
+        mockGetNotifyAdapters.mockReturnValue([makeAdapter('ch1', ['100'])])
+        const imagePath = path.join(workspace, 'dup.png')
+        await writeFile(imagePath, Buffer.from([0x89, 0x50, 0x4e, 0x47]))
+        markOutboundImageDelivered('ch1', '100', await realpath(imagePath))
+
+        const server = createServer('agent_1', workspace)
+        const result = await callTool(server, { file_path: 'dup.png' }, 'notify')
+
+        expect(mockSendImage).not.toHaveBeenCalled()
+        expect(mockSendFile).not.toHaveBeenCalled()
+        expect(result.content[0].text).toContain('File "dup.png" sent to 1 chat(s)')
+        expect(result.isError).toBeFalsy()
       })
 
       it('should send both message and file independently', async () => {

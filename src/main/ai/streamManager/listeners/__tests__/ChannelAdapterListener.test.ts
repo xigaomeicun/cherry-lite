@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 
 import type { ChannelAdapter } from '@main/ai/channels/ChannelAdapter'
+import { markOutboundImageDelivered, resetOutboundImageDeliveryForTests } from '@main/ai/channels/outboundImageDelivery'
 import type { UIMessageChunk } from 'ai'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -191,6 +192,7 @@ describe('ChannelAdapterListener', () => {
     let outside: string
 
     beforeEach(async () => {
+      resetOutboundImageDeliveryForTests()
       workspace = await mkdtemp(path.join(tmpdir(), 'cal-ws-'))
       outside = await mkdtemp(path.join(tmpdir(), 'cal-out-'))
     })
@@ -256,6 +258,48 @@ describe('ChannelAdapterListener', () => {
 
       expect(adapter.sendImage).not.toHaveBeenCalled()
       expect(adapter.onTextUpdate).toHaveBeenCalled()
+    })
+
+    it('skips sendImage when notify already delivered the same realpath', async () => {
+      const imagePath = path.join(workspace, 'dup.png')
+      await writeFile(imagePath, Buffer.from([0x89, 0x50, 0x4e, 0x47]))
+      const { realpath } = await import('node:fs/promises')
+      const canonical = await realpath(imagePath)
+      markOutboundImageDelivered('ch-1', 'chat-1', canonical)
+
+      const adapter = makeAdapter({ onStreamComplete: vi.fn().mockResolvedValue(false) })
+      const listener = new ChannelAdapterListener(adapter, 'chat-1', false, undefined, workspace)
+
+      listener.onChunk(delta(`See\n\n![${imagePath}](${imagePath})\n\nDone.`))
+      await listener.onDone({ status: 'success' } as StreamDoneResult)
+
+      expect(adapter.sendImage).not.toHaveBeenCalled()
+      expect(adapter.sendMessage).toHaveBeenCalledWith('chat-1', 'See\n\nDone.', undefined)
+    })
+
+    it('marks delivered realpath after a successful sendImage', async () => {
+      const imagePath = path.join(workspace, 'mark.png')
+      await writeFile(imagePath, Buffer.from([0x89, 0x50, 0x4e, 0x47]))
+      const { realpath } = await import('node:fs/promises')
+      const canonical = await realpath(imagePath)
+
+      const adapter = makeAdapter({ onStreamComplete: vi.fn().mockResolvedValue(false) })
+      const listener = new ChannelAdapterListener(adapter, 'chat-1', false, undefined, workspace)
+
+      listener.onChunk(delta(`![${imagePath}](${imagePath})`))
+      await listener.onDone({ status: 'success' } as StreamDoneResult)
+
+      expect(adapter.sendImage).toHaveBeenCalledTimes(1)
+
+      // Second listener on the same chat must not re-send.
+      const adapter2 = makeAdapter({ onStreamComplete: vi.fn().mockResolvedValue(false) })
+      const listener2 = new ChannelAdapterListener(adapter2, 'chat-1', false, undefined, workspace)
+      listener2.onChunk(delta(`again\n\n![${imagePath}](${imagePath})`))
+      await listener2.onDone({ status: 'success' } as StreamDoneResult)
+
+      expect(adapter2.sendImage).not.toHaveBeenCalled()
+      const { hasOutboundImageDelivered } = await import('@main/ai/channels/outboundImageDelivery')
+      expect(hasOutboundImageDelivered('ch-1', 'chat-1', canonical)).toBe(true)
     })
   })
 })

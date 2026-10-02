@@ -4,6 +4,8 @@ import {
   type ChannelAdapter,
   escHtml,
   extractOutboundLocalImages,
+  hasOutboundImageDelivered,
+  markOutboundImageDelivered,
   normalizeToolKey,
   resolveWorkspaceFile,
   sanitizeChannelOutput,
@@ -84,7 +86,15 @@ export class ChannelAdapterListener implements StreamListener {
           })
           continue
         }
+        const canonicalPath = file.canonicalPath
+        if (canonicalPath && hasOutboundImageDelivered(this.adapter.channelId, this.platformChatId, canonicalPath)) {
+          // notify(file_path) already delivered this photo — skip duplicate sendPhoto/sendDocument.
+          continue
+        }
         await this.adapter.sendImage(this.platformChatId, file)
+        if (canonicalPath) {
+          markOutboundImageDelivered(this.adapter.channelId, this.platformChatId, canonicalPath)
+        }
       } catch (err) {
         failedPaths.push(imagePath)
         logger.warn('Failed to deliver outbound local image', {

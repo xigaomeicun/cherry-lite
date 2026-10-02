@@ -8,6 +8,11 @@ export type {
   SendMessageOptions
 } from './ChannelAdapter'
 export { ChannelAdapter } from './ChannelAdapter'
+export {
+  hasOutboundImageDelivered,
+  markOutboundImageDelivered,
+  resetOutboundImageDeliveryForTests
+} from './outboundImageDelivery'
 export type { OutboundLocalImages } from './outboundLocalImages'
 export { extractOutboundLocalImages } from './outboundLocalImages'
 export { resolveLocalFile } from './security/localFileResolver'

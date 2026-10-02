@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, symlink, truncate, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, realpath, rm, symlink, truncate, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { Readable } from 'node:stream'
@@ -40,6 +40,7 @@ describe('resolveWorkspaceFile', () => {
     expect(file.media_type).toBe('text/markdown')
     expect(file.size).toBe(Buffer.byteLength('hello world'))
     expect(Buffer.from(file.data, 'base64').toString()).toBe('hello world')
+    expect(file.canonicalPath).toBe(await realpath(path.join(workspace, 'note.md')))
   })
 
   it('accepts an absolute path inside the workspace', async () => {

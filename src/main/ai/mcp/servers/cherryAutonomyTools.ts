@@ -17,7 +17,13 @@ import { agentSessionService } from '@data/services/AgentSessionService'
 import { agentTaskService as taskService } from '@data/services/AgentTaskService'
 import { loggerService } from '@logger'
 import { buildAgentSessionTopicId } from '@main/ai/agentSession/topic'
-import { type ChannelAdapter, resolveWorkspaceFile, sanitizeChannelOutput } from '@main/ai/channels'
+import {
+  type ChannelAdapter,
+  hasOutboundImageDelivered,
+  markOutboundImageDelivered,
+  resolveWorkspaceFile,
+  sanitizeChannelOutput
+} from '@main/ai/channels'
 import { conversationEvidence } from '@main/ai/messages/conversationEvidence'
 import { findPersistedToolOutput } from '@main/ai/messages/persistedToolOutput'
 import { readConversation, type ReadConversationInput } from '@main/ai/messages/readConversation'
@@ -950,7 +956,21 @@ export class CherryAutonomyTools {
         }
         if (file) {
           try {
-            await adapter.sendFile(chatId, file)
+            const isImage = file.media_type.startsWith('image/')
+            const canonicalPath = file.canonicalPath
+            if (isImage && canonicalPath && hasOutboundImageDelivered(adapter.channelId, chatId, canonicalPath)) {
+              // Body path already delivered this photo — do not re-send as document.
+              filesSent++
+              continue
+            }
+            if (isImage) {
+              await adapter.sendImage(chatId, file)
+              if (canonicalPath) {
+                markOutboundImageDelivered(adapter.channelId, chatId, canonicalPath)
+              }
+            } else {
+              await adapter.sendFile(chatId, file)
+            }
             filesSent++
           } catch (err) {
             recordError(adapter, chatId, 'file', err)
