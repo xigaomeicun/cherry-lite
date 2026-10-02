@@ -98,7 +98,7 @@ export function AgentToolDisclosure({
             data-testid={`collapse-content-${item.key}`}
             hidden={!isExpanded}
             className={cn(
-              'mt-1.5 max-h-96 overflow-auto rounded-xl bg-muted px-4 py-3 text-[13px] text-muted-foreground leading-5',
+              'mt-1.5 max-h-[min(32rem,60dvh)] overflow-auto overscroll-contain rounded-xl bg-muted px-4 py-3 text-[13px] text-muted-foreground leading-5',
               item.classNames?.body
             )}>
             {item.children}
