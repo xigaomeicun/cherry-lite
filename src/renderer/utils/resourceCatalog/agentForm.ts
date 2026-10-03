@@ -4,6 +4,7 @@ import {
   DEFAULT_HEARTBEAT_INTERVAL,
   normalizePermissionMode
 } from '@renderer/utils/agent/permissionMode'
+import { normalizePiDisabledToolId } from '@shared/ai/piBuiltinTools'
 import type { AgentSkillUpdateDto, UpdateAgentDto } from '@shared/data/api/schemas/agents'
 import type { AgentConfiguration } from '@shared/data/types/agent'
 import type { UniqueModelId } from '@shared/data/types/model'
@@ -104,7 +105,9 @@ export function buildInitialAgentFormState(agent?: AgentDetail | null, skillIds:
     mcps: [...(agent?.mcps ?? [])],
     knowledgeBaseIds: [...(agent?.knowledgeBaseIds ?? [])],
     skillIds: [...skillIds],
-    disabledTools: [...(agent?.disabledTools ?? [])],
+    disabledTools: (agent?.disabledTools ?? []).map((name) =>
+      agent?.type === 'pi' ? normalizePiDisabledToolId(name) : name
+    ),
     avatar: asString(cfg.avatar),
     permissionMode: asString(cfg.permission_mode),
     envVarsText: envVarsToText(cfg.env_vars),
