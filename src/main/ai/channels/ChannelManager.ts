@@ -12,6 +12,7 @@ import type { EventPayload } from '@shared/ipc/types'
 import type { ChannelAdapter } from './ChannelAdapter'
 import { ChannelLogBuffer } from './ChannelLogBuffer'
 import { channelMessageHandler } from './ChannelMessageHandler'
+import { ChannelRegistration } from './ChannelRegistration'
 import type { ChannelLogEntry, ChannelStatusEvent } from './types'
 
 const logger = loggerService.withContext('ChannelManager')
@@ -44,7 +45,8 @@ const adapterImportMap: Record<AgentChannelType, () => Promise<unknown>> = {
   qq: () => import('./adapters/qq/QqAdapter'),
   slack: () => import('./adapters/slack/SlackAdapter'),
   telegram: () => import('./adapters/telegram/TelegramAdapter'),
-  wechat: () => import('./adapters/wechat/WeChatAdapter')
+  wechat: () => import('./adapters/wechat/WeChatAdapter'),
+  wecom: () => import('./adapters/wecom/WeComAdapter')
 }
 
 /** Ensure the adapter factory for the given type is loaded (idempotent). */
@@ -57,6 +59,7 @@ async function ensureAdapterLoaded(type: AgentChannelType): Promise<void> {
 @ServicePhase(Phase.WhenReady)
 @DependsOn(['WindowManager'])
 export class ChannelManager extends BaseService {
+  readonly registration = new ChannelRegistration()
   private readonly adapters = new Map<string, ChannelAdapter>() // key: `${agentId}:${channelId}`
   private readonly qrWaiters = new Map<
     string,
@@ -116,6 +119,7 @@ export class ChannelManager extends BaseService {
   }
 
   async stop(): Promise<void> {
+    this.registration.dispose()
     logger.info('Stopping channel manager')
     const disconnects = Array.from(this.adapters.values()).map((adapter) =>
       adapter.disconnect().catch((err) => {

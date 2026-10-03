@@ -14,6 +14,7 @@ import {
   toolPermSent
 } from '@main/ai/channels'
 import { toolApprovalRegistry } from '@main/ai/toolApproval/ToolApprovalRegistry'
+import { t } from '@main/i18n'
 import type { UniqueModelId } from '@shared/data/types/model'
 import type { UIMessageChunk } from 'ai'
 
@@ -27,6 +28,7 @@ export class ChannelAdapterListener implements StreamListener {
   readonly id: string
   private accumulatedText = ''
   private exitPlanCardSent = false
+  private settled = false
 
   constructor(
     private readonly adapter: ChannelAdapter,
@@ -63,8 +65,8 @@ export class ChannelAdapterListener implements StreamListener {
     return this.adapter.onTextUpdate(this.platformChatId, text, this.responseOptions)
   }
 
-  private completeStream(text: string): Promise<boolean> {
-    return this.adapter.onStreamComplete(this.platformChatId, text, this.responseOptions)
+  private completeStream(text: string, status: 'success' | 'paused'): Promise<boolean> {
+    return this.adapter.onStreamComplete(this.platformChatId, text, this.responseOptions, { status })
   }
 
   /**
@@ -125,10 +127,10 @@ export class ChannelAdapterListener implements StreamListener {
   private async finalizeDelivery(text: string): Promise<void> {
     if (!text) {
       // Image-only turn: still ask the adapter to close any streaming draft/card.
-      await this.completeStream('')
+      await this.completeStream('', 'success')
       return
     }
-    const handled = await this.completeStream(text)
+    const handled = await this.completeStream(text, 'success')
     if (!handled) {
       await this.deliver(text)
     }
@@ -136,6 +138,7 @@ export class ChannelAdapterListener implements StreamListener {
 
   // oxlint-disable-next-line no-unused-vars
   onChunk(chunk: UIMessageChunk, _sourceModelId?: UniqueModelId): void {
+    if (this.settled) return
     if (chunk.type === 'text-delta' && chunk.delta) {
       this.accumulatedText += chunk.delta
       // Best-effort streaming update; adapter chooses to throttle. Sanitize here — this is
@@ -308,49 +311,44 @@ export class ChannelAdapterListener implements StreamListener {
 
   async onDone(result: StreamDoneResult): Promise<void> {
     await this.adapter.dismissToolProgress?.(this.platformChatId, this.responseOptions)?.catch(() => {})
+    await this.finish(result.status)
+  }
+
+  // oxlint-disable-next-line no-unused-vars
+  async onPaused(_result: StreamPausedResult): Promise<void> {
+    await this.adapter.dismissToolProgress?.(this.platformChatId, this.responseOptions)?.catch(() => {})
+    await this.finish('paused')
+  }
+
+  private async finish(status: 'success' | 'paused'): Promise<void> {
+    if (this.settled) return
+    this.settled = true
     const text = sanitizeChannelOutput(this.accumulatedText).text.trim()
-    if (!text) {
+    if (status === 'success' && !text) {
       logger.warn('ChannelAdapterListener.onDone with empty text', {
         channelId: this.adapter.channelId,
         chatId: this.platformChatId,
-        status: result.status
+        status
       })
       return
     }
 
     try {
       const deliveryText = await this.prepareOutboundDelivery(text)
-      await this.finalizeDelivery(deliveryText)
-    } catch (err) {
-      logger.error('Failed to deliver message to channel', {
-        channelId: this.adapter.channelId,
-        chatId: this.platformChatId,
-        err
-      })
-    }
-  }
-
-  // oxlint-disable-next-line no-unused-vars
-  async onPaused(_result: StreamPausedResult): Promise<void> {
-    await this.adapter.dismissToolProgress?.(this.platformChatId, this.responseOptions)?.catch(() => {})
-    const text = sanitizeChannelOutput(this.accumulatedText).text.trim()
-    if (!text) return
-
-    try {
-      const deliveryText = await this.prepareOutboundDelivery(text)
-      // Keep historical contract: onStreamComplete gets body without the stopped
-      // suffix; sendMessage fallback appends it.
-      if (!deliveryText) {
-        await this.completeStream('')
-        await this.deliver('_(stopped)_')
+      if (status === 'paused') {
+        if (!deliveryText) {
+          await this.completeStream('', 'paused')
+          return
+        }
+        const handled = await this.completeStream(deliveryText, 'paused')
+        if (!handled) {
+          await this.deliver(`${deliveryText}\n\n_(${t('common.channel_stopped')})_`)
+        }
         return
       }
-      const handled = await this.completeStream(deliveryText)
-      if (!handled) {
-        await this.deliver(`${deliveryText}\n\n_(stopped)_`)
-      }
+      await this.finalizeDelivery(deliveryText)
     } catch (err) {
-      logger.error('Failed to deliver paused message to channel', {
+      logger.error('Failed to deliver terminal message to channel', {
         channelId: this.adapter.channelId,
         chatId: this.platformChatId,
         err
@@ -360,9 +358,16 @@ export class ChannelAdapterListener implements StreamListener {
 
   async onError(result: StreamErrorResult): Promise<void> {
     await this.adapter.dismissToolProgress?.(this.platformChatId, this.responseOptions)?.catch(() => {})
-    if (this.suppressErrorMessage) return
+    if (this.settled) return
+    this.settled = true
     try {
-      await this.deliver(`Error: ${result.error.message ?? 'Unknown error'}`)
+      const error = sanitizeChannelOutput(result.error.message ?? t('common.channel_message_processing_error')).text
+      const handled = await this.adapter.onStreamError(this.platformChatId, error, this.responseOptions, {
+        suppressDelivery: this.suppressErrorMessage
+      })
+      if (!handled && !this.suppressErrorMessage) {
+        await this.deliver(t('common.channel_error', { error }))
+      }
     } catch (err) {
       logger.error('Failed to deliver error to channel', {
         channelId: this.adapter.channelId,
@@ -373,6 +378,6 @@ export class ChannelAdapterListener implements StreamListener {
   }
 
   isAlive(): boolean {
-    return this.adapter.connected
+    return this.adapter.isStreamListenerAlive()
   }
 }

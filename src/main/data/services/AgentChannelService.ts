@@ -9,8 +9,15 @@ import {
 import type { DbOrTx } from '@data/db/types'
 import { nullsToUndefined, timestampToISO } from '@data/services/utils/rowMappers'
 import { loggerService } from '@logger'
-import { DataApiErrorFactory } from '@shared/data/api/errors'
-import type { AgentChannelEntity, CreateAgentChannelDto } from '@shared/data/api/schemas/agentChannels'
+import { t } from '@main/i18n'
+import { DataApiErrorFactory, toDataApiError } from '@shared/data/api/errors'
+import {
+  ActiveAgentChannelConfigSchemasByType,
+  AgentChannelConfigSchemasByType,
+  type AgentChannelEntity,
+  type AgentChannelType,
+  type CreateAgentChannelDto
+} from '@shared/data/api/schemas/agentChannels'
 import type { AgentPermissionMode } from '@shared/data/api/schemas/agents'
 import {
   AGENT_WORKSPACE_TYPE,
@@ -28,6 +35,20 @@ function normalizeChannelConfig(config: unknown): Record<string, unknown> {
   const rest = { ...(config as Record<string, unknown>) }
   delete rest.type
   return rest
+}
+
+function validateChannelConfig(
+  type: AgentChannelType,
+  config: unknown,
+  isActive: boolean
+): AgentChannelEntity['config'] {
+  const parsed = AgentChannelConfigSchemasByType[type].safeParse(normalizeChannelConfig(config))
+  if (!parsed.success) throw toDataApiError(parsed.error)
+  if (isActive) {
+    const active = ActiveAgentChannelConfigSchemasByType[type].safeParse(parsed.data)
+    if (!active.success) throw toDataApiError(active.error)
+  }
+  return parsed.data
 }
 
 export class AgentChannelService {
@@ -60,7 +81,7 @@ export class AgentChannelService {
           permissionMode?: AgentPermissionMode | null
         }
   ): AgentChannelEntity {
-    const database = application.get('DbService').getDb()
+    const isActive = data.isActive ?? true
 
     const insertData: InsertChannelRow = {
       type: data.type,
@@ -72,7 +93,10 @@ export class AgentChannelService {
       permissionMode: data.permissionMode
     }
 
-    const result = database.insert(channelsTable).values(insertData).returning().all()
+    const result = application.get('DbService').withWriteTx((tx) => {
+      this.validateWeComBot(tx, data.type, insertData.config, isActive)
+      return tx.insert(channelsTable).values(insertData).returning().all()
+    })
 
     if (!result[0]) {
       throw DataApiErrorFactory.invalidOperation('create channel', 'database insert returned no row')
@@ -205,27 +229,48 @@ export class AgentChannelService {
     updates: Partial<
       Pick<ChannelRow, 'name' | 'agentId' | 'config' | 'isActive' | 'activeChatIds' | 'permissionMode'> & {
         workspace: AgentSessionWorkspaceSource
+        configPatch: Record<string, unknown>
       }
     >
   ): AgentChannelEntity | null {
-    const database = application.get('DbService').getDb()
-    const normalizedUpdates = {
-      ...updates,
-      ...(updates.config !== undefined ? { config: normalizeChannelConfig(updates.config) } : {})
-    }
-    const result = database
-      .update(channelsTable)
-      .set(normalizedUpdates)
-      .where(eq(channelsTable.id, id))
-      .returning()
-      .all()
+    const { configPatch, ...fields } = updates
+    const result = application.get('DbService').withWriteTx((tx) => {
+      const existing = tx.select().from(channelsTable).where(eq(channelsTable.id, id)).limit(1).all()[0]
+      if (!existing) return null
 
-    if (!result[0]) {
-      return null
-    }
+      const isActive = updates.isActive ?? existing.isActive
+      const config = validateChannelConfig(
+        existing.type,
+        configPatch !== undefined
+          ? { ...normalizeChannelConfig(existing.config), ...configPatch }
+          : updates.config !== undefined
+            ? updates.config
+            : existing.config,
+        isActive
+      )
+      this.validateWeComBot(tx, existing.type, config, isActive, id)
+      const normalizedUpdates = {
+        ...fields,
+        ...(configPatch !== undefined || updates.config !== undefined || updates.isActive !== undefined
+          ? { config }
+          : {})
+      }
+      const updated = tx
+        .update(channelsTable)
+        .set(normalizedUpdates)
+        .where(eq(channelsTable.id, id))
+        .returning()
+        .all()[0]
+      if (updates.agentId !== undefined && updates.agentId !== existing.agentId) {
+        tx.delete(channelTaskSubscriptionsTable).where(eq(channelTaskSubscriptionsTable.channelId, id)).run()
+      }
+      return updated ?? null
+    })
+
+    if (!result) return null
 
     logger.info('Channel updated', { channelId: id })
-    return this.rowToEntity(result[0])
+    return this.rowToEntity(result)
   }
 
   deleteChannel(id: string): boolean {
@@ -235,6 +280,18 @@ export class AgentChannelService {
       logger.info('Channel deleted', { channelId: id })
     }
     return result.length > 0
+  }
+
+  private validateWeComBot(tx: DbOrTx, type: AgentChannelType, config: unknown, active: boolean, id?: string): void {
+    if (type !== 'wecom' || !active) return
+    const botId = (config as { bot_id: string }).bot_id
+    const conflict = tx
+      .select()
+      .from(channelsTable)
+      .where(and(eq(channelsTable.type, 'wecom'), eq(channelsTable.isActive, true)))
+      .all()
+      .some((row) => row.id !== id && (row.config as { bot_id?: string }).bot_id?.trim() === botId)
+    if (conflict) throw DataApiErrorFactory.invalidOperation('activate channel', t('common.wecom_duplicate_bot'))
   }
 
   // ---- Task subscription methods ----

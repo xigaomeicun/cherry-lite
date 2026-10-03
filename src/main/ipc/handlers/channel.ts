@@ -10,6 +10,12 @@ import fs from 'fs'
  * adapters / ChannelManager, not here.
  */
 export const channelHandlers: IpcHandlersFor<typeof channelRequestSchemas> = {
+  'channel.registration.begin': async ({ channelId, requestId }, { senderId }) =>
+    application.get('ChannelManager').registration.begin(senderId, channelId, requestId),
+  'channel.registration.poll': async ({ requestId }, { senderId }) =>
+    application.get('ChannelManager').registration.poll(senderId, requestId),
+  'channel.registration.cancel': async ({ requestId }, { senderId }) =>
+    application.get('ChannelManager').registration.cancel(senderId, requestId),
   'channel.wechat.has_credentials': async (channelId) => {
     const tokenPath = application.getPath('feature.agents.channels', `weixin_bot_${channelId}.json`)
     try {
