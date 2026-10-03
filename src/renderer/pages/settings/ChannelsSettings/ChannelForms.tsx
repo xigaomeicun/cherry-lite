@@ -22,6 +22,7 @@ import { type FC, useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import type { ChannelData } from './channelTypes'
+import { DingTalkForm } from './DingTalkForm'
 import { WeComForm } from './WeComForm'
 
 // --------------- Permission mode ---------------
@@ -559,6 +560,8 @@ export const getFormForType = (type: string) => {
       return DiscordForm
     case 'slack':
       return SlackForm
+    case 'dingtalk':
+      return DingTalkForm
     case 'wecom':
       return WeComForm
     case 'wechat':

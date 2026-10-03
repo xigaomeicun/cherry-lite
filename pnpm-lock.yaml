@@ -87,6 +87,7 @@ patchedDependencies:
   ai@6.0.185: 61fc175c652267f39ec01df738fc61d1639faa19b980441005f7e9cd645d1711
   app-builder-lib@26.15.6: 0c97462468a75262cf0a035c308cc8fdf186541f4dfc637e87952fb2a2850181
   atomically@1.7.0: 657b68ae90d71dfa6230dbf3431a1c2d952f87572cd8e00e635c4f5739f7b671
+  dingtalk-stream@2.1.7-beta.1: b81b5999ab52fb82bc76c6c7599eb74137cf8c6304b84aa5e8d3c3c562049172
   electron-updater@6.7.0: 845dead3509897d7a5aed99b4d271a244449c544b840c21bf149ff6fc907cc85
   emoji-picker-react@4.19.1: ba04440e6cf4cbf02fe55453d84c4fcf318bc83f6481fc7e5e5b3d5e29af3649
   file-stream-rotator@0.6.1: 40d59705d29163ef409027f9558e88101f422adb4fa6c6d991e5d8dd1bdc8b1a
@@ -819,6 +820,9 @@ importers:
       diff:
         specifier: ^8.0.3
         version: 8.0.3
+      dingtalk-stream:
+        specifier: 2.1.7-beta.1
+        version: 2.1.7-beta.1(patch_hash=b81b5999ab52fb82bc76c6c7599eb74137cf8c6304b84aa5e8d3c3c562049172)
       docx:
         specifier: ^9.0.2
         version: 9.5.1
@@ -1664,7 +1668,7 @@ importers:
         version: 0.2.0-rc.2(92203fffa8eb22d3bf471936e9f2add5)
       '@deepseek-ai/dsh-llm-pi-ai':
         specifier: 0.2.0-rc.2
-        version: 0.2.0-rc.2(patch_hash=22e1bba3e6b5d2567a6c64821bc2310147b41f8f6d993774d1c65b249f7d6d78)(4157a43759de927e8e5c381a1d925fe1)
+        version: 0.2.0-rc.2(patch_hash=22e1bba3e6b5d2567a6c64821bc2310147b41f8f6d993774d1c65b249f7d6d78)(a40a9396e0d455be782fe17ad4be3983)
       '@deepseek-ai/dsh-llm-retry':
         specifier: 0.2.0-rc.2
         version: 0.2.0-rc.2(@deepseek-ai/cordis@4.0.4)(@deepseek-ai/dsh-agent@0.2.0-rc.2(b872d4d836bb263e5b3a50782f98c977))(@deepseek-ai/dsh-brand@0.2.0-rc.2(@deepseek-ai/cordis@4.0.4))(@deepseek-ai/dsh-invariants@0.2.0-rc.2(@deepseek-ai/cordis@4.0.4))(@deepseek-ai/dsh-llm@0.2.0-rc.2(@deepseek-ai/cordis@4.0.4))(@deepseek-ai/dsh-session-projection@0.2.0-rc.2(@deepseek-ai/cordis@4.0.4)(@deepseek-ai/dsh-session@0.2.0-rc.2(@deepseek-ai/cordis@4.0.4)(@deepseek-ai/dsh-scope@0.2.0-rc.2(@deepseek-ai/cordis@4.0.4)(@deepseek-ai/dsh-invariants@0.2.0-rc.2(@deepseek-ai/cordis@4.0.4)))))(@deepseek-ai/dsh-session@0.2.0-rc.2(@deepseek-ai/cordis@4.0.4)(@deepseek-ai/dsh-scope@0.2.0-rc.2(@deepseek-ai/cordis@4.0.4)(@deepseek-ai/dsh-invariants@0.2.0-rc.2(@deepseek-ai/cordis@4.0.4))))(@deepseek-ai/dsh-timeout@0.2.0-rc.2(@deepseek-ai/cordis@4.0.4))
@@ -9916,6 +9920,9 @@ packages:
   axios@1.16.0:
     resolution: {integrity: sha512-6hp5CwvTPlN2A31g5dxnwAX0orzM7pmCRDLnZSX772mv8WDqICwFjowHuPs04Mc8deIld1+ejhtaMn5vp6b+1w==}
 
+  axios@1.20.0:
+    resolution: {integrity: sha512-r8aOh8j9cGKpgQAqpzrUHnSIc6a59Y3Xf/cv8sy1DrHCkZHzQGEuoq1tARk6qSyDdtQGSDgpb9kFlruzPvrgwg==}
+
   b4a@1.7.3:
     resolution: {integrity: sha512-5Q2mfq2WfGuFp3uS//0s6baOJLMoVduPYVeNmDYxu5OUA1/cBfvr2RIS7vi62LdNj/urk1hfmj867I3qt6uZ7Q==}
     peerDependencies:
@@ -10957,6 +10964,9 @@ packages:
 
   dingbat-to-unicode@1.0.1:
     resolution: {integrity: sha512-98l0sW87ZT58pU4i61wa2OHwxbiYSbuxsCBozaVnYX2iCnr3bLM3fIes1/ej7h1YdOKuKt/MLs706TVnALA65w==}
+
+  dingtalk-stream@2.1.7-beta.1:
+    resolution: {integrity: sha512-MBWfDa3KrocwFPf5tOAhG2oM6FFYBN30sQQ7wbz7BPlRcuemAb7SGXbeztS49Pp/3Hiyzhwqjcssf8Yq3Z9DzA==}
 
   dir-compare@4.2.0:
     resolution: {integrity: sha512-2xMCmOoMrdQIPHdsTawECdNPwlVFB9zGcz3kuhmBO6U3oU+UQjsue0i8ayLKpgBcm+hcXPMVSGUN9d+pvJ6+VQ==}
@@ -16687,6 +16697,18 @@ packages:
       utf-8-validate:
         optional: true
 
+  ws@8.22.0:
+    resolution: {integrity: sha512-Ydggc987+RO0AnWtZ/7Wq9FtNvcrL1b/RO0ud9mWjUPgDrsAAwQSF51sm2hm1XofbU/4jkpGEsLFsZZxU+1DOg==}
+    engines: {node: '>=10.0.0'}
+    peerDependencies:
+      bufferutil: ^4.0.1
+      utf-8-validate: '>=5.0.2'
+    peerDependenciesMeta:
+      bufferutil:
+        optional: true
+      utf-8-validate:
+        optional: true
+
   wsl-utils@0.1.0:
     resolution: {integrity: sha512-h3Fbisa2nKGPxCpm89Hk33lBLsnaGBvctQopaBSOW/uIs6FTe1ATyAnKFJrzVs9vpGdsTe73WF3V4lIsk4Gacw==}
     engines: {node: '>=18'}
@@ -18399,9 +18421,9 @@ snapshots:
       ws: 8.21.0
       zod: 4.3.4
 
-  '@cherrystudio/openai@6.15.0(ws@8.21.0)(zod@4.6.5)':
+  '@cherrystudio/openai@6.15.0(ws@8.22.0)(zod@4.6.5)':
     optionalDependencies:
-      ws: 8.21.0
+      ws: 8.22.0
       zod: 4.6.5
 
   '@chevrotain/cst-dts-gen@11.1.2':
@@ -19032,7 +19054,7 @@ snapshots:
     optionalDependencies:
       '@deepseek-ai/cordis-plugin-loader': 1.0.5(@deepseek-ai/cordis@4.0.4)(node-addon-require-builtin@0.1.7)
 
-  '@deepseek-ai/dsh-llm-pi-ai@0.2.0-rc.2(patch_hash=22e1bba3e6b5d2567a6c64821bc2310147b41f8f6d993774d1c65b249f7d6d78)(4157a43759de927e8e5c381a1d925fe1)':
+  '@deepseek-ai/dsh-llm-pi-ai@0.2.0-rc.2(patch_hash=22e1bba3e6b5d2567a6c64821bc2310147b41f8f6d993774d1c65b249f7d6d78)(a40a9396e0d455be782fe17ad4be3983)':
     dependencies:
       '@deepseek-ai/cordis': 4.0.4(@deepseek-ai/cordis-plugin-include@1.0.9)(@deepseek-ai/cordis-plugin-loader@1.0.5)
       '@deepseek-ai/dsh-attachment': 0.2.0-rc.2(@deepseek-ai/cordis@4.0.4)(@deepseek-ai/dsh-brand@0.2.0-rc.2(@deepseek-ai/cordis@4.0.4))
@@ -19045,7 +19067,7 @@ snapshots:
       '@deepseek-ai/dsh-timeout': 0.2.0-rc.2(@deepseek-ai/cordis@4.0.4)
       '@deepseek-ai/dsh-util-values': 0.2.0-rc.2(@deepseek-ai/cordis@4.0.4)
       '@deepseek-ai/schemastery': 3.18.4
-      '@earendil-works/pi-ai': 0.87.1(patch_hash=43bf946d925f1313409b88fb1658172dd225645ffd22fb4d96bf531f917ba750)(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@4.6.5))(ws@8.21.0)(zod@4.6.5)
+      '@earendil-works/pi-ai': 0.87.1(patch_hash=43bf946d925f1313409b88fb1658172dd225645ffd22fb4d96bf531f917ba750)(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@4.6.5))(ws@8.22.0)(zod@4.6.5)
     optionalDependencies:
       '@deepseek-ai/cordis-plugin-loader': 1.0.5(@deepseek-ai/cordis@4.0.4)(node-addon-require-builtin@0.1.7)
     transitivePeerDependencies:
@@ -19768,7 +19790,7 @@ snapshots:
       - ws
       - zod
 
-  '@earendil-works/pi-ai@0.87.1(patch_hash=43bf946d925f1313409b88fb1658172dd225645ffd22fb4d96bf531f917ba750)(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@4.6.5))(ws@8.21.0)(zod@4.6.5)':
+  '@earendil-works/pi-ai@0.87.1(patch_hash=43bf946d925f1313409b88fb1658172dd225645ffd22fb4d96bf531f917ba750)(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@4.6.5))(ws@8.22.0)(zod@4.6.5)':
     dependencies:
       '@anthropic-ai/sdk': 0.124.0(zod@4.6.5)
       '@aws-sdk/client-bedrock-runtime': 3.1127.0
@@ -19777,7 +19799,7 @@ snapshots:
       '@smithy/node-http-handler': 4.12.1
       http-proxy-agent: 9.1.0
       https-proxy-agent: 9.1.0
-      openai: '@cherrystudio/openai@6.15.0(ws@8.21.0)(zod@4.6.5)'
+      openai: '@cherrystudio/openai@6.15.0(ws@8.22.0)(zod@4.6.5)'
       partial-json: 0.1.7
       typebox: 1.3.27
     transitivePeerDependencies:
@@ -25423,7 +25445,6 @@ snapshots:
       debug: 4.4.3
     transitivePeerDependencies:
       - supports-color
-    optional: true
 
   agent-base@7.1.4: {}
 
@@ -25690,11 +25711,21 @@ snapshots:
 
   axios@1.16.0:
     dependencies:
-      follow-redirects: 1.16.0
+      follow-redirects: 1.16.0(debug@4.4.3)
       form-data: 4.0.6
       proxy-from-env: 2.1.0
     transitivePeerDependencies:
       - debug
+
+  axios@1.20.0(debug@4.4.3):
+    dependencies:
+      follow-redirects: 1.16.0(debug@4.4.3)
+      form-data: 4.0.6
+      https-proxy-agent: 5.0.1
+      proxy-from-env: 2.1.0
+    transitivePeerDependencies:
+      - debug
+      - supports-color
 
   b4a@1.7.3: {}
 
@@ -26785,6 +26816,16 @@ snapshots:
 
   dingbat-to-unicode@1.0.1: {}
 
+  dingtalk-stream@2.1.7-beta.1(patch_hash=b81b5999ab52fb82bc76c6c7599eb74137cf8c6304b84aa5e8d3c3c562049172):
+    dependencies:
+      axios: 1.20.0(debug@4.4.3)
+      debug: 4.4.3
+      ws: 8.22.0
+    transitivePeerDependencies:
+      - bufferutil
+      - supports-color
+      - utf-8-validate
+
   dir-compare@4.2.0:
     dependencies:
       minimatch: 3.1.5
@@ -27784,7 +27825,9 @@ snapshots:
 
   fn.name@1.1.0: {}
 
-  follow-redirects@1.16.0: {}
+  follow-redirects@1.16.0(debug@4.4.3):
+    optionalDependencies:
+      debug: 4.4.3
 
   font-list@2.0.0: {}
 
@@ -28474,7 +28517,6 @@ snapshots:
       debug: 4.4.3
     transitivePeerDependencies:
       - supports-color
-    optional: true
 
   https-proxy-agent@7.0.6:
     dependencies:
@@ -33556,6 +33598,8 @@ snapshots:
   wrappy@1.0.2: {}
 
   ws@8.21.0: {}
+
+  ws@8.22.0: {}
 
   wsl-utils@0.1.0:
     dependencies:

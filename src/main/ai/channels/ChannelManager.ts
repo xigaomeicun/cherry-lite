@@ -46,7 +46,8 @@ const adapterImportMap: Record<AgentChannelType, () => Promise<unknown>> = {
   slack: () => import('./adapters/slack/SlackAdapter'),
   telegram: () => import('./adapters/telegram/TelegramAdapter'),
   wechat: () => import('./adapters/wechat/WeChatAdapter'),
-  wecom: () => import('./adapters/wecom/WeComAdapter')
+  wecom: () => import('./adapters/wecom/WeComAdapter'),
+  dingtalk: () => import('./adapters/dingtalk/DingTalkAdapter')
 }
 
 /** Ensure the adapter factory for the given type is loaded (idempotent). */

@@ -60,8 +60,9 @@ renderer-side transport that connects to them.
 
 > **Scope of the focused docs.** The reference documents in this folder map
 > the **chat / stream pipeline** (dispatch → stream manager → runtime →
-> tools → persistence → renderer transport). The WeCom channel design describes
-> the integration and its pending acceptance checks; the `channels/`, `skills/`, and `mcp/` subsystems are
+> tools → persistence → renderer transport). Channel designs cover the WeCom
+> integration and the proposed DingTalk integration with their acceptance checks;
+> the `channels/`, `skills/`, and `mcp/` subsystems are
 > mapped in the tree below but do not yet have complete subsystem references.
 
 ```
