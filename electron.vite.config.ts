@@ -1,11 +1,10 @@
-import { readdirSync, readFileSync } from 'fs'
-import { join, resolve } from 'path'
-
 import tailwindcss from '@tailwindcss/vite'
 import { tanstackRouter } from '@tanstack/router-plugin/vite'
 import react from '@vitejs/plugin-react'
 import { CodeInspectorPlugin } from 'code-inspector-plugin'
 import { defineConfig } from 'electron-vite'
+import { readdirSync, readFileSync } from 'fs'
+import { join, resolve } from 'path'
 import { visualizer } from 'rollup-plugin-visualizer'
 import type { Plugin } from 'vite'
 import { parse } from 'yaml'
@@ -15,6 +14,7 @@ import { parse } from 'yaml'
 import pkg from './package.json'
 import { buildFlatContractCss } from './packages/ui/scripts/build-theme-css'
 import { chunkExportGuardPlugin } from './scripts/checkChunkExports'
+import { piVccBundlePlugin } from './scripts/piVccBundle'
 import { uiContractPlugin } from './scripts/uiContract/vitePlugin'
 import { APP_EDITIONS, type AppEdition } from './src/shared/types/appEdition'
 import { parseReleaseHistory, validateCurrentReleaseHistory } from './src/shared/utils/releaseNotes'
@@ -116,7 +116,7 @@ export const mainResolveAlias = {
 
 export default defineConfig({
   main: {
-    plugins: [chunkExportGuardPlugin(), miniAppThemeAssetPlugin(), ...visualizerPlugin('main')],
+    plugins: [chunkExportGuardPlugin(), piVccBundlePlugin(), miniAppThemeAssetPlugin(), ...visualizerPlugin('main')],
     resolve: { alias: mainResolveAlias },
     build: {
       externalizeDeps: {
