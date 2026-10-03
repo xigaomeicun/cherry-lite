@@ -24,7 +24,9 @@ describe('grep MCP ripgrep integration', () => {
   it('passes pattern after a `--` end-of-options separator so flag-like patterns are literal', async () => {
     const workspaceRoot = await createTempDir('grep-injection-root-')
 
-    const runRipgrepSpy = vi.spyOn(types, 'runRipgrep').mockResolvedValue({ ok: true, stdout: '', exitCode: 1 })
+    const runRipgrepSpy = vi
+      .spyOn(types, 'runRipgrep')
+      .mockResolvedValue({ ok: true, stdout: '', stderr: '', exitCode: 1 })
 
     // A pattern that, without `--`, ripgrep would interpret as its preprocessor flag (→ RCE).
     await handleGrepTool({ pattern: '--pre=/bin/sh', path: workspaceRoot }, workspaceRoot)
@@ -45,7 +47,9 @@ describe('grep MCP ripgrep integration', () => {
   it('accepts ripgrep regex syntax that JavaScript does not support', async () => {
     const workspaceRoot = await createTempDir('grep-ripgrep-regex-root-')
     const pattern = '(?P<word>foo)'
-    const runRipgrepSpy = vi.spyOn(types, 'runRipgrep').mockResolvedValue({ ok: true, stdout: '', exitCode: 1 })
+    const runRipgrepSpy = vi
+      .spyOn(types, 'runRipgrep')
+      .mockResolvedValue({ ok: true, stdout: '', stderr: '', exitCode: 1 })
 
     const result = await handleGrepTool({ pattern, path: workspaceRoot }, workspaceRoot)
 
@@ -57,7 +61,7 @@ describe('grep MCP ripgrep integration', () => {
   it('rejects unsupported regex syntax when manual search is required', async () => {
     const workspaceRoot = await createTempDir('grep-fallback-regex-root-')
     const pattern = '(?P<word>foo)'
-    vi.spyOn(types, 'runRipgrep').mockResolvedValue({ ok: false, stdout: '', exitCode: null })
+    vi.spyOn(types, 'runRipgrep').mockResolvedValue({ ok: false, stdout: '', stderr: '', exitCode: null })
 
     await expect(handleGrepTool({ pattern, path: workspaceRoot }, workspaceRoot)).rejects.toThrow(
       `Invalid regex pattern: ${pattern}`
@@ -86,6 +90,7 @@ describe('grep MCP ripgrep integration', () => {
         }),
         JSON.stringify({ type: 'summary', data: {} })
       ].join('\n'),
+      stderr: '',
       exitCode: 0
     })
 
@@ -113,6 +118,7 @@ describe('grep MCP ripgrep integration', () => {
         }),
         'malformed output'
       ].join('\n'),
+      stderr: '',
       exitCode: 0
     })
 
@@ -135,6 +141,7 @@ describe('grep MCP ripgrep integration', () => {
         type: 'match',
         data: { path: { text: matchedFile }, lines: { text: 'needle here\n' }, line_number: 7 }
       }),
+      stderr: '',
       exitCode: 0
     })
 
@@ -164,6 +171,7 @@ describe('grep MCP ripgrep integration', () => {
         // ripgrep reports the match, then flags the file as binary once it reaches the NULs.
         JSON.stringify({ type: 'end', data: { path: { text: binaryFile }, binary_offset: 19 } })
       ].join('\n'),
+      stderr: '',
       exitCode: 0
     })
 
