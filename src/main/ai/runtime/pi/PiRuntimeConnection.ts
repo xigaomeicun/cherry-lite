@@ -359,7 +359,6 @@ export class PiRuntimeConnection implements AgentRuntimeConnection {
         nonBypassableApprovalTools: PI_NON_BYPASSABLE_APPROVAL_TOOLS
       }
       const mountedServers = resolveMountedMcpServers(agent, {
-        browserEnabled: application.get('PreferenceService').get('app.browser.agent_control.enabled'),
         channelLinked: linkedChannel !== null
       })
       const mcpServers = buildAgentMcpServers(
