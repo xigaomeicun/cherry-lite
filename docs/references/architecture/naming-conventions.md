@@ -9,7 +9,7 @@ sources:
 
 > Version: 1.1
 > Last Updated: 2026-06
-> **This document is the authoritative source. `CLAUDE.md` only links here.**
+> **This document is the authoritative source. `AGENTS.md` only links here.**
 
 This document defines naming rules for files, directories, and identifiers across the Cherry Studio monorepo. It encodes both industry consensus (React/TypeScript, Node.js, shadcn/Next.js) and project-specific conventions.
 
@@ -43,7 +43,7 @@ The 90% case. See later sections for full rules and edge cases.
 | Test file | `*.test.ts(x)` | `mcp.test.ts` |
 | Config file | `*.config.ts` | `vitest.config.ts` |
 | Type declaration | `*.d.ts` (lowercase / kebab) | `env.d.ts` |
-| Top-level meta doc | `UPPERCASE.md` | `README.md`, `CLAUDE.md` |
+| Top-level meta doc | `UPPERCASE.md` | `README.md`, `AGENTS.md` |
 | Regular doc | `kebab-case.md` | `database-testing.md` |
 | npm package directory (`packages/*`) | `kebab-case` | `ai-sdk-provider/` |
 | Business React component directory | `PascalCase` | `CodeEditor/` |
@@ -137,7 +137,7 @@ A `*Utils` suffix is used only when the file lives outside any `utils/` director
 
 | Type | Convention | Example |
 |---|---|---|
-| Top-level meta docs at repo root | `UPPERCASE.md` | `README.md`, `CLAUDE.md`, `DESIGN.md` |
+| Top-level meta docs at repo root | `UPPERCASE.md` | `README.md`, `AGENTS.md`, `DESIGN.md` |
 | Per-directory README | `README.md` (always uppercase) | `src/main/core/paths/README.md` |
 | All other docs (under `docs/`, `packages/*/docs/`, etc.) | `kebab-case.md` | `database-testing.md`, `lan-transfer-protocol.md` |
 

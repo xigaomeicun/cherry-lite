@@ -31,7 +31,7 @@ pnpm install
 pnpm dev
 ```
 
-约定与架构：[`CLAUDE.md`](./CLAUDE.md)（同 [`AGENTS.md`](./AGENTS.md)）。  
+约定与架构：[`AGENTS.md`](./AGENTS.md)。  
 UI 样式：[`DESIGN.md`](./DESIGN.md)。  
 内部参考文档：[`docs/`](./docs/README.md)。
 
