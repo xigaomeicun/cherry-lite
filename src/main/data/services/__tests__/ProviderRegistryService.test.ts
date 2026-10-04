@@ -1,6 +1,6 @@
 /**
  * Tests for ProviderRegistryService.
- * Uses setupTestDatabase() per CLAUDE.md testing guidelines.
+ * Uses setupTestDatabase() per AGENTS.md testing guidelines.
  */
 
 import { readFileSync } from 'node:fs'

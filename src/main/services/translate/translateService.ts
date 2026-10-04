@@ -10,7 +10,7 @@
  * Renderer subscribers consume `ai.stream.chunk` / `done` / `error` events
  * filtered by that streamId; abort flows back through `ai.stream.abort`.
  *
- * Per CLAUDE.md's lifecycle-decision guide this is a **direct-import
+ * Per AGENTS.md's lifecycle-decision guide this is a **direct-import
  * singleton**, not a `BaseService` — no long-lived resources, no persistent
  * side effects. The thin IpcApi handler lives in
  * `src/main/ipc/handlers/translate.ts`.

@@ -3,7 +3,7 @@
  * reads: the v1 → v2 migrators (`ProviderModelMigrator` / mappings) and the
  * legacy `OpenClawService`.
  *
- * v1 is throwaway (see CLAUDE.md "Coexistence Mindset"). These shapes are
+ * v1 is throwaway (see AGENTS.md "Coexistence Mindset"). These shapes are
  * deliberately NOT shared with the renderer (which keeps its own copy in
  * `src/renderer/types`) and NOT placed in `@shared`; they live under
  * `data/migration/` (outside the v2 barrel) to keep the v1 projection out of the
