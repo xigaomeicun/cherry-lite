@@ -140,7 +140,7 @@ describe('DSH edit fork checkpoint workset', () => {
   async function save(role: 'user' | 'assistant', text: string, boundary?: number, formatVersion?: 0 | 4) {
     return agentSessionMessageService.saveMessage({
       sessionId,
-      runtimeResumeToken: role === 'assistant' ? session : null,
+      runtimeResumeToken: role === 'assistant' ? session : undefined,
       runtimeAnchor:
         boundary === undefined
           ? undefined
