@@ -8,19 +8,20 @@ import type { AgentSessionMessageRow } from '@data/db/schemas/agentSessionMessag
 import type { DbOrTx } from '@data/db/types'
 import { agentService } from '@data/services/AgentService'
 import { AgentSessionEditError } from '@data/services/AgentSessionEditError'
-import { AgentSessionForkSourceError, agentSessionForkService } from '@data/services/AgentSessionForkService'
+import { agentSessionForkService, AgentSessionForkSourceError } from '@data/services/AgentSessionForkService'
 import { agentSessionMessageService } from '@data/services/AgentSessionMessageService'
 import { agentSessionService } from '@data/services/AgentSessionService'
 import { agentWorkspaceService } from '@data/services/AgentWorkspaceService'
 import { loggerService } from '@logger'
-import { type RuntimeForkCheckpoint, type RuntimeForkAnchor, RuntimeForkAnchorSchema } from '@main/ai/runtime/fork'
+import { type RuntimeForkAnchor, RuntimeForkAnchorSchema, type RuntimeForkCheckpoint } from '@main/ai/runtime/fork'
 import { AgentSessionForkError } from '@main/ai/runtime/fork'
 import { t } from '@main/i18n'
 import type { AgentSessionEditTarget } from '@shared/ai/agentSessionEdit'
 
 import { runtimeDriverRegistry } from '../../runtime/registry'
+import { resolveForkCheckpointWorkset } from './checkpointWorkset'
 import { copyForkWorkspace, forkFileIdentity, publishForkArtifact } from './files'
-import { type AgentSessionForkResources, readForkResources, writeForkResources, removeForkResources } from './resources'
+import { type AgentSessionForkResources, readForkResources, removeForkResources, writeForkResources } from './resources'
 import { workspaceHasReferences } from './workspaceCleanup'
 
 const logger = loggerService.withContext('AgentSessionForkOperations')
@@ -130,6 +131,14 @@ export class AgentSessionForkOperations {
             const parsed = RuntimeForkAnchorSchema.safeParse(row.data.runtimeAnchor)
             return parsed.success ? [parsed.data.checkpoint] : []
           })
+          // DSH hashes each checkpoint's prefix. Pass the anchor plus legacy/foreign
+          // checkpoints only; stable v4 boundaries are stamped after the fork.
+          const work = resolveForkCheckpointWorkset(agent.type, anchorData.checkpoint, checkpoints)
+          if (work.workset.length !== checkpoints.length) {
+            logger.info(
+              `fork checkpoint workset shrunk runtime=${agent.type} full=${checkpoints.length} workset=${work.workset.length}`
+            )
+          }
           resources = {
             version: 1,
             operationId,
@@ -146,17 +155,17 @@ export class AgentSessionForkOperations {
           const native = await driver.fork({
             sourceSessionId: sessionId,
             checkpoint: anchorData.checkpoint,
-            checkpoints,
+            checkpoints: work.workset,
             targetSessionId: nativeSessionId,
             targetCwd: source.workspace.path,
             artifactDirectory: resources.artifactDirectory,
             signal
           })
-          if (!native.resumeToken.trim() || native.checkpoints.length !== checkpoints.length)
+          if (!native.resumeToken.trim() || native.checkpoints.length !== work.workset.length)
             throw new AgentSessionForkError('history_corrupt')
           resources.resumeToken = native.resumeToken
           await writeForkResources(resources)
-          remapNativeHistory(prefix, native.resumeToken, native.checkpoints)
+          remapNativeHistory(prefix, native.resumeToken, work.expand(native.checkpoints, native.resumeToken))
           await this.publish(resources, native.publish, signal)
         } else {
           // If no assistant message in prefix has recorded a fork checkpoint (e.g. earlier turns
@@ -249,6 +258,12 @@ export class AgentSessionForkOperations {
       const parsed = RuntimeForkAnchorSchema.safeParse(row.data.runtimeAnchor)
       if (parsed.success) checkpoints.push(parsed.data.checkpoint)
     }
+    const work = resolveForkCheckpointWorkset(agent.type, checkpoint, checkpoints)
+    if (work.workset.length !== checkpoints.length) {
+      logger.info(
+        `fork checkpoint workset shrunk runtime=${agent.type} full=${checkpoints.length} workset=${work.workset.length}`
+      )
+    }
     const resources: AgentSessionForkResources = {
       version: 1,
       operationId,
@@ -278,16 +293,21 @@ export class AgentSessionForkOperations {
       const result = await driver.fork({
         sourceSessionId,
         checkpoint,
-        checkpoints,
+        checkpoints: work.workset,
         targetSessionId: resources.targetSessionId,
         targetCwd,
         artifactDirectory: resources.artifactDirectory,
         signal
       })
-      if (!result.resumeToken.trim() || result.checkpoints.length !== checkpoints.length)
+      if (!result.resumeToken.trim() || result.checkpoints.length !== work.workset.length)
         throw new AgentSessionForkError('history_corrupt')
       signal.throwIfAborted()
-      const messages = cloneMessages(source.messages, resources.targetSessionId, result.resumeToken, result.checkpoints)
+      const messages = cloneMessages(
+        source.messages,
+        resources.targetSessionId,
+        result.resumeToken,
+        work.expand(result.checkpoints, result.resumeToken)
+      )
       await this.publish(resources, result.publish, signal)
       signal.throwIfAborted()
       application.get('DbService').withWriteTx((tx) => {

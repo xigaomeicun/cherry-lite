@@ -108,7 +108,14 @@ export async function forkSession(
     }))
     const events = history.slice(0, boundary + 1)
     const { prefixHash } = createForkCheckpoint(events, boundary)
-    for (const checkpoint of checkpoints) createForkCheckpoint(events, checkpoint.boundary)
+    // The anchor hash already proved this prefix is contiguous and has no interrupted
+    // closers. Earlier checkpoints only have to land on a turn/end — hashing every
+    // prefix is quadratic (hundreds of boundaries × the full log).
+    for (const checkpoint of checkpoints) {
+      if (checkpoint.boundary === boundary) continue
+      const event = events[checkpoint.boundary]
+      if (event?.type !== 'turn/end' || event.seq !== checkpoint.boundary) throw new Error('history_changed')
+    }
     // SessionStore validates and owns a detached copy of the full event graph.
     const child = target.sessions.create(SessionId(input.targetSessionId), {
       seed: events,
@@ -136,7 +143,7 @@ export async function forkSession(
     throw error
   } finally {
     console.info(
-      `dsh fork fork_source=${forkSource} event_count=${eventCount} boundary=${input.boundary} duration_ms=${Date.now() - started} jsonl_bytes=${jsonlBytes ?? ''} legacy_checkpoints=${
+      `dsh fork fork_source=${forkSource} event_count=${eventCount} boundary=${input.boundary} checkpoint_count=${input.checkpoints.length} duration_ms=${Date.now() - started} jsonl_bytes=${jsonlBytes ?? ''} legacy_checkpoints=${
         [input, ...input.checkpoints].filter((checkpoint) => checkpoint.formatVersion === 0).length
       }${failed ? ` failed=${failed}` : ''}`
     )

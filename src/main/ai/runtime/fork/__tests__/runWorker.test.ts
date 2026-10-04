@@ -2,7 +2,7 @@ import { Worker } from 'node:worker_threads'
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { runForkWorker } from '../runWorker'
+import { FORK_WORKER_TIMEOUT_CAP_MS, resolveForkWorkerTimeoutMs, runForkWorker } from '../runWorker'
 
 afterEach(() => vi.useRealTimers())
 
@@ -54,5 +54,29 @@ describe('runForkWorker', () => {
     await vi.advanceTimersByTimeAsync(60_000)
     await rejected
     expect(worker.threadId).toBe(-1)
+  })
+
+  it('reports a fork timeout as its own reason and clamps to the cap', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    const worker = new Worker('setInterval(() => {}, 1000)', { eval: true })
+    const result = runForkWorker(worker, new AbortController().signal, FORK_WORKER_TIMEOUT_CAP_MS + 60_000)
+    const rejected = expect(result).rejects.toMatchObject({
+      reason: 'fork_timed_out',
+      message: expect.stringContaining('Fork worker timed out')
+    })
+    await vi.advanceTimersByTimeAsync(FORK_WORKER_TIMEOUT_CAP_MS)
+    await rejected
+    expect(worker.threadId).toBe(-1)
+  })
+})
+
+describe('resolveForkWorkerTimeoutMs', () => {
+  it('stays at 60s without a byte hint and caps huge disk scans at 3 minutes', () => {
+    expect(resolveForkWorkerTimeoutMs()).toBe(60_000)
+    expect(resolveForkWorkerTimeoutMs({ jsonlBytes: 1, checkpointCount: 1 })).toBe(62_000)
+    expect(resolveForkWorkerTimeoutMs({ jsonlBytes: 34 * 1024 * 1024, checkpointCount: 1 })).toBe(128_000)
+    expect(resolveForkWorkerTimeoutMs({ jsonlBytes: 100 * 1024 * 1024, checkpointCount: 257 })).toBe(
+      FORK_WORKER_TIMEOUT_CAP_MS
+    )
   })
 })

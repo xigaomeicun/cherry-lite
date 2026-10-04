@@ -2,18 +2,42 @@ import { readdir, stat } from 'node:fs/promises'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 
-import * as z from 'zod'
-
 import { application } from '@application'
 import { resolveBundledDshRuntimeEntry } from '@cherrystudio/dsh-bridge'
 import { loggerService } from '@logger'
+import * as z from 'zod'
 
-import { AgentSessionForkError, type RuntimeForkInput, type RuntimeForkResult } from '../fork'
-import { runForkWorker } from '../fork'
+import {
+  AgentSessionForkError,
+  resolveForkWorkerTimeoutMs,
+  runForkWorker,
+  type RuntimeForkInput,
+  type RuntimeForkResult
+} from '../fork'
 import { parseDshForkCheckpoint } from './forkCheckpoint'
 import type { DshForkWorkerInput } from './forkWorker'
 
 const logger = loggerService.withContext('dshFork')
+
+/** Above this, disk fallback can exceed the 60s floor. Compact is not automatic. */
+const HUGE_DSH_JSONL_BYTES = 16 * 1024 * 1024
+/** Live snapshots larger than this still hash one prefix; warn so the log explains the cost. */
+const HUGE_DSH_EVENT_COUNT = 50_000
+
+function warnIfHugeDshHistory(info: {
+  forkSource: string
+  eventCount: number
+  jsonlBytes: number | ''
+  checkpointCount: number
+  boundary: number
+}): void {
+  const hugeBytes = typeof info.jsonlBytes === 'number' && info.jsonlBytes >= HUGE_DSH_JSONL_BYTES
+  const hugeEvents = info.eventCount >= HUGE_DSH_EVENT_COUNT
+  if (!hugeBytes && !hugeEvents) return
+  logger.warn(
+    `dsh session history is large fork_source=${info.forkSource} event_count=${info.eventCount} boundary=${info.boundary} checkpoint_count=${info.checkpointCount} jsonl_bytes=${info.jsonlBytes}; native fork cost grows with history (no automatic compact)`
+  )
+}
 
 export async function forkDshSession(input: RuntimeForkInput, snapshotEvents?: unknown[]): Promise<RuntimeForkResult> {
   const checkpoint = parseDshForkCheckpoint(input.checkpoint)
@@ -27,7 +51,6 @@ export async function forkDshSession(input: RuntimeForkInput, snapshotEvents?: u
       throw new AgentSessionForkError('history_changed')
     return value
   })
-  const { default: createWorker } = await import('./forkWorker?nodeWorker')
   input.signal.throwIfAborted()
   const workerData: DshForkWorkerInput = {
     modulePath: pathToFileURL(resolveBundledDshRuntimeEntry('@cherrystudio/dsh-bridge/fork')).href,
@@ -41,17 +64,41 @@ export async function forkDshSession(input: RuntimeForkInput, snapshotEvents?: u
     checkpoints: checkpoints.map(({ boundary, formatVersion }) => ({ boundary, formatVersion })),
     events: snapshotEvents
   }
-  const worker = createWorker({ workerData, env: { ...process.env } })
   const forkSource = snapshotEvents && snapshotEvents.length > 0 ? 'live' : 'disk'
   const started = Date.now()
+  const jsonlBytesHint =
+    forkSource === 'disk' ? await sourceSessionJsonlBytes(sourceRoot, checkpoint.runtimeSessionId) : ''
+  const timeoutMs = resolveForkWorkerTimeoutMs({
+    jsonlBytes: typeof jsonlBytesHint === 'number' ? jsonlBytesHint : 0,
+    checkpointCount: checkpoints.length
+  })
+  const eventCount = snapshotEvents?.length ?? 0
+  warnIfHugeDshHistory({
+    forkSource,
+    eventCount,
+    jsonlBytes: jsonlBytesHint,
+    checkpointCount: checkpoints.length,
+    boundary: checkpoint.boundary
+  })
+  const { default: createWorker } = await import('./forkWorker?nodeWorker')
+  input.signal.throwIfAborted()
+  // Start the worker only after the listener exists. A stat between create and
+  // runForkWorker can drop the result message.
+  const worker = createWorker({ workerData, env: { ...process.env } })
   let workerResult: unknown
   try {
-    workerResult = await runForkWorker(worker, input.signal)
+    workerResult = await runForkWorker(worker, input.signal, timeoutMs)
   } catch (error) {
     logger.warn(
-      `dsh fork failed fork_source=${forkSource} event_count=${snapshotEvents?.length ?? 0} boundary=${checkpoint.boundary} checkpoint_count=${checkpoints.length} duration_ms=${Date.now() - started} jsonl_bytes=`,
+      `dsh fork failed fork_source=${forkSource} event_count=${eventCount} boundary=${checkpoint.boundary} checkpoint_count=${checkpoints.length} duration_ms=${Date.now() - started} timeout_ms=${timeoutMs} jsonl_bytes=${jsonlBytesHint}`,
       { error }
     )
+    if (error instanceof AgentSessionForkError && error.reason === 'fork_timed_out') {
+      throw new AgentSessionForkError(
+        'fork_timed_out',
+        `Fork worker timed out after ${timeoutMs}ms (fork_source=${forkSource}, checkpoint_count=${checkpoints.length}, jsonl_bytes=${jsonlBytesHint === '' ? 'unknown' : jsonlBytesHint})`
+      )
+    }
     throw error
   }
   const parsed = z
@@ -64,14 +111,13 @@ export async function forkDshSession(input: RuntimeForkInput, snapshotEvents?: u
     .safeParse(workerResult)
   if (!parsed.success) {
     logger.warn(
-      `dsh fork failed fork_source=${forkSource} event_count=${snapshotEvents?.length ?? 0} boundary=${checkpoint.boundary} checkpoint_count=${checkpoints.length} duration_ms=${Date.now() - started} jsonl_bytes=`
+      `dsh fork failed fork_source=${forkSource} event_count=${eventCount} boundary=${checkpoint.boundary} checkpoint_count=${checkpoints.length} duration_ms=${Date.now() - started} timeout_ms=${timeoutMs} jsonl_bytes=${jsonlBytesHint}`
     )
     throw new AgentSessionForkError('history_corrupt')
   }
   const durationMs = Date.now() - started
-  const jsonlBytes = forkSource === 'disk' ? await sourceSessionJsonlBytes(sourceRoot, checkpoint.runtimeSessionId) : ''
   logger.info(
-    `dsh fork fork_source=${forkSource} event_count=${snapshotEvents?.length ?? 0} boundary=${checkpoint.boundary} checkpoint_count=${checkpoints.length} duration_ms=${durationMs} jsonl_bytes=${jsonlBytes}`
+    `dsh fork fork_source=${forkSource} event_count=${eventCount} boundary=${checkpoint.boundary} checkpoint_count=${checkpoints.length} duration_ms=${durationMs} timeout_ms=${timeoutMs} jsonl_bytes=${jsonlBytesHint}`
   )
   const result = parsed.data
   const relative = path.relative(targetRoot, result.path)

@@ -532,6 +532,7 @@
   "agent_session_fork.history_changed": "O histórico selecionado foi alterado e já não pode ser bifurcado.",
   "agent_session_fork.history_corrupt": "O histórico da sessão original está danificado.",
   "agent_session_fork.history_missing": "O histórico da sessão original não foi encontrado.",
+  "agent_session_fork.fork_timed_out": "A bifurcação desta sessão demorou demasiado e foi interrompida. Tente novamente ou edite uma mensagem mais recente se o histórico for muito longo.",
   "agent_session_fork.label": "Bifurcar",
   "agent_session_fork.legacy_history": "Não foi registado um ponto de bifurcação para esta mensagem histórica.",
   "agent_session_fork.not_turn_boundary": "Só é possível bifurcar a partir da última mensagem do assistente de um turno concluído.",

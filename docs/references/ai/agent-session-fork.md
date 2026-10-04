@@ -109,13 +109,16 @@ compression settings to Agent forks.
 |---|---|---|
 | Pi | Runtime session ID and leaf ID | Stages the newest matching native file, as normal resume does, then branches with `SessionManager` and maps checkpoints to the child session ID |
 | Claude Code | Runtime session ID, main assistant UUID, and config directory | Its private worker calls the SDK fork API and maps assistant UUIDs into the child's transcript |
-| DSH | Runtime session ID and completed `turn/end` boundary | Its private worker calls the bundled bridge fork entry with a live snapshot or stored native history; the bridge creates and persists a seeded child |
+| DSH | Runtime session ID and completed `turn/end` boundary | Its private worker calls the bundled bridge fork entry with a live snapshot or stored native history; the bridge creates and persists a seeded child. The host sends the anchor plus any checkpoint the protocol must rewrite (legacy `formatVersion` 0, a different session, or a boundary past the anchor). Other v4 checkpoints are stamped onto the child session id without hashing each prefix. |
 
 DSH waits for an existing connection to finish startup before requesting a snapshot. Failure
 of that request is reported rather than retried against potentially stale stored
 history. A cold fork reads stored history without starting the source Agent loop.
 A closing connection remains registered until teardown finishes before Fork reads
 its persisted history. Startup and shutdown waits are cancellable and limited to 60 seconds each.
+The fork worker itself waits at least 60 seconds and at most 3 minutes; disk fallback
+adds about 2 seconds per MiB. `CHERRY_DSH_FORK_LIVE_EVENTS=0` still forces the on-disk scan.
+Edit snapshots the live session before `editSession` closes the connection.
 
 Claude and DSH create their own workers and pass them to `runForkWorker`. The
 shared helper returns an opaque result and waits for termination on success,

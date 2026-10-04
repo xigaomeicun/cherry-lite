@@ -532,6 +532,7 @@
   "agent_session_fork.history_changed": "所选历史已发生变化，无法继续分叉。",
   "agent_session_fork.history_corrupt": "原生会话历史已损坏。",
   "agent_session_fork.history_missing": "原生会话历史缺失。",
+  "agent_session_fork.fork_timed_out": "分叉会话超时并已停止。请重试；如果历史很长，请改为编辑更晚的消息。",
   "agent_session_fork.label": "分叉",
   "agent_session_fork.legacy_history": "该历史消息未记录分叉检查点。",
   "agent_session_fork.not_turn_boundary": "只能从完整回合的最后一条助手消息分叉。",

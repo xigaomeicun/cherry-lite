@@ -532,6 +532,7 @@
   "agent_session_fork.history_changed": "所選歷史已發生變更，無法繼續分叉。",
   "agent_session_fork.history_corrupt": "原生工作階段歷史已損壞。",
   "agent_session_fork.history_missing": "原生工作階段歷史遺失。",
+  "agent_session_fork.fork_timed_out": "分叉工作階段逾時並已停止。請重試；如果歷史很長，請改為編輯更晚的訊息。",
   "agent_session_fork.label": "分叉",
   "agent_session_fork.legacy_history": "此歷史訊息未記錄分叉檢查點。",
   "agent_session_fork.not_turn_boundary": "只能從完整回合的最後一則助手訊息分叉。",

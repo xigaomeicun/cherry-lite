@@ -1,8 +1,7 @@
-import type { TFunction } from 'i18next'
-
 import type { ActionAvailabilityInput } from '@renderer/components/chat/actions/actionTypes'
 import type { MessageListItem } from '@renderer/components/chat/messages/types'
 import type { AgentSessionForkFailureReason } from '@shared/ai/agentSessionFork'
+import type { TFunction } from 'i18next'
 
 export function agentSessionForkAvailability(t: TFunction, message: MessageListItem): ActionAvailabilityInput {
   if (message.role !== 'assistant') return false
@@ -39,5 +38,7 @@ export function agentSessionForkReasonLabel(t: TFunction, reason: AgentSessionFo
     case 'source_missing':
     case 'operation_failed':
       return t('agent_session_fork.operation_failed')
+    case 'fork_timed_out':
+      return t('agent_session_fork.fork_timed_out')
   }
 }

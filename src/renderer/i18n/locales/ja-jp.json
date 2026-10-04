@@ -532,6 +532,7 @@
   "agent_session_fork.history_changed": "選択した履歴が変更されたため、分岐できません。",
   "agent_session_fork.history_corrupt": "元のセッション履歴が破損しています。",
   "agent_session_fork.history_missing": "元のセッション履歴が見つかりません。",
+  "agent_session_fork.fork_timed_out": "セッションのフォークが制限時間内に終わらなかったため中断しました。再試行するか、履歴が長い場合はより新しいメッセージを編集してください。",
   "agent_session_fork.label": "分岐",
   "agent_session_fork.legacy_history": "この過去のメッセージには分岐用チェックポイントがありません。",
   "agent_session_fork.not_turn_boundary": "完了したターンの最後のアシスタントメッセージからのみ分岐できます。",

@@ -532,6 +532,7 @@
   "agent_session_fork.history_changed": "Der ausgewählte Verlauf wurde geändert und kann nicht mehr verzweigt werden.",
   "agent_session_fork.history_corrupt": "Der ursprüngliche Sitzungsverlauf ist beschädigt.",
   "agent_session_fork.history_missing": "Der ursprüngliche Sitzungsverlauf fehlt.",
+  "agent_session_fork.fork_timed_out": "Das Forken dieser Sitzung hat zu lange gedauert und wurde abgebrochen. Erneut versuchen oder bei sehr langem Verlauf eine spätere Nachricht bearbeiten.",
   "agent_session_fork.label": "Verzweigen",
   "agent_session_fork.legacy_history": "Für diese frühere Nachricht wurde kein Verzweigungspunkt gespeichert.",
   "agent_session_fork.not_turn_boundary": "Nur die letzte Assistentennachricht eines abgeschlossenen Dialogschritts kann verzweigt werden.",

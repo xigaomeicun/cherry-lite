@@ -532,6 +532,7 @@
   "agent_session_fork.history_changed": "Istoricul selectat s-a modificat și nu mai poate fi ramificat.",
   "agent_session_fork.history_corrupt": "Istoricul sesiunii originale este deteriorat.",
   "agent_session_fork.history_missing": "Istoricul sesiunii originale lipsește.",
+  "agent_session_fork.fork_timed_out": "Bifurcarea acestei sesiuni a durat prea mult și a fost oprită. Reîncercați sau editați un mesaj mai recent dacă istoricul este foarte lung.",
   "agent_session_fork.label": "Ramifică",
   "agent_session_fork.legacy_history": "Nu a fost înregistrat un punct de ramificare pentru acest mesaj istoric.",
   "agent_session_fork.not_turn_boundary": "Se poate ramifica doar ultimul mesaj al asistentului dintr-o rundă încheiată.",

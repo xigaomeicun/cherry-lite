@@ -532,6 +532,7 @@
   "agent_session_fork.history_changed": "Lịch sử đã chọn đã thay đổi và không thể phân nhánh nữa.",
   "agent_session_fork.history_corrupt": "Lịch sử phiên gốc bị hỏng.",
   "agent_session_fork.history_missing": "Không tìm thấy lịch sử phiên gốc.",
+  "agent_session_fork.fork_timed_out": "Việc tách phiên này mất quá lâu và đã bị dừng. Hãy thử lại, hoặc sửa một tin nhắn mới hơn nếu lịch sử quá dài.",
   "agent_session_fork.label": "Phân nhánh",
   "agent_session_fork.legacy_history": "Tin nhắn cũ này chưa được ghi điểm kiểm tra phân nhánh.",
   "agent_session_fork.not_turn_boundary": "Chỉ có thể phân nhánh từ tin nhắn trợ lý cuối cùng của một lượt đã hoàn tất.",

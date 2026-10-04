@@ -532,6 +532,7 @@
   "agent_session_fork.history_changed": "Seçilen geçmiş değişti ve artık dallandırılamaz.",
   "agent_session_fork.history_corrupt": "Kaynak oturum geçmişi bozuk.",
   "agent_session_fork.history_missing": "Kaynak oturum geçmişi bulunamadı.",
+  "agent_session_fork.fork_timed_out": "Bu oturumun çatallanması çok uzun sürdü ve durduruldu. Yeniden deneyin veya geçmiş çok uzunsa daha sonraki bir mesajı düzenleyin.",
   "agent_session_fork.label": "Dallandır",
   "agent_session_fork.legacy_history": "Bu eski mesaj için dallanma kontrol noktası kaydedilmemiş.",
   "agent_session_fork.not_turn_boundary": "Yalnızca tamamlanmış bir turun son asistan mesajından dallanılabilir.",

@@ -532,6 +532,7 @@
   "agent_session_fork.history_changed": "The selected history has changed and can no longer be forked.",
   "agent_session_fork.history_corrupt": "The original session history is damaged.",
   "agent_session_fork.history_missing": "The original session history is missing.",
+  "agent_session_fork.fork_timed_out": "Forking this session took too long and was stopped. Retry, or edit a later message if the history is very long.",
   "agent_session_fork.label": "Fork",
   "agent_session_fork.legacy_history": "No fork checkpoint was recorded for this historical message.",
   "agent_session_fork.not_turn_boundary": "Only the final assistant message of a completed turn can be forked.",

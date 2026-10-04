@@ -11,8 +11,8 @@ import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import { JsonRpcLineTransport } from '@deepseek-ai/dsh-sdk-protocol'
 import {
   interruptedTurnClosers,
-  SESSION_FORMAT_VERSION,
   Session,
+  SESSION_FORMAT_VERSION,
   SessionId,
   SessionLogOffset,
   SessionStore
@@ -352,6 +352,58 @@ describe('cherry bridge plugin', () => {
     } finally {
       info.mockRestore()
     }
+  })
+
+  it('checks earlier checkpoints without re-hashing each prefix', async () => {
+    const directory = await mkdtemp(path.join(os.tmpdir(), 'cherry-dsh-checkpoint-workset-'))
+    cleanup.push(() => rm(directory, { recursive: true, force: true }))
+    const source = new Context()
+    await source.plugin(SessionStore)
+    const session = source.sessions.create(SessionId('source'), { meta: { cwd: directory } })
+    session.append('turn/start', { turn: 1 })
+    const earlyEnd = session.append('turn/end', { turn: 1, reason: { kind: 'blocked' } })
+    const laterStart = session.append('turn/start', { turn: 2 })
+    const anchorEnd = session.append('turn/end', { turn: 2, reason: { kind: 'blocked' } })
+    const liveEvents = JSON.parse(JSON.stringify(session.snapshotEvents()))
+    await source.fiber.dispose()
+    const base = {
+      sourceRoot: directory,
+      sourceSessionId: 'source',
+      targetCwd: directory,
+      boundary: anchorEnd.seq,
+      formatVersion: 4 as const,
+      events: liveEvents
+    }
+    const stringify = vi.spyOn(JSON, 'stringify')
+    try {
+      await forkSession({
+        ...base,
+        targetRoot: path.join(directory, 'child'),
+        targetSessionId: 'child',
+        checkpoints: [
+          { boundary: earlyEnd.seq, formatVersion: 4 },
+          { boundary: anchorEnd.seq, formatVersion: 4 }
+        ]
+      })
+      const hashedLengths = stringify.mock.calls
+        .filter((call) => Array.isArray(call[0]) && typeof call[1] === 'function')
+        .map((call) => (call[0] as unknown[]).length)
+      expect(hashedLengths).toContain(anchorEnd.seq + 1)
+      expect(hashedLengths).not.toContain(earlyEnd.seq + 1)
+    } finally {
+      stringify.mockRestore()
+    }
+    await expect(
+      forkSession({
+        ...base,
+        targetRoot: path.join(directory, 'bad'),
+        targetSessionId: 'bad',
+        checkpoints: [
+          { boundary: laterStart.seq, formatVersion: 4 },
+          { boundary: anchorEnd.seq, formatVersion: 4 }
+        ]
+      })
+    ).rejects.toThrow('history_changed')
   })
 
   it('executes fork I/O while the source writes', async () => {

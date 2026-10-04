@@ -10,7 +10,8 @@ export const AGENT_SESSION_FORK_FAILURE_REASONS = [
   'source_missing',
   'source_changed',
   'cancelled',
-  'operation_failed'
+  'operation_failed',
+  'fork_timed_out'
 ] as const
 
 export type AgentSessionForkFailureReason = (typeof AGENT_SESSION_FORK_FAILURE_REASONS)[number]
