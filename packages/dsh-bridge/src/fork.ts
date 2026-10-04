@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { readdir, readFile } from 'node:fs/promises'
+import { readdir, readFile, stat } from 'node:fs/promises'
 import path from 'node:path'
 import { zstdDecompressSync } from 'node:zlib'
 
@@ -61,6 +61,13 @@ export function createForkCheckpoint(events: readonly SessionEvent[], boundary: 
 export async function forkSession(
   input: DshForkInput
 ): Promise<{ path: string; checkpoints: Array<{ boundary: number; formatVersion: 4 }> }> {
+  const started = Date.now()
+  // Absent `events` is the disk path. An empty array is still a live snapshot and must not
+  // silently fall back to a full JSONL scan.
+  const forkSource = input.events === undefined ? 'disk' : 'live'
+  let eventCount = input.events?.length ?? 0
+  let jsonlBytes: number | undefined
+  let failed = ''
   const source = new Context()
   const target = new Context()
   try {
@@ -70,19 +77,22 @@ export async function forkSession(
     await target.plugin(JsonlSessionPersistence, { root: input.targetRoot })
     // cherry-lite: the host may hand over the live snapshot it already holds; only fall
     // back to a disk read when it does not (see `DshForkInput.events`).
-    const history = input.events
-      ? (input.events as SessionEvent[])
-      : await (async () => {
-          const reader = await source.sessionPersistence
-            .open(SessionId(input.sourceSessionId), 'read')
-            .catch((error) => {
-              if (error instanceof SessionPersistenceNotFoundError) throw new Error('history_missing')
-              throw error
-            })
-          const read = await reader.read()
-          await reader.close()
-          return read.events
-        })()
+    const history =
+      input.events !== undefined
+        ? (input.events as SessionEvent[])
+        : await (async () => {
+            jsonlBytes = await sourceSessionJsonlBytes(input.sourceRoot, input.sourceSessionId)
+            const reader = await source.sessionPersistence
+              .open(SessionId(input.sourceSessionId), 'read')
+              .catch((error) => {
+                if (error instanceof SessionPersistenceNotFoundError) throw new Error('history_missing')
+                throw error
+              })
+            const read = await reader.read()
+            await reader.close()
+            return read.events
+          })()
+    eventCount = history.length
     const legacy = [input, ...input.checkpoints].filter((checkpoint) => checkpoint.formatVersion === 0)
     const remapped = legacy.length
       ? await remapLegacyBoundaries(
@@ -121,8 +131,28 @@ export async function forkSession(
     )
     if (artifacts.length !== 1) throw new Error('Unsupported DSH storage')
     return { path: path.join(input.targetRoot, artifacts[0]), checkpoints }
+  } catch (error) {
+    failed = error instanceof Error ? error.message : 'error'
+    throw error
   } finally {
+    console.info(
+      `dsh fork fork_source=${forkSource} event_count=${eventCount} boundary=${input.boundary} duration_ms=${Date.now() - started} jsonl_bytes=${jsonlBytes ?? ''} legacy_checkpoints=${
+        [input, ...input.checkpoints].filter((checkpoint) => checkpoint.formatVersion === 0).length
+      }${failed ? ` failed=${failed}` : ''}`
+    )
     await Promise.all([target.fiber.dispose(), source.fiber.dispose()])
+  }
+}
+
+async function sourceSessionJsonlBytes(root: string, sessionId: string): Promise<number | undefined> {
+  try {
+    const artifacts = (await readdir(root, { recursive: true })).filter(
+      (file) => path.basename(path.dirname(file)) === sessionId && path.basename(file) === 'session.jsonl.zstd'
+    )
+    if (artifacts.length !== 1) return undefined
+    return (await stat(path.join(root, artifacts[0]))).size
+  } catch {
+    return undefined
   }
 }
 

@@ -694,17 +694,40 @@ export class DshRuntimeConnection implements AgentRuntimeConnection {
     await this.bridge.request('session/flush', { sessionId: this.runtimeSessionId }, { timeoutMs: 10_000, signal })
   }
 
-  async snapshotForFork(_boundary: number, signal?: AbortSignal): Promise<unknown[] | undefined> {
+  /**
+   * Flush the live native session, then copy events `[0..boundary]` from memory.
+   * Returns undefined when no live agent is available so the fork can fall back to disk.
+   * `history_changed` / `history_corrupt` / `history_missing` propagate — those are not
+   * "snapshot unavailable", and a disk scan would only repeat the failure more slowly.
+   */
+  async snapshotForFork(boundary: number, signal?: AbortSignal): Promise<unknown[] | undefined> {
     if (this.startPromise) await this.waitForForkTransition(this.startPromise, signal)
     signal?.throwIfAborted()
     if (this.closePromise) {
       await this.waitForForkTransition(this.closePromise, signal)
-      // The source has finished flushing; the driver can now use persisted history.
+      // Teardown already finished (or is the flush). The on-disk artifact is the source of truth.
       return undefined
     }
-    if (!this.bridge || this.closed) throw new Error('DSH connection is closed')
-    await this.bridge.request('session/flush', { sessionId: this.runtimeSessionId }, { timeoutMs: 60_000, signal })
-    return undefined
+    if (!this.bridge || this.closed) return undefined
+    await this.bridge.request('session/flush', { sessionId: this.runtimeSessionId }, { timeoutMs: 10_000, signal })
+    signal?.throwIfAborted()
+    try {
+      const snapshot = await this.bridge.request(
+        'session/fork-snapshot',
+        { sessionId: this.runtimeSessionId, boundary },
+        { timeoutMs: 60_000, signal }
+      )
+      if (!Array.isArray(snapshot?.events) || snapshot.events.length === 0) {
+        logger.warn('dsh live fork snapshot was empty; falling back to disk', { boundary })
+        return undefined
+      }
+      return snapshot.events
+    } catch (error) {
+      const message = error instanceof Error ? error.message : ''
+      if (message === 'history_changed' || message === 'history_corrupt' || message === 'history_missing') throw error
+      logger.warn('dsh live fork snapshot failed; falling back to disk', { error, boundary })
+      return undefined
+    }
   }
 
   private async waitForForkTransition(transition: Promise<unknown>, signal?: AbortSignal): Promise<void> {

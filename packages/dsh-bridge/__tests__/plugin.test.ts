@@ -296,6 +296,64 @@ describe('cherry bridge plugin', () => {
     }
   })
 
+  it('forks from live events without reading the source session file', async () => {
+    const directory = await mkdtemp(path.join(os.tmpdir(), 'cherry-dsh-live-events-fork-'))
+    cleanup.push(() => rm(directory, { recursive: true, force: true }))
+    const source = new Context()
+    const root = path.join(directory, 'source')
+    await source.plugin(SessionStore)
+    await source.plugin(JsonlSessionPersistence, { root })
+    const session = source.sessions.create(SessionId('source'), { meta: { cwd: directory } })
+    session.append('turn/start', { turn: 1 })
+    const end = session.append('turn/end', { turn: 1, reason: { kind: 'blocked' } })
+    const liveEvents = JSON.parse(JSON.stringify(session.snapshotEvents()))
+    const checkpoint = { ...createForkCheckpoint(liveEvents, end.seq), formatVersion: 4 as const }
+    await source.fiber.dispose()
+    const emptyRoot = path.join(directory, 'empty-source')
+    await mkdir(emptyRoot)
+    const info = vi.spyOn(console, 'info').mockImplementation(() => undefined)
+    try {
+      const targetRoot = path.join(directory, 'child')
+      await forkSession({
+        sourceRoot: emptyRoot,
+        targetRoot,
+        sourceSessionId: 'source',
+        targetSessionId: 'child',
+        targetCwd: directory,
+        ...checkpoint,
+        checkpoints: [checkpoint],
+        events: liveEvents
+      })
+      expect(info.mock.calls.some((call) => String(call[0]).includes('fork_source=live'))).toBe(true)
+      expect(info.mock.calls.some((call) => String(call[0]).includes('fork_source=disk'))).toBe(false)
+      const reader = new Context()
+      try {
+        await reader.plugin(SessionStore)
+        await reader.plugin(JsonlSessionPersistence, { root: targetRoot })
+        const handle = await reader.sessionPersistence.open(SessionId('child'), 'read')
+        const stored = await handle.read()
+        expect(stored?.events[end.seq]).toMatchObject({ type: 'turn/end', seq: end.seq })
+        expect({ ...createForkCheckpoint(stored.events, end.seq), formatVersion: 4 }).toEqual(checkpoint)
+      } finally {
+        await reader.fiber.dispose()
+      }
+      await expect(
+        forkSession({
+          sourceRoot: emptyRoot,
+          targetRoot: path.join(directory, 'disk'),
+          sourceSessionId: 'source',
+          targetSessionId: 'disk-child',
+          targetCwd: directory,
+          ...checkpoint,
+          checkpoints: [checkpoint]
+        })
+      ).rejects.toThrow('history_missing')
+      expect(info.mock.calls.some((call) => String(call[0]).includes('fork_source=disk'))).toBe(true)
+    } finally {
+      info.mockRestore()
+    }
+  })
+
   it('executes fork I/O while the source writes', async () => {
     const directory = await mkdtemp(path.join(os.tmpdir(), 'cherry-dsh-fork-io-'))
     cleanup.push(() => rm(directory, { recursive: true, force: true }))

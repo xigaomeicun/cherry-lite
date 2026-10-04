@@ -140,6 +140,9 @@ export class AgentSessionForkOperations {
             published: []
           }
           await this.prepareResources(resources)
+          // Fork (and the DSH live-event snapshot) must run before closeSource().
+          // editSession tears the connection down inside closeSource; capturing events
+          // after that leaves only the on-disk JSONL scan.
           const native = await driver.fork({
             sourceSessionId: sessionId,
             checkpoint: anchorData.checkpoint,

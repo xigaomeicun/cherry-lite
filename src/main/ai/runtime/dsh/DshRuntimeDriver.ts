@@ -15,14 +15,27 @@ import { DshRuntimeConnection } from './DshRuntimeConnection'
 import { parseDshForkCheckpoint } from './forkCheckpoint'
 import { assertDshProviderUsable } from './modelInjection'
 
+/** Set to `0` to force the on-disk JSONL fork (rollback switch for the live-events path). */
+function forkLiveEventsEnabled(): boolean {
+  return process.env.CHERRY_DSH_FORK_LIVE_EVENTS !== '0'
+}
+
 export class DshRuntimeDriver implements AgentSessionRuntimeDriver {
   private readonly forkSources = new Map<string, DshRuntimeConnection>()
 
   async fork(input: RuntimeForkInput) {
     input.signal.throwIfAborted()
-    parseDshForkCheckpoint(input.checkpoint)
+    const checkpoint = parseDshForkCheckpoint(input.checkpoint)
+    const source = this.forkSources.get(input.sourceSessionId)
+    let events: unknown[] | undefined
     try {
-      await this.forkSources.get(input.sourceSessionId)?.flushForFork(input.signal)
+      if (source && forkLiveEventsEnabled()) {
+        // snapshotForFork flushes before copying memory. Do not also call flushForFork —
+        // a second flush only adds latency on the edit path.
+        events = await source.snapshotForFork(checkpoint.boundary, input.signal)
+      } else {
+        await source?.flushForFork(input.signal)
+      }
     } catch (error) {
       input.signal.throwIfAborted()
       if (error instanceof AgentSessionForkError) throw error
@@ -31,7 +44,8 @@ export class DshRuntimeDriver implements AgentSessionRuntimeDriver {
       throw new AgentSessionForkError(reason, error instanceof Error ? error.message : reason)
     }
     input.signal.throwIfAborted()
-    return forkDshSession(input)
+    if (!events?.length) events = undefined
+    return forkDshSession(input, events)
   }
   readonly type = 'dsh'
   readonly capabilities = ['agent-session'] as const

@@ -151,4 +151,45 @@ describe('DshRuntimeConnection fork flush', () => {
     expect(flushed?.[1]).toMatchObject({ sessionId: 'native-resumed' })
     expect(flushed?.[1]).not.toMatchObject({ sessionId: connectInput.sessionId })
   })
+
+  it('returns live events from session/fork-snapshot after flushing the native session', async () => {
+    const connection = await new DshRuntimeConnection({
+      ...connectInput,
+      nativeSessionId: 'native-session',
+      resumeToken: 'native-resumed'
+    } as unknown as AgentRuntimeConnectInput).start()
+    const events = [{ type: 'turn/end', seq: 4 }]
+    mocks.bridge!.request.mockImplementation(async (method: string) => {
+      if (method === 'session/fork-snapshot') return { events }
+      return {}
+    })
+
+    await expect(connection.snapshotForFork(4)).resolves.toEqual(events)
+
+    const flushed = mocks.bridge!.request.mock.calls.find(([method]) => method === 'session/flush')
+    const snapshotted = mocks.bridge!.request.mock.calls.find(([method]) => method === 'session/fork-snapshot')
+    expect(flushed?.[1]).toMatchObject({ sessionId: 'native-resumed' })
+    expect(snapshotted?.[1]).toEqual({ sessionId: 'native-resumed', boundary: 4 })
+    expect(mocks.bridge!.request.mock.calls.findIndex(([method]) => method === 'session/flush')).toBeLessThan(
+      mocks.bridge!.request.mock.calls.findIndex(([method]) => method === 'session/fork-snapshot')
+    )
+  })
+
+  it('propagates history_changed instead of hiding it behind a disk scan', async () => {
+    const connection = await new DshRuntimeConnection({
+      ...connectInput,
+      resumeToken: 'native-resumed'
+    } as unknown as AgentRuntimeConnectInput).start()
+    mocks.bridge!.request.mockImplementation(async (method: string) => {
+      if (method === 'session/fork-snapshot') throw new Error('history_changed')
+      return {}
+    })
+
+    await expect(connection.snapshotForFork(4)).rejects.toThrow('history_changed')
+  })
+
+  it('falls back when the connection was never started', async () => {
+    const connection = new DshRuntimeConnection(connectInput)
+    await expect(connection.snapshotForFork(1)).resolves.toBeUndefined()
+  })
 })
