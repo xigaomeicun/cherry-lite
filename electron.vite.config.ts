@@ -1,3 +1,5 @@
+import { createRequire } from 'node:module'
+
 import tailwindcss from '@tailwindcss/vite'
 import { tanstackRouter } from '@tanstack/router-plugin/vite'
 import react from '@vitejs/plugin-react'
@@ -18,6 +20,10 @@ import { piVccBundlePlugin } from './scripts/piVccBundle'
 import { uiContractPlugin } from './scripts/uiContract/vitePlugin'
 import { APP_EDITIONS, type AppEdition } from './src/shared/types/appEdition'
 import { parseReleaseHistory, validateCurrentReleaseHistory } from './src/shared/utils/releaseNotes'
+
+const { buildSelectionPanel, sourcePath: selectionPanelSource } = createRequire(import.meta.url)(
+  './native/darwin/build'
+)
 
 type ElectronBuilderConfig = {
   releaseInfo?: {
@@ -116,7 +122,19 @@ export const mainResolveAlias = {
 
 export default defineConfig({
   main: {
-    plugins: [chunkExportGuardPlugin(), piVccBundlePlugin(), miniAppThemeAssetPlugin(), ...visualizerPlugin('main')],
+    plugins: [
+      {
+        name: 'cherry-selection-panel',
+        buildStart() {
+          this.addWatchFile(selectionPanelSource)
+          buildSelectionPanel()
+        }
+      },
+      chunkExportGuardPlugin(),
+      piVccBundlePlugin(),
+      miniAppThemeAssetPlugin(),
+      ...visualizerPlugin('main')
+    ],
     resolve: { alias: mainResolveAlias },
     build: {
       externalizeDeps: {

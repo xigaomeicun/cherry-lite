@@ -2,6 +2,7 @@
 import { application } from '@application'
 import { BaseService } from '@main/core/lifecycle/BaseService'
 import { WindowType } from '@main/core/window/types'
+import { screen } from 'electron'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { getApplicationIdMock } = vi.hoisted(() => ({
@@ -271,5 +272,67 @@ describe('SelectionService macOS toolbar', () => {
       skipTransformProcessType: true
     })
     expect(toolbarWindow.showInactive).toHaveBeenCalledOnce()
+  })
+})
+
+describe('SelectionService macOS action window', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    BaseService.resetInstances()
+    Object.assign(screen, {
+      getDisplayNearestPoint: vi.fn(() => ({
+        workArea: { x: 0, y: 0, width: 1440, height: 900 }
+      })),
+      getCursorScreenPoint: vi.fn(() => ({ x: 500, y: 400 }))
+    })
+  })
+
+  afterEach(() => {
+    BaseService.resetInstances()
+    vi.restoreAllMocks()
+  })
+
+  it.each([false, true])('keeps the invoking Space when showing a recycled panel (fullscreen=%s)', (fullScreen) => {
+    vi.useFakeTimers()
+    try {
+      let activeSpace = 'invoking-space'
+      let panelSpace = 'previous-space'
+      let visible = false
+      const handle = Buffer.alloc(8)
+      const svc = new SelectionService() as unknown as {
+        nativePanel: { moveToActiveSpace(handle: Buffer): void }
+        showActionWindow(actionWindow: unknown, isFullScreen: boolean): void
+      }
+      svc.nativePanel = {
+        moveToActiveSpace: (actualHandle) => {
+          expect(actualHandle).toBe(handle)
+          panelSpace = activeSpace
+        }
+      }
+      const show = () => {
+        activeSpace = panelSpace
+        visible = true
+      }
+      const actionWindow = {
+        getNativeWindowHandle: () => handle,
+        setPosition: vi.fn(),
+        setBounds: vi.fn(),
+        setFocusable: vi.fn(),
+        setAlwaysOnTop: vi.fn(),
+        show,
+        showInactive: show,
+        isDestroyed: () => false,
+        focus: vi.fn()
+      }
+
+      svc.showActionWindow(actionWindow, fullScreen)
+      vi.runAllTimers()
+
+      expect(visible).toBe(true)
+      expect(activeSpace).toBe('invoking-space')
+      expect(panelSpace).toBe('invoking-space')
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })
