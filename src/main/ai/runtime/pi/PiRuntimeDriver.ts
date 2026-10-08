@@ -9,7 +9,7 @@ import type { AgentSessionEntity } from '@shared/data/api/schemas/agentSessions'
 import type { AgentRuntimeConnectInput, AgentRuntimeConnection, AgentSessionRuntimeDriver } from '../types'
 import { assertPiProviderUsable } from './modelInjection'
 import { forkPiSession } from './piFork'
-import { buildPiMcpToolName, piMcpServerIdentity, resolvePiMcpServerKeys, toPiMcpServerKey } from './piMcpNames'
+import { buildLegacyPiMcpToolName } from './piMcpNames'
 import { PiRuntimeConnection } from './PiRuntimeConnection'
 
 export class PiRuntimeDriver implements AgentSessionRuntimeDriver {
@@ -44,16 +44,22 @@ export class PiRuntimeDriver implements AgentSessionRuntimeDriver {
     }))
     // Bridged MCP tools, read cache-only from the same catalog the session bridge uses
     // (piMcpExtension warms it). Third-party, so they prompt in the default mode.
+    //
+    // The id persisted into `disabledTools` stays namespaced by the server UUID, not by its display
+    // name: renaming a server must not silently re-enable tools the user blocked. The connection
+    // translates these ids to Pi's current native names at runtime (`expandPiDisabledMcpTools`).
     const catalog = application.get('McpCatalogService')
-    const servers = mcpIds.flatMap((idOrName) => mcpServerService.findByIdOrName(idOrName) ?? [])
-    // Keys are resolved across the whole set so two servers with the same display name stay distinct.
-    const serverKeys = resolvePiMcpServerKeys(servers)
-    const mcpTools: Tool[] = servers.flatMap((server) => {
-      const serverKey = serverKeys.get(piMcpServerIdentity(server)) ?? toPiMcpServerKey(server)
+    const mcpTools: Tool[] = mcpIds.flatMap((idOrName) => {
+      const server = mcpServerService.findByIdOrName(idOrName)
+      if (!server) return []
       const tools = catalog.listTools(server.id, { includeDisabled: false })
-      const names = tools.map((tool) => buildPiMcpToolName(serverKey, tool.name))
+      const names = tools.map((tool) => buildLegacyPiMcpToolName(server.id, tool.name))
       return tools.map((tool, index) => ({
-        id: buildPiMcpToolName(serverKey, tool.name, names.indexOf(names[index]) !== names.lastIndexOf(names[index])),
+        id: buildLegacyPiMcpToolName(
+          server.id,
+          tool.name,
+          names.indexOf(names[index]) !== names.lastIndexOf(names[index])
+        ),
         name: tool.name,
         origin: 'mcp' as const,
         approval: 'prompt' as const,

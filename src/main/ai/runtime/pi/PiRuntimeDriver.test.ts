@@ -76,13 +76,26 @@ describe('PiRuntimeDriver.listAvailableTools', () => {
     expect(mocks.listTools).toHaveBeenCalledWith('srv-1', { includeDisabled: false })
     expect(mcpTools).toEqual([
       expect.objectContaining({
-        id: 'mcp__github__search_issues',
+        // Keyed by server UUID so a rename cannot orphan a stored block.
+        id: 'mcp__srv_1__search_issues',
         name: 'search_issues',
         approval: 'prompt',
         sourceId: 'srv-1',
         sourceName: 'github'
       })
     ])
+  })
+
+  it('keeps the persisted id stable when a server is renamed', async () => {
+    mocks.listTools.mockReturnValue([{ name: 'search_issues' } as McpTool])
+    const ids = async (name: string) => {
+      mocks.findByIdOrName.mockReturnValue({ id: 'srv-1', name } as McpServer)
+      return (await new PiRuntimeDriver().listAvailableTools(['srv-1']))
+        .filter((tool) => tool.origin === 'mcp')
+        .map((tool) => tool.id)
+    }
+
+    expect(await ids('github')).toEqual(await ids('GitHub Enterprise'))
   })
 
   it('skips MCP server ids that no longer resolve', async () => {

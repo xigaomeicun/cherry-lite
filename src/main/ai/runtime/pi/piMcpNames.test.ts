@@ -102,6 +102,15 @@ describe('expandPiDisabledMcpTools', () => {
     expect([...disabled].sort()).toEqual(['mcp__notion__notion_search'])
   })
 
+  it('keeps a stored block working after the server is renamed', () => {
+    const stored = new Set([buildLegacyPiMcpToolName(NOTION.id, 'notion-fetch')])
+
+    // The stored id is UUID-keyed, so the key the server currently has is irrelevant to the match.
+    expandPiDisabledMcpTools(stored, { ...NOTION, name: 'Company Wiki' }, 'company_wiki', tools)
+
+    expect(stored.has('mcp__company_wiki__notion_fetch')).toBe(true)
+  })
+
   it('uses the collision-resolved key for the second same-named server', () => {
     const disabled = new Set([buildLegacyPiMcpToolName(OTHER_NOTION.id, 'notion-fetch')])
 
