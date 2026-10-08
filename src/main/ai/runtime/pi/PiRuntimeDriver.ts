@@ -9,7 +9,7 @@ import type { AgentSessionEntity } from '@shared/data/api/schemas/agentSessions'
 import type { AgentRuntimeConnectInput, AgentRuntimeConnection, AgentSessionRuntimeDriver } from '../types'
 import { assertPiProviderUsable } from './modelInjection'
 import { forkPiSession } from './piFork'
-import { buildPiMcpToolName, toPiMcpServerKey } from './piMcpExtension'
+import { buildPiMcpToolName, piMcpServerIdentity, resolvePiMcpServerKeys, toPiMcpServerKey } from './piMcpNames'
 import { PiRuntimeConnection } from './PiRuntimeConnection'
 
 export class PiRuntimeDriver implements AgentSessionRuntimeDriver {
@@ -45,10 +45,11 @@ export class PiRuntimeDriver implements AgentSessionRuntimeDriver {
     // Bridged MCP tools, read cache-only from the same catalog the session bridge uses
     // (piMcpExtension warms it). Third-party, so they prompt in the default mode.
     const catalog = application.get('McpCatalogService')
-    const mcpTools: Tool[] = mcpIds.flatMap((idOrName) => {
-      const server = mcpServerService.findByIdOrName(idOrName)
-      if (!server) return []
-      const serverKey = toPiMcpServerKey(server)
+    const servers = mcpIds.flatMap((idOrName) => mcpServerService.findByIdOrName(idOrName) ?? [])
+    // Keys are resolved across the whole set so two servers with the same display name stay distinct.
+    const serverKeys = resolvePiMcpServerKeys(servers)
+    const mcpTools: Tool[] = servers.flatMap((server) => {
+      const serverKey = serverKeys.get(piMcpServerIdentity(server)) ?? toPiMcpServerKey(server)
       const tools = catalog.listTools(server.id, { includeDisabled: false })
       const names = tools.map((tool) => buildPiMcpToolName(serverKey, tool.name))
       return tools.map((tool, index) => ({

@@ -74,7 +74,14 @@ import {
   type PiConnectionSnapshot,
   PiInvalidConnectionSnapshotError
 } from './piConnectionSignature'
-import { buildPiMcpToolName, createPiMcpExtension, toPiMcpServerKey, warmMcpToolCatalogs } from './piMcpExtension'
+import { createPiMcpExtension, warmMcpToolCatalogs } from './piMcpExtension'
+import {
+  buildPiMcpToolName,
+  expandPiDisabledMcpTools,
+  piMcpServerIdentity,
+  resolvePiMcpServerKeys,
+  toPiMcpServerKey
+} from './piMcpNames'
 import { loadPiAi, loadPiSdk, loadPiVccExtension } from './piSdk'
 import { resolveResumeTokenSessionFile } from './piSessionFile'
 import { PiStreamAdapter, resolvePiMcpToolMetadata } from './piStreamAdapter'
@@ -1021,24 +1028,12 @@ function normalizeDisabledTools(
 ): Set<string> {
   const disabled = new Set((disabledTools ?? []).map(normalizePiDisabledToolId))
   const catalog = application.get('McpCatalogService')
+  const serverKeys = resolvePiMcpServerKeys(snapshot.mcpServerSnapshots.values())
   for (const server of snapshot.mcpServerSnapshots.values()) {
     if (!server) continue
-    const serverKey = toPiMcpServerKey(server)
-    const tools = catalog.listTools(server.id, { includeDisabled: false })
-    const names = tools.map((tool) => buildPiMcpToolName(serverKey, tool.name))
-    for (const tool of tools) {
-      const name = buildPiMcpToolName(serverKey, tool.name)
-      const legacyName = buildPiMcpToolName(server.id, tool.name)
-      if (
-        disabled.has(name) ||
-        disabled.has(legacyName) ||
-        disabled.has(buildFunctionCallToolName(server.name, tool.name)) ||
-        disabled.has(`mcp__${server.id}__${tool.name}`) ||
-        disabled.has(`mcp__${server.id.replaceAll('-', '_')}__${tool.name}`)
-      ) {
-        disabled.add(buildPiMcpToolName(serverKey, tool.name, names.indexOf(name) !== names.lastIndexOf(name)))
-      }
-    }
+    const serverKey = serverKeys.get(piMcpServerIdentity(server)) ?? toPiMcpServerKey(server)
+    const toolNames = catalog.listTools(server.id, { includeDisabled: false }).map((tool) => tool.name)
+    expandPiDisabledMcpTools(disabled, server, serverKey, toolNames)
   }
   // Sanitizing raw aliases can accidentally block another tool whose name collides.
   return disabled

@@ -1,5 +1,3 @@
-import { createHash } from 'node:crypto'
-
 import { application } from '@application'
 import { mcpServerService } from '@data/services/McpServerService'
 import type { ExtensionFactory, McpTransportFactory } from '@earendil-works/pi-coding-agent'
@@ -8,64 +6,18 @@ import { MCP_FORWARDING_TIMEOUT_MS } from '@main/ai/mcp/mcpRequestOptions'
 import type { AgentMcpServer } from '@main/ai/runtime/agentMcpServers'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 
+import { piMcpServerIdentity, resolvePiMcpServerKeys } from './piMcpNames'
 import type { loadPiSdk } from './piSdk'
 
 const logger = loggerService.withContext('PiMcpExtension')
 
-/**
- * Compute a compact, identifier-safe server identifier for Pi's 64-char tool-name ceiling.
- *
- * A raw 36-char UUID prefix spends 43 chars upfront (`mcp__<uuid>__`), leaving only 12 chars
- * before Pi's native `createMcpToolName` truncates and hashes the tool name.
- * We prefer a clean slug of `server.name` (e.g. 'notion', 'github').
- * If the name cannot produce a valid ASCII slug (e.g. pure CJK) or is missing,
- * we fall back to `s_${id.slice(0, 8)}` (~10 chars), leaving 45+ chars for tools.
- */
-export function toPiMcpServerKey(
-  server: { id?: string; name?: string } | string,
-  isTaken?: (candidate: string) => boolean
-): string {
-  const serverObj = typeof server === 'string' ? { name: server } : server
-  const name = serverObj.name?.trim()
-  const slug = name
-    ? name
-        .toLowerCase()
-        .replace(/[^a-z0-9_]/g, '_')
-        .replace(/^_+|_+$/g, '')
-        .slice(0, 20)
-    : ''
-
-  let candidate: string
-  if (slug.length >= 2 && !/^[0-9]/.test(slug)) {
-    candidate = slug
-  } else {
-    const rawId = (serverObj.id || serverObj.name || 'mcp').replace(/[^a-zA-Z0-9]/g, '').toLowerCase()
-    candidate = `s_${rawId.slice(0, 8)}`
-  }
-
-  if (isTaken && isTaken(candidate) && serverObj.id) {
-    const suffix = serverObj.id
-      .replace(/[^a-zA-Z0-9]/g, '')
-      .slice(0, 4)
-      .toLowerCase()
-    candidate = `${candidate.slice(0, 15)}_${suffix}`
-  }
-
-  return candidate
-}
-
-/** Match Pi's native MCP identifiers for policy and stored disabled-tool lookups. */
-export function buildPiMcpToolName(
-  server: { id?: string; name?: string } | string,
-  toolName: string,
-  collides = false
-): string {
-  const serverKey = toPiMcpServerKey(server)
-  const name = `mcp__${serverKey}__${toolName}`.replace(/[^A-Za-z0-9_]/g, '_')
-  if (name.length <= 64 && !collides) return name
-  const hash = createHash('sha256').update(`${serverKey}\0${toolName}`).digest('hex').slice(0, 8)
-  return `${name.slice(0, 55)}_${hash}`
-}
+export {
+  buildLegacyPiMcpToolName,
+  buildPiMcpToolName,
+  expandPiDisabledMcpTools,
+  resolvePiMcpServerKeys,
+  toPiMcpServerKey
+} from './piMcpNames'
 
 export async function warmMcpToolCatalogs(mcpIds: readonly string[]): Promise<void> {
   const catalog = application.get('McpCatalogService')
@@ -87,13 +39,12 @@ export function createPiMcpExtension(
   servers: Record<string, AgentMcpServer>,
   logPath: string
 ): ExtensionFactory {
-  // Use compact, provider-safe server identifiers to stay within Pi's 64-char tool-name ceiling.
+  // Compact, provider-safe server keys stay inside Pi's 64-char tool-name ceiling. They are resolved once
+  // for the whole set, in an order-independent way, so policy and tool listing see the same names.
+  const keys = resolvePiMcpServerKeys(Object.values(servers))
   const runtimeServers = new Map<string, AgentMcpServer>()
-  const taken = new Set<string>()
   for (const server of Object.values(servers)) {
-    const key = toPiMcpServerKey(server, (candidate) => taken.has(candidate))
-    taken.add(key)
-    runtimeServers.set(key, server)
+    runtimeServers.set(keys.get(piMcpServerIdentity(server))!, server)
   }
   return pi.createMcpExtension({
     logPath,
