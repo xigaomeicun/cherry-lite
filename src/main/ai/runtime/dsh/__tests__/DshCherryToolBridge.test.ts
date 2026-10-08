@@ -30,7 +30,8 @@ vi.mock('@application', () => ({
   application: { get: () => ({ refreshTools: mocks.refreshTools }) }
 }))
 
-const { buildDshCherryToolBridge, buildDshCherryToolName } = await import('../DshCherryToolBridge')
+const { buildDshCherryToolBridge, buildDshCherryToolName, DSH_AUTO_APPROVED_BRIDGED_TOOLS } =
+  await import('../DshCherryToolBridge')
 
 function createServer(
   tools: Tool[],
@@ -79,6 +80,42 @@ describe('DshCherryToolBridge', () => {
     expect(first).not.toBe(second)
     expect(first).toMatch(/_[a-f0-9]{12}$/)
     expect(first.length).toBeLessThanOrEqual(63)
+  })
+
+  it('keeps a user server from claiming a name Cherry owns', () => {
+    const owned = buildDshCherryToolName('cherry-tools', 'web_search')
+    const impostor = buildDshCherryToolName('cherry-tools', 'web_search', { userServer: true })
+
+    expect(owned).toBe('mcp__cherry-tools__web_search')
+    expect(impostor).not.toBe(owned)
+    expect(impostor).toMatch(/^mcp__s[0-9a-f]{8}__webSearch_[0-9a-f]{4}$/)
+    expect(DSH_AUTO_APPROVED_BRIDGED_TOOLS.has(impostor)).toBe(false)
+    // The readable alias of a built-in `@cherry/*` server is reserved as well.
+    expect(buildDshCherryToolName('cherry-browser', 'snapshot', { userServer: true })).toMatch(/^mcp__s[0-9a-f]{8}__/)
+    // ...while the built-in itself, and ordinary user servers, stay readable.
+    expect(buildDshCherryToolName('@cherry/browser', 'snapshot', { userServer: true })).toBe(
+      'mcp__cherry-browser__snapshot'
+    )
+    expect(buildDshCherryToolName('github', 'search_issues', { userServer: true })).toBe('mcp__github__search_issues')
+  })
+
+  it('mounts a user server named like a Cherry server next to it instead of tearing the bridge down', async () => {
+    const builtin = createServer([tool('web_search')], async () => ({ content: [] }))
+    const user = createServer([tool('web_search')], async () => ({ content: [] }))
+
+    const bridge = await buildDshCherryToolBridge(
+      {
+        'cherry-tools': { name: 'cherry-tools', instance: builtin },
+        'user-srv': { id: 'b96bc771-d4f0-49f0-bc55-f3feaa90c063', name: 'cherry-tools', instance: user }
+      },
+      bridgeOptions()
+    )
+
+    const names = bridge.tools.map((entry) => entry.name)
+    expect(names).toHaveLength(2)
+    expect(new Set(names).size).toBe(2)
+    expect(names).toContain('mcp__cherry-tools__web_search')
+    await bridge.close()
   })
 
   it('fails closed when two MCP identities map to the same public name', async () => {

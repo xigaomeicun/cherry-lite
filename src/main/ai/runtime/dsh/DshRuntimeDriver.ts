@@ -81,7 +81,7 @@ export class DshRuntimeDriver implements AgentSessionRuntimeDriver {
       const server = mcpServerService.findByIdOrName(idOrName)
       if (!server) return []
       return catalog.listTools(server.id, { includeDisabled: false }).map((tool) => {
-        const id = buildDshCherryToolName(server.name, tool.name)
+        const id = buildDshCherryToolName(server.name, tool.name, { userServer: true })
         return {
           id,
           name: tool.name,

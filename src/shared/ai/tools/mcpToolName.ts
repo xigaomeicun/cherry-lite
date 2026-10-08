@@ -201,7 +201,7 @@ function fnv1aHex(value: string, length: number): string {
 }
 
 /** `@` and `/` are rejected in tool names; built-in `@cherry/*` servers read as `cherry-*` instead. */
-function toWireServerName(serverName: string): string {
+export function toWireServerName(serverName: string): string {
   const builtin = /^@cherry\/(.+)$/.exec(serverName)
   return builtin ? `cherry-${builtin[1]}` : serverName
 }
@@ -220,14 +220,25 @@ function toWireServerName(serverName: string): string {
  * Names that still do not fit — or that slug to nothing, e.g. CJK — keep the
  * fully-lossy shape, so no two identities are ever silently merged.
  *
+ * `reservedServerNames` lists plain server names that another server already owns on the wire (Cherry's
+ * own servers, and the readable `cherry-*` aliases of the built-in `@cherry/*` ones). A server that merely
+ * *happens* to carry one of those names must not alias it: it takes the digest form instead, so it cannot
+ * collide with the owner nor inherit the owner's approval policy, which is keyed by wire name.
+ *
  * @example
  * buildMcpBridgedToolName('github', 'search_issues')            // 'mcp__github__search_issues'
  * buildMcpBridgedToolName('@cherry/browser', 'snapshot')        // 'mcp__cherry-browser__snapshot'
  * buildMcpBridgedToolName('<36-char uuid>', 'create_database')  // 'mcp__s1a2b3c4d__createDatabase_9f3e'
  */
-export function buildMcpBridgedToolName(serverName: string, toolName: string): string {
-  const wireName = `mcp__${toWireServerName(serverName)}__${toolName}`
-  if (/^[A-Za-z_][A-Za-z0-9_-]{0,62}$/.test(wireName)) return wireName
+export function buildMcpBridgedToolName(
+  serverName: string,
+  toolName: string,
+  options: { reservedServerNames?: ReadonlySet<string> } = {}
+): string {
+  const wireServerName = toWireServerName(serverName)
+  const impersonatesOwner = wireServerName === serverName && options.reservedServerNames?.has(serverName) === true
+  const wireName = `mcp__${wireServerName}__${toolName}`
+  if (!impersonatesOwner && /^[A-Za-z_][A-Za-z0-9_-]{0,62}$/.test(wireName)) return wireName
 
   const toolPart = toCamelCase(toolName)
   if (toolPart && toolPart.length <= BRIDGED_TOOL_PART_MAX_LENGTH) {

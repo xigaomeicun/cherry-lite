@@ -288,6 +288,21 @@ describe('buildMcpBridgedToolName', () => {
     expect(buildMcpBridgedToolName('@cherry/fetch', 'fetch_html')).toBe('mcp__cherry-fetch__fetch_html')
   })
 
+  it('digests a server that only carries a name another server owns on the wire', () => {
+    const reservedServerNames = new Set(['cherry-tools', 'cherry-browser'])
+
+    expect(buildMcpBridgedToolName('cherry-tools', 'web_search', { reservedServerNames })).toMatch(
+      /^mcp__s[0-9a-f]{8}__webSearch_[0-9a-f]{4}$/
+    )
+    // The owner of the alias keeps the readable name, and unrelated servers are untouched.
+    expect(buildMcpBridgedToolName('@cherry/browser', 'snapshot', { reservedServerNames })).toBe(
+      'mcp__cherry-browser__snapshot'
+    )
+    expect(buildMcpBridgedToolName('github', 'search_issues', { reservedServerNames })).toBe(
+      'mcp__github__search_issues'
+    )
+  })
+
   it('spends the lossy budget on the tool name, not the server name', () => {
     const name = buildMcpBridgedToolName(UUID_SERVER, 'notion-create-database')
 

@@ -4,11 +4,12 @@ import { mcpServerService } from '@data/services/McpServerService'
 import { loggerService } from '@logger'
 import { MCP_FORWARDING_TIMEOUT_MS } from '@main/ai/mcp/mcpRequestOptions'
 import type { AgentMcpServer } from '@main/ai/runtime/agentMcpServers'
-import { listBuiltinToolPolicies } from '@main/ai/toolApproval/builtinToolPolicy'
+import { CHERRY_MCP_SERVER, listBuiltinToolPolicies } from '@main/ai/toolApproval/builtinToolPolicy'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import type { CallToolResult, Tool } from '@modelcontextprotocol/sdk/types.js'
-import { buildMcpBridgedToolName } from '@shared/ai/tools/mcpToolName'
+import { buildMcpBridgedToolName, toWireServerName } from '@shared/ai/tools/mcpToolName'
+import { BuiltinMcpServerNamesArray } from '@shared/utils/mcp'
 
 import { dshToolResultErrorText, projectDshToolResult } from './dshToolResultProjection'
 
@@ -33,11 +34,32 @@ export interface DshCherryToolBridgeOptions {
 }
 
 /**
+ * Wire server names Cherry owns: its own agent servers, and the readable aliases of the built-in
+ * `@cherry/*` ones. Approval policy is keyed by wire name, so a user server that merely carries one of
+ * these names must never be given it.
+ */
+const DSH_RESERVED_SERVER_NAMES: ReadonlySet<string> = new Set([
+  ...Object.values(CHERRY_MCP_SERVER),
+  ...BuiltinMcpServerNamesArray.map(toWireServerName)
+])
+
+/**
  * Preserve MCP wire names when provider-safe; fall back to a tag + tool-name
  * shape otherwise. Shared with the Pi bridge — see `buildMcpBridgedToolName`.
+ *
+ * Pass `userServer` for servers the user (or the MCP catalog) defines, as opposed to Cherry's own agent
+ * servers: those cannot claim a name Cherry owns.
  */
-export function buildDshCherryToolName(serverName: string, toolName: string): string {
-  return buildMcpBridgedToolName(serverName, toolName)
+export function buildDshCherryToolName(
+  serverName: string,
+  toolName: string,
+  options: { userServer?: boolean } = {}
+): string {
+  return buildMcpBridgedToolName(
+    serverName,
+    toolName,
+    options.userServer ? { reservedServerNames: DSH_RESERVED_SERVER_NAMES } : {}
+  )
 }
 
 export const DSH_AUTO_APPROVED_BRIDGED_TOOLS: ReadonlySet<string> = new Set(
@@ -91,7 +113,7 @@ export async function buildDshCherryToolBridge(
       const result = await client.listTools()
       const serverNames = new Set<string>()
       const serverTools = result.tools.map((tool) => ({
-        descriptor: toBridgeDescriptor(server.name, tool),
+        descriptor: toBridgeDescriptor(server.name, tool, server.id !== undefined),
         rawName: tool.name
       }))
       for (const { descriptor } of serverTools) {
@@ -139,9 +161,9 @@ export async function buildDshCherryToolBridge(
   }
 }
 
-function toBridgeDescriptor(serverName: string, tool: Tool): BridgeToolDescriptor {
+function toBridgeDescriptor(serverName: string, tool: Tool, userServer: boolean): BridgeToolDescriptor {
   return {
-    name: buildDshCherryToolName(serverName, tool.name),
+    name: buildDshCherryToolName(serverName, tool.name, { userServer }),
     description: tool.description ?? '',
     inputSchema: tool.inputSchema as Record<string, unknown>
   }
