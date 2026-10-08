@@ -19,7 +19,7 @@ import {
   type ToolProgressEvent
 } from '../../ChannelAdapter'
 import { registerAdapterFactory } from '../../ChannelManager'
-import { chunkMessage, renderTelegramHtml } from './markdownTg'
+import { planTelegramSend } from './markdownTg'
 import { TelegramToolBubbleController } from './TelegramToolBubble'
 
 const TELEGRAM_MAX_LENGTH = 4096
@@ -375,12 +375,12 @@ class TelegramAdapter extends ChannelAdapter {
     }
 
     // High-fidelity Telegram HTML rendering (ports markdown-tg with table-to-list, code blocks, br handling)
+    // Markdown 按「转换后」可见长度切段（见 planTelegramSend），每段自带纯文本降级内容
     const isRawHtml = opts?.parseMode === 'html' || opts?.parseMode === 'HTML'
-    const formatted = isRawHtml ? text : renderTelegramHtml(text)
-    const chunks = chunkMessage(formatted, TELEGRAM_MAX_LENGTH)
+    const chunks = planTelegramSend(text, { rawHtml: isRawHtml })
 
     for (let i = 0; i < chunks.length; i++) {
-      const chunk = chunks[i]
+      const chunk = chunks[i].html
       const replyParams =
         typeof opts?.replyToMessageId === 'number' && i === 0
           ? { reply_parameters: { message_id: opts.replyToMessageId } }
@@ -432,7 +432,8 @@ class TelegramAdapter extends ChannelAdapter {
           chatId,
           error: lastError instanceof Error ? lastError.message : String(lastError)
         })
-        const plainChunks = splitMessage(text, TELEGRAM_MAX_LENGTH)
+        // 只降级本段：整篇重发会让已成功发出的段落重复
+        const plainChunks = splitMessage(chunks[i].plain, TELEGRAM_MAX_LENGTH)
         for (const plain of plainChunks) {
           await this.bot.api.sendMessage(chatId, plain, replyParams)
         }

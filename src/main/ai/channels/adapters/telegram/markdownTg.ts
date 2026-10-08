@@ -18,6 +18,119 @@ export function chunkMessage(text, maxLen = CHUNK_MAX) {
   return chunks
 }
 
+/** 转换后可见文本上限（Telegram 4096 按实体解析后的字符计；留余量） */
+export const HTML_VISIBLE_MAX = 4000
+
+/**
+ * Telegram HTML 的「可见长度」：去标签、实体按 1 字符计。
+ * 表格→列表、标题→<b> 等会让 Markdown 膨胀（实测约 1.2~1.7x），
+ * 所以必须按转换后的长度判断，不能只看 Markdown 原文长度。
+ */
+export function htmlVisibleLength(html) {
+  return String(html || '')
+    .replace(/<[^>]*>/g, '')
+    .replace(/&(?:lt|gt|amp|quot|#\d+|#x[0-9a-f]+);/gi, 'x').length
+}
+
+/** 按空行切块；围栏代码块内的空行不切 */
+function splitMdBlocks(md) {
+  const blocks = []
+  let cur = []
+  let inFence = false
+  for (const line of String(md).split('\n')) {
+    if (/^\s*(?:\\*`){3,}/.test(line)) inFence = !inFence
+    if (!inFence && !line.trim()) {
+      if (cur.length) {
+        blocks.push(cur.join('\n'))
+        cur = []
+      }
+      continue
+    }
+    cur.push(line)
+  }
+  if (cur.length) blocks.push(cur.join('\n'))
+  return blocks
+}
+
+/**
+ * 单块仍超限：表格按行切并重复表头；其余按行切；单行超限再硬切。
+ * prefix：前面还没发出去的内容（常见是标题），只并进第一段，避免孤零零的标题成一条消息。
+ */
+function splitOversizedBlock(block, fits, prefix = '') {
+  const lines = block.split('\n')
+  const isTable = lines.length >= 3 && lines.every((l) => /^\s*(?:>\s*)*\|/.test(l))
+  const head = isTable ? lines.slice(0, 2) : []
+  const body = isTable ? lines.slice(2) : lines
+  let pre = prefix
+  const compose = (arr) => {
+    const s = [...head, ...arr].join('\n')
+    return pre ? `${pre}\n\n${s}` : s
+  }
+  const out = []
+  let cur = []
+  for (const line of body) {
+    if (fits(compose([...cur, line]))) {
+      cur.push(line)
+      continue
+    }
+    if (cur.length) {
+      out.push(compose(cur))
+      pre = ''
+      cur = []
+    } else if (pre) {
+      // 前缀 + 这一行都放不下：前缀单独成段
+      out.push(pre)
+      pre = ''
+    }
+    if (fits(compose([line]))) {
+      cur = [line]
+      continue
+    }
+    for (const piece of chunkMessage(line, 1200)) {
+      out.push(isTable ? piece : [...head, piece].join('\n'))
+    }
+  }
+  if (cur.length) out.push(compose(cur))
+  return out
+}
+
+/**
+ * 按「转换后」可见长度回切 Markdown，保证每段发出去不超 Telegram 上限。
+ * 块级优先（空行、整张表、整段代码块），超限块再按行/表格行切。
+ * @param {string} md
+ * @param {(s: string) => string} toHtml 与实际发送一致的转换函数
+ * @param {number} limit
+ * @returns {string[]}
+ */
+export function splitMarkdownByHtmlLimit(md, toHtml, limit = HTML_VISIBLE_MAX) {
+  const fits = (s) => htmlVisibleLength(toHtml(s)) <= limit
+  if (fits(md)) return [md]
+  const out = []
+  let cur = ''
+  const flush = () => {
+    if (cur) {
+      out.push(cur)
+      cur = ''
+    }
+  }
+  for (const block of splitMdBlocks(md)) {
+    const cand = cur ? `${cur}\n\n${block}` : block
+    if (fits(cand)) {
+      cur = cand
+      continue
+    }
+    if (fits(block)) {
+      flush()
+      cur = block
+      continue
+    }
+    out.push(...splitOversizedBlock(block, fits, cur))
+    cur = ''
+  }
+  flush()
+  return out.length ? out : [md]
+}
+
 /**
  * 模型有时用 HTML `<br>` 做换行；sendMessage HTML 不认该标签，需映射为 `\n`。
  * 但下列区域不得把 br 换成换行（否则结构被撕）：
@@ -628,7 +741,63 @@ export function escapeInline(text) {
   t = restoreHoldTokens(t, 'L', linkHolds)
   t = restoreHoldTokens(t, 'C', codeHolds)
 
-  return scrubLeakedHoldMarkers(t)
+  return scrubLeakedHoldMarkers(balanceInlineTags(t))
+}
+
+/**
+ * 修复行内格式标签的交叉/孤立/未闭合：
+ *   <b>a <i>b</b> c</i>  →  <b>a <i>b</i></b><i> c</i>
+ * 做法同 HTML 的 formatting-element 修复：遇到跨层闭合就先关内层、闭合目标、再把内层重开。
+ * 孤立的闭合标签丢弃，结尾仍未闭合的补齐，最后清掉空标签。
+ * 只处理 b/i/u/s/tg-spoiler/a；code/pre/blockquote 等块由别处整段生成，不会交叉。
+ * 否则 Telegram 会 400 `Unmatched end tag`，整条消息退化成原始 Markdown。
+ * @param {string} html
+ * @returns {string}
+ */
+export function balanceInlineTags(html) {
+  if (!html || !html.includes('<')) return html
+  const re = /<(\/?)(b|i|u|s|tg-spoiler|a)(\s[^>]*)?>/gi
+  const stack = [] // { name, open }
+  let out = ''
+  let last = 0
+  for (const m of html.matchAll(re)) {
+    out += html.slice(last, m.index)
+    last = m.index + m[0].length
+    const name = m[2].toLowerCase()
+    if (!m[1]) {
+      stack.push({ name, open: m[0] })
+      out += m[0]
+      continue
+    }
+    let idx = -1
+    for (let k = stack.length - 1; k >= 0; k--) {
+      if (stack[k].name === name) {
+        idx = k
+        break
+      }
+    }
+    if (idx < 0) continue // 孤立闭合标签：丢弃
+    const reopen = []
+    while (stack.length > idx + 1) {
+      const top = stack.pop()
+      out += `</${top.name}>`
+      reopen.push(top)
+    }
+    stack.pop()
+    out += `</${name}>`
+    for (let k = reopen.length - 1; k >= 0; k--) {
+      out += reopen[k].open
+      stack.push(reopen[k])
+    }
+  }
+  out += html.slice(last)
+  while (stack.length) out += `</${stack.pop().name}>`
+  let prev
+  do {
+    prev = out
+    out = out.replace(/<(b|i|u|s|tg-spoiler)><\/\1>/g, '')
+  } while (out !== prev)
+  return out
 }
 
 // ============================================================
@@ -965,6 +1134,29 @@ export function markdownToTelegramHtmlSafe(md, opts = {}) {
 
   const compiled = output.join('\n').replace(/\n{3,}/g, '\n\n')
   return cleanUnsupportedHtmlTagsAfterEscape(compiled)
+}
+
+export interface TelegramSendPiece {
+  /** 发送用（parse_mode=HTML） */
+  html: string
+  /** 该段 HTML 发送失败时的纯文本降级内容（只对应本段，不会把整篇原文重发） */
+  plain: string
+}
+
+/**
+ * 规划一次发送：把正文切成若干「每段发出去都不超 Telegram 4096 可见字符」的片段。
+ *   • Markdown：按【转换后】可见长度回切（表格→列表、标题→<b> 会膨胀 1.2~1.7x，
+ *     只看原文长度会漏判，导致 `message is too long` → 整篇退化成原始 Markdown）
+ *   • rawHtml：调用方自带 HTML，只能按字符硬切（保持历史行为）
+ * 转换后为空的片段（纯空白）直接丢弃。
+ */
+export function planTelegramSend(text: string, opts: { rawHtml?: boolean } = {}): TelegramSendPiece[] {
+  if (opts.rawHtml) {
+    return chunkMessage(text, CHUNK_MAX).map((chunk) => ({ html: chunk, plain: chunk }))
+  }
+  return splitMarkdownByHtmlLimit(text, renderTelegramHtml)
+    .map((part) => ({ html: renderTelegramHtml(part), plain: part }))
+    .filter((piece) => piece.html.trim().length > 0)
 }
 
 export function renderTelegramHtml(md: string): string {
