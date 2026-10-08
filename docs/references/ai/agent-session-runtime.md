@@ -806,7 +806,25 @@ workspace follows the normal approval policy.
 
 Pi sanitizes MCP identifiers to `[A-Za-z0-9_]`; Cherry uses those identifiers for
 policy and disabled-tool lookups. A stored `tool_exec` disable applies to
-`codemode`. Historical `tool_call`/`tool_exec` results remain readable, while new
+`codemode`.
+
+Pi tool names are `mcp__<server-key>__<tool>`, capped at 64 characters. The server
+key is a slug of the server's display name (at most 20 characters, falling back to
+`s_<first 8 id chars>` when the name has no ASCII slug) rather than its UUID, which
+would spend 43 of the 64 characters and force long tool names into an unreadable
+truncated form. `resolvePiMcpServerKeys` assigns keys once for the whole session in
+UUID order, so the first of two same-named servers keeps the plain slug and the rest
+get an id suffix; Cherry's own server slugs are reserved so a user server cannot
+shadow them. The extension, the tool lister, the stream adapter and the disabled-tool
+policy must all use that one resolution. The helpers live in `pi/piMcpNames.ts`.
+
+`disabledTools` entries for Pi MCP tools are persisted under the UUID-namespaced id
+(`buildLegacyPiMcpToolName`), so renaming a server never un-blocks a tool. Each
+session `expandPiDisabledMcpTools` translates every stored alias (that id, the raw
+`mcp__<uuid>__<tool>` form and the camelCase function-call form) into the current
+native name. Do not change the persisted id shape without migrating stored data: the
+legacy form is reproduced byte for byte, including the sha256 tail added past 64
+characters. Historical `tool_call`/`tool_exec` results remain readable, while new
 MCP tool results retain their structured payloads and Cherry citation metadata.
 Closing a connection emits `session_shutdown` before disposing the SDK session.
 
@@ -824,6 +842,18 @@ policy, routes approval requests through the shared registry, and forwards
 subagent/background-flow events into the host event model. DSH-native built-ins
 remain described by the shared `dshBuiltinTools` catalog; the driver does not
 reuse the AI SDK `ToolRegistry`.
+
+DSH tool names come from `buildMcpBridgedToolName` (shared with the Pi bridge): a
+provider-safe `mcp__<server>__<tool>` passes through, and built-in `@cherry/<name>`
+servers are exposed as `cherry-<name>` because `@` and `/` are not allowed in tool
+names. Anything that still does not fit takes a digest form
+(`mcp__s<server digest>__<tool>_<tool digest>`). Approval policy and disabled tools
+are keyed by wire name, so Cherry-owned names are reserved: a catalog server that
+merely carries one of them (for example `cherry-tools` or `skills`) is given the
+digest form instead, which prevents both a duplicate-name failure that would tear the
+bridge down and inheriting Cherry's auto-approval. DSH disabled tools are stored
+under the display-name form, so renaming a server drops those entries (Pi does not
+have this limitation).
 
 The generated composition receives the common Agent prompt, bounded workspace
 context, managed skill directories, and a generation-specific bridge socket and
