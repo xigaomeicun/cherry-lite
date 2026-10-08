@@ -200,6 +200,12 @@ function fnv1aHex(value: string, length: number): string {
   return out.slice(0, length)
 }
 
+/** `@` and `/` are rejected in tool names; built-in `@cherry/*` servers read as `cherry-*` instead. */
+function toWireServerName(serverName: string): string {
+  const builtin = /^@cherry\/(.+)$/.exec(serverName)
+  return builtin ? `cherry-${builtin[1]}` : serverName
+}
+
 /**
  * Name an MCP tool for a model-facing runtime bridge (DSH, Pi) while staying
  * inside the provider's function-name limit.
@@ -216,10 +222,11 @@ function fnv1aHex(value: string, length: number): string {
  *
  * @example
  * buildMcpBridgedToolName('github', 'search_issues')            // 'mcp__github__search_issues'
+ * buildMcpBridgedToolName('@cherry/browser', 'snapshot')        // 'mcp__cherry-browser__snapshot'
  * buildMcpBridgedToolName('<36-char uuid>', 'create_database')  // 'mcp__s1a2b3c4d__createDatabase_9f3e'
  */
 export function buildMcpBridgedToolName(serverName: string, toolName: string): string {
-  const wireName = `mcp__${serverName}__${toolName}`
+  const wireName = `mcp__${toWireServerName(serverName)}__${toolName}`
   if (/^[A-Za-z_][A-Za-z0-9_-]{0,62}$/.test(wireName)) return wireName
 
   const toolPart = toCamelCase(toolName)

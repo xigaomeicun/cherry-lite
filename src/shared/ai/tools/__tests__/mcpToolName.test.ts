@@ -283,6 +283,11 @@ describe('buildMcpBridgedToolName', () => {
     expect(buildMcpBridgedToolName(UUID_SERVER, 'notion-fetch')).toBe(`mcp__${UUID_SERVER}__notion-fetch`)
   })
 
+  it('exposes built-in @cherry servers under readable names instead of digest tags', () => {
+    expect(buildMcpBridgedToolName('@cherry/browser', 'snapshot')).toBe('mcp__cherry-browser__snapshot')
+    expect(buildMcpBridgedToolName('@cherry/fetch', 'fetch_html')).toBe('mcp__cherry-fetch__fetch_html')
+  })
+
   it('spends the lossy budget on the tool name, not the server name', () => {
     const name = buildMcpBridgedToolName(UUID_SERVER, 'notion-create-database')
 
