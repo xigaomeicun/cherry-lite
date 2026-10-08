@@ -22,7 +22,7 @@ import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprot
 import { expect, it } from 'vitest'
 
 import { createPiApprovalExtension } from './approvalExtension'
-import { createPiMcpExtension } from './piMcpExtension'
+import { createPiMcpExtension, toPiMcpServerKey } from './piMcpExtension'
 import { PiStreamAdapter, resolvePiMcpToolMetadata } from './piStreamAdapter'
 
 // Real SDK session + MCP wire + QuickJS: catches bypassed nested policy and lost structured results.
@@ -33,7 +33,10 @@ it.each(['cherry-tools', 'my-server', 'my_server'])(
     const shadowName = binding === 'my-server' ? 'my_server' : 'my-server'
     const longTool = 'read_' + 'long_name_'.repeat(8)
     const serverId = binding === 'cherry-tools' ? binding : '12345678-1234-4234-8234-123456789abc'
-    const nativePrefix = `mcp__${serverId.replaceAll('-', '_')}__`
+    const serverKey = toPiMcpServerKey({ id: binding === 'cherry-tools' ? undefined : serverId, name: binding })
+    const shadowKey = toPiMcpServerKey({ id: shadowId, name: shadowName }, (c) => c === serverKey)
+    const nativePrefix = `mcp__${serverKey}__`
+    const shadowPrefix = `mcp__${shadowKey}__`
     const snapshots = new Map(
       binding === 'cherry-tools'
         ? []
@@ -94,7 +97,7 @@ it.each(['cherry-tools', 'my-server', 'my_server'])(
                   id: 'script',
                   name: 'codemode',
                   arguments: {
-                    code: `const result = await tools.${nativePrefix}read_value({}); text(result.structuredContent.value); const long = await searchTools("${longTool}", { namespace: "mcp__${serverId.replaceAll('-', '_')}" }); await tools[long[0].name]({}); ${binding === 'cherry-tools' ? '' : `await tools.mcp__${shadowId.replaceAll('-', '_')}__forbidden({});`} try { await tools.${nativePrefix}forbidden({}) } catch (e) { text(e.message) }`
+                    code: `const result = await tools.${nativePrefix}read_value({}); text(result.structuredContent.value); const long = await searchTools("${longTool}", { namespace: "mcp__${serverKey}" }); await tools[long[0].name]({}); ${binding === 'cherry-tools' ? '' : `await tools.${shadowPrefix}forbidden({});`} try { await tools.${nativePrefix}forbidden({}) } catch (e) { text(e.message) }`
                   }
                 }
               ]

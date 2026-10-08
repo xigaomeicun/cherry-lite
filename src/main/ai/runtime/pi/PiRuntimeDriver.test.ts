@@ -76,7 +76,7 @@ describe('PiRuntimeDriver.listAvailableTools', () => {
     expect(mocks.listTools).toHaveBeenCalledWith('srv-1', { includeDisabled: false })
     expect(mcpTools).toEqual([
       expect.objectContaining({
-        id: 'mcp__srv_1__search_issues',
+        id: 'mcp__github__search_issues',
         name: 'search_issues',
         approval: 'prompt',
         sourceId: 'srv-1',

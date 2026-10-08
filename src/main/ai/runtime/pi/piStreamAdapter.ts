@@ -23,6 +23,8 @@ import { parseFunctionCallToolName } from '@shared/ai/tools/mcpToolName'
 import type { McpServer } from '@shared/data/types/mcpServer'
 import type { CherryUIMessageChunk } from '@shared/data/types/message'
 
+import { toPiMcpServerKey } from './piMcpExtension'
+
 export interface PiStreamSink {
   enqueue(chunk: CherryUIMessageChunk): void
 }
@@ -41,13 +43,23 @@ export function resolvePiMcpToolMetadata(
   if (!definition?.namespace?.name.startsWith('mcp__')) return undefined
   const separator = definition.label.indexOf('/')
   if (separator < 0) return undefined
-  const serverId = definition.label.slice(0, separator)
-  const server = [...snapshots.values()].find((candidate) => candidate?.id === serverId)
+  const serverKey = definition.label.slice(0, separator)
+  const canonicalCherryServer = CHERRY_SERVER_NAMES.get(serverKey)
+  const server = [...snapshots.values()].find(
+    (candidate) =>
+      candidate &&
+      (candidate.id === serverKey ||
+        candidate.name === serverKey ||
+        toPiMcpServerKey(candidate) === serverKey ||
+        candidate.id?.replaceAll('-', '_') === serverKey)
+  )
+  const serverId = server?.id ?? canonicalCherryServer ?? serverKey
+  const serverName = server?.name ?? canonicalCherryServer ?? serverKey
   return {
     type: 'mcp' as const,
     name: definition.label.slice(separator + 1),
     serverId,
-    serverName: server?.name ?? serverId
+    serverName
   }
 }
 

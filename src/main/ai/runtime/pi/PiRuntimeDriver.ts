@@ -9,7 +9,7 @@ import type { AgentSessionEntity } from '@shared/data/api/schemas/agentSessions'
 import type { AgentRuntimeConnectInput, AgentRuntimeConnection, AgentSessionRuntimeDriver } from '../types'
 import { assertPiProviderUsable } from './modelInjection'
 import { forkPiSession } from './piFork'
-import { buildPiMcpToolName } from './piMcpExtension'
+import { buildPiMcpToolName, toPiMcpServerKey } from './piMcpExtension'
 import { PiRuntimeConnection } from './PiRuntimeConnection'
 
 export class PiRuntimeDriver implements AgentSessionRuntimeDriver {
@@ -48,10 +48,11 @@ export class PiRuntimeDriver implements AgentSessionRuntimeDriver {
     const mcpTools: Tool[] = mcpIds.flatMap((idOrName) => {
       const server = mcpServerService.findByIdOrName(idOrName)
       if (!server) return []
+      const serverKey = toPiMcpServerKey(server)
       const tools = catalog.listTools(server.id, { includeDisabled: false })
-      const names = tools.map((tool) => buildPiMcpToolName(server.id, tool.name))
+      const names = tools.map((tool) => buildPiMcpToolName(serverKey, tool.name))
       return tools.map((tool, index) => ({
-        id: buildPiMcpToolName(server.id, tool.name, names.indexOf(names[index]) !== names.lastIndexOf(names[index])),
+        id: buildPiMcpToolName(serverKey, tool.name, names.indexOf(names[index]) !== names.lastIndexOf(names[index])),
         name: tool.name,
         origin: 'mcp' as const,
         approval: 'prompt' as const,

@@ -12,11 +12,58 @@ import type { loadPiSdk } from './piSdk'
 
 const logger = loggerService.withContext('PiMcpExtension')
 
+/**
+ * Compute a compact, identifier-safe server identifier for Pi's 64-char tool-name ceiling.
+ *
+ * A raw 36-char UUID prefix spends 43 chars upfront (`mcp__<uuid>__`), leaving only 12 chars
+ * before Pi's native `createMcpToolName` truncates and hashes the tool name.
+ * We prefer a clean slug of `server.name` (e.g. 'notion', 'github').
+ * If the name cannot produce a valid ASCII slug (e.g. pure CJK) or is missing,
+ * we fall back to `s_${id.slice(0, 8)}` (~10 chars), leaving 45+ chars for tools.
+ */
+export function toPiMcpServerKey(
+  server: { id?: string; name?: string } | string,
+  isTaken?: (candidate: string) => boolean
+): string {
+  const serverObj = typeof server === 'string' ? { name: server } : server
+  const name = serverObj.name?.trim()
+  const slug = name
+    ? name
+        .toLowerCase()
+        .replace(/[^a-z0-9_]/g, '_')
+        .replace(/^_+|_+$/g, '')
+        .slice(0, 20)
+    : ''
+
+  let candidate: string
+  if (slug.length >= 2 && !/^[0-9]/.test(slug)) {
+    candidate = slug
+  } else {
+    const rawId = (serverObj.id || serverObj.name || 'mcp').replace(/[^a-zA-Z0-9]/g, '').toLowerCase()
+    candidate = `s_${rawId.slice(0, 8)}`
+  }
+
+  if (isTaken && isTaken(candidate) && serverObj.id) {
+    const suffix = serverObj.id
+      .replace(/[^a-zA-Z0-9]/g, '')
+      .slice(0, 4)
+      .toLowerCase()
+    candidate = `${candidate.slice(0, 15)}_${suffix}`
+  }
+
+  return candidate
+}
+
 /** Match Pi's native MCP identifiers for policy and stored disabled-tool lookups. */
-export function buildPiMcpToolName(serverName: string, toolName: string, collides = false): string {
-  const name = `mcp__${serverName}__${toolName}`.replace(/[^A-Za-z0-9_]/g, '_')
+export function buildPiMcpToolName(
+  server: { id?: string; name?: string } | string,
+  toolName: string,
+  collides = false
+): string {
+  const serverKey = toPiMcpServerKey(server)
+  const name = `mcp__${serverKey}__${toolName}`.replace(/[^A-Za-z0-9_]/g, '_')
   if (name.length <= 64 && !collides) return name
-  const hash = createHash('sha256').update(`${serverName}\0${toolName}`).digest('hex').slice(0, 8)
+  const hash = createHash('sha256').update(`${serverKey}\0${toolName}`).digest('hex').slice(0, 8)
   return `${name.slice(0, 55)}_${hash}`
 }
 
@@ -40,8 +87,14 @@ export function createPiMcpExtension(
   servers: Record<string, AgentMcpServer>,
   logPath: string
 ): ExtensionFactory {
-  // UUID namespaces prevent display-name collisions and keep stored tool policies stable on rename.
-  const runtimeServers = new Map(Object.values(servers).map((server) => [server.id ?? server.name, server]))
+  // Use compact, provider-safe server identifiers to stay within Pi's 64-char tool-name ceiling.
+  const runtimeServers = new Map<string, AgentMcpServer>()
+  const taken = new Set<string>()
+  for (const server of Object.values(servers)) {
+    const key = toPiMcpServerKey(server, (candidate) => taken.has(candidate))
+    taken.add(key)
+    runtimeServers.set(key, server)
+  }
   return pi.createMcpExtension({
     logPath,
     loadConfig: () => ({

@@ -74,7 +74,7 @@ import {
   type PiConnectionSnapshot,
   PiInvalidConnectionSnapshotError
 } from './piConnectionSignature'
-import { buildPiMcpToolName, createPiMcpExtension, warmMcpToolCatalogs } from './piMcpExtension'
+import { buildPiMcpToolName, createPiMcpExtension, toPiMcpServerKey, warmMcpToolCatalogs } from './piMcpExtension'
 import { loadPiAi, loadPiSdk, loadPiVccExtension } from './piSdk'
 import { resolveResumeTokenSessionFile } from './piSessionFile'
 import { PiStreamAdapter, resolvePiMcpToolMetadata } from './piStreamAdapter'
@@ -470,7 +470,9 @@ export class PiRuntimeConnection implements AgentRuntimeConnection {
     return (
       tool !== undefined &&
       (this.disabledTools.has(buildFunctionCallToolName(tool.serverName, tool.name)) ||
-        this.disabledTools.has(`mcp__${tool.serverId}__${tool.name}`))
+        this.disabledTools.has(`mcp__${tool.serverId}__${tool.name}`) ||
+        this.disabledTools.has(`mcp__${tool.serverId.replaceAll('-', '_')}__${tool.name}`) ||
+        this.disabledTools.has(`mcp__${toPiMcpServerKey({ id: tool.serverId, name: tool.serverName })}__${tool.name}`))
     )
   }
 
@@ -1021,15 +1023,20 @@ function normalizeDisabledTools(
   const catalog = application.get('McpCatalogService')
   for (const server of snapshot.mcpServerSnapshots.values()) {
     if (!server) continue
+    const serverKey = toPiMcpServerKey(server)
     const tools = catalog.listTools(server.id, { includeDisabled: false })
-    const names = tools.map((tool) => buildPiMcpToolName(server.id, tool.name))
+    const names = tools.map((tool) => buildPiMcpToolName(serverKey, tool.name))
     for (const tool of tools) {
-      const name = buildPiMcpToolName(server.id, tool.name)
+      const name = buildPiMcpToolName(serverKey, tool.name)
+      const legacyName = buildPiMcpToolName(server.id, tool.name)
       if (
+        disabled.has(name) ||
+        disabled.has(legacyName) ||
         disabled.has(buildFunctionCallToolName(server.name, tool.name)) ||
-        disabled.has(`mcp__${server.id}__${tool.name}`)
+        disabled.has(`mcp__${server.id}__${tool.name}`) ||
+        disabled.has(`mcp__${server.id.replaceAll('-', '_')}__${tool.name}`)
       ) {
-        disabled.add(buildPiMcpToolName(server.id, tool.name, names.indexOf(name) !== names.lastIndexOf(name)))
+        disabled.add(buildPiMcpToolName(serverKey, tool.name, names.indexOf(name) !== names.lastIndexOf(name)))
       }
     }
   }

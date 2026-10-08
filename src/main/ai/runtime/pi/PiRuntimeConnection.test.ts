@@ -153,8 +153,11 @@ vi.mock('@main/ai/agents/prompt', () => ({
 vi.mock('./piMcpExtension', () => ({
   warmMcpToolCatalogs: mocks.warmMcpToolCatalogs,
   createPiMcpExtension: mocks.createPiMcpExtension,
-  buildPiMcpToolName: (serverName: string, toolName: string) =>
-    `mcp__${serverName}__${toolName}`.replace(/[^A-Za-z0-9_]/g, '_')
+  toPiMcpServerKey: (server: any) => (typeof server === 'string' ? server : server.name || server.id || 'mcp'),
+  buildPiMcpToolName: (serverName: any, toolName: string) => {
+    const s = typeof serverName === 'string' ? serverName : serverName.name || serverName.id
+    return `mcp__${s}__${toolName}`.replace(/[^A-Za-z0-9_]/g, '_')
+  }
 }))
 vi.mock('./modelInjection', () => ({
   resolvePiProviderInjectionForSession: mocks.resolveInjection,

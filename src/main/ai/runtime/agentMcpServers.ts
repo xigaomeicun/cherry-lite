@@ -64,7 +64,11 @@ export function buildAgentMcpServers(
       if (mcpServerSnapshots && !serverSnapshot) {
         throw new Error(`MCP server not found in request snapshot: ${mcpId}`)
       }
-      servers[mcpId] = { id: serverSnapshot?.id, name: mcpId, instance: createMcpBridgeServer(mcpId, serverSnapshot) }
+      servers[mcpId] = {
+        id: serverSnapshot?.id,
+        name: serverSnapshot?.name ?? mcpId,
+        instance: createMcpBridgeServer(mcpId, serverSnapshot)
+      }
     } catch (error) {
       logger.error(`Failed to create MCP bridge for ${mcpId}`, { error })
     }
