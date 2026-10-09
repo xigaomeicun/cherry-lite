@@ -77,6 +77,7 @@ import '../telegram/TelegramAdapter'
 import { InputFile } from 'grammy'
 
 import { registerAdapterFactory } from '../../ChannelManager'
+import { CHUNK_MAX } from '../telegram/markdownTg'
 
 function getFactory() {
   const call = vi.mocked(registerAdapterFactory).mock.calls[0]
@@ -245,10 +246,15 @@ describe('TelegramAdapter', () => {
     await vi.runAllTimersAsync()
     await sendPromise
 
-    expect(mockBot.api.sendMessage).toHaveBeenCalledTimes(2)
-    // After MarkdownV2 conversion the total length may differ slightly
-    const totalSent = mockBot.api.sendMessage.mock.calls[0][1].length + mockBot.api.sendMessage.mock.calls[1][1].length
-    expect(totalSent).toBe(5000)
+    // Splitting is by converted visible length (planTelegramSend). A single
+    // break-less line offers no block or row boundary, so the oversized-block
+    // fallback hard-cuts it into several parts instead of the old raw 4096 split.
+    const parts = mockBot.api.sendMessage.mock.calls.map((call) => call[1] as string)
+    expect(parts.length).toBeGreaterThan(1)
+    // Nothing is dropped or duplicated across the parts.
+    expect(parts.join('')).toBe(longText)
+    // Every part stays within Telegram's 4096-char ceiling.
+    for (const part of parts) expect(part.length).toBeLessThanOrEqual(CHUNK_MAX)
   })
 
   it('sendFile() sends a document built from the decoded buffer and filename', async () => {
