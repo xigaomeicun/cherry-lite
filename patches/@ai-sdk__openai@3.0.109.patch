@@ -111,6 +111,15 @@ index 48ea06eecf6397b44f4176acea05664541cc4e1f..f6f18ef76f1971e36bd9cdc11123dc86
  });
  
  // src/responses/map-openai-responses-finish-reason.ts
+@@ -4241,7 +4268,7 @@ var openaiResponsesChunkSchema = (0, import_provider_utils28.lazySchema)(
+             id: import_v422.z.string(),
+             call_id: import_v422.z.string(),
+             name: import_v422.z.string(),
+-            arguments: import_v422.z.string(),
++            arguments: import_v422.z.string().optional().transform((v) => v ?? ""),
+             namespace: import_v422.z.string().nullish()
+           }),
+           import_v422.z.object({
 @@ -4658,6 +4682,11 @@ var openaiResponsesChunkSchema = (0, import_provider_utils28.lazySchema)(
          summary_index: import_v422.z.number(),
          delta: import_v422.z.string()
@@ -272,6 +281,15 @@ index 26483821603be3057bd67afc71143f97e8c33ac9..2cbea13c005abf6573beb2c0c8636704
  });
  
  // src/responses/map-openai-responses-finish-reason.ts
+@@ -4342,7 +4369,7 @@ var openaiResponsesChunkSchema = lazySchema20(
+             id: z22.string(),
+             call_id: z22.string(),
+             name: z22.string(),
+-            arguments: z22.string(),
++            arguments: z22.string().optional().transform((v) => v ?? ""),
+             namespace: z22.string().nullish()
+           }),
+           z22.object({
 @@ -4759,6 +4783,11 @@ var openaiResponsesChunkSchema = lazySchema20(
          summary_index: z22.number(),
          delta: z22.string()
@@ -433,6 +451,15 @@ index e5b1f96b49d488c7ef553b9dda77e3fbc3945681..be156e6df03cb0ba50118ff8c2b7b1df
  });
  
  // src/responses/map-openai-responses-finish-reason.ts
+@@ -4185,7 +4212,7 @@ var openaiResponsesChunkSchema = (0, import_provider_utils26.lazySchema)(
+             id: import_v418.z.string(),
+             call_id: import_v418.z.string(),
+             name: import_v418.z.string(),
+-            arguments: import_v418.z.string(),
++            arguments: import_v418.z.string().optional().transform((v) => v ?? ""),
+             namespace: import_v418.z.string().nullish()
+           }),
+           import_v418.z.object({
 @@ -4602,6 +4626,11 @@ var openaiResponsesChunkSchema = (0, import_provider_utils26.lazySchema)(
          summary_index: import_v418.z.number(),
          delta: import_v418.z.string()
@@ -594,6 +621,15 @@ index 714e23772d3d042b4bd88e69c0dc37d6e11187c5..b391b8de8bb1160e7eada80c84edd92c
  });
  
  // src/responses/map-openai-responses-finish-reason.ts
+@@ -4233,7 +4260,7 @@ var openaiResponsesChunkSchema = lazySchema16(
+             id: z18.string(),
+             call_id: z18.string(),
+             name: z18.string(),
+-            arguments: z18.string(),
++            arguments: z18.string().optional().transform((v) => v ?? ""),
+             namespace: z18.string().nullish()
+           }),
+           z18.object({
 @@ -4650,6 +4674,11 @@ var openaiResponsesChunkSchema = lazySchema16(
          summary_index: z18.number(),
          delta: z18.string()
@@ -787,6 +823,15 @@ diff --git a/src/responses/openai-responses-api.ts b/src/responses/openai-respon
 index aef872bfbed2218f104c6cf864cde8005173ff6d..b34fcfd8c530c7cfc33e04ffe2ec5efbd3bc435c 100644
 --- a/src/responses/openai-responses-api.ts
 +++ b/src/responses/openai-responses-api.ts
+@@ -771,7 +771,7 @@ export const openaiResponsesChunkSchema = lazySchema(() =>
+             id: z.string(),
+             call_id: z.string(),
+             name: z.string(),
+-            arguments: z.string(),
++            arguments: z.string().optional().transform((v) => v ?? ''),
+             namespace: z.string().nullish(),
+           }),
+           z.object({
 @@ -1206,6 +1206,11 @@ export const openaiResponsesChunkSchema = lazySchema(() =>
          summary_index: z.number(),
          delta: z.string(),
