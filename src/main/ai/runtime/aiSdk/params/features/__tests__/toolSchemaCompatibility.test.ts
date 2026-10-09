@@ -5,7 +5,7 @@ import type { LanguageModelV3CallOptions } from '@ai-sdk/provider'
 import { readFileInputSchema } from '@shared/ai/builtinTools'
 import { ENDPOINT_TYPE, type EndpointType } from '@shared/data/types/model'
 import type { LanguageModelMiddleware } from 'ai'
-import { generateText, tool, wrapLanguageModel } from 'ai'
+import { generateText, jsonSchema, tool, wrapLanguageModel } from 'ai'
 import { describe, expect, it } from 'vitest'
 import * as z from 'zod'
 
@@ -493,5 +493,116 @@ describe('toolSchemaCompatibilityFeature', () => {
     // `z.union([z.literal(1), z.literal(2)])` used to reach Gemini as
     // `anyOf: [{ enum: [1] }, { enum: [2] }]` and 400 the whole request.
     expect(declaration.parameters.properties.clickCount).toEqual({ anyOf: [{ type: 'number' }, { type: 'number' }] })
+  })
+  // Gemini's Schema proto requires a concrete `type`: a draft-07 type array
+  // (third-party MCP servers advertise nullable scalars as
+  // `type: ["number", "null"]`) reaches convertJSONSchemaToOpenAPISchema, which
+  // maps the array into an `anyOf` without ever setting a top-level `type`, and
+  // Gemini 400s the whole request with "didn't specify the schema type field"
+  // (issue #21394). Rewrite the array into explicit anyOf branches — one per
+  // listed type — which the converter already folds into `nullable` + a typed
+  // schema, keeping nullability instead of silently dropping the null branch.
+  it('expands type arrays into anyOf branches on the Gemini endpoint only', async () => {
+    const params: LanguageModelV3CallOptions = {
+      prompt: [],
+      tools: [
+        {
+          type: 'function',
+          name: 'cron',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              timeout_minutes: {
+                type: ['number', 'null'],
+                minimum: 1,
+                description: 'Timeout in minutes before the task is aborted.'
+              },
+              mode: { type: ['string', 'number'] },
+              single: { type: ['string'] }
+            }
+          }
+        }
+      ]
+    }
+
+    const transformed = (
+      await transform(params, {
+        aiSdkProviderId: 'google',
+        endpointType: ENDPOINT_TYPE.GOOGLE_GENERATE_CONTENT
+      })
+    ).tools?.[0]
+    if (transformed?.type !== 'function') throw new Error('expected a transformed function tool')
+
+    expect(transformed.inputSchema.properties).toEqual({
+      timeout_minutes: {
+        minimum: 1,
+        description: 'Timeout in minutes before the task is aborted.',
+        anyOf: [
+          { minimum: 1, description: 'Timeout in minutes before the task is aborted.', type: 'number' },
+          { type: 'null' }
+        ]
+      },
+      mode: { anyOf: [{ type: 'string' }, { type: 'number' }] },
+      single: { type: 'string' }
+    })
+
+    const untouched = (
+      await transform(params, {
+        aiSdkProviderId: 'anthropic',
+        endpointType: ENDPOINT_TYPE.ANTHROPIC_MESSAGES
+      })
+    ).tools?.[0]
+    expect(untouched).toBe(params.tools?.[0])
+  })
+
+  it('keeps a type on nullable scalar properties in Google function declarations', async () => {
+    // Wire-level guard: drives the real @ai-sdk/google package through a
+    // capturing fetch. Without the rewrite the type array goes out as an
+    // `anyOf` with no `type` and Gemini 400s the request.
+    let capturedBody: unknown
+    const captureFetch: typeof globalThis.fetch = async (_input, init) => {
+      capturedBody = JSON.parse(String(init?.body))
+      return new Response(JSON.stringify({ error: { message: 'captured' } }), {
+        status: 400,
+        headers: { 'content-type': 'application/json' }
+      })
+    }
+
+    const model = wrapLanguageModel({
+      model: createGoogleGenerativeAI({ apiKey: 'test-key', fetch: captureFetch })('gemini-3.5-flash'),
+      middleware: await getMiddleware({
+        aiSdkProviderId: 'google',
+        endpointType: ENDPOINT_TYPE.GOOGLE_GENERATE_CONTENT
+      })
+    })
+
+    await expect(
+      generateText({
+        model,
+        prompt: 'hello',
+        tools: {
+          // MCP-style raw JSON schema (bypasses zod conversion, like live MCP tools).
+          cron: {
+            description: 'cron',
+            inputSchema: jsonSchema({
+              type: 'object',
+              properties: {
+                timeout_minutes: { type: ['number', 'null'], minimum: 1 }
+              }
+            })
+          }
+        }
+      })
+    ).rejects.toBeDefined()
+
+    const declaration = (
+      capturedBody as {
+        tools: Array<{
+          functionDeclarations: Array<{ name: string; parameters: { properties: Record<string, unknown> } }>
+        }>
+      }
+    ).tools[0].functionDeclarations[0]
+    expect(declaration.name).toBe('cron')
+    expect(declaration.parameters.properties.timeout_minutes).toMatchObject({ type: 'number', nullable: true })
   })
 })
