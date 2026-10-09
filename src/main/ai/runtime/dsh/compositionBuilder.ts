@@ -53,7 +53,10 @@ export interface DshCompositionInput {
   /** JSONL session-persistence root (`feature.agents.dsh.sessions`). */
   sessionsRoot: string
   permissionMode: BridgePermissionMode
-  /** Cherry-materialized system prompt; empty string adds no persona beyond the optional harness identity. */
+  /**
+   * Cherry-materialized system prompt; empty string adds no persona beyond the
+   * optional harness identity. Emitted as the plugin's `personaPrefix` (order 0).
+   */
   persona: string
   /** A workspace `system.md` replaced the native base — drop the dsh identity sentence. */
   customBase: boolean
@@ -107,7 +110,10 @@ function buildSystemPromptConfig(input: DshCompositionInput): Record<string, unk
   return {
     // dsh interpolates {{var}} strictly at render (unknown refs THROW); Cherry text
     // never uses dsh variables, so break every opener instead of crashing turns.
-    ...(input.persona ? { persona: input.persona.replaceAll('{{', '{ {') } : {}),
+    // Key is `personaPrefix`: dsh 0.2.0-rc.2 renamed the 0.1.2-rc.1 `persona` config
+    // to personaPrefix/personaSuffix, and the plugin's zod schema silently strips an
+    // unknown key — the old name dropped the whole Agent System Prompt at order 0.
+    ...(input.persona ? { personaPrefix: input.persona.replaceAll('{{', '{ {') } : {}),
     // A workspace system.md replaces the persona base; drop only the dsh identity
     // sentence — tool-guidance sections stay (mechanics, not persona).
     ...(input.customBase ? { includeHarnessIdentity: false } : {})

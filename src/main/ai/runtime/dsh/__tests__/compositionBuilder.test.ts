@@ -134,10 +134,16 @@ describe('buildDshCompositionYaml', () => {
           platform === 'win32' ? '@deepseek-ai/dsh-tool-pwsh' : '@deepseek-ai/dsh-tool-bash',
           { enableRunInBackground: false }
         ],
-        ['workspace-context', '@deepseek-ai/dsh-agent-instructions', { dshHome: '/tmp/dsh-root', maxBytes: 32768 }]
+        ['workspace-context', '@deepseek-ai/dsh-agent-instructions', { dshHome: '/tmp/dsh-root', maxBytes: 32768 }],
+        // Validates the emitted persona key against the installed plugin schema, so a
+        // future dsh rename fails here instead of silently emptying the system prompt.
+        ['system-prompt', '@deepseek-ai/dsh-system-prompt', { personaPrefix: 'You are a Cherry agent.\n\nBe helpful.' }]
       ] as const) {
         const entry = entryById(yaml, id)
-        const { Config } = await import(pathToFileURL(resolveDshPluginPath(specifier)).href)
+        const mod = await import(pathToFileURL(resolveDshPluginPath(specifier)).href)
+        // A runtime entry exposes its schema either as a named `Config` or as the
+        // `Config` static of the service class it re-exports as default.
+        const Config = mod.Config ?? mod.SystemPrompt?.Config
         expect(Config(entry.config), id).toMatchObject(expected)
       }
     }
@@ -146,7 +152,16 @@ describe('buildDshCompositionYaml', () => {
   it('breaks {{ openers in the persona so dsh strict interpolation cannot throw', () => {
     const yml = buildDshCompositionYaml(makeInput({ persona: 'Use {{secret}} and {{cwd}} literally.' }))
     expect(yml).not.toContain('{{')
-    expect(entryById(yml, 'system-prompt').config?.persona).toBe('Use { {secret}} and { {cwd}} literally.')
+    expect(entryById(yml, 'system-prompt').config?.personaPrefix).toBe('Use { {secret}} and { {cwd}} literally.')
+  })
+
+  it('names the persona with the key dsh 0.2.0-rc.2 actually reads', () => {
+    // REGRESSION dsh-persona-1: 0.2.0-rc.2 renamed the config key from `persona` to
+    // `personaPrefix`; an unknown key is stripped by the plugin's zod schema without
+    // throwing, so the old name silently dropped the whole Agent System Prompt.
+    const config = entryById(buildDshCompositionYaml(makeInput()), 'system-prompt').config
+    expect(config).toHaveProperty('personaPrefix')
+    expect(config).not.toHaveProperty('persona')
   })
 
   it('drops the dsh identity sentence only for a custom base', () => {
