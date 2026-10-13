@@ -1,8 +1,10 @@
-import { type MarkdownSource } from '@cherrystudio/ui'
+import { type MarkdownSource, Scrollbar } from '@cherrystudio/ui'
 import { type CSSProperties, memo, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import BeatLoader from 'react-spinners/BeatLoader'
 
+import { getDistanceToBottom, getRealBottom } from '../list/scrollGeometry'
+import { VERTICAL_SCROLL_OVERFLOW_TOLERANCE_PX } from '../list/ScrollOwnershipContext'
 import ChatMarkdown from '../markdown/ChatMarkdown'
 import { useMessageRenderConfig } from '../MessageListProvider'
 import ThinkingEffect from './ThinkingEffect'
@@ -72,6 +74,20 @@ const ThinkingBlock: React.FC<Props> = ({ id, content, isStreaming, showTitlePre
   const { thoughtAutoCollapse } = useMessageRenderConfig()
   const [isExpanded, setIsExpanded] = useState(!thoughtAutoCollapse)
   const contentId = useId()
+  const contentRef = useRef<HTMLDivElement>(null)
+  const followingRef = useRef(true)
+  const hasContent = !!content
+
+  useEffect(() => {
+    const panel = contentRef.current
+    if (!panel || !isExpanded || !isStreaming) return
+    const observer = new ResizeObserver(() => {
+      if (followingRef.current) panel.scrollTop = getRealBottom(panel)
+    })
+    observer.observe(panel)
+    if (panel.firstElementChild) observer.observe(panel.firstElementChild)
+    return () => observer.disconnect()
+  }, [hasContent, isExpanded, isStreaming])
   const thinkingPreviewScanStateRef = useRef<ThinkingPreviewScanState | undefined>(undefined)
   const { anchorRef, withScrollAnchor } = useScrollAnchor<HTMLDivElement>()
 
@@ -154,9 +170,19 @@ const ThinkingBlock: React.FC<Props> = ({ id, content, isStreaming, showTitlePre
           }
         />
       </div>
-      <div id={contentId} hidden={!isExpanded} className={THINKING_CONTENT_PANEL_CLASSNAME}>
+      <Scrollbar
+        ref={contentRef}
+        id={contentId}
+        hidden={!isExpanded}
+        autoHideScrollbar={false}
+        className={THINKING_CONTENT_PANEL_CLASSNAME}
+        onScroll={() => {
+          const panel = contentRef.current
+          if (!panel || !isExpanded || !isStreaming) return
+          followingRef.current = getDistanceToBottom(panel) <= VERTICAL_SCROLL_OVERFLOW_TOLERANCE_PX
+        }}>
         <ThinkingBlockContent id={id} content={content} isStreaming={isStreaming} />
-      </div>
+      </Scrollbar>
     </div>
   )
 }
