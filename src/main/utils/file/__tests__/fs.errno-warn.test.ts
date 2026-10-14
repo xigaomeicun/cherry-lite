@@ -428,14 +428,7 @@ describe('atomicWriteFile (write/sync failure cleans up .tmp-{uuid})', () => {
     mockUnlink.mockRejectedValueOnce(unlinkErr)
 
     await expect(atomicWriteFile(target as AbsoluteFilePath, 'payload')).rejects.toBe(renameErr)
-    expect(mockLoggerWarn).toHaveBeenCalledWith(
-      expect.stringContaining('tmp cleanup failed'),
-      expect.objectContaining({
-        target,
-        code: 'EACCES',
-        err: unlinkErr
-      })
-    )
+    expect(mockLoggerWarn).toHaveBeenCalledWith(expect.stringContaining('tmp cleanup failed'), { code: 'EACCES' })
   })
 
   it('on rename failure + unlink ENOENT: silent (tmp already gone is the desired post-state)', async () => {
@@ -514,14 +507,7 @@ describe('createAtomicWriteStream (tmp leak observability)', () => {
     const err = await consumeStream(stream, 'payload')
 
     expect(err).toBe(renameErr)
-    expect(mockLoggerWarn).toHaveBeenCalledWith(
-      expect.stringContaining('tmp cleanup failed'),
-      expect.objectContaining({
-        target,
-        code: 'EACCES',
-        err: unlinkErr
-      })
-    )
+    expect(mockLoggerWarn).toHaveBeenCalledWith(expect.stringContaining('tmp cleanup failed'), { code: 'EACCES' })
   })
 
   it('_destroy (pre-commit abort): cleanup runs, no .tmp- residue, no warn on clean unlink', async () => {

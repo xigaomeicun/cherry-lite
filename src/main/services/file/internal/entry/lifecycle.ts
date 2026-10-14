@@ -18,6 +18,7 @@
 import type { DbOrTx } from '@data/db/types'
 import { loggerService } from '@logger'
 import { remove as fsRemove } from '@main/utils/file'
+import { DataApiErrorFactory } from '@shared/data/api/errors'
 import type { FileEntry, FileEntryId } from '@shared/data/types/file'
 import type { BatchMutationResult } from '@shared/types/file'
 
@@ -62,15 +63,9 @@ export async function cleanupDeletedEntry(deps: FileManagerDeps, entry: FileEntr
     try {
       await fsRemove(physical)
     } catch (err) {
-      // Include `physical` so operators can grep / `ls` the leak directly.
-      // The DB row is already gone by this point, so without the path here
-      // the only way to locate the orphan blob is to reconstruct it from
-      // `id` + the (since-removed) DB row's `ext` — exactly the dance the
-      // operator would otherwise have to do at incident time.
       logger.warn('permanentDelete: failed to unlink internal physical file (DB row already removed)', {
         id: entry.id,
-        physical,
-        err
+        code: (err as NodeJS.ErrnoException)?.code ?? 'UNKNOWN'
       })
       return { unlinkFailed: true }
     }
@@ -80,6 +75,58 @@ export async function cleanupDeletedEntry(deps: FileManagerDeps, entry: FileEntr
 
 export async function permanentDelete(deps: FileManagerDeps, id: FileEntryId): Promise<void> {
   const entry = deps.fileEntryService.withWriteTx((tx) => permanentDeleteTx(deps, tx, id))
+  await cleanupDeletedEntry(deps, entry)
+}
+
+export async function deleteInternalTemporaryEntry(deps: FileManagerDeps, id: FileEntryId): Promise<void> {
+  const entry = deps.fileEntryService.getById(id)
+  if (entry.origin !== 'internal' || entry.cleanupPolicy !== 'delete_when_unreferenced') {
+    throw DataApiErrorFactory.invalidOperation(
+      'delete retained temporary file',
+      `File entry ${id} must be an automatic internal entry`
+    )
+  }
+  await fsRemove(resolvePhysicalPath(entry))
+  deps.versionCache.invalidate(entry.id)
+  deps.fileEntryService.withWriteTx((tx) => permanentDeleteTx(deps, tx, id))
+}
+
+function assertUnreferenced(deps: FileManagerDeps, tx: DbOrTx, id: FileEntryId, operation: string): void {
+  if (deps.fileRefService.countPersistentRefsByEntryIdTx(tx, id) > 0) {
+    throw DataApiErrorFactory.invalidOperation(operation, `File entry ${id} is still referenced`)
+  }
+}
+
+function permanentDeleteFromTrashTx(deps: FileManagerDeps, tx: DbOrTx, id: FileEntryId): FileEntry {
+  const entry = deps.fileEntryService.getByIdTx(tx, id)
+  if (entry.origin !== 'internal' || entry.deletedAt == null) {
+    throw DataApiErrorFactory.invalidOperation(
+      'permanently delete file from Trash',
+      `File entry ${id} must be an internal file in the Recycle Bin`
+    )
+  }
+  assertUnreferenced(deps, tx, id, 'permanently delete file from Trash')
+  deps.fileEntryService.deleteTx(tx, id)
+  return entry
+}
+
+export async function permanentDeleteFromTrash(deps: FileManagerDeps, id: FileEntryId): Promise<void> {
+  const entry = deps.fileEntryService.withWriteTx((tx) => permanentDeleteFromTrashTx(deps, tx, id))
+  await cleanupDeletedEntry(deps, entry)
+}
+
+function removeExternalFromLibraryTx(deps: FileManagerDeps, tx: DbOrTx, id: FileEntryId): FileEntry {
+  const entry = deps.fileEntryService.getByIdTx(tx, id)
+  if (entry.origin !== 'external') {
+    throw DataApiErrorFactory.invalidOperation('remove file from library', `File entry ${id} must be an external file`)
+  }
+  assertUnreferenced(deps, tx, id, 'remove file from library')
+  deps.fileEntryService.deleteTx(tx, id)
+  return entry
+}
+
+export async function removeExternalFromLibrary(deps: FileManagerDeps, id: FileEntryId): Promise<void> {
+  const entry = deps.fileEntryService.withWriteTx((tx) => removeExternalFromLibraryTx(deps, tx, id))
   await cleanupDeletedEntry(deps, entry)
 }
 
