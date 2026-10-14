@@ -118,7 +118,7 @@ describe('ChannelAdapterListener', () => {
     // onStreamComplete (finalize UI) gets the plain text; sendMessage falls back
     // since it returned false, and carries the truncation suffix.
     expect(vi.mocked(adapter.onStreamComplete).mock.calls[0][1]).toBe('partial answer')
-    expect(vi.mocked(adapter.sendMessage).mock.calls[0][1]).toBe(`partial answer\n\n_(${t('common.channel_stopped')})_`)
+    expect(vi.mocked(adapter.sendMessage).mock.calls[0][1]).toBe(`partial answer\n\n⏹ ${t('common.channel_stopped')}`)
   })
 
   it('finalizes an empty paused turn without sending an empty fallback', async () => {

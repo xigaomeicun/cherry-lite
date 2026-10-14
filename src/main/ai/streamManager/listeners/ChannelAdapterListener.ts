@@ -342,7 +342,7 @@ export class ChannelAdapterListener implements StreamListener {
         }
         const handled = await this.completeStream(deliveryText, 'paused')
         if (!handled) {
-          await this.deliver(`${deliveryText}\n\n_(${t('common.channel_stopped')})_`)
+          await this.deliver(`${deliveryText}\n\n⏹ ${t('common.channel_stopped')}`)
         }
         return
       }
