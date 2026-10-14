@@ -1451,23 +1451,37 @@ describe('Sessions', () => {
     expect(getSessionGroupExpansionCache().agent).not.toContain('session:agent:agent-b')
   })
 
-  it('keeps a pinned session in its expanded agent group', () => {
+  it.each([false, true])('keeps a pinned session above its agent group (collapsed: %s)', (collapsed) => {
     preferenceMocks.values.set('agent.session.display_mode', 'agent')
+    setSessionGroupExpansionCache({
+      ...createExpandedSessionGroupExpansionFixture(),
+      agent: collapsed ? ['session:agent:agent-a'] : []
+    })
     agentDataMocks.useAgents.mockReturnValue({
       agents: [{ id: 'agent-a', model: 'model-a', name: 'Alpha agent', configuration: { avatar: 'A' } }],
       isLoading: false,
       error: undefined
     })
     setupSessions({
-      sessions: [createSession({ id: 'session-pinned', name: 'Pinned session', agentId: 'agent-a' })],
+      sessions: [
+        createSession({ id: 'session-pinned', name: 'Pinned session', agentId: 'agent-a' }),
+        createSession({ id: 'session-regular', name: 'Regular session', agentId: 'agent-a' })
+      ],
       pinIdBySessionId: new Map([['session-pinned', 'pin-session-pinned']])
     })
 
     render(<SessionsForTest />)
 
-    expect(screen.queryByRole('button', { name: 'Pinned' })).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Alpha agent' })).toBeInTheDocument()
-    expect(screen.getByText('Pinned session')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Pinned' })).toBeInTheDocument()
+    const agentGroup = screen.getByRole('button', { name: 'Alpha agent' })
+    const pinnedSession = screen.getByText('Pinned session')
+    expect(screen.getAllByText('Pinned session')).toHaveLength(1)
+    expect(pinnedSession.compareDocumentPosition(agentGroup) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    if (collapsed) {
+      expect(screen.queryByText('Regular session')).not.toBeInTheDocument()
+    } else {
+      expect(screen.getByText('Regular session')).toBeInTheDocument()
+    }
     expect(screen.queryByText('No tasks')).not.toBeInTheDocument()
   })
 
@@ -1482,6 +1496,25 @@ describe('Sessions', () => {
     const unlinkedAgentGroup = screen.getByRole('button', { name: 'Unlinked Agent' })
     expect(unlinkedAgentGroup.querySelector('[data-resource-list-leading-slot="true"]')).not.toBeInTheDocument()
     expect(unlinkedAgentGroup.closest('[data-slot="tooltip-trigger"]')).toBeInTheDocument()
+  })
+
+  it('labels an all-pinned orphan session list', () => {
+    preferenceMocks.values.set('agent.session.display_mode', 'agent')
+    agentDataMocks.useAgents.mockReturnValue({
+      agents: [],
+      isLoading: false,
+      error: undefined,
+      refetch: dataApiMocks.refetchAgents
+    })
+    setupSessions({
+      sessions: [createSession({ id: 'session-orphan', name: 'Orphan session', agentId: null })],
+      pinIdBySessionId: new Map([['session-orphan', 'pin-session-orphan']])
+    })
+
+    render(<SessionsForTest />)
+
+    expect(screen.getByRole('button', { name: 'Pinned' })).toBeInTheDocument()
+    expect(screen.getByText('Orphan session')).toBeInTheDocument()
   })
 
   it('defaults agent display groups to collapsed before the user changes expansion', () => {
@@ -2268,7 +2301,7 @@ describe('Sessions', () => {
     expect(menuContent).toHaveTextContent('Open in New Window')
   })
 
-  it('keeps a pinned session aligned with its agent icon', () => {
+  it('does not reserve an agent icon slot for a pinned session', () => {
     preferenceMocks.values.set('agent.session.display_mode', 'agent')
     dataApiMocks.agents = [{ id: 'agent-a', model: 'model-a', name: 'Alpha agent', configuration: { avatar: 'A' } }]
     setupSessions({
@@ -2279,11 +2312,10 @@ describe('Sessions', () => {
     render(<SessionsForTest />)
 
     const pinnedRow = screen.getByText('Pinned session').closest('[role="option"]')
-    // The leading slot is the horizontal alignment contract shared with the agent header icon.
-    expect(pinnedRow?.querySelector('[data-resource-list-leading-slot="true"]') ?? null).toBeInTheDocument()
+    expect(pinnedRow?.querySelector('[data-resource-list-leading-slot="true"]') ?? null).not.toBeInTheDocument()
   })
 
-  it('keeps the leading slot when agent icons are hidden', () => {
+  it('does not reserve a leading slot for a pinned session when agent icons are hidden', () => {
     preferenceMocks.values.set('agent.session.display_mode', 'agent')
     preferenceMocks.values.set('agent.icon_type', 'none')
     dataApiMocks.agents = [{ id: 'agent-a', model: 'model-a', name: 'Alpha agent' }]
@@ -2295,7 +2327,7 @@ describe('Sessions', () => {
     render(<SessionsForTest />)
 
     const pinnedRow = screen.getByText('Pinned session').closest('[role="option"]')
-    expect(pinnedRow?.querySelector('[data-resource-list-leading-slot="true"]') ?? null).toBeInTheDocument()
+    expect(pinnedRow?.querySelector('[data-resource-list-leading-slot="true"]') ?? null).not.toBeInTheDocument()
   })
 
   it('hides the inline delete action for pinned sessions', () => {
