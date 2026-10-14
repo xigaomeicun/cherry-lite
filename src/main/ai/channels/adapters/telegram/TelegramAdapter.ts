@@ -163,6 +163,9 @@ class TelegramAdapter extends ChannelAdapter {
         },
         editReplyMarkup: async (keyboard) => {
           await ctx.editMessageReplyMarkup({ reply_markup: keyboard as never }).catch(() => {})
+        },
+        editMessageText: async (text) => {
+          await ctx.editMessageText(text, { reply_markup: { inline_keyboard: [] } }).catch(() => {})
         }
       })
     })
@@ -453,7 +456,8 @@ class TelegramAdapter extends ChannelAdapter {
           typeof opts?.replyToMessageId === 'number' && i === 0
             ? { reply_parameters: { message_id: opts.replyToMessageId } }
             : {}
-        await this.bot.api.sendMessage(chatId, plain, replyParams)
+        const markupParams = i === plainChunks.length - 1 && opts?.replyMarkup ? { reply_markup: opts.replyMarkup } : {}
+        await this.bot.api.sendMessage(chatId, plain, { ...replyParams, ...markupParams })
       }
       return
     }

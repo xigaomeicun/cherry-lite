@@ -66,6 +66,8 @@ export type ChannelCallbackQueryEvent = {
   messageId?: number
   answerCallbackQuery: (opts?: { text?: string }) => Promise<void>
   editReplyMarkup: (keyboard: ChannelInlineKeyboard) => Promise<void>
+  /** Replace the card's text (plain) and remove its inline keyboard, when the platform supports it. */
+  editMessageText?: (text: string) => Promise<void>
 }
 
 export type SendMessageOptions = {

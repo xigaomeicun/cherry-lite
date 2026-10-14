@@ -3,7 +3,9 @@
  * Kept separate from ChannelMessageHandler to limit file size.
  */
 
-import type { ChannelMessageEvent } from './ChannelAdapter'
+import { t } from '@main/i18n'
+
+import type { ChannelInlineKeyboard, ChannelMessageEvent } from './ChannelAdapter'
 
 export type BusyOffer = {
   activeSessionId: string
@@ -13,10 +15,55 @@ export type BusyOffer = {
     _cherryBusyOfferId?: string
   }
   cancelled: boolean
+  /** 1-based position among pending cards for this session when the card was sent. */
+  queueIndex: number
 }
 
 /** Shared offer map for busy auto-queue cards. */
 export const busyOffers = new Map<string, BusyOffer>()
+
+/** Keep the card well under Telegram's 4096-char limit. */
+const BUSY_CARD_PREVIEW_MAX = 3000
+
+function busyCardPreview(message: ChannelMessageEvent): string {
+  const text = (message.text ?? '').trim()
+  const extras = [
+    ...(message.images?.length ? [`[🖼 ×${message.images.length}]`] : []),
+    ...(message.files?.length ? [`[📎 ×${message.files.length}]`] : [])
+  ].join(' ')
+  const body = text.length > BUSY_CARD_PREVIEW_MAX ? `${text.slice(0, BUSY_CARD_PREVIEW_MAX)}…` : text
+  return [body, extras].filter(Boolean).join('\n') || '…'
+}
+
+/** Plain-text confirmation card shown when a Telegram message arrives while a turn is running. */
+export function buildBusyCardText(queueIndex: number, message: ChannelMessageEvent): string {
+  return [
+    t('common.channel_busy.title', { n: queueIndex }),
+    '',
+    busyCardPreview(message),
+    '',
+    t('common.channel_busy.steer_hint'),
+    t('common.channel_busy.send_hint'),
+    t('common.channel_busy.cancel_hint')
+  ].join('\n')
+}
+
+/** Card text after a choice: same header + message, hints replaced by the result. */
+export function buildBusyResultText(queueIndex: number, message: ChannelMessageEvent, result: string): string {
+  return [t('common.channel_busy.title', { n: queueIndex }), '', busyCardPreview(message), '', result].join('\n')
+}
+
+export function buildBusyCardKeyboard(offerId: string): ChannelInlineKeyboard {
+  return {
+    inline_keyboard: [
+      [
+        { text: t('common.channel_busy.btn_steer'), callback_data: `busy:steer:${offerId}` },
+        { text: t('common.channel_busy.btn_send'), callback_data: `busy:send:${offerId}` },
+        { text: t('common.channel_busy.btn_cancel'), callback_data: `busy:cancel:${offerId}` }
+      ]
+    ]
+  }
+}
 
 /** AskUserQuestion multi-step answers (Telegram). */
 export const askUserPending = new Map<

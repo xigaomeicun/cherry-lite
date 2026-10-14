@@ -20,7 +20,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ChannelMessageEvent } from '../ChannelAdapter'
 import { channelMessageHandler } from '../ChannelMessageHandler'
 import { sanitizeChannelOutput } from '../security/OutputSanitizer'
-import { modelPickTokens, resetModelPickTokensForTests } from '../telegramChannelExtras'
+import { busyOffers, modelPickTokens, resetModelPickTokensForTests } from '../telegramChannelExtras'
 
 const { mockPrepareAgentSessionWorkspaceDirectory, MockAgentSessionWorkspaceError } = vi.hoisted(() => {
   class MockAgentSessionWorkspaceError extends Error {
@@ -66,7 +66,7 @@ const { mockStreamAbort, mockTrySteer } = vi.hoisted(() => ({
 vi.mock('@application', async () => {
   const { mockApplicationFactory } = await import('@test-mocks/main/application')
   return mockApplicationFactory({
-    AiStreamManager: { abort: mockStreamAbort },
+    AiStreamManager: { abort: mockStreamAbort, isTopicLive: () => false },
     AgentSessionRuntimeService: { trySteer: mockTrySteer }
   } as never)
 })
@@ -331,77 +331,203 @@ describe('ChannelMessageHandler', () => {
     expect(adapter.sendMessage).toHaveBeenCalledWith('chat-1', 'second completed', undefined)
   })
 
-  it('steers mid-turn when runtime accepts the steer for a busy Telegram session', async () => {
-    const adapter = createMockAdapter({ channelType: 'telegram' })
-    const session = {
-      id: 'session-tg-busy',
-      agentId: 'agent-1',
-      agentType: 'claude-code',
-      model: 'openai::gpt-4',
-      workspace: { path: '/tmp/test-workspace' },
-      configuration: {}
+  describe('Telegram busy confirmation card', () => {
+    const SID = 'session-tg-busy'
+    let abortController: AbortController
+    let startedTexts: string[]
+
+    function setupBusy() {
+      const adapter = createMockAdapter({ channelType: 'telegram' })
+      adapter.dismissToolProgress = vi.fn().mockResolvedValue(undefined)
+      const session = {
+        id: SID,
+        agentId: 'agent-1',
+        agentType: 'claude-code',
+        model: 'openai::gpt-4',
+        workspace: { path: '/tmp/test-workspace' },
+        configuration: {}
+      }
+      vi.mocked(agentSessionService.create).mockReturnValue(session as any)
+      abortController = new AbortController()
+      ;(channelMessageHandler as any).activeAbortControllers.set(SID, abortController)
+      persistedChannelSessions.bindings.set('channel-1:chat-1', SID)
+      persistedChannelSessions.sessions.set(SID, session as any)
+      startedTexts = []
+      mockStartAgentSessionRun.mockImplementation(async (args: any) => {
+        startedTexts.push(JSON.stringify(args.message ?? args.userMessage ?? args))
+        for (const l of args.listeners ?? []) await l.onDone?.({ status: 'success' })
+        return { mode: 'started' }
+      })
+      return adapter
     }
-    vi.mocked(agentSessionService.create).mockReturnValue(session as any)
 
-    // Simulate an active abort controller registered for the session (turn in flight)
-    const abortController = new AbortController()
-    ;(channelMessageHandler as any).activeAbortControllers.set('session-tg-busy', abortController)
-    persistedChannelSessions.bindings.set('channel-1:chat-1', 'session-tg-busy')
-    persistedChannelSessions.sessions.set('session-tg-busy', session as any)
+    function cardCall(adapter: any, n = 1) {
+      return vi.mocked(adapter.sendMessage).mock.calls.filter((c: any[]) => c[2]?.replyMarkup)[n - 1]
+    }
 
-    mockTrySteer.mockReturnValueOnce(true)
+    function offerIdFrom(adapter: any, n = 1): string {
+      const markup = cardCall(adapter, n)![2].replyMarkup
+      return markup.inline_keyboard[0][0].callback_data.split(':')[2]
+    }
 
-    await handleIncomingAndFlush(adapter, {
-      chatId: 'chat-1',
-      userId: 'user-1',
-      userName: 'User',
-      text: 'steer into tool boundary'
+    function cb(data: string) {
+      return {
+        chatId: 'chat-1',
+        userId: 'user-1',
+        userName: 'User',
+        data,
+        answerCallbackQuery: vi.fn().mockResolvedValue(undefined),
+        editReplyMarkup: vi.fn().mockResolvedValue(undefined),
+        editMessageText: vi.fn().mockResolvedValue(undefined)
+      }
+    }
+
+    afterEach(() => {
+      ;(channelMessageHandler as any).activeAbortControllers.delete(SID)
+      busyOffers.clear()
+      mockStartAgentSessionRun.mockReset()
     })
 
-    // Steer must NOT abort the running turn
-    expect(abortController.signal.aborted).toBe(false)
-    expect(mockTrySteer).toHaveBeenCalledWith('session-tg-busy', 'steer into tool boundary')
-    expect(adapter.sendMessage).toHaveBeenCalledWith(
-      'chat-1',
-      '⚡️ <i>已将新指令插入当前任务，正在引导执行...</i>',
-      expect.objectContaining({ parseMode: 'html' })
-    )
-  })
-
-  it('queues cleanly when runtime cannot steer mid-turn, without aborting the running turn', async () => {
-    const adapter = createMockAdapter({ channelType: 'telegram' })
-    const session = {
-      id: 'session-tg-busy-queue',
-      agentId: 'agent-1',
-      agentType: 'claude-code',
-      model: 'openai::gpt-4',
-      workspace: { path: '/tmp/test-workspace' },
-      configuration: {}
-    }
-    vi.mocked(agentSessionService.create).mockReturnValue(session as any)
-
-    // Simulate an active turn in flight
-    const abortController = new AbortController()
-    ;(channelMessageHandler as any).activeAbortControllers.set('session-tg-busy-queue', abortController)
-    persistedChannelSessions.bindings.set('channel-1:chat-1', 'session-tg-busy-queue')
-    persistedChannelSessions.sessions.set('session-tg-busy-queue', session as any)
-
-    mockTrySteer.mockReturnValueOnce(false)
-
-    await handleIncomingAndFlush(adapter, {
-      chatId: 'chat-1',
-      userId: 'user-1',
-      userName: 'User',
-      text: 'followup to queue'
+    it('sends a plain-text card with steer/send/cancel buttons and does not auto-steer', async () => {
+      const adapter = setupBusy()
+      const p = channelMessageHandler.handleIncoming(adapter, {
+        chatId: 'chat-1',
+        userId: 'user-1',
+        userName: 'User',
+        text: 'hello *new*'
+      })
+      const call = cardCall(adapter)!
+      expect(call[1]).toBe(
+        [
+          '📋 New message pending (queue #1)',
+          '',
+          'hello *new*',
+          '',
+          '🧭 Steer — keep the current task running and inject this message to guide it',
+          '⚡ Send — abort the current task and run this now',
+          '❎ Cancel — drop this new message (the running task is unaffected)'
+        ].join('\n')
+      )
+      expect(call[2].parseMode).toBe('plain')
+      const buttons = call[2].replyMarkup.inline_keyboard[0]
+      expect(buttons.map((b: any) => b.callback_data.split(':')[1])).toEqual(['steer', 'send', 'cancel'])
+      expect(buttons.every((b: any) => b.callback_data.length <= 64)).toBe(true)
+      expect(mockTrySteer).not.toHaveBeenCalled()
+      expect(abortController.signal.aborted).toBe(false)
+      await vi.advanceTimersByTimeAsync(1000)
+      await p
     })
 
-    // Must NOT abort the running turn
-    expect(abortController.signal.aborted).toBe(false)
-    expect(adapter.sendMessage).toHaveBeenCalledWith(
-      'chat-1',
-      '⏳ <i>任务执行中，新指令已排队…</i>',
-      expect.objectContaining({ parseMode: 'html' })
-    )
+    it('numbers multiple pending cards by queue position', async () => {
+      const adapter = setupBusy()
+      const p1 = channelMessageHandler.handleIncoming(adapter, {
+        chatId: 'chat-1',
+        userId: 'user-1',
+        userName: 'User',
+        text: 'a'
+      })
+      const p2 = channelMessageHandler.handleIncoming(adapter, {
+        chatId: 'chat-1',
+        userId: 'user-1',
+        userName: 'User',
+        text: 'b'
+      })
+      expect(cardCall(adapter, 1)![1]).toContain('queue #1')
+      expect(cardCall(adapter, 2)![1]).toContain('queue #2')
+      await vi.advanceTimersByTimeAsync(1000)
+      await Promise.all([p1, p2])
+    })
+
+    it('steer: injects into the running turn, edits the card and drops the queued copy', async () => {
+      const adapter = setupBusy()
+      mockTrySteer.mockReturnValueOnce(true)
+      const p = channelMessageHandler.handleIncoming(adapter, {
+        chatId: 'chat-1',
+        userId: 'user-1',
+        userName: 'User',
+        text: 'steer me'
+      })
+      const ev = cb(`busy:steer:${offerIdFrom(adapter)}`)
+      await channelMessageHandler.handleCallbackQuery(adapter, ev as any)
+      expect(mockTrySteer).toHaveBeenCalledWith(SID, 'steer me')
+      expect(ev.editMessageText).toHaveBeenCalledWith(expect.stringContaining('🧭 Steered into the current task'))
+      await vi.advanceTimersByTimeAsync(1000)
+      await p
+      expect(mockStartAgentSessionRun).not.toHaveBeenCalled()
+      expect(abortController.signal.aborted).toBe(false)
+    })
+
+    it('steer: falls back to queue when the runtime cannot steer', async () => {
+      const adapter = setupBusy()
+      mockTrySteer.mockReturnValueOnce(false)
+      const p = channelMessageHandler.handleIncoming(adapter, {
+        chatId: 'chat-1',
+        userId: 'user-1',
+        userName: 'User',
+        text: 'q me'
+      })
+      const ev = cb(`busy:steer:${offerIdFrom(adapter)}`)
+      await channelMessageHandler.handleCallbackQuery(adapter, ev as any)
+      expect(ev.editMessageText).toHaveBeenCalledWith(
+        expect.stringContaining('This runtime cannot steer; message queued')
+      )
+      await vi.advanceTimersByTimeAsync(1000)
+      await p
+      expect(mockStartAgentSessionRun).toHaveBeenCalledTimes(1)
+    })
+
+    it('send: aborts the current turn and runs the new message', async () => {
+      const adapter = setupBusy()
+      const p = channelMessageHandler.handleIncoming(adapter, {
+        chatId: 'chat-1',
+        userId: 'user-1',
+        userName: 'User',
+        text: 'now'
+      })
+      const ev = cb(`busy:send:${offerIdFrom(adapter)}`)
+      await channelMessageHandler.handleCallbackQuery(adapter, ev as any)
+      expect(mockStreamAbort).toHaveBeenCalledWith(expect.stringContaining(SID), 'channel-session-aborted')
+      expect(ev.editMessageText).toHaveBeenCalledWith(expect.stringContaining('Current task aborted'))
+      await vi.advanceTimersByTimeAsync(1000)
+      await p
+      expect(mockStartAgentSessionRun).toHaveBeenCalledTimes(1)
+    })
+
+    it('cancel: drops the new message without touching the running turn', async () => {
+      const adapter = setupBusy()
+      const p = channelMessageHandler.handleIncoming(adapter, {
+        chatId: 'chat-1',
+        userId: 'user-1',
+        userName: 'User',
+        text: 'nope'
+      })
+      const ev = cb(`busy:cancel:${offerIdFrom(adapter)}`)
+      await channelMessageHandler.handleCallbackQuery(adapter, ev as any)
+      expect(ev.editMessageText).toHaveBeenCalledWith(expect.stringContaining('New message cancelled'))
+      await vi.advanceTimersByTimeAsync(1000)
+      await p
+      expect(mockStartAgentSessionRun).not.toHaveBeenCalled()
+      expect(abortController.signal.aborted).toBe(false)
+    })
+
+    it('runs normally if the turn finishes first, and a later tap is treated as stale', async () => {
+      const adapter = setupBusy()
+      const p = channelMessageHandler.handleIncoming(adapter, {
+        chatId: 'chat-1',
+        userId: 'user-1',
+        userName: 'User',
+        text: 'later'
+      })
+      const offerId = offerIdFrom(adapter)
+      await vi.advanceTimersByTimeAsync(1000)
+      await p
+      expect(mockStartAgentSessionRun).toHaveBeenCalledTimes(1)
+      const ev = cb(`busy:send:${offerId}`)
+      await channelMessageHandler.handleCallbackQuery(adapter, ev as any)
+      expect(ev.answerCallbackQuery).toHaveBeenCalledWith({ text: '⚪ This action has expired or was already handled' })
+      expect(ev.editReplyMarkup).toHaveBeenCalledWith({ inline_keyboard: [] })
+      expect(mockTrySteer).not.toHaveBeenCalled()
+    })
   })
 
   // channels-core-3: the streaming delivery path (real ChannelAdapterListener) must route

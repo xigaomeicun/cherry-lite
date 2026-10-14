@@ -34,6 +34,10 @@ import type {
 import { SLASH_COMMANDS } from './constants'
 import {
   askUserPending,
+  buildBusyCardKeyboard,
+  buildBusyCardText,
+  buildBusyResultText,
+  type BusyOffer,
   busyOffers,
   escHtml,
   MODEL_PICK_LIMIT,
@@ -243,35 +247,13 @@ export class ChannelMessageHandler {
       return Promise.resolve()
     }
 
-    // Telegram: if a turn is already streaming for this session,
-    // first attempt mid-turn steering (⌘Enter steer equivalent);
-    // if steering is not accepted by the current runtime, queue it cleanly (Enter queue equivalent).
+    // Telegram: if a turn is already streaming for this session, post a confirmation card
+    // (🧭 引导 / ⚡ 发送 / ❎ 取消). The message is queued meanwhile, so if the current turn
+    // finishes before the user taps, it simply runs normally (and the card's offer expires).
     if (adapter.channelType === 'telegram') {
       const sid = this.peekSessionId(adapter.agentId, adapter.channelId, conversationIdOf(message))
       if (sid && this.activeAbortControllers.has(sid)) {
-        // Try steering into the running turn (PreToolUse/PostToolBatch hook)
-        const runtimeService = application.get('AgentSessionRuntimeService')
-        const steerAccepted = message.text ? runtimeService.trySteer?.(sid, message.text) : false
-
-        if (steerAccepted) {
-          void adapter
-            .sendMessage(message.chatId, '⚡️ <i>已将新指令插入当前任务，正在引导执行...</i>', {
-              ...responseOptionsFor(message),
-              parseMode: 'html'
-            })
-            .catch(() => {})
-          // The running turn absorbed the steer into its tool loop; no separate turn needed.
-          return Promise.resolve()
-        }
-
-        // Steer was declined or unavailable (e.g. pure text turn / no tool boundary);
-        // seamlessly queue for execution once the current turn completes.
-        void adapter
-          .sendMessage(message.chatId, '⏳ <i>任务执行中，新指令已排队…</i>', {
-            ...responseOptionsFor(message),
-            parseMode: 'html'
-          })
-          .catch(() => {})
+        this.offerBusyCard(adapter, sid, message)
       }
     }
 
@@ -1063,34 +1045,7 @@ export class ChannelMessageHandler {
       }
 
       if (data.startsWith('busy:')) {
-        const parts = data.split(':')
-        const action = parts[1]
-        const offerId = parts[2]
-        const offer = busyOffers.get(offerId)
-        if (!offer) {
-          await cb.answerCallbackQuery({ text: '⚪ 该操作已过期或已被处理' })
-          await cb.editReplyMarkup({ inline_keyboard: [] })
-          return
-        }
-        if (action === 'interrupt') {
-          busyOffers.delete(offerId)
-          void adapter.dismissToolProgress(cb.chatId).catch(() => {})
-          await cb.answerCallbackQuery({ text: '⚡️ 已打断上一任务，队列将尽快执行' })
-          await cb.editReplyMarkup({
-            inline_keyboard: [[{ text: '⚡️ 上一任务已打断，队列执行中', callback_data: 'noop' }]]
-          })
-          this.abortSession(offer.activeSessionId)
-        } else if (action === 'cancel') {
-          busyOffers.delete(offerId)
-          offer.cancelled = true
-          offer.message._cherryBusyCancelled = true
-          await cb.answerCallbackQuery({ text: '🗑 已取消此条新消息' })
-          await cb.editReplyMarkup({
-            inline_keyboard: [[{ text: '🗑 本条新指令已取消', callback_data: 'noop' }]]
-          })
-        } else {
-          await cb.answerCallbackQuery({ text: '✅ 已在队列中' })
-        }
+        await this.handleBusyCallback(adapter, cb, data)
         return
       }
 
@@ -1255,6 +1210,83 @@ export class ChannelMessageHandler {
   }
 
   /** Abort an active stream for the given session. Returns true if a stream was in flight. */
+  /** Register a busy offer and send the Telegram confirmation card for a message arriving mid-turn. */
+  private offerBusyCard(adapter: ChannelAdapter, sessionId: string, message: ChannelMessageEvent): void {
+    const offerId = randomUUID().replace(/-/g, '').slice(0, 16)
+    const queueIndex =
+      [...busyOffers.values()].filter((o) => o.activeSessionId === sessionId && !o.cancelled).length + 1
+    const tagged = message as BusyOffer['message']
+    tagged._cherryBusyOfferId = offerId
+    busyOffers.set(offerId, { activeSessionId: sessionId, message: tagged, cancelled: false, queueIndex })
+    void adapter
+      .sendMessage(message.chatId, buildBusyCardText(queueIndex, message), {
+        ...responseOptionsFor(message),
+        parseMode: 'plain',
+        replyMarkup: buildBusyCardKeyboard(offerId)
+      })
+      .catch((err) => logger.debug('Failed to send busy confirmation card', { err }))
+  }
+
+  /** busy:<steer|send|cancel>:<offerId> (legacy: busy:interrupt / busy:queue). */
+  private async handleBusyCallback(
+    adapter: ChannelAdapter,
+    cb: ChannelCallbackQueryEvent,
+    data: string
+  ): Promise<void> {
+    const [, rawAction, offerId] = data.split(':')
+    const action = rawAction === 'interrupt' ? 'send' : rawAction
+    const offer = offerId ? busyOffers.get(offerId) : undefined
+    if (!offer) {
+      // Stale: already handled, already started running (turn finished first), or app restarted.
+      await cb.answerCallbackQuery({ text: t('common.channel_busy.expired') })
+      await cb.editReplyMarkup({ inline_keyboard: [] })
+      return
+    }
+
+    const finish = async (result: string): Promise<void> => {
+      await cb.answerCallbackQuery({ text: result })
+      const text = buildBusyResultText(offer.queueIndex, offer.message, result)
+      if (cb.editMessageText) {
+        await cb.editMessageText(text)
+      } else {
+        await cb.editReplyMarkup({ inline_keyboard: [[{ text: result.slice(0, 60), callback_data: 'noop' }]] })
+      }
+    }
+
+    if (action === 'steer') {
+      busyOffers.delete(offerId)
+      const text = offer.message.text
+      const runtimeService = application.get('AgentSessionRuntimeService')
+      const accepted = text ? Boolean(runtimeService.trySteer?.(offer.activeSessionId, text)) : false
+      if (accepted) {
+        // Absorbed into the live turn's tool loop — drop it from the queue.
+        offer.cancelled = true
+        offer.message._cherryBusyCancelled = true
+        await finish(t('common.channel_busy.result_steered'))
+      } else {
+        // Runtime can't steer (e.g. DSH without redirect, or turn already ended): stays queued.
+        await finish(t('common.channel_busy.result_steer_unsupported'))
+      }
+      return
+    }
+    if (action === 'send') {
+      busyOffers.delete(offerId)
+      void adapter.dismissToolProgress(cb.chatId).catch(() => {})
+      await finish(t('common.channel_busy.result_sent'))
+      // Aborting releases the chat queue; this (still queued) message runs next.
+      this.abortSession(offer.activeSessionId)
+      return
+    }
+    if (action === 'cancel') {
+      busyOffers.delete(offerId)
+      offer.cancelled = true
+      offer.message._cherryBusyCancelled = true
+      await finish(t('common.channel_busy.result_cancelled'))
+      return
+    }
+    await cb.answerCallbackQuery()
+  }
+
   abortSession(sessionId: string): boolean {
     const hasLocal = this.activeAbortControllers.has(sessionId)
     const topicId = buildAgentSessionTopicId(sessionId)
