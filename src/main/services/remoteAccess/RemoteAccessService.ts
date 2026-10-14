@@ -1,7 +1,5 @@
-import { powerMonitor } from 'electron'
-
 import { application } from '@application'
-import { remoteLimits, type RemoteCapability } from '@cherrystudio/remote-protocol'
+import { type RemoteCapability, remoteLimits } from '@cherrystudio/remote-protocol'
 import {
   acceptSecureChannel,
   type ChannelOptions,
@@ -12,6 +10,7 @@ import {
 import { remoteCommandService } from '@data/services/RemoteCommandService'
 import { loggerService } from '@logger'
 import { BaseService, DependsOn, Injectable, Phase, ServicePhase } from '@main/core/lifecycle'
+import { powerMonitor } from 'electron'
 
 import { RemoteAgentHub } from './agentJournal'
 import { loadDesktopIdentity } from './deviceIdentity'
@@ -193,7 +192,16 @@ export class RemoteAccessService extends BaseService {
         windowStart = Date.now()
         count = 0
       }
-      if (++count > 64) throw new Error('Remote request rate exceeded')
+      if (++count > 256) {
+        // Awaiting keeps a flood of refusals from queueing ahead of the socket; excess must not end the session.
+        const refusal = remote.rpc.refuse(input, {
+          reason: 'RATE_LIMITED',
+          message: 'Request rate exceeded',
+          retryAfterMs: Math.max(1, windowStart + 1000 - Date.now())
+        })
+        if (refusal) await remote.send(refusal).catch(() => socket.close(1011, 'Remote request failed'))
+        continue
+      }
       void remote.rpc
         .receive(input, undefined)
         .then(async (response) => {

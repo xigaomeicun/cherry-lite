@@ -1,11 +1,10 @@
-import { createJSONRPCErrorResponse, JSONRPCErrorException, JSONRPCServer, type JSONRPCResponse } from 'json-rpc-2.0'
-
 import {
   jsonRpcNotificationSchema,
   jsonRpcRequestSchema,
-  remoteLimits,
-  type RemoteFailure
+  type RemoteFailure,
+  remoteLimits
 } from '@cherrystudio/remote-protocol'
+import { createJSONRPCErrorResponse, JSONRPCErrorException, type JSONRPCResponse, JSONRPCServer } from 'json-rpc-2.0'
 
 interface Schema<T> {
   safeParse(input: unknown): { success: true; data: T } | { success: false; error: unknown }
@@ -51,6 +50,24 @@ export class RemoteRpcServer<Context> {
     const responses = (await Promise.all(input.map((value) => this.receiveOne(value, context)))).filter(
       (value) => value !== null
     )
+    return responses.length ? responses : null
+  }
+
+  /**
+   * Answers an input that admission control above the server refused to dispatch.
+   * Notifications get no reply; batches answer per entry, mirroring `receive`.
+   */
+  refuse(input: unknown, failure: RemoteFailure): JSONRPCResponse | JSONRPCResponse[] | null {
+    const refuseOne = (value: unknown): JSONRPCResponse | null => {
+      if (jsonRpcNotificationSchema.safeParse(value).success) return null
+      const parsed = jsonRpcRequestSchema.safeParse(value)
+      if (!parsed.success) return createJSONRPCErrorResponse(null, -32600, 'Invalid request')
+      return createJSONRPCErrorResponse(parsed.data.id, 1000, failure.message, failure)
+    }
+    if (!Array.isArray(input)) return refuseOne(input)
+    if (!input.length || input.length > remoteLimits.batchEntries)
+      return createJSONRPCErrorResponse(null, -32600, 'Invalid batch')
+    const responses = input.map(refuseOne).filter((value) => value !== null)
     return responses.length ? responses : null
   }
 
