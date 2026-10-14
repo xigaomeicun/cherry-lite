@@ -58,7 +58,7 @@ async function ensureAdapterLoaded(type: AgentChannelType): Promise<void> {
 
 @Injectable('ChannelManager')
 @ServicePhase(Phase.WhenReady)
-@DependsOn(['WindowManager'])
+@DependsOn(['WindowManager', 'PowerService'])
 export class ChannelManager extends BaseService {
   readonly registration = new ChannelRegistration()
   private readonly adapters = new Map<string, ChannelAdapter>() // key: `${agentId}:${channelId}`
@@ -70,7 +70,12 @@ export class ChannelManager extends BaseService {
   private readonly channelStatuses = new Map<string, ChannelStatusEvent>()
 
   protected async onReady(): Promise<void> {
+    this.registerDisposable(application.get('PowerService').onResume(() => this.handleSystemResume()))
     await this.start()
+  }
+
+  private handleSystemResume(): void {
+    for (const adapter of this.adapters.values()) adapter.handleSystemResume()
   }
 
   protected async onStop(): Promise<void> {
