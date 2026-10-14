@@ -442,6 +442,11 @@ class TelegramAdapter extends ChannelAdapter {
     }
   }
 
+  async editMessageText(chatId: string, messageId: number | string, text: string): Promise<void> {
+    if (!this.bot) throw new Error('Bot is not connected')
+    await this.bot.api.editMessageText(chatId, Number(messageId), text, { reply_markup: { inline_keyboard: [] } })
+  }
+
   async sendMessage(chatId: string, text: string, opts?: SendMessageOptions): Promise<void> {
     if (!this.bot) {
       throw new Error('Bot is not connected')
@@ -457,7 +462,8 @@ class TelegramAdapter extends ChannelAdapter {
             ? { reply_parameters: { message_id: opts.replyToMessageId } }
             : {}
         const markupParams = i === plainChunks.length - 1 && opts?.replyMarkup ? { reply_markup: opts.replyMarkup } : {}
-        await this.bot.api.sendMessage(chatId, plain, { ...replyParams, ...markupParams })
+        const sent = await this.bot.api.sendMessage(chatId, plain, { ...replyParams, ...markupParams })
+        if (i === plainChunks.length - 1 && sent?.message_id !== undefined) opts?.onSent?.(sent.message_id)
       }
       return
     }

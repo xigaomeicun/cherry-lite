@@ -20,7 +20,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ChannelMessageEvent } from '../ChannelAdapter'
 import { channelMessageHandler } from '../ChannelMessageHandler'
 import { sanitizeChannelOutput } from '../security/OutputSanitizer'
-import { busyOffers, modelPickTokens, resetModelPickTokensForTests } from '../telegramChannelExtras'
+import { BUSY_AUTO_STEER_MS, busyOffers, modelPickTokens, resetModelPickTokensForTests } from '../telegramChannelExtras'
 
 const { mockPrepareAgentSessionWorkspaceDirectory, MockAgentSessionWorkspaceError } = vi.hoisted(() => {
   class MockAgentSessionWorkspaceError extends Error {
@@ -384,8 +384,10 @@ describe('ChannelMessageHandler', () => {
 
     afterEach(() => {
       ;(channelMessageHandler as any).activeAbortControllers.delete(SID)
-      busyOffers.clear()
+      ;(channelMessageHandler as any).chatQueues.clear()
+      channelMessageHandler.disposeBusyOffers()
       mockStartAgentSessionRun.mockReset()
+      mockTrySteer.mockReset()
     })
 
     it('sends a plain-text card with steer/send/cancel buttons and does not auto-steer', async () => {
@@ -403,7 +405,7 @@ describe('ChannelMessageHandler', () => {
           '',
           'hello *new*',
           '',
-          '🧭 Steer — keep the current task running and inject this message to guide it',
+          '🧭 Steer — keep the current task running and inject this message to guide it (default, auto in 10s)',
           '⚡ Send — abort the current task and run this now',
           '❎ Cancel — drop this new message (the running task is unaffected)'
         ].join('\n')
@@ -527,6 +529,132 @@ describe('ChannelMessageHandler', () => {
       expect(ev.answerCallbackQuery).toHaveBeenCalledWith({ text: '⚪ This action has expired or was already handled' })
       expect(ev.editReplyMarkup).toHaveBeenCalledWith({ inline_keyboard: [] })
       expect(mockTrySteer).not.toHaveBeenCalled()
+    })
+
+    describe('auto-steer timeout', () => {
+      function holdTurn() {
+        // Keep the running turn alive so the queued message waits past the timeout.
+        let release!: () => void
+        const gate = new Promise<void>((r) => (release = r))
+        ;(channelMessageHandler as any).chatQueues.set('agent-1:channel-1:chat-1', gate)
+        return release
+      }
+
+      it('auto-steers after BUSY_AUTO_STEER_MS and edits the card', async () => {
+        const adapter = setupBusy()
+        const release = holdTurn()
+        adapter.editMessageText = vi.fn().mockResolvedValue(undefined)
+        adapter.sendMessage = vi.fn(async (_c: string, _t: string, o: any) => o?.onSent?.(777))
+        mockTrySteer.mockReturnValueOnce(true)
+        const p = channelMessageHandler.handleIncoming(adapter, {
+          chatId: 'chat-1',
+          userId: 'user-1',
+          userName: 'User',
+          text: 'auto me'
+        })
+        const offerId = offerIdFrom(adapter)
+        expect(busyOffers.has(offerId)).toBe(true)
+        await vi.advanceTimersByTimeAsync(BUSY_AUTO_STEER_MS - 1)
+        expect(mockTrySteer).not.toHaveBeenCalled()
+        await vi.advanceTimersByTimeAsync(1)
+        expect(mockTrySteer).toHaveBeenCalledWith(SID, 'auto me')
+        expect(adapter.editMessageText).toHaveBeenCalledWith(
+          'chat-1',
+          777,
+          expect.stringContaining('🧭 Auto-steered into the current task')
+        )
+        expect(busyOffers.has(offerId)).toBe(false)
+        release()
+        await vi.advanceTimersByTimeAsync(10)
+        await p
+        expect(mockStartAgentSessionRun).not.toHaveBeenCalled()
+        const ev = cb(`busy:send:${offerId}`)
+        await channelMessageHandler.handleCallbackQuery(adapter, ev as any)
+        expect(ev.answerCallbackQuery).toHaveBeenCalledWith({
+          text: '⚪ This action has expired or was already handled'
+        })
+        expect(abortController.signal.aborted).toBe(false)
+      })
+
+      it('auto-steer falls back to queue when the runtime cannot steer', async () => {
+        const adapter = setupBusy()
+        const release = holdTurn()
+        adapter.editMessageText = vi.fn().mockResolvedValue(undefined)
+        adapter.sendMessage = vi.fn(async (_c: string, _t: string, o: any) => o?.onSent?.(9))
+        mockTrySteer.mockReturnValueOnce(false)
+        const p = channelMessageHandler.handleIncoming(adapter, {
+          chatId: 'chat-1',
+          userId: 'user-1',
+          userName: 'User',
+          text: 'queue me'
+        })
+        await vi.advanceTimersByTimeAsync(BUSY_AUTO_STEER_MS)
+        expect(adapter.editMessageText).toHaveBeenCalledWith(
+          'chat-1',
+          9,
+          expect.stringContaining('This runtime cannot steer; message queued')
+        )
+        release()
+        await vi.advanceTimersByTimeAsync(10)
+        await p
+        expect(mockStartAgentSessionRun).toHaveBeenCalledTimes(1)
+      })
+
+      it('a tap cancels the timer (no auto-steer afterwards)', async () => {
+        const adapter = setupBusy()
+        const release = holdTurn()
+        adapter.editMessageText = vi.fn().mockResolvedValue(undefined)
+        const p = channelMessageHandler.handleIncoming(adapter, {
+          chatId: 'chat-1',
+          userId: 'user-1',
+          userName: 'User',
+          text: 'tap'
+        })
+        const ev = cb(`busy:cancel:${offerIdFrom(adapter)}`)
+        await channelMessageHandler.handleCallbackQuery(adapter, ev as any)
+        await vi.advanceTimersByTimeAsync(BUSY_AUTO_STEER_MS * 2)
+        expect(mockTrySteer).not.toHaveBeenCalled()
+        expect(adapter.editMessageText).not.toHaveBeenCalled()
+        release()
+        await vi.advanceTimersByTimeAsync(10)
+        await p
+      })
+
+      it('turn finishing first cancels the timer', async () => {
+        const adapter = setupBusy()
+        adapter.editMessageText = vi.fn().mockResolvedValue(undefined)
+        const p = channelMessageHandler.handleIncoming(adapter, {
+          chatId: 'chat-1',
+          userId: 'user-1',
+          userName: 'User',
+          text: 'runs'
+        })
+        await vi.advanceTimersByTimeAsync(1000)
+        await p
+        expect(busyOffers.size).toBe(0)
+        await vi.advanceTimersByTimeAsync(BUSY_AUTO_STEER_MS * 2)
+        expect(mockTrySteer).not.toHaveBeenCalled()
+        expect(adapter.editMessageText).not.toHaveBeenCalled()
+      })
+
+      it('shutdown clears pending timers', async () => {
+        const adapter = setupBusy()
+        const release = holdTurn()
+        const p = channelMessageHandler.handleIncoming(adapter, {
+          chatId: 'chat-1',
+          userId: 'user-1',
+          userName: 'User',
+          text: 'bye'
+        })
+        expect(busyOffers.size).toBe(1)
+        channelMessageHandler.disposeBusyOffers()
+        expect(busyOffers.size).toBe(0)
+        await vi.advanceTimersByTimeAsync(BUSY_AUTO_STEER_MS * 2)
+        expect(mockTrySteer).not.toHaveBeenCalled()
+        release()
+        await vi.advanceTimersByTimeAsync(10)
+        await p
+      })
     })
   })
 

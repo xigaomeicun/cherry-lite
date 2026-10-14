@@ -78,6 +78,8 @@ export type SendMessageOptions = {
   replyInThread?: boolean
   /** Telegram inline keyboard / equivalent. */
   replyMarkup?: ChannelInlineKeyboard
+  /** Called with the platform message id of the (last) sent chunk, when the adapter can report it. */
+  onSent?: (messageId: number | string) => void
 }
 
 export type ToolProgressEvent =
@@ -261,6 +263,12 @@ export abstract class ChannelAdapter extends EventEmitter {
 
   abstract sendMessage(chatId: string, text: string, opts?: SendMessageOptions): Promise<void>
   abstract sendTypingIndicator(chatId: string, opts?: SendMessageOptions): Promise<void>
+
+  /**
+   * Replace a previously sent message's text (plain) and drop its inline keyboard.
+   * Optional: adapters that can't edit leave it undefined.
+   */
+  editMessageText?(chatId: string, messageId: number | string, text: string): Promise<void>
 
   /**
    * Send a file to a chat. Non-abstract so adapters can adopt outbound file

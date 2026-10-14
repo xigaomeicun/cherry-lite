@@ -13,6 +13,7 @@ import type { ChannelAdapter } from './ChannelAdapter'
 import { ChannelLogBuffer } from './ChannelLogBuffer'
 import { channelMessageHandler } from './ChannelMessageHandler'
 import { ChannelRegistration } from './ChannelRegistration'
+import { clearAllBusyOffers } from './telegramChannelExtras'
 import type { ChannelLogEntry, ChannelStatusEvent } from './types'
 
 const logger = loggerService.withContext('ChannelManager')
@@ -127,6 +128,7 @@ export class ChannelManager extends BaseService {
   async stop(): Promise<void> {
     this.registration.dispose()
     logger.info('Stopping channel manager')
+    clearAllBusyOffers()
     const disconnects = Array.from(this.adapters.values()).map((adapter) =>
       adapter.disconnect().catch((err) => {
         logger.warn('Error disconnecting adapter', {

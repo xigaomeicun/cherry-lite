@@ -17,6 +17,28 @@ export type BusyOffer = {
   cancelled: boolean
   /** 1-based position among pending cards for this session when the card was sent. */
   queueIndex: number
+  /** Auto-steer timer; cleared on any tap, when the message starts running, or on shutdown. */
+  autoTimer?: ReturnType<typeof setTimeout>
+  /** Telegram message id of the card, once the send resolved (needed to edit it on timeout). */
+  cardMessageId?: number | string
+}
+
+/** If the user doesn't tap within this window, the card auto-steers. */
+export const BUSY_AUTO_STEER_MS = 10_000
+
+/** Remove an offer and cancel its auto-steer timer. Returns the removed offer (if it was still pending). */
+export function takeBusyOffer(offerId: string): BusyOffer | undefined {
+  const offer = busyOffers.get(offerId)
+  if (!offer) return undefined
+  if (offer.autoTimer) clearTimeout(offer.autoTimer)
+  offer.autoTimer = undefined
+  busyOffers.delete(offerId)
+  return offer
+}
+
+/** Cancel every pending auto-steer timer and drop all offers (app shutdown). */
+export function clearAllBusyOffers(): void {
+  for (const id of [...busyOffers.keys()]) takeBusyOffer(id)
 }
 
 /** Shared offer map for busy auto-queue cards. */
@@ -42,7 +64,7 @@ export function buildBusyCardText(queueIndex: number, message: ChannelMessageEve
     '',
     busyCardPreview(message),
     '',
-    t('common.channel_busy.steer_hint'),
+    t('common.channel_busy.steer_hint', { n: Math.round(BUSY_AUTO_STEER_MS / 1000) }),
     t('common.channel_busy.send_hint'),
     t('common.channel_busy.cancel_hint')
   ].join('\n')

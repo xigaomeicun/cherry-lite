@@ -37,12 +37,15 @@ import {
   buildBusyCardKeyboard,
   buildBusyCardText,
   buildBusyResultText,
+  BUSY_AUTO_STEER_MS,
   type BusyOffer,
   busyOffers,
+  clearAllBusyOffers,
   escHtml,
   MODEL_PICK_LIMIT,
   modelPickTokens,
-  rememberModelPick
+  rememberModelPick,
+  takeBusyOffer
 } from './telegramChannelExtras'
 
 const logger = loggerService.withContext('ChannelMessageHandler')
@@ -330,7 +333,7 @@ export class ChannelMessageHandler {
         const alive = batch.messages.filter((m) => !(m as { _cherryBusyCancelled?: boolean })._cherryBusyCancelled)
         for (const m of batch.messages) {
           const offerId = (m as { _cherryBusyOfferId?: string })._cherryBusyOfferId
-          if (offerId) busyOffers.delete(offerId)
+          if (offerId) takeBusyOffer(offerId)
         }
         if (!alive.length) {
           batch.admit()
@@ -423,7 +426,7 @@ export class ChannelMessageHandler {
       return
     }
     const offerId = (message as { _cherryBusyOfferId?: string })._cherryBusyOfferId
-    if (offerId) busyOffers.delete(offerId)
+    if (offerId) takeBusyOffer(offerId)
 
     const { agentId } = adapter
     let streamStarted = false
@@ -1217,14 +1220,55 @@ export class ChannelMessageHandler {
       [...busyOffers.values()].filter((o) => o.activeSessionId === sessionId && !o.cancelled).length + 1
     const tagged = message as BusyOffer['message']
     tagged._cherryBusyOfferId = offerId
-    busyOffers.set(offerId, { activeSessionId: sessionId, message: tagged, cancelled: false, queueIndex })
+    const offer: BusyOffer = { activeSessionId: sessionId, message: tagged, cancelled: false, queueIndex }
+    busyOffers.set(offerId, offer)
+    offer.autoTimer = setTimeout(() => {
+      offer.autoTimer = undefined
+      void this.autoSteerBusyOffer(adapter, offerId).catch((err) => logger.debug('Busy auto-steer failed', { err }))
+    }, BUSY_AUTO_STEER_MS)
     void adapter
       .sendMessage(message.chatId, buildBusyCardText(queueIndex, message), {
         ...responseOptionsFor(message),
         parseMode: 'plain',
-        replyMarkup: buildBusyCardKeyboard(offerId)
+        replyMarkup: buildBusyCardKeyboard(offerId),
+        onSent: (id) => {
+          offer.cardMessageId = id
+        }
       })
       .catch((err) => logger.debug('Failed to send busy confirmation card', { err }))
+  }
+
+  /** Steer into the live turn; on success drop the queued copy. Shared by tap and auto-steer. */
+  private steerBusyOffer(offer: BusyOffer): boolean {
+    const text = offer.message.text
+    const runtimeService = application.get('AgentSessionRuntimeService')
+    const accepted = text ? Boolean(runtimeService.trySteer?.(offer.activeSessionId, text)) : false
+    if (accepted) {
+      offer.cancelled = true
+      offer.message._cherryBusyCancelled = true
+    }
+    return accepted
+  }
+
+  /** Timeout path: nobody tapped, so default to 引导. Race-safe: takeBusyOffer is the single claim. */
+  private async autoSteerBusyOffer(adapter: ChannelAdapter, offerId: string): Promise<void> {
+    const offer = takeBusyOffer(offerId)
+    if (!offer) return
+    const result = this.steerBusyOffer(offer)
+      ? t('common.channel_busy.result_auto_steered')
+      : t('common.channel_busy.result_steer_unsupported')
+    if (offer.cardMessageId !== undefined && adapter.editMessageText) {
+      await adapter.editMessageText(
+        offer.message.chatId,
+        offer.cardMessageId,
+        buildBusyResultText(offer.queueIndex, offer.message, result)
+      )
+    }
+  }
+
+  /** Cancel all pending busy-card auto-steer timers (app shutdown). */
+  disposeBusyOffers(): void {
+    clearAllBusyOffers()
   }
 
   /** busy:<steer|send|cancel>:<offerId> (legacy: busy:interrupt / busy:queue). */
@@ -1235,7 +1279,8 @@ export class ChannelMessageHandler {
   ): Promise<void> {
     const [, rawAction, offerId] = data.split(':')
     const action = rawAction === 'interrupt' ? 'send' : rawAction
-    const offer = offerId ? busyOffers.get(offerId) : undefined
+    const known = action === 'steer' || action === 'send' || action === 'cancel'
+    const offer = offerId && known ? takeBusyOffer(offerId) : undefined
     if (!offer) {
       // Stale: already handled, already started running (turn finished first), or app restarted.
       await cb.answerCallbackQuery({ text: t('common.channel_busy.expired') })
@@ -1254,23 +1299,15 @@ export class ChannelMessageHandler {
     }
 
     if (action === 'steer') {
-      busyOffers.delete(offerId)
-      const text = offer.message.text
-      const runtimeService = application.get('AgentSessionRuntimeService')
-      const accepted = text ? Boolean(runtimeService.trySteer?.(offer.activeSessionId, text)) : false
-      if (accepted) {
-        // Absorbed into the live turn's tool loop — drop it from the queue.
-        offer.cancelled = true
-        offer.message._cherryBusyCancelled = true
-        await finish(t('common.channel_busy.result_steered'))
-      } else {
-        // Runtime can't steer (e.g. DSH without redirect, or turn already ended): stays queued.
-        await finish(t('common.channel_busy.result_steer_unsupported'))
-      }
+      // Absorbed into the live turn's tool loop, or (runtime can't steer / turn ended) stays queued.
+      await finish(
+        this.steerBusyOffer(offer)
+          ? t('common.channel_busy.result_steered')
+          : t('common.channel_busy.result_steer_unsupported')
+      )
       return
     }
     if (action === 'send') {
-      busyOffers.delete(offerId)
       void adapter.dismissToolProgress(cb.chatId).catch(() => {})
       await finish(t('common.channel_busy.result_sent'))
       // Aborting releases the chat queue; this (still queued) message runs next.
@@ -1278,7 +1315,6 @@ export class ChannelMessageHandler {
       return
     }
     if (action === 'cancel') {
-      busyOffers.delete(offerId)
       offer.cancelled = true
       offer.message._cherryBusyCancelled = true
       await finish(t('common.channel_busy.result_cancelled'))
