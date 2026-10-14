@@ -261,9 +261,60 @@ describe('retired DSH session migration', () => {
     const file = resolveResumeTokenSessionFile(migration.resumeToken, path.join(directory, 'sessions'))!
     const manager = SessionManager.open(file, path.dirname(file), directory)
     const serialized = JSON.stringify(manager.buildContextEntries())
-    expect(serialized).toContain('large message 0 ')
+    // 900 x 2KB exceeds the import budget: the head stays in Cherry only, behind an omission note.
+    expect(serialized).not.toContain('large message 0 ')
+    expect(serialized).toContain('earlier messages of this conversation are omitted')
     expect(serialized).toContain('large message 899 ')
+    expect(serialized.length).toBeLessThan(400_000)
     expect(getRetiredAgentSessionMigration(dbh.db, 'conversation')).toBeUndefined()
+  })
+
+  it('starts imported model context after the last completed DSH compaction', async () => {
+    dbh.db
+      .insert(agentSessionMessageTable)
+      .values([
+        {
+          id: 'pre-compact',
+          sessionId: 'conversation',
+          role: 'user',
+          status: 'success',
+          createdAt: 900,
+          data: { parts: [{ type: 'text', text: 'before compaction marker-a' }] }
+        },
+        {
+          id: 'compact',
+          sessionId: 'conversation',
+          role: 'assistant',
+          status: 'success',
+          createdAt: 901,
+          data: { parts: [{ type: 'data-compaction-anchor', id: 'c1', data: { status: 'done' } }] } as never
+        },
+        {
+          id: 'post-compact',
+          sessionId: 'conversation',
+          role: 'user',
+          status: 'success',
+          createdAt: 902,
+          data: { parts: [{ type: 'text', text: 'after compaction marker-b' }] }
+        },
+        {
+          id: 'post-compact-reply',
+          sessionId: 'conversation',
+          role: 'assistant',
+          status: 'success',
+          createdAt: 903,
+          data: { parts: [{ type: 'text', text: 'reply marker-c' }] }
+        }
+      ])
+      .run()
+    seeder.run(dbh.db)
+    const migration = getRetiredAgentSessionMigration(dbh.db, 'conversation')!
+    await ensureRetiredSessionHistory('conversation')
+    const file = resolveResumeTokenSessionFile(migration.resumeToken, path.join(directory, 'sessions'))!
+    const serialized = JSON.stringify(SessionManager.open(file, path.dirname(file), directory).buildContextEntries())
+    expect(serialized).not.toContain('marker-a')
+    expect(serialized).toContain('marker-b')
+    expect(serialized).toContain('earlier messages of this conversation are omitted')
   })
 
   it('converts active and archived agents while preserving identity, permissions, workspace and history', () => {
