@@ -1,6 +1,4 @@
 import type { LanguageModelV3ToolApprovalRequest } from '@ai-sdk/provider'
-import type { UIMessageChunk } from 'ai'
-
 import type { AiUsageCredentialReceipt, SourceSnapshot } from '@data/services/AiUsageRecordService'
 import type { RuntimeForkAnchor } from '@main/ai/runtime/fork'
 import type { AgentSessionApiRetryInfo } from '@shared/ai/agentSessionApiRetry'
@@ -17,6 +15,7 @@ import type { MessageSnapshot } from '@shared/data/types/message'
 import type { ServiceTierSelection, UniqueModelId } from '@shared/data/types/model'
 import type { AgentTaskEventPartData } from '@shared/data/types/uiParts'
 import type { ReasoningEffortOption } from '@shared/types/aiSdk'
+import type { UIMessageChunk } from 'ai'
 
 import type { RuntimeForkInput, RuntimeForkResult } from './fork'
 
@@ -251,6 +250,8 @@ export interface AgentSessionRuntimeDriver extends AiRuntimeDriver {
   /** Enumerate the tools this driver exposes for the given MCP server set. */
   listAvailableTools(mcpIds: string[]): Promise<Tool[]>
   connect(input: AgentRuntimeConnectInput): Promise<AgentRuntimeConnection>
+  /** Boot-time recovery hook (e.g. finishing retired-runtime history imports). Must not throw. */
+  recoverSessions?(): Promise<void>
   /**
    * Notified when a session goes idle and its runtime is torn down. Lets a
    * driver run runtime-specific idle work (e.g. Claude prewarming the next

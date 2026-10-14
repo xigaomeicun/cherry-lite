@@ -28,6 +28,10 @@ vi.mock('@main/ai/runtime/agentSessionWorkspace', () => ({
 }))
 vi.mock('./modelInjection', () => ({ assertPiProviderUsable: mocks.assertProviderUsable }))
 vi.mock('./PiRuntimeConnection', () => ({ PiRuntimeConnection: vi.fn() }))
+vi.mock('./retiredSessionHistory', () => ({
+  ensureRetiredSessionHistory: vi.fn(async () => undefined),
+  migrateRetiredSessionHistories: vi.fn(async () => undefined)
+}))
 
 const { PiRuntimeDriver } = await import('./PiRuntimeDriver')
 

@@ -1,6 +1,8 @@
 import { application } from '@application'
 import { agentService } from '@data/services/AgentService'
+import { agentSessionMessageService } from '@data/services/AgentSessionMessageService'
 import { mcpServerService } from '@data/services/McpServerService'
+import { getRetiredAgentSessionMigration } from '@data/services/retiredAgentRuntimeMigration'
 import { prepareAgentSessionWorkspaceDirectory } from '@main/ai/runtime/agentSessionWorkspace'
 import { PI_BUILTIN_TOOLS } from '@shared/ai/piBuiltinTools'
 import type { Tool } from '@shared/ai/tool'
@@ -11,11 +13,14 @@ import { assertPiProviderUsable } from './modelInjection'
 import { forkPiSession } from './piFork'
 import { buildLegacyPiMcpToolName } from './piMcpNames'
 import { PiRuntimeConnection } from './PiRuntimeConnection'
+import { ensureRetiredSessionHistory, migrateRetiredSessionHistories } from './retiredSessionHistory'
 
 export class PiRuntimeDriver implements AgentSessionRuntimeDriver {
   readonly type = 'pi'
   readonly capabilities = ['agent-session'] as const
   readonly fork = forkPiSession
+  /** Rebuild Pi history for sessions migrated from the retired DSH runtime (retryable). */
+  readonly recoverSessions = migrateRetiredSessionHistories
 
   async validateSession(session: AgentSessionEntity): Promise<void> {
     const cwd = session.workspace?.path
@@ -30,6 +35,7 @@ export class PiRuntimeDriver implements AgentSessionRuntimeDriver {
       throw new Error(`pi agent ${session.agentId} has no model configured`)
     }
     await prepareAgentSessionWorkspaceDirectory(session)
+    await ensureRetiredSessionHistory(session.id)
     // Side-effect free: dispatch validation must not consume API-key rotation;
     // the concrete key is selected only when the runtime connection starts.
     await assertPiProviderUsable(agent.model)
@@ -71,6 +77,16 @@ export class PiRuntimeDriver implements AgentSessionRuntimeDriver {
   }
 
   async connect(input: AgentRuntimeConnectInput): Promise<AgentRuntimeConnection> {
-    return new PiRuntimeConnection(input).start()
+    const migration = getRetiredAgentSessionMigration(application.get('DbService').getDb(), input.sessionId)
+    await ensureRetiredSessionHistory(input.sessionId)
+    // A migrated DSH session resumes from the imported Pi history, never from the DSH native id.
+    const migratedInput = migration
+      ? {
+          ...input,
+          resumeToken: agentSessionMessageService.getLastRuntimeResumeToken(input.sessionId) ?? undefined,
+          nativeSessionId: undefined
+        }
+      : input
+    return new PiRuntimeConnection(migratedInput).start()
   }
 }
