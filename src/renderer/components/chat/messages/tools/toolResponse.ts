@@ -16,7 +16,12 @@ export const APPROVAL_REQUESTED = 'approval-requested'
 export const APPROVAL_RESPONDED = 'approval-responded'
 export const CLAUDE_AGENT_TRANSPORT = AGENT_RUNTIME_CAPABILITIES['claude-code'].transport
 export const PI_AGENT_TRANSPORT = AGENT_RUNTIME_CAPABILITIES.pi.transport
-const CHERRY_AGENT_TRANSPORTS = new Set<string>(Object.values(AGENT_RUNTIME_CAPABILITIES).map((caps) => caps.transport))
+/** Retired DSH runtime tag: kept so transcripts persisted before the Pi migration still render. */
+const LEGACY_DSH_AGENT_TRANSPORT = 'dsh-agent'
+const CHERRY_AGENT_TRANSPORTS = new Set<string>([
+  ...Object.values(AGENT_RUNTIME_CAPABILITIES).map((caps) => caps.transport),
+  LEGACY_DSH_AGENT_TRANSPORT
+])
 const PI_RUNTIME_BUILTIN_TOOL_NAMES = new Set<string>(
   AGENT_RUNTIME_CAPABILITIES.pi.builtinTools().map((tool) => tool.id)
 )

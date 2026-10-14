@@ -820,7 +820,7 @@ export class ChannelMessageHandler {
           const current = agent?.configuration?.permission_mode ?? 'default'
           const agentType = agent?.type || 'claude-code'
           const supportsPlan = agentType !== 'pi'
-          const supportsAuto = agentType !== 'dsh'
+          const supportsAuto = true
           const rows: Array<Array<{ text: string; callback_data: string }>> = []
           if (supportsPlan) {
             rows.push([
@@ -1018,16 +1018,11 @@ export class ChannelMessageHandler {
           return
         }
         channelService.updateChannel(adapter.channelId, { agentId: targetAgentId })
-        // Soft-heal permission mode for Pi / DSH
+        // Soft-heal permission mode for Pi
         const mode = target.configuration?.permission_mode
         if (target.type === 'pi' && mode === 'plan') {
           agentService.updateAgent(targetAgentId, {
             configuration: { ...target.configuration, permission_mode: 'auto' }
-          })
-        }
-        if (target.type === 'dsh' && mode === 'auto') {
-          agentService.updateAgent(targetAgentId, {
-            configuration: { ...target.configuration, permission_mode: 'plan' }
           })
         }
         await cb.answerCallbackQuery({ text: `已切换至 ${target.name || targetAgentId}` })

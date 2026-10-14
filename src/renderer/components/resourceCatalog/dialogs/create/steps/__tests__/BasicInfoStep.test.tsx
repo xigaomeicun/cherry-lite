@@ -1,12 +1,10 @@
 import type * as CherryStudioUi from '@cherrystudio/ui'
 import { Form } from '@cherrystudio/ui'
-import { AgentRuntimeSummary } from '@renderer/components/AgentRuntimeOption'
 import type * as EditDialogSharedModule from '@renderer/components/resourceCatalog/dialogs/components/EditDialogShared'
 import type { Model, UniqueModelId } from '@shared/data/types/model'
 import { cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { useForm } from 'react-hook-form'
-import { useTranslation } from 'react-i18next'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { ResourceCreateWizardFormValues } from '../../types'
@@ -143,19 +141,6 @@ describe('BasicInfoStep', () => {
       'agent.settings.tooling.permissionMode.auto.title'
     )
     expect(screen.getByTestId('permission-mode')).toHaveTextContent('auto')
-  })
-
-  it('still displays the runtime summary for an existing DeepSeek Harness agent', () => {
-    function ExistingAgentRuntime() {
-      const { t } = useTranslation()
-      return <AgentRuntimeSummary value="dsh" t={t} />
-    }
-
-    render(<ExistingAgentRuntime />)
-
-    expect(screen.getByText('library.config.agent.field.runtime.option.dsh')).toBeVisible()
-    expect(screen.getByText('library.config.agent.field.runtime.option_description.dsh')).toBeVisible()
-    expect(screen.queryByRole('radio')).not.toBeInTheDocument()
   })
 
   it('clears the missing-model warning when a prefilled model resolves asynchronously', async () => {

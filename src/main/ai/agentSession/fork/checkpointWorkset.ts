@@ -1,30 +1,25 @@
-import { selectDshCheckpointWorkset } from '@main/ai/runtime/dsh/forkCheckpoint'
 import { AgentSessionForkError, type RuntimeForkCheckpoint } from '@main/ai/runtime/fork'
 
 export interface ForkCheckpointWorkset {
-  /** Passed to `driver.fork`. Smaller than the prefix when DSH can stamp the rest. */
+  /** Passed to `driver.fork`. */
   workset: RuntimeForkCheckpoint[]
   expand(remapped: readonly RuntimeForkCheckpoint[], resumeToken: string): RuntimeForkCheckpoint[]
 }
 
 /**
- * Pi and Claude remap every checkpoint (leaf / message ids change). DSH v4 only
- * changes the runtime session id, so the worker sees the anchor plus anything
- * the protocol still has to rewrite.
+ * Pi and Claude remap every checkpoint (leaf / message ids change), so the worker always receives
+ * the full prefix. (The DSH-only "anchor + stamp the rest" workset retired with the DSH runtime.)
  */
 export function resolveForkCheckpointWorkset(
-  runtime: string,
-  anchor: RuntimeForkCheckpoint,
+  _runtime: string,
+  _anchor: RuntimeForkCheckpoint,
   checkpoints: readonly RuntimeForkCheckpoint[]
 ): ForkCheckpointWorkset {
-  if (runtime !== 'dsh') {
-    return {
-      workset: [...checkpoints],
-      expand(remapped) {
-        if (remapped.length !== checkpoints.length) throw new AgentSessionForkError('history_corrupt')
-        return [...remapped]
-      }
+  return {
+    workset: [...checkpoints],
+    expand(remapped) {
+      if (remapped.length !== checkpoints.length) throw new AgentSessionForkError('history_corrupt')
+      return [...remapped]
     }
   }
-  return selectDshCheckpointWorkset(anchor, checkpoints)
 }
