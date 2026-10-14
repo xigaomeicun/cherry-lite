@@ -536,6 +536,7 @@
   "agent_session_fork.label": "Fork",
   "agent_session_fork.legacy_history": "No fork checkpoint was recorded for this historical message.",
   "agent_session_fork.not_turn_boundary": "Only the final assistant message of a completed turn can be forked.",
+  "agent_session_fork.omitted_history": "This turn was omitted during import and cannot be forked from here.",
   "agent_session_fork.operation_failed": "Could not create the session fork. Check file permissions and free disk space, then retry.",
   "agent_session_fork.source_not_found": "The original chat does not exist or has been deleted.",
   "agent_session_fork.unsupported_checkpoint": "This checkpoint was created by an older version or cannot be restored by the current one, so forking from this point is not supported. The conversation itself is unaffected and can continue.",

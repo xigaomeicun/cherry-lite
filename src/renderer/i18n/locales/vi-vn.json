@@ -536,6 +536,7 @@
   "agent_session_fork.label": "Phân nhánh",
   "agent_session_fork.legacy_history": "Tin nhắn cũ này chưa được ghi điểm kiểm tra phân nhánh.",
   "agent_session_fork.not_turn_boundary": "Chỉ có thể phân nhánh từ tin nhắn trợ lý cuối cùng của một lượt đã hoàn tất.",
+  "agent_session_fork.omitted_history": "Lượt này đã bị bỏ qua khi nhập nên không thể phân nhánh từ đây.",
   "agent_session_fork.operation_failed": "Không thể phân nhánh phiên. Hãy kiểm tra quyền truy cập tệp và dung lượng đĩa trống rồi thử lại.",
   "agent_session_fork.source_not_found": "Cuộc trò chuyện gốc không tồn tại hoặc đã bị xóa.",
   "agent_session_fork.unsupported_checkpoint": "Điểm kiểm tra này được tạo bằng phiên bản cũ hoặc không thể khôi phục bằng phiên bản hiện tại, nên không hỗ trợ phân nhánh từ vị trí này. Cuộc trò chuyện không bị ảnh hưởng và có thể tiếp tục.",

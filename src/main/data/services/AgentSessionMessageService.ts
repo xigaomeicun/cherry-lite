@@ -92,7 +92,7 @@ function agentSessionMessageEntityJsonBytes(): SQL<number> {
     'id', ${sessionMessagesTable.id},
     'sessionId', ${sessionMessagesTable.sessionId},
     'role', ${sessionMessagesTable.role},
-    'data', json_remove(json(${sessionMessagesTable.data}), '$.runtimeAnchor', '$.nativeSessionId'),
+    'data', json_remove(json(${sessionMessagesTable.data}), '$.runtimeAnchor', '$.nativeSessionId', '$.historyImportOmitted'),
     'searchableText', ${sessionMessagesTable.searchableText},
     'status', ${sessionMessagesTable.status},
     'modelId', ${sessionMessagesTable.modelId},
@@ -290,6 +290,7 @@ function publicMessageData(data: SessionMessageRow['data']): AgentSessionMessage
   const result = { ...data }
   delete (result as { runtimeAnchor?: unknown }).runtimeAnchor
   delete (result as { nativeSessionId?: unknown }).nativeSessionId
+  delete (result as { historyImportOmitted?: unknown }).historyImportOmitted
   return result
 }
 

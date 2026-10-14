@@ -536,6 +536,7 @@
   "agent_session_fork.label": "Dallandır",
   "agent_session_fork.legacy_history": "Bu eski mesaj için dallanma kontrol noktası kaydedilmemiş.",
   "agent_session_fork.not_turn_boundary": "Yalnızca tamamlanmış bir turun son asistan mesajından dallanılabilir.",
+  "agent_session_fork.omitted_history": "Bu tur içe aktarma sırasında atlandı; buradan dallanma yapılamaz.",
   "agent_session_fork.operation_failed": "Oturum dallandırılamadı. Dosya izinlerini ve boş disk alanını kontrol edip yeniden deneyin.",
   "agent_session_fork.source_not_found": "Orijinal sohbet mevcut değil veya silinmiş.",
   "agent_session_fork.unsupported_checkpoint": "Bu kontrol noktası eski bir sürümde oluşturulduğu veya mevcut sürüm tarafından geri yüklenemediği için buradan dallandırma desteklenmiyor. Görüşmenin kendisi etkilenmez ve devam edebilir.",

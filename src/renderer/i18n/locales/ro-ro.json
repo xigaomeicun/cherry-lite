@@ -536,6 +536,7 @@
   "agent_session_fork.label": "Ramifică",
   "agent_session_fork.legacy_history": "Nu a fost înregistrat un punct de ramificare pentru acest mesaj istoric.",
   "agent_session_fork.not_turn_boundary": "Se poate ramifica doar ultimul mesaj al asistentului dintr-o rundă încheiată.",
+  "agent_session_fork.omitted_history": "Această rundă a fost omisă la import și nu se poate ramifica de aici.",
   "agent_session_fork.operation_failed": "Sesiunea nu a putut fi ramificată. Verificați permisiunile și spațiul liber pe disc, apoi încercați din nou.",
   "agent_session_fork.source_not_found": "Conversația originală nu există sau a fost ștearsă.",
   "agent_session_fork.unsupported_checkpoint": "Acest punct de control a fost creat cu o versiune mai veche sau nu poate fi restaurat de versiunea actuală, astfel că ramificarea din acest punct nu este acceptată. Conversația nu este afectată și poate continua.",

@@ -231,7 +231,13 @@ export class AgentSessionForkOperations {
     if (selected.role !== 'assistant' || selected.status !== 'success')
       throw new AgentSessionForkError('not_turn_boundary')
     if (!anchor.success)
-      throw new AgentSessionForkError(selected.data.runtimeAnchor == null ? 'legacy_history' : 'unsupported_checkpoint')
+      throw new AgentSessionForkError(
+        selected.data.runtimeAnchor != null
+          ? 'unsupported_checkpoint'
+          : (selected.data as { historyImportOmitted?: unknown }).historyImportOmitted === true
+            ? 'omitted_history'
+            : 'legacy_history'
+      )
     const excludedIds = [
       ...new Set([
         ...(anchor.data.excludedMessageIds ?? []),

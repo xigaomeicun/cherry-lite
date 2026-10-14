@@ -536,6 +536,7 @@
   "agent_session_fork.label": "分叉",
   "agent_session_fork.legacy_history": "该历史消息未记录分叉检查点。",
   "agent_session_fork.not_turn_boundary": "只能从完整回合的最后一条助手消息分叉。",
+  "agent_session_fork.omitted_history": "这一轮在导入时被省略，不能从这里分叉",
   "agent_session_fork.operation_failed": "无法创建会话分叉。请检查文件权限和磁盘剩余空间后重试。",
   "agent_session_fork.source_not_found": "原聊天不存在或已被删除",
   "agent_session_fork.unsupported_checkpoint": "此检查点由旧版本创建，或当前版本无法恢复，因此暂不支持从该位置分叉。会话本身不受影响，可正常继续对话。",

@@ -20,6 +20,8 @@ export function agentSessionForkReasonLabel(t: TFunction, reason: AgentSessionFo
       return t('message.tools.cancelled')
     case 'legacy_history':
       return t('agent_session_fork.legacy_history')
+    case 'omitted_history':
+      return t('agent_session_fork.omitted_history')
     case 'not_turn_boundary':
       return t('agent_session_fork.not_turn_boundary')
     case 'history_missing':

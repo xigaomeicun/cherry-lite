@@ -536,6 +536,7 @@
   "agent_session_fork.label": "Bifurquer",
   "agent_session_fork.legacy_history": "Aucun point de bifurcation n’a été enregistré pour ce message historique.",
   "agent_session_fork.not_turn_boundary": "Seul le dernier message de l’assistant d’un tour terminé peut être bifurqué.",
+  "agent_session_fork.omitted_history": "Ce tour a été omis lors de l’importation et ne peut pas servir de point de bifurcation.",
   "agent_session_fork.operation_failed": "Impossible de bifurquer la session. Vérifiez les autorisations et l’espace disque disponible, puis réessayez.",
   "agent_session_fork.source_not_found": "La conversation d’origine n’existe pas ou a été supprimée.",
   "agent_session_fork.unsupported_checkpoint": "Ce point de contrôle a été créé avec une ancienne version ou ne peut pas être restauré par la version actuelle. La bifurcation à partir de ce point n’est donc pas prise en charge. La conversation reste intacte et peut continuer.",

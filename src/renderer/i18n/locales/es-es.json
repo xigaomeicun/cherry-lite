@@ -536,6 +536,7 @@
   "agent_session_fork.label": "Bifurcar",
   "agent_session_fork.legacy_history": "No se registró un punto de bifurcación para este mensaje histórico.",
   "agent_session_fork.not_turn_boundary": "Solo se puede bifurcar desde el último mensaje del asistente de un turno completado.",
+  "agent_session_fork.omitted_history": "Este turno se omitió durante la importación y no se puede bifurcar desde aquí.",
   "agent_session_fork.operation_failed": "No se pudo bifurcar la sesión. Comprueba los permisos y el espacio libre en disco e inténtalo de nuevo.",
   "agent_session_fork.source_not_found": "El chat original no existe o se ha eliminado.",
   "agent_session_fork.unsupported_checkpoint": "Este punto de control se creó con una versión anterior o la versión actual no puede restaurarlo, por lo que no se puede bifurcar desde aquí. La conversación no se ve afectada y puede continuar.",

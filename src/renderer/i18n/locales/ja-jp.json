@@ -536,6 +536,7 @@
   "agent_session_fork.label": "分岐",
   "agent_session_fork.legacy_history": "この過去のメッセージには分岐用チェックポイントがありません。",
   "agent_session_fork.not_turn_boundary": "完了したターンの最後のアシスタントメッセージからのみ分岐できます。",
+  "agent_session_fork.omitted_history": "このターンはインポート時に省略されたため、ここから分岐できません。",
   "agent_session_fork.operation_failed": "セッションを分岐できませんでした。ファイル権限とディスクの空き容量を確認して再試行してください。",
   "agent_session_fork.source_not_found": "元のチャットが存在しないか、削除されています。",
   "agent_session_fork.unsupported_checkpoint": "このチェックポイントは旧バージョンで作成されたか、現在のバージョンでは復元できないため、ここからの分岐には対応していません。会話自体には影響がなく、引き続き利用できます。",

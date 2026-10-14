@@ -536,6 +536,7 @@
   "agent_session_fork.label": "Verzweigen",
   "agent_session_fork.legacy_history": "Für diese frühere Nachricht wurde kein Verzweigungspunkt gespeichert.",
   "agent_session_fork.not_turn_boundary": "Nur die letzte Assistentennachricht eines abgeschlossenen Dialogschritts kann verzweigt werden.",
+  "agent_session_fork.omitted_history": "Diese Runde wurde beim Import ausgelassen; von hier aus ist keine Verzweigung möglich.",
   "agent_session_fork.operation_failed": "Die Sitzung konnte nicht abgezweigt werden. Prüfen Sie Dateiberechtigungen und freien Speicherplatz und versuchen Sie es erneut.",
   "agent_session_fork.source_not_found": "Der ursprüngliche Chat existiert nicht oder wurde gelöscht.",
   "agent_session_fork.unsupported_checkpoint": "Dieser Prüfpunkt wurde mit einer älteren Version erstellt oder kann von der aktuellen Version nicht wiederhergestellt werden. Daher wird das Verzweigen ab dieser Stelle nicht unterstützt. Die Unterhaltung bleibt unberührt und kann fortgesetzt werden.",

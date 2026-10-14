@@ -1,5 +1,6 @@
 export const AGENT_SESSION_FORK_FAILURE_REASONS = [
   'legacy_history',
+  'omitted_history',
   'not_turn_boundary',
   'history_missing',
   'history_corrupt',
