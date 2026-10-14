@@ -463,6 +463,7 @@ function answeredAskUserQuestionPart(toolCallId: string, state = 'output-availab
 
 describe('MessagePartsRenderer', () => {
   beforeEach(() => {
+    invalidateCachedMessageUiStates(['msg-1'])
     activityStore = new KeyedMessageActivityStore()
     topicStreamStore.setStatus(undefined)
     mockThinkingBlockMounted.mockClear()
