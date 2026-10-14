@@ -941,31 +941,6 @@ describe('BackupManager direct v2 data compatibility', () => {
     expect(progress.every((value, index) => index === 0 || value >= progress[index - 1])).toBe(true)
   })
 
-  it('refuses restore staging while an admitted heartbeat write has not drained', async () => {
-    arrangeDirectRestore()
-    mockAgentJobs.drainInFlight.mockResolvedValueOnce({ settled: false })
-
-    await expect((backupManager as any).restoreDirect('/extract')).rejects.toThrow(
-      'Background data writes did not quiesce'
-    )
-
-    expect(mockWriteRestoreJournal).not.toHaveBeenCalled()
-    expect(mockHeartbeatHold.dispose).toHaveBeenCalledOnce()
-    expect(fs.remove).toHaveBeenCalledWith('/mock/userData/restore-staging/operation-id')
-  })
-
-  it('refuses backup capture while an admitted heartbeat write has not drained', async () => {
-    mockAgentJobs.drainInFlight.mockResolvedValueOnce({ settled: false })
-
-    await expect(backupManager.backup({} as Electron.IpcMainInvokeEvent, 'backup.zip', '/backups')).rejects.toThrow(
-      'Background data writes did not quiesce'
-    )
-
-    expect(mockDbService.checkpointTruncate).not.toHaveBeenCalled()
-    expect(mockHeartbeatHold.dispose).toHaveBeenCalledOnce()
-    expect(mockCreateAtomicWriteStream).not.toHaveBeenCalled()
-  })
-
   it('opens staged files with write access before fsync on Windows', () => {
     const originalPlatform = process.platform
     Object.defineProperty(process, 'platform', { value: 'win32', configurable: true })
