@@ -5,7 +5,6 @@
  */
 
 import type { ProviderOptions } from '@ai-sdk/provider-utils'
-
 import { loggerService } from '@logger'
 import { DEFAULT_TIMEOUT } from '@main/ai/constants'
 import type { SamplingSettings } from '@main/ai/types'
@@ -16,6 +15,7 @@ import {
   isClaudeReasoningModel,
   isGemini3Model,
   isMaxTemperatureOneModel,
+  isQwenModel,
   isSupportedFlexServiceTier,
   isSupportTemperatureModel,
   isSupportTopPModel,
@@ -41,11 +41,12 @@ type SamplingParams = {
   bodyParams: Record<string, unknown>
 }
 
-/** Omit rejected sampling from all merged parameters before SDK serialization or body passthrough. */
+/** Sanitize merged parameters before SDK serialization or body passthrough. */
 export function stripRejectedSamplingParams(params: SamplingParams, model: Model): SamplingParams {
   const acceptsTemperature = modelAcceptsSamplingParam(model, 'temperature')
   const acceptsTopP = modelAcceptsSamplingParam(model, 'topP')
-  if (acceptsTemperature && acceptsTopP) return params
+  const normalizeTemperature = model.providerId === 'dashscope' && isQwenModel(model)
+  if (acceptsTemperature && acceptsTopP && !normalizeTemperature) return params
 
   function strip<T>(values: Record<string, T>): Record<string, T> {
     const cleaned = { ...values }
@@ -53,6 +54,14 @@ export function stripRejectedSamplingParams(params: SamplingParams, model: Model
     if (!acceptsTopP) {
       delete cleaned.topP
       delete cleaned.top_p
+    }
+    if (
+      normalizeTemperature &&
+      typeof cleaned.temperature === 'number' &&
+      Number.isFinite(cleaned.temperature) &&
+      cleaned.temperature >= 2
+    ) {
+      cleaned.temperature = 1.9 as T
     }
     return cleaned
   }
