@@ -140,7 +140,13 @@ vi.mock('@main/ai/agents/builtin/BuiltinAgentProvisioner', () => ({
   provisionBuiltinAgent: mocks.provisionBuiltinAgent
 }))
 vi.mock('@main/utils/prompt', () => ({ replacePromptVariables: mocks.replacePromptVariables }))
-vi.mock('@main/ai/runtime/agentMcpServers', () => ({ buildAgentMcpServers: mocks.buildAgentMcpServers }))
+vi.mock('@main/ai/runtime/agentMcpServers', () => ({
+  buildAgentMcpServers: mocks.buildAgentMcpServers,
+  warmAgentMcpToolCatalogs: mocks.warmMcpToolCatalogs
+}))
+vi.mock('@main/ai/runtime/agentSessionWorkspace', () => ({
+  prepareAgentSessionWorkspaceDirectory: vi.fn().mockResolvedValue(undefined)
+}))
 vi.mock('@main/ai/runtime/citationsGuidance', () => ({ buildCitationsGuidance: mocks.buildCitationsGuidance }))
 // PromptBuilder and tool adapters are exercised in their own suites; this is a wiring test.
 vi.mock('@main/ai/agents/prompt', () => ({

@@ -254,19 +254,9 @@ export class PiRuntimeConnection implements AgentRuntimeConnection {
       throw new Error(`pi agent session ${this.input.sessionId} has no agent or workspace configured`)
     }
 
-    // The driver's validateSession owns workspace preparation, but a primed/warm connection
-    // reaches start() without it — leaving an app-owned system workspace uncreated while
-    // buildAgentRuntimePrompt reads the workspace (system.md). Materialize it here too.
-    // Best-effort on purpose: validateSession stays the authoritative gate that reports an
-    // unusable workspace to the user, and a failure here must not pre-empt it with a less
-    // useful error (a prompt built without system.md is already the correct degraded result).
-    await prepareAgentSessionWorkspaceDirectory(session).catch((error) => {
-      logger.warn('Failed to prepare the pi session workspace before building the prompt', {
-        sessionId: this.input.sessionId,
-        workspacePath,
-        error
-      })
-    })
+    // The driver's validateSession prepares the workspace too; a primed/warm connection reaches
+    // start() without it, so materialize it here as well — failing fast before prompt/SDK work.
+    await prepareAgentSessionWorkspaceDirectory(session)
 
     // pi has no native permission modes; the approval extension enforces them.
     // `plan` is unsupported for pi (deferred) — it falls through to gate-all.
