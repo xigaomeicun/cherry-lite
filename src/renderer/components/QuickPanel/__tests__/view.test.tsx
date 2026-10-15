@@ -745,6 +745,59 @@ describe('QuickPanelView', () => {
     expect(deleteTriggerRange).toHaveBeenCalledOnce()
   })
 
+  it('opens Permission Mode from /permission without inheriting the parent query', async () => {
+    const user = userEvent.setup()
+    let text = '/permission'
+    let cursorOffset = text.length
+    let selectedMode: string | undefined
+    const inputAdapter: QuickPanelInputAdapter = {
+      getText: () => text,
+      getCursorOffset: () => cursorOffset,
+      insertText: vi.fn(),
+      deleteTriggerRange: ({ from, to }) => {
+        text = text.slice(0, from) + text.slice(to)
+        cursorOffset = from
+      },
+      focus: vi.fn()
+    }
+    const menuAction: QuickPanelListItem['action'] = ({ context, parentPanel }) => {
+      context.open({
+        title: 'Permission Mode',
+        symbol: 'permission-mode',
+        parentPanel,
+        triggerInfo: { type: 'button' },
+        trackInputQuery: true,
+        list: [
+          { id: 'plan', label: 'Plan Only', icon: 'plan', action: () => (selectedMode = 'plan') },
+          { id: 'auto', label: 'Approve for Me', icon: 'auto', action: () => (selectedMode = 'auto') }
+        ]
+      })
+    }
+
+    render(
+      <QuickPanelProvider>
+        <PanelHarness
+          captureDispatch={vi.fn()}
+          inputAdapter={inputAdapter}
+          items={[
+            { id: 'permission-mode', label: 'Permission Mode', icon: 'shield', isMenu: true, action: menuAction }
+          ]}
+          queryAnchor={0}
+        />
+      </QuickPanelProvider>
+    )
+
+    const permissionMode = await screen.findByRole('button', { name: /Permission Mode/ })
+    await user.hover(screen.getByTestId('quick-panel-body'))
+    await user.click(permissionMode)
+
+    expect(text).toBe('')
+    expect(await screen.findByRole('button', { name: /Plan Only/ })).toBeVisible()
+    expect(screen.getByRole('button', { name: /Approve for Me/ })).toBeVisible()
+    await user.click(screen.getByRole('button', { name: /Plan Only/ }))
+    expect(selectedMode).toBe('plan')
+  })
+
   it('keeps a multi-select filter through picks and consumes it when dismissed', async () => {
     let text = 'card'
     let cursorOffset = text.length
@@ -854,13 +907,13 @@ describe('QuickPanelView', () => {
   const compactItems = measuredItems.slice(0, 2)
 
   it('keeps the fixed height in a docked composer (no placement, no fill)', async () => {
-    const getRectSpy = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function rectFor(
-      this: HTMLElement
-    ) {
-      // 即便上方空间很小，docked 也应忽略它、保持固定高度。
-      if (this.dataset.testid === 'quick-panel') return createRect(180, 180)
-      return createRect(40, 900)
-    })
+    const getRectSpy = vi
+      .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+      .mockImplementation(function rectFor(this: HTMLElement) {
+        // 即便上方空间很小，docked 也应忽略它、保持固定高度。
+        if (this.dataset.testid === 'quick-panel') return createRect(180, 180)
+        return createRect(40, 900)
+      })
 
     try {
       render(
@@ -898,13 +951,13 @@ describe('QuickPanelView', () => {
   it('lets the whole welcome (home) panel shrink naturally when content fits above the input', async () => {
     const panelBottom = 500
     const dockTop = 40
-    const getRectSpy = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function rectFor(
-      this: HTMLElement
-    ) {
-      if (this.dataset.testid === 'quick-panel') return createRect(panelBottom, panelBottom)
-      if (this.dataset.testid === 'quick-panel-dock') return createRect(dockTop, 900)
-      return createRect(0, 900)
-    })
+    const getRectSpy = vi
+      .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+      .mockImplementation(function rectFor(this: HTMLElement) {
+        if (this.dataset.testid === 'quick-panel') return createRect(panelBottom, panelBottom)
+        if (this.dataset.testid === 'quick-panel-dock') return createRect(dockTop, 900)
+        return createRect(0, 900)
+      })
 
     try {
       render(
@@ -948,13 +1001,13 @@ describe('QuickPanelView', () => {
     const footerHeight = 30
     const bodyVerticalSpace = 11
     const chromeHeight = footerHeight + bodyVerticalSpace
-    const getRectSpy = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function rectFor(
-      this: HTMLElement
-    ) {
-      if (this.dataset.testid === 'quick-panel') return createRect(panelBottom, panelBottom)
-      if (this.dataset.testid === 'quick-panel-dock') return createRect(dockTop, 900)
-      return createRect(0, 900)
-    })
+    const getRectSpy = vi
+      .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+      .mockImplementation(function rectFor(this: HTMLElement) {
+        if (this.dataset.testid === 'quick-panel') return createRect(panelBottom, panelBottom)
+        if (this.dataset.testid === 'quick-panel-dock') return createRect(dockTop, 900)
+        return createRect(0, 900)
+      })
     const clientHeightSpy = vi
       .spyOn(HTMLElement.prototype, 'clientHeight', 'get')
       .mockImplementation(function heightFor(this: HTMLElement) {
@@ -1016,13 +1069,13 @@ describe('QuickPanelView', () => {
     const bodyVerticalSpace = 11
     const chromeHeight = footerHeight + bodyVerticalSpace
     const captureDispatch = vi.fn()
-    const getRectSpy = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function rectFor(
-      this: HTMLElement
-    ) {
-      if (this.dataset.testid === 'quick-panel') return createRect(panelBottom, panelBottom)
-      if (this.dataset.testid === 'quick-panel-dock') return createRect(dockTop, 900)
-      return createRect(0, 900)
-    })
+    const getRectSpy = vi
+      .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+      .mockImplementation(function rectFor(this: HTMLElement) {
+        if (this.dataset.testid === 'quick-panel') return createRect(panelBottom, panelBottom)
+        if (this.dataset.testid === 'quick-panel-dock') return createRect(dockTop, 900)
+        return createRect(0, 900)
+      })
     const clientHeightSpy = vi
       .spyOn(HTMLElement.prototype, 'clientHeight', 'get')
       .mockImplementation(function heightFor(this: HTMLElement) {
@@ -1095,13 +1148,13 @@ describe('QuickPanelView', () => {
   })
 
   it('keeps the standard shadow and fixed height for a read-only panel even with fill enabled', async () => {
-    const getRectSpy = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function rectFor(
-      this: HTMLElement
-    ) {
-      if (this.dataset.testid === 'quick-panel') return createRect(240, 240)
-      if (this.dataset.testid === 'quick-panel-dock') return createRect(40, 900)
-      return createRect(0, 900)
-    })
+    const getRectSpy = vi
+      .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+      .mockImplementation(function rectFor(this: HTMLElement) {
+        if (this.dataset.testid === 'quick-panel') return createRect(240, 240)
+        if (this.dataset.testid === 'quick-panel-dock') return createRect(40, 900)
+        return createRect(0, 900)
+      })
 
     try {
       render(
@@ -1646,11 +1699,11 @@ describe('QuickPanelView', () => {
   })
 
   it('uses the compact footer layout at its 620px boundary', async () => {
-    const clientWidthSpy = vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockImplementation(function widthFor(
-      this: HTMLElement
-    ) {
-      return this.dataset.testid === 'quick-panel-footer' ? 620 : 0
-    })
+    const clientWidthSpy = vi
+      .spyOn(HTMLElement.prototype, 'clientWidth', 'get')
+      .mockImplementation(function widthFor(this: HTMLElement) {
+        return this.dataset.testid === 'quick-panel-footer' ? 620 : 0
+      })
     const footerActions: QuickPanelFooterAction[] = [
       {
         id: 'add',

@@ -1,4 +1,4 @@
-import type { QuickPanelListItem } from '@renderer/components/QuickPanel'
+import type { QuickPanelInputAdapter, QuickPanelInputEvent, QuickPanelListItem } from '@renderer/components/QuickPanel'
 import { COMPOSER_FILE_KIND, FILE_TYPE } from '@renderer/types/file'
 import {
   COMPOSER_CLIPBOARD_FRAGMENT_MIME,
@@ -55,6 +55,7 @@ const mocks = vi.hoisted(() => ({
   pasteHandler: vi.fn(),
   fileDragDropOptions: undefined as any,
   setTimeoutTimer: vi.fn(),
+  clearTimeoutTimer: vi.fn(),
   timeoutCleanups: [] as Array<() => void>,
   preferences: {
     'chat.input.send_message_shortcut': 'Enter'
@@ -308,7 +309,8 @@ vi.mock('@renderer/data/hooks/usePreference', () => ({
 
 vi.mock('@renderer/hooks/useTimer', () => ({
   useTimer: () => ({
-    setTimeoutTimer: mocks.setTimeoutTimer
+    setTimeoutTimer: mocks.setTimeoutTimer,
+    clearTimeoutTimer: mocks.clearTimeoutTimer
   })
 }))
 
@@ -5581,5 +5583,103 @@ describe('ComposerSurface', () => {
         list: [expect.objectContaining({ label: 'Low', filterText: expect.stringContaining('Low') })]
       })
     )
+  })
+})
+
+describe('ComposerSurface IME input notifications', () => {
+  let listener: ReturnType<typeof vi.fn<(event?: QuickPanelInputEvent) => void>>
+  let inputAdapter: QuickPanelInputAdapter | undefined
+
+  beforeEach(async () => {
+    // This suite sits outside the main describe, so re-arm the editor mocks it relies on.
+    mocks.getJSON.mockReset()
+    mocks.getJSON.mockReturnValue({ type: 'doc', content: [{ type: 'paragraph' }] })
+    // Mirror useTimer's keyed timers so clearTimeoutTimer(key) really cancels the pending notify.
+    const pendingTimers = new Map<string, ReturnType<typeof setTimeout>>()
+    mocks.setTimeoutTimer.mockReset()
+    mocks.clearTimeoutTimer.mockReset()
+    mocks.setTimeoutTimer.mockImplementation((key: string, callback: () => void, delay?: number) => {
+      if (pendingTimers.has(key)) clearTimeout(pendingTimers.get(key))
+      const timer = setTimeout(() => {
+        pendingTimers.delete(key)
+        callback()
+      }, delay)
+      pendingTimers.set(key, timer)
+      return () => clearTimeout(timer)
+    })
+    mocks.clearTimeoutTimer.mockImplementation((key: string) => {
+      const timer = pendingTimers.get(key)
+      if (timer) clearTimeout(timer)
+      pendingTimers.delete(key)
+    })
+    mocks.stabilizeEditor = true
+    render(
+      <ComposerSurface
+        {...baseProps}
+        renderLeftControls={(adapter) => {
+          inputAdapter = adapter
+          return null
+        }}
+      />
+    )
+    await waitFor(() => expect(inputAdapter).toBeDefined())
+    listener = vi.fn<(event?: QuickPanelInputEvent) => void>()
+    inputAdapter!.subscribeInput!(listener)
+    vi.useFakeTimers()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('notifies input listeners once an IME composition ends without another edit', () => {
+    mocks.editorViewComposing = true
+    act(() => {
+      mocks.editorOptions.onUpdate({ transaction: mocks.transaction, editor: mocks.editorInstance })
+    })
+    expect(listener).toHaveBeenCalledWith({ isComposing: true, cause: 'user-input' })
+    listener.mockClear()
+
+    mocks.editorViewComposing = false
+    act(() => {
+      mocks.editorOptions.editorProps.handleDOMEvents.compositionend(null, { data: '知识' })
+      vi.advanceTimersByTime(39)
+    })
+    expect(listener).not.toHaveBeenCalled()
+
+    act(() => {
+      vi.advanceTimersByTime(1)
+    })
+    expect(listener).toHaveBeenCalledExactlyOnceWith({ isComposing: false, cause: 'user-input' })
+  })
+
+  it('waits for a restarted composition to end before notifying finalized input', () => {
+    act(() => {
+      mocks.editorOptions.editorProps.handleDOMEvents.compositionend(null, { data: '知' })
+      mocks.editorViewComposing = true
+      mocks.editorOptions.editorProps.handleDOMEvents.compositionstart()
+      vi.advanceTimersByTime(40)
+    })
+    expect(listener).not.toHaveBeenCalled()
+
+    act(() => {
+      mocks.editorViewComposing = false
+      mocks.editorOptions.editorProps.handleDOMEvents.compositionend(null, { data: '知识' })
+      vi.advanceTimersByTime(40)
+    })
+    expect(listener).toHaveBeenCalledExactlyOnceWith({ isComposing: false, cause: 'user-input' })
+  })
+
+  it('does not repeat an input notification already emitted by the composition flush', () => {
+    act(() => {
+      mocks.editorOptions.editorProps.handleDOMEvents.compositionend(null, { data: '知识' })
+      mocks.editorOptions.onUpdate({ transaction: mocks.transaction, editor: mocks.editorInstance })
+    })
+    expect(listener).toHaveBeenCalledExactlyOnceWith({ isComposing: false, cause: 'user-input' })
+
+    act(() => {
+      vi.advanceTimersByTime(40)
+    })
+    expect(listener).toHaveBeenCalledExactlyOnceWith({ isComposing: false, cause: 'user-input' })
   })
 })
