@@ -13,6 +13,7 @@
 import { application } from '@application'
 import type { AiUsageCredentialReceipt } from '@data/services/AiUsageRecordService'
 import { modelService } from '@data/services/ModelService'
+import { providerRegistryService } from '@data/services/ProviderRegistryService'
 import { providerService } from '@data/services/ProviderService'
 import type { ProviderConfig, ProviderModelConfig } from '@earendil-works/pi-coding-agent'
 import { getExtraHeaders } from '@main/ai/utils/provider'
@@ -42,6 +43,7 @@ import { requiresAgentGateway, resolveApiGatewayRuntime } from '../agentApiGatew
 import { resolveAgentContextWindow } from '../agentContextWindow'
 import { toAgentProviderHeaders } from '../agentProviderHeaders'
 import type { AgentSessionUsageCapture } from '../types'
+import { projectPiReasoningCompat } from './piReasoningCompat'
 import { loadPiAnthropicMessagesApi, loadPiApiStreamSimple } from './piSdk'
 import { withCherryInThinkingReplay } from './piThinkingReplay'
 
@@ -140,9 +142,8 @@ function resolvePiEndpoint(provider: Provider, model: Model) {
 }
 
 /**
- * Pure mapping: build the pi provider injection from an already-resolved Cherry
- * `Provider`, `Model`, and API key. Kept free of service/IO so it is unit
- * testable in isolation.
+ * Build the pi provider injection from a Cherry `Provider`, `Model`, and API key,
+ * resolving reasoning metadata from the registry.
  *
  * @throws PiUnsupportedProviderError when the provider's endpoint has no pi mapping.
  */
@@ -429,6 +430,19 @@ function buildPiModelConfig(
     input.push('image')
   }
   const thinkingLevelMap = buildThinkingLevelMap(model)
+  const reasoningCompat =
+    api === 'anthropic-messages'
+      ? projectPiReasoningCompat(providerRegistryService.resolveReasoningProfile(provider, model, endpointType))
+      : {}
+  const compat = {
+    // Cherry's endpoint capability overrides pi's URL-based developer-role inference.
+    ...(api === 'openai-completions' || api === 'openai-responses'
+      ? { supportsDeveloperRole: resolveEndpointDialect(provider, endpointType).developerRole }
+      : {}),
+    // CherryIN can omit the signature delta on thinking blocks that must be replayed.
+    ...(provider.id === 'cherryin' && api === 'anthropic-messages' ? { allowEmptySignature: true } : {}),
+    ...reasoningCompat
+  }
 
   return {
     id,
@@ -442,14 +456,6 @@ function buildPiModelConfig(
     cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
     contextWindow: resolveAgentContextWindow(model),
     maxTokens: model.maxOutputTokens ?? DEFAULT_MAX_TOKENS,
-    // Cherry's provider capability is the source of truth; pi otherwise infers
-    // developer-role support from the endpoint URL.
-    ...(api === 'openai-completions' || api === 'openai-responses'
-      ? { compat: { supportsDeveloperRole: resolveEndpointDialect(provider, endpointType).developerRole } }
-      : {}),
-    // CherryIN requires replaying its thinking block even when the compatible endpoint omits a signature delta.
-    ...(provider.id === 'cherryin' && api === 'anthropic-messages' ? { compat: { allowEmptySignature: true } } : {})
-    // thinkingLevelMap intentionally omitted: Cherry does not wire pi
-    // thinking-level control in v1 (see capability matrix).
+    ...(Object.keys(compat).length > 0 ? { compat } : {})
   }
 }

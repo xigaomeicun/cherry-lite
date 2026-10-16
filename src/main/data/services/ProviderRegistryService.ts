@@ -125,6 +125,7 @@ const DEFAULT_FORMAT_BY_ENDPOINT: Partial<Record<EndpointType, ReasoningFormatTy
 }
 
 export interface ResolvedReasoningProfile {
+  wireDialect?: ReasoningWireDialect
   format: ReasoningFormatType
   wire: ReasoningWireProfile
   support?: ProtoReasoningSupport
@@ -227,7 +228,12 @@ export function resolveReasoningProfileFromRegistry(input: {
       ? configureOpenAIResponsesSummary(baseWire, input.reasoningSummary)
       : baseWire
 
-  return { format: formatType, support: input.contract?.support, wire }
+  return {
+    format: formatType,
+    support: input.contract?.support,
+    wire,
+    ...(input.wireDialect !== undefined ? { wireDialect: input.wireDialect } : {})
+  }
 }
 
 /**
