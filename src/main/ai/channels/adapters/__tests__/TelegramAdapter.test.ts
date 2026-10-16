@@ -27,6 +27,7 @@ const mockBot = {
     setMessageReaction: vi.fn().mockResolvedValue(undefined)
   },
   catch: vi.fn(),
+  init: vi.fn().mockResolvedValue(undefined),
   start: vi.fn(),
   stop: vi.fn().mockResolvedValue(undefined)
 }
@@ -101,6 +102,7 @@ describe('TelegramAdapter', () => {
     mockBot.api.sendDocument.mockClear().mockResolvedValue(undefined)
     mockBot.api.sendPhoto.mockClear().mockResolvedValue(undefined)
     mockBot.catch.mockClear()
+    mockBot.init.mockReset().mockResolvedValue(undefined)
     mockBot.start.mockReset().mockImplementation(async (options?: { onStart?: (info: object) => void }) => {
       await options?.onStart?.({})
     })
@@ -294,6 +296,30 @@ describe('TelegramAdapter', () => {
 
     await vi.advanceTimersByTimeAsync(1000) // first backoff delay
     expect(mockBot.start).toHaveBeenCalledTimes(2) // reconnected
+  })
+
+  it('retries with backoff when the startup connect hits a network error', async () => {
+    vi.useFakeTimers()
+    const { HttpError } = (await import('grammy')) as any
+    const adapter = createAdapter()
+    mockBot.init.mockRejectedValueOnce(
+      new HttpError("Network request for 'getMe' failed!", Object.assign(new Error('socket hang up'), { code: 'ECONNRESET' }))
+    )
+
+    await expect(adapter.connect()).resolves.toBeUndefined()
+    expect(mockBot.start).not.toHaveBeenCalled()
+
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(mockBot.init).toHaveBeenCalledTimes(2)
+    expect(mockBot.start).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not fail connect when setMyCommands fails', async () => {
+    const { HttpError } = (await import('grammy')) as any
+    mockBot.api.setMyCommands.mockRejectedValueOnce(new HttpError("Network request for 'setMyCommands' failed!", {}))
+    const adapter = createAdapter()
+    await adapter.connect()
+    expect(mockBot.start).toHaveBeenCalledTimes(1)
   })
 
   it('resets the reconnect budget after a stable polling window (REGRESSION channel-adapters-2)', async () => {
