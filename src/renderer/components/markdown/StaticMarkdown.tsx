@@ -17,6 +17,8 @@ interface Props {
   id?: string
   className?: string
   components?: Partial<Components>
+  /** Single-dollar inline math; quoting `$…$` round-trips only when this matches the chat setting. */
+  singleDollarMath?: boolean
 }
 
 const STATIC_REMARK_PLUGINS: Pluggable[] = [remarkLatexMath]
@@ -31,13 +33,13 @@ const STATIC_REMARK_PLUGINS: Pluggable[] = [remarkLatexMath]
  * Host-specific actions stay optional, so an embedded file preview can supply a
  * local-file opener without coupling this shared renderer to that feature.
  */
-export const StaticMarkdown: FC<Props> = ({ children, id, className, components }) => {
+export const StaticMarkdown: FC<Props> = ({ children, id, className, components, singleDollarMath = true }) => {
   const { t } = useTranslation()
   const generatedId = useId()
   const blockId = id ?? generatedId
   const { openFilePath } = useMarkdownHost()
 
-  const plugins = useMemo(() => withFullMarkdown({ singleDollarMath: true }), [])
+  const plugins = useMemo(() => withFullMarkdown({ singleDollarMath }), [singleDollarMath])
   const content = useMemo(() => removeSvgEmptyLines(children), [children])
   const hasStyleElement = /<style\b[^>]*>/i.test(content)
   const markdownComponents = useMarkdownComponents({ components, hasStyleElement })
