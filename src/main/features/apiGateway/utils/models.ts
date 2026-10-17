@@ -86,6 +86,11 @@ function transformModelToOpenAi(model: Model, provider?: Provider): ApiModel {
   }
 }
 
+/** Drop trailing whitespace and a trailing Claude Code `[1m]` context marker (case-insensitive). */
+function stripClaudeContextMarker(apiModelId: string): string {
+  return apiModelId.replace(/\s*\[1m\]\s*$/i, '').trimEnd()
+}
+
 /** Resolve a `providerId:apiModelId`; Agent-only models require an authenticated internal request. */
 export function resolveGatewayModelAddress(modelAddress: string, allowAgentOnly = false): ResolvedGatewayModelAddress {
   const sepIdx = modelAddress.indexOf(':')
@@ -112,16 +117,30 @@ export function resolveGatewayModelAddress(modelAddress: string, allowAgentOnly 
     throw new Error(`Model "${modelAddress}" is not available through the API gateway`)
   }
 
-  const model = modelService.list({ providerId, enabled: true }).find((candidate) => {
-    if (!isGatewayRoutableModel(candidate)) return false
-    const candidateApiModelId = candidate.apiModelId ?? parseUniqueModelId(candidate.id).modelId
-    return candidateApiModelId === apiModelId
-  })
-  if (!model) {
+  const candidates = modelService
+    .list({ providerId, enabled: true })
+    .filter((candidate) => isGatewayRoutableModel(candidate))
+    .map((candidate) => ({ candidate, id: candidate.apiModelId ?? parseUniqueModelId(candidate.id).modelId }))
+  // Exact ids win, so catalog models whose id itself ends in `[1m]` stay addressable. Otherwise fall
+  // back to the id without a Claude Code context marker / trailing whitespace (e.g. `model [1M]`, or
+  // `model ` after Claude Code strips the bracket token from a spaced marker).
+  const normalizedApiModelId = stripClaudeContextMarker(apiModelId)
+  const match =
+    candidates.find(({ id }) => id === apiModelId) ??
+    (normalizedApiModelId && normalizedApiModelId !== apiModelId
+      ? candidates.find(({ id }) => id === normalizedApiModelId)
+      : undefined)
+  if (!match) {
     throw new Error(`Model "${modelAddress}" is not available through the API gateway`)
   }
 
-  return { providerId, apiModelId, uniqueModelId: model.id, provider, model }
+  return {
+    providerId,
+    apiModelId: match.id,
+    uniqueModelId: match.candidate.id,
+    provider,
+    model: match.candidate
+  }
 }
 
 /**
