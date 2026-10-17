@@ -10,19 +10,20 @@ import {
   type AgentParams,
   type AgentResult,
   type CommandReceipt,
-  questionInputSchema,
-  encodeAgentCommand
+  encodeAgentCommand,
+  questionInputSchema
 } from '@cherrystudio/remote-protocol/agent'
 import { RemoteRpcError, type RemoteRpcServer } from '@cherrystudio/remote-transport'
 import { AgentSessionDeliveryRoutingError } from '@data/services/AgentSessionMessageService'
 import { agentSessionService } from '@data/services/AgentSessionService'
-import { remoteCommandService, type RemoteCommandOutcome } from '@data/services/RemoteCommandService'
+import { type RemoteCommandOutcome, remoteCommandService } from '@data/services/RemoteCommandService'
 import { loggerService } from '@logger'
 import { buildAgentSessionTopicId } from '@main/ai/agentSession/topic'
 import { serializeError } from '@main/ai/utils/serializeError'
 import { toExecutionFailure } from '@shared/ai/executionFailure'
 
 import type { RemoteAgentHub } from './agentJournal'
+import { pageOf, queryPage } from './agentPagination'
 import {
   createSessionTx,
   getSession,
@@ -32,7 +33,6 @@ import {
   listPersistedInteractions,
   listSessions,
   listWorkspaces,
-  pageOf,
   readPersistedContent,
   sha256,
   sliceContent,
@@ -130,13 +130,15 @@ export function registerAgentMethods(
 
   on('agent.agents.list', ({ cursor, limit }) => listAgents(cursor, limit))
   on('agent.workspaces.list', ({ agentId, cursor, limit }) => listWorkspaces(agentId, cursor, limit))
-  on('agent.sessions.list', (params) => {
-    const page = listSessions(params)
-    return {
-      items: page.items.flatMap((session) => toSessionSummary(session, hub.activeExecutionId(session.id)) ?? []),
-      nextCursor: page.nextCursor
-    }
-  })
+  on('agent.sessions.list', (params) =>
+    queryPage((attemptLimit) => {
+      const page = listSessions({ ...params, limit: attemptLimit })
+      return {
+        items: page.items.flatMap((session) => toSessionSummary(session, hub.activeExecutionId(session.id)) ?? []),
+        nextCursor: page.nextCursor
+      }
+    }, params.limit)
+  )
   on('agent.sessions.get', ({ sessionId }) => ({ session: summaryOf(sessionId) }))
   on('agent.sessions.create', (params, auth) => {
     const method = 'agent.sessions.create'

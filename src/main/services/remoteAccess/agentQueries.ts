@@ -1,16 +1,14 @@
 import { createHash } from 'node:crypto'
 
-import { getToolName, isToolUIPart } from 'ai'
-
-import { modelSummarySchema } from '@cherrystudio/remote-protocol/agent'
 import type {
   AgentInteraction,
-  AgentParams,
   AgentMessage,
+  AgentParams,
   AgentPart,
   AgentSession,
   ContentRef
 } from '@cherrystudio/remote-protocol/agent'
+import { modelSummarySchema } from '@cherrystudio/remote-protocol/agent'
 import { RemoteRpcError } from '@cherrystudio/remote-transport'
 import type { DbOrTx } from '@data/db/types'
 import { agentService } from '@data/services/AgentService'
@@ -22,14 +20,15 @@ import { ErrorCode, isDataApiError } from '@shared/data/api/errors'
 import type { AgentSessionMessageEntity } from '@shared/data/api/schemas/agentSessionMessages'
 import type { AgentSessionEntity } from '@shared/data/api/schemas/agentSessions'
 import type { CherryMessagePart } from '@shared/data/types/message'
-import { UniqueModelIdSchema, parseUniqueModelId } from '@shared/data/types/model'
+import { parseUniqueModelId, UniqueModelIdSchema } from '@shared/data/types/model'
 import type { SerializedError } from '@shared/types/error'
+import { getToolName, isToolUIPart } from 'ai'
 
+import { DEFAULT_PAGE, pageOf, queryPage } from './agentPagination'
 import { toMessageUsage } from './agentUsage'
 
 /** Text above this many UTF-16 units travels as a content reference so records stay under the wire budget. */
 export const INLINE_TEXT_LIMIT = 4096
-const DEFAULT_PAGE = 20
 
 export const sha256 = (bytes: Uint8Array): string => createHash('sha256').update(bytes).digest('hex')
 export const utf8 = (text: string): Uint8Array => new TextEncoder().encode(text)
@@ -72,17 +71,6 @@ export function sliceContent(
     eof: start + slice.length === bytes.length,
     sha256: sha256(bytes)
   }
-}
-
-export function pageOf<T>(
-  items: readonly T[],
-  cursor: string | undefined,
-  limit: number | undefined
-): { items: T[]; nextCursor: string | null } {
-  const start = cursor === undefined ? 0 : Number(cursor)
-  if (!Number.isSafeInteger(start) || start < 0) throw new RemoteRpcError('NOT_FOUND', 'Invalid page cursor')
-  const end = start + (limit ?? DEFAULT_PAGE)
-  return { items: items.slice(start, end), nextCursor: end < items.length ? String(end) : null }
 }
 
 export function toSessionSummary(session: AgentSessionEntity, activeExecutionId?: string): AgentSession | undefined {
@@ -225,10 +213,12 @@ export function listMessages(
   const session = getSession(sessionId)
   if (revisionOf(session.updatedAt) !== historyRevision)
     throw new RemoteRpcError('REVISION_EXPIRED', 'History revision expired')
-  const page = notFound(() =>
-    agentSessionMessageService.listSessionMessages(sessionId, { cursor, limit: limit ?? DEFAULT_PAGE })
-  )
-  return { items: page.items.map(toMessage), nextCursor: page.nextCursor ?? null }
+  return queryPage((attemptLimit) => {
+    const page = notFound(() =>
+      agentSessionMessageService.listSessionMessages(sessionId, { cursor, limit: attemptLimit })
+    )
+    return { items: page.items.map(toMessage), nextCursor: page.nextCursor ?? null }
+  }, limit)
 }
 
 export function listParts(
