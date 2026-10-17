@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import lmStudioModels from '../../__tests__/fixtures/lmstudio-models.json'
 import { makeProvider } from '../../__tests__/fixtures/provider'
 import { DEFAULT_VERTEX_MODEL_PUBLISHERS } from '../listModels/vertex'
+import { AIHubMixModelsResponseSchema } from '../listModelsSchemas'
 
 // The fetchers resolve the rotated API key (and, for Vertex, the iam-gcp auth
 // config + signed auth headers) off main-process singletons, then perform the
@@ -138,6 +139,17 @@ describe('listModels — default grouping', () => {
       expect(models.map((model) => model.group)).not.toContain(providerId)
     }
   )
+})
+
+describe('AIHubMix model list response', () => {
+  it('accepts null pricing without dropping the model', () => {
+    const response = AIHubMixModelsResponseSchema.parse({
+      data: [{ model_id: 'media-model', pricing: null }]
+    })
+
+    expect(response.data).toHaveLength(1)
+    expect(response.data[0]).toMatchObject({ model_id: 'media-model', pricing: null })
+  })
 })
 
 describe('listModels — malformed OpenAI-compatible rows', () => {
