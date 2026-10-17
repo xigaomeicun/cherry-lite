@@ -19,6 +19,7 @@ const mockBot = {
     config: {
       use: vi.fn()
     },
+    getMe: vi.fn(),
     setMyCommands: vi.fn().mockResolvedValue(undefined),
     sendMessage: vi.fn().mockResolvedValue(undefined),
     sendChatAction: vi.fn().mockResolvedValue(undefined),
@@ -27,7 +28,7 @@ const mockBot = {
     setMessageReaction: vi.fn().mockResolvedValue(undefined)
   },
   catch: vi.fn(),
-  init: vi.fn().mockResolvedValue(undefined),
+  botInfo: undefined as unknown,
   start: vi.fn(),
   stop: vi.fn().mockResolvedValue(undefined)
 }
@@ -83,6 +84,27 @@ import { Bot, InputFile } from 'grammy'
 import { registerAdapterFactory } from '../../ChannelManager'
 import { CHUNK_MAX } from '../telegram/markdownTg'
 
+const BOT_INFO = { id: 1, is_bot: true, first_name: 'Cherry', username: 'cherry_bot' }
+
+/** A getMe that behaves like a real request to an unreachable host: hangs until aborted. */
+function hangingGetMe(_signal?: AbortSignal) {
+  return new Promise((_resolve, reject) => {
+    _signal?.addEventListener('abort', () => reject(new Error('The operation was aborted')), { once: true })
+  })
+}
+
+function grammyError(code: number, description: string) {
+  return import('grammy').then(({ GrammyError }) => {
+    const Ctor = GrammyError as any
+    return new Ctor(
+      `Call to 'getMe' failed! (${code}: ${description})`,
+      { ok: false, error_code: code, description },
+      'getMe',
+      {}
+    )
+  })
+}
+
 function getFactory() {
   const call = vi.mocked(registerAdapterFactory).mock.calls[0]
   if (!call) throw new Error('registerAdapterFactory was not called')
@@ -102,7 +124,8 @@ describe('TelegramAdapter', () => {
     mockBot.api.sendDocument.mockClear().mockResolvedValue(undefined)
     mockBot.api.sendPhoto.mockClear().mockResolvedValue(undefined)
     mockBot.catch.mockClear()
-    mockBot.init.mockReset().mockResolvedValue(undefined)
+    mockBot.api.getMe.mockReset().mockResolvedValue(BOT_INFO)
+    mockBot.botInfo = undefined
     mockBot.start.mockReset().mockImplementation(async (options?: { onStart?: (info: object) => void }) => {
       await options?.onStart?.({})
     })
@@ -151,7 +174,7 @@ describe('TelegramAdapter', () => {
     ])
     expect(mockBot.catch).toHaveBeenCalledTimes(1)
     expect(mockBot.start).toHaveBeenCalledTimes(1)
-    expect(mockBot.api.config.use).toHaveBeenCalledTimes(1)
+    expect(mockBot.api.config.use).toHaveBeenCalledTimes(2) // getUpdates timeout + polling health
     expect(mockBot.start).toHaveBeenCalledWith(expect.objectContaining({ timeout: 30, onStart: expect.any(Function) }))
   })
 
@@ -298,20 +321,169 @@ describe('TelegramAdapter', () => {
     expect(mockBot.start).toHaveBeenCalledTimes(2) // reconnected
   })
 
-  it('retries with backoff when the startup connect hits a network error', async () => {
+  it('probes with a bounded getMe (not bot.init) and sets botInfo', async () => {
+    const adapter = createAdapter()
+    await adapter.connect()
+    expect(mockBot.api.getMe).toHaveBeenCalledTimes(1)
+    expect(mockBot.botInfo).toEqual(BOT_INFO)
+    expect(mockBot.start).toHaveBeenCalledTimes(1)
+  })
+
+  it('times out a hanging startup probe and retries with backoff', async () => {
+    vi.useFakeTimers()
+    mockBot.api.getMe.mockImplementationOnce(hangingGetMe)
+    const adapter = createAdapter()
+    const statuses: any[] = []
+    adapter.on('statusChange', (s: any) => statuses.push(s))
+
+    let settled = false
+    const connecting = adapter.connect().then(() => (settled = true))
+    await vi.advanceTimersByTimeAsync(9_999)
+    expect(settled).toBe(false)
+    await vi.advanceTimersByTimeAsync(1)
+    await connecting // connect() resolves (awaitConnect never hangs) and schedules a retry
+    expect(mockBot.start).not.toHaveBeenCalled()
+    expect(statuses.at(-1)).toMatchObject({ connected: false, error: expect.stringContaining('timed out') })
+
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(mockBot.api.getMe).toHaveBeenCalledTimes(2)
+    expect(mockBot.start).toHaveBeenCalledTimes(1)
+    expect(adapter.connected).toBe(true)
+  })
+
+  it('retries with backoff when the startup probe hits a network error', async () => {
     vi.useFakeTimers()
     const { HttpError } = (await import('grammy')) as any
-    const adapter = createAdapter()
-    mockBot.init.mockRejectedValueOnce(
-      new HttpError("Network request for 'getMe' failed!", Object.assign(new Error('socket hang up'), { code: 'ECONNRESET' }))
+    mockBot.api.getMe.mockRejectedValueOnce(
+      new HttpError(
+        "Network request for 'getMe' failed!",
+        Object.assign(new Error('socket hang up'), { code: 'ECONNRESET' })
+      )
     )
-
+    const adapter = createAdapter()
     await expect(adapter.connect()).resolves.toBeUndefined()
     expect(mockBot.start).not.toHaveBeenCalled()
 
     await vi.advanceTimersByTimeAsync(1000)
-    expect(mockBot.init).toHaveBeenCalledTimes(2)
+    expect(mockBot.api.getMe).toHaveBeenCalledTimes(2)
     expect(mockBot.start).toHaveBeenCalledTimes(1)
+  })
+
+  it('switches to slow retry after the fast backoff budget is exhausted', async () => {
+    vi.useFakeTimers()
+    const { HttpError } = (await import('grammy')) as any
+    mockBot.api.getMe.mockRejectedValue(new HttpError("Network request for 'getMe' failed!", new Error('ENETUNREACH')))
+    const adapter = createAdapter()
+    await adapter.connect()
+    // 1 initial + 50 fast retries (1s,2s,5s,10s,30s, then 60s each)
+    const fastBudgetMs = 1000 + 2000 + 5000 + 10000 + 30000 + 45 * 60000
+    await vi.advanceTimersByTimeAsync(fastBudgetMs)
+    expect(mockBot.api.getMe).toHaveBeenCalledTimes(51)
+
+    await vi.advanceTimersByTimeAsync(5 * 60_000 - 1)
+    expect(mockBot.api.getMe).toHaveBeenCalledTimes(51)
+    await vi.advanceTimersByTimeAsync(1)
+    expect(mockBot.api.getMe).toHaveBeenCalledTimes(52)
+
+    mockBot.api.getMe.mockResolvedValue(BOT_INFO)
+    await vi.advanceTimersByTimeAsync(5 * 60_000)
+    expect(mockBot.start).toHaveBeenCalledTimes(1)
+    expect(adapter.connected).toBe(true)
+  })
+
+  it('does not retry a startup 401 and reports the reason', async () => {
+    vi.useFakeTimers()
+    mockBot.api.getMe.mockRejectedValueOnce(await grammyError(401, 'Unauthorized'))
+    const adapter = createAdapter()
+    const statuses: any[] = []
+    adapter.on('statusChange', (s: any) => statuses.push(s))
+    await expect(adapter.connect()).rejects.toThrow('401')
+    expect(statuses.at(-1)).toMatchObject({ connected: false, error: expect.stringContaining('Unauthorized') })
+    await vi.advanceTimersByTimeAsync(10 * 60_000)
+    expect(mockBot.api.getMe).toHaveBeenCalledTimes(1)
+  })
+
+  it('stops reconnecting when a reconnect attempt hits 401', async () => {
+    vi.useFakeTimers()
+    const { HttpError } = (await import('grammy')) as any
+    mockBot.api.getMe
+      .mockRejectedValueOnce(new HttpError("Network request for 'getMe' failed!", new Error('ETIMEDOUT')))
+      .mockRejectedValueOnce(await grammyError(401, 'Unauthorized'))
+    const adapter = createAdapter()
+    const statuses: any[] = []
+    adapter.on('statusChange', (s: any) => statuses.push(s))
+    await adapter.connect()
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(mockBot.api.getMe).toHaveBeenCalledTimes(2)
+    expect(statuses.at(-1)).toMatchObject({ connected: false, error: expect.stringContaining('not retrying') })
+    await vi.advanceTimersByTimeAsync(60 * 60_000)
+    expect(mockBot.api.getMe).toHaveBeenCalledTimes(2)
+  })
+
+  it('stops reconnecting when polling is rejected with 401', async () => {
+    vi.useFakeTimers()
+    mockBot.start.mockReset().mockRejectedValue(await grammyError(401, 'Unauthorized'))
+    const adapter = createAdapter()
+    await adapter.connect()
+    await vi.advanceTimersByTimeAsync(60 * 60_000)
+    expect(mockBot.start).toHaveBeenCalledTimes(1)
+    expect(adapter.connected).toBe(false)
+  })
+
+  it('gives up after a limited number of 409 conflicts', async () => {
+    vi.useFakeTimers()
+    mockBot.start
+      .mockReset()
+      .mockRejectedValue(await grammyError(409, 'Conflict: terminated by other getUpdates request'))
+    const adapter = createAdapter()
+    await adapter.connect()
+    await vi.advanceTimersByTimeAsync(60 * 60_000)
+    expect(mockBot.start).toHaveBeenCalledTimes(6) // initial + 5 retries
+  })
+
+  it('disconnect during the startup probe cancels it and never starts polling', async () => {
+    vi.useFakeTimers()
+    mockBot.api.getMe.mockImplementationOnce(hangingGetMe)
+    const adapter = createAdapter()
+    const connecting = adapter.connect()
+    await vi.advanceTimersByTimeAsync(2000)
+    await adapter.disconnect()
+    await expect(connecting).resolves.toBeUndefined()
+    await vi.advanceTimersByTimeAsync(60 * 60_000)
+    expect(mockBot.start).not.toHaveBeenCalled()
+    expect(mockBot.api.setMyCommands).not.toHaveBeenCalled()
+    expect(mockBot.api.getMe).toHaveBeenCalledTimes(1)
+  })
+
+  it('disconnect while getMe resolves late still never starts polling', async () => {
+    let finish: ((v: unknown) => void) | undefined
+    mockBot.api.getMe.mockImplementationOnce(() => new Promise((r) => (finish = r)))
+    const adapter = createAdapter()
+    const connecting = adapter.connect()
+    await vi.waitFor(() => expect(finish).toBeDefined())
+    const disconnecting = adapter.disconnect()
+    finish?.(BOT_INFO) // grammY may resolve even though we aborted
+    await Promise.all([connecting, disconnecting])
+    expect(mockBot.start).not.toHaveBeenCalled()
+  })
+
+  it('reports polling offline after consecutive getUpdates network failures and online on recovery', async () => {
+    const { HttpError } = (await import('grammy')) as any
+    const adapter = createAdapter()
+    await adapter.connect()
+    const health = mockBot.api.config.use.mock.calls[1][0]
+    const statuses: any[] = []
+    adapter.on('statusChange', (s: any) => statuses.push(s))
+    const fail = vi
+      .fn()
+      .mockRejectedValue(new HttpError("Network request for 'getUpdates' failed!", new Error('ECONNRESET')))
+    await expect(health(fail, 'getUpdates', {}, undefined)).rejects.toBeInstanceOf(HttpError)
+    expect(adapter.connected).toBe(true)
+    await expect(health(fail, 'getUpdates', {}, undefined)).rejects.toBeInstanceOf(HttpError)
+    expect(adapter.connected).toBe(false)
+    await expect(health(vi.fn().mockResolvedValue([]), 'getUpdates', {}, undefined)).resolves.toEqual([])
+    expect(adapter.connected).toBe(true)
+    expect(statuses.map((s) => s.connected)).toEqual([false, true])
   })
 
   it('does not fail connect when setMyCommands fails', async () => {

@@ -32,6 +32,12 @@ import { splitMessage } from '../../utils'
 
 const TELEGRAM_LONG_POLL_TIMEOUT_SECONDS = 30
 const TELEGRAM_GET_UPDATES_TIMEOUT_MS = 45_000
+/** Startup `getMe` probe budget. Bypasses grammY's unbounded `init()` retry loop. */
+export const TELEGRAM_PROBE_TIMEOUT_MS = 10_000
+/** Consecutive getUpdates transport failures before the channel is reported offline (grammY retries every 3s). */
+const TELEGRAM_POLL_FAILURES_BEFORE_OFFLINE = 2
+/** A 409 Conflict (another poller with the same token) is retried this many times before giving up. */
+const TELEGRAM_MAX_CONFLICT_RETRIES = 5
 type GrammyAbortSignal = NonNullable<Parameters<ApiCallFn>[2]>
 
 /** Bound only `getUpdates` so a suspended long poll cannot hang for grammY's 500s default (#21412). */
@@ -56,16 +62,43 @@ const withGetUpdatesTimeout: Transformer = async (prev, method, payload, signal)
 export function describeTelegramError(err: unknown): string {
   if (!(err instanceof Error)) return String(err)
   if (err instanceof HttpError) {
-    const inner = err.error as { code?: string; message?: string; cause?: { code?: string; message?: string } } | undefined
+    const inner = err.error as
+      | { code?: string; message?: string; cause?: { code?: string; message?: string } }
+      | undefined
     const detail = [inner?.code, inner?.message, inner?.cause?.code, inner?.cause?.message].filter(Boolean).join(' / ')
     return detail ? `${err.message} (${detail})` : err.message
   }
   return err.message
 }
 
+/** The startup `getMe` probe did not answer within {@link TELEGRAM_PROBE_TIMEOUT_MS}. */
+export class TelegramProbeTimeoutError extends Error {
+  constructor() {
+    super(`Telegram getMe probe timed out after ${TELEGRAM_PROBE_TIMEOUT_MS}ms`)
+    this.name = 'TelegramProbeTimeoutError'
+  }
+}
+
+/** The adapter was disconnected while a startup step was in flight; must stop silently. */
+class TelegramStoppedError extends Error {
+  constructor() {
+    super('Telegram adapter stopped')
+    this.name = 'TelegramStoppedError'
+  }
+}
+
 /** Network-level (transport) failure, as opposed to a Telegram API rejection like 401. */
 export function isTelegramNetworkError(err: unknown): boolean {
-  return err instanceof HttpError
+  return err instanceof HttpError || err instanceof TelegramProbeTimeoutError
+}
+
+/** Telegram rejected the bot itself (bad/revoked token): retrying can never succeed. */
+export function isTelegramFatalError(err: unknown): boolean {
+  return err instanceof GrammyError && (err.error_code === 401 || err.error_code === 404)
+}
+
+function isTelegramConflictError(err: unknown): boolean {
+  return err instanceof GrammyError && err.error_code === 409
 }
 
 class TelegramAdapter extends ChannelAdapter {
@@ -88,6 +121,11 @@ class TelegramAdapter extends ChannelAdapter {
   private readonly reconnectDelays = [1000, 2000, 5000, 10000, 30000, 60000]
   private readonly maxReconnectAttempts = 50
   private readonly slowReconnectDelayMs = 5 * 60_000
+  /** Owned by the adapter lifetime (connect → disconnect); aborts in-flight startup probes. */
+  private lifecycleAbort: AbortController | null = null
+  private conflictAttempts = 0
+  private pollFailures = 0
+  private pollingOffline = false
   // Long polling has no "ready" event (a fatal 409 surfaces *after* `markConnected`), so
   // resetting the backoff budget on connect would let a persistent failure loop forever and
   // never hit the cap. Instead reset only after the bot has polled cleanly for this window —
@@ -110,18 +148,117 @@ class TelegramAdapter extends ChannelAdapter {
     if (!this.botToken) {
       throw new Error('Telegram bot token is required')
     }
+    this.clearReconnectTimer()
+    this.lifecycleAbort?.abort()
+    this.lifecycleAbort = new AbortController()
     this.shouldStop = false
     this.reconnectAttempts = 0
+    this.conflictAttempts = 0
     try {
       await this.startBot()
     } catch (err) {
+      if (err instanceof TelegramStoppedError || this.shouldStop) return
       // A transient network failure at startup must not permanently drop the channel:
       // keep the adapter registered and retry with backoff until the network returns.
-      if (!isTelegramNetworkError(err)) throw err
-      const msg = describeTelegramError(err)
-      this.markDisconnected(msg)
-      this.log.warn(`Telegram initial connect failed, will retry: ${msg}`)
-      this.scheduleReconnect()
+      if (!isTelegramNetworkError(err)) {
+        this.markDisconnected(describeTelegramError(err))
+        throw err
+      }
+      this.handleTransportFailure(err, 'Telegram initial connect failed')
+    }
+  }
+
+  /**
+   * Central failure policy for startup/reconnect/polling errors:
+   * - disconnected by the user → silent
+   * - 401/404 (bad token) → report and stop retrying
+   * - 409 Conflict → limited retries
+   * - everything else (network, timeouts, 5xx, …) → backoff reconnect (fast, then slow forever)
+   */
+  private handleTransportFailure(err: unknown, context: string): void {
+    if (this.shouldStop || err instanceof TelegramStoppedError) return
+    const msg = describeTelegramError(err)
+    if (isTelegramFatalError(err)) {
+      this.clearReconnectTimer()
+      this.markDisconnected(`${msg} (not retrying)`)
+      this.log.error(`${context}: ${msg}; not retrying (check the bot token)`)
+      return
+    }
+    if (isTelegramConflictError(err)) {
+      this.conflictAttempts++
+      if (this.conflictAttempts > TELEGRAM_MAX_CONFLICT_RETRIES) {
+        this.clearReconnectTimer()
+        this.markDisconnected(`${msg} (gave up after ${TELEGRAM_MAX_CONFLICT_RETRIES} retries)`)
+        this.log.error(`${context}: ${msg}; another instance keeps polling this bot, giving up`)
+        return
+      }
+    }
+    this.markDisconnected(msg)
+    this.log.warn(`${context}, will retry: ${msg}`)
+    this.scheduleReconnect()
+  }
+
+  /**
+   * Fetch bot info with a bounded, cancellable `getMe` instead of `bot.init()`, whose grammY
+   * retry loop never rejects on network errors (and in <1.46 slept seconds-as-ms).
+   */
+  private async probeBot(bot: Bot): Promise<void> {
+    const lifecycle = this.lifecycleAbort
+    if (this.shouldStop || !lifecycle || lifecycle.signal.aborted) throw new TelegramStoppedError()
+    const controller = new AbortController()
+    let timedOut = false
+    const onAbort = () => controller.abort()
+    lifecycle.signal.addEventListener('abort', onAbort, { once: true })
+    const timer = setTimeout(() => {
+      timedOut = true
+      controller.abort()
+    }, TELEGRAM_PROBE_TIMEOUT_MS)
+    try {
+      const me = await bot.api.getMe(controller.signal as unknown as GrammyAbortSignal)
+      bot.botInfo = me
+    } catch (err) {
+      if (lifecycle.signal.aborted || this.shouldStop) throw new TelegramStoppedError()
+      if (timedOut) throw new TelegramProbeTimeoutError()
+      throw err
+    } finally {
+      clearTimeout(timer)
+      lifecycle.signal.removeEventListener('abort', onAbort)
+    }
+  }
+
+  /** True when `bot` is no longer the adapter's live bot (disconnected or replaced). */
+  private isDiscardedBot(bot: Bot): boolean {
+    return this.shouldStop || this.bot !== bot
+  }
+
+  /**
+   * Tracks getUpdates transport health. grammY retries failed polls internally every 3s and
+   * never surfaces network errors, so without this the channel would stay "connected" for the
+   * whole outage. Reports offline after a few consecutive failures and online on the next success.
+   */
+  private readonly pollingHealth: Transformer = async (prev, method, payload, signal) => {
+    if (method !== 'getUpdates') return prev(method, payload, signal)
+    try {
+      const result = await prev(method, payload, signal)
+      this.pollFailures = 0
+      if (this.pollingOffline && !this.shouldStop) {
+        this.pollingOffline = false
+        this.markConnected()
+        this.log.info('Telegram polling recovered')
+      }
+      return result
+    } catch (err) {
+      const cancelled = (signal as unknown as { aborted?: boolean } | undefined)?.aborted
+      if (!cancelled && !this.shouldStop && err instanceof HttpError) {
+        this.pollFailures++
+        if (this.pollFailures >= TELEGRAM_POLL_FAILURES_BEFORE_OFFLINE && !this.pollingOffline) {
+          this.pollingOffline = true
+          const msg = describeTelegramError(err)
+          this.markDisconnected(msg)
+          this.log.warn(`Telegram polling offline (grammY keeps retrying): ${msg}`)
+        }
+      }
+      throw err
     }
   }
 
@@ -135,6 +272,7 @@ class TelegramAdapter extends ChannelAdapter {
     const bot = new Bot(this.botToken)
     this.bot = bot
     bot.api.config.use(withGetUpdatesTimeout)
+    bot.api.config.use(this.pollingHealth)
 
     // Auth middleware — must be first
     bot.use(async (ctx, next) => {
@@ -259,21 +397,26 @@ class TelegramAdapter extends ChannelAdapter {
       })
     })
 
-    // Fail fast on network errors before starting polling (surfaces the cause + triggers retry).
-    await bot.init()
+    // Bounded probe before polling: fails fast (≤10s) on network errors so the caller retries.
+    await this.probeBot(bot)
+    if (this.isDiscardedBot(bot)) {
+      // Disconnected (or replaced) while probing: never start a zombie poller.
+      void bot.stop().catch(() => {})
+      throw new TelegramStoppedError()
+    }
 
     // Register bot commands with Telegram (best effort; must not block the channel)
     void bot.api
       .setMyCommands([
-      { command: 'new', description: '🆕 开启全新会话' },
-      { command: 'stop', description: '✋ 终止当前任务' },
-      { command: 'model', description: '🧠 切换底座模型' },
-      { command: 'switch', description: '🤖 切换执行后端' },
-      { command: 'mode', description: '🎮 切换权限模式' },
-      { command: 'status', description: '📊 查看当前状态' },
-      { command: 'rename', description: '✏️ 命名当前会话' },
-      { command: 'compact', description: '🗜️ 压缩会话记忆' },
-      { command: 'reboot', description: '🧿 重启樱桃服务' }
+        { command: 'new', description: '🆕 开启全新会话' },
+        { command: 'stop', description: '✋ 终止当前任务' },
+        { command: 'model', description: '🧠 切换底座模型' },
+        { command: 'switch', description: '🤖 切换执行后端' },
+        { command: 'mode', description: '🎮 切换权限模式' },
+        { command: 'status', description: '📊 查看当前状态' },
+        { command: 'rename', description: '✏️ 命名当前会话' },
+        { command: 'compact', description: '🗜️ 压缩会话记忆' },
+        { command: 'reboot', description: '🧿 重启樱桃服务' }
       ])
       .catch((err) => this.log.warn(`setMyCommands failed: ${describeTelegramError(err)}`))
 
@@ -288,7 +431,10 @@ class TelegramAdapter extends ChannelAdapter {
   }
 
   private startPolling(bot: Bot, notifyReboot: boolean): void {
+    if (this.isDiscardedBot(bot)) return
     const generation = ++this.pollingGeneration
+    this.pollFailures = 0
+    this.pollingOffline = false
     this.pollingBot = bot
     // `bot.start()` only resolves when the bot stops; a fatal polling error (e.g. 409 Conflict)
     // rejects — schedule a backoff reconnect. Connected is reported only after grammY's onStart.
@@ -307,11 +453,8 @@ class TelegramAdapter extends ChannelAdapter {
       .catch((err) => {
         if (this.isStalePolling(bot, generation)) return
         this.pollingBot = null
-        const msg = describeTelegramError(err)
         this.clearStabilityTimer()
-        this.markDisconnected(msg)
-        this.log.error(`Polling stopped: ${msg}`)
-        this.scheduleReconnect()
+        this.handleTransportFailure(err, 'Telegram polling stopped')
       })
   }
 
@@ -324,7 +467,10 @@ class TelegramAdapter extends ChannelAdapter {
     this.clearStabilityTimer()
     this.stabilityTimer = setTimeout(() => {
       this.stabilityTimer = null
-      if (!this.isStalePolling(bot, generation)) this.reconnectAttempts = 0
+      if (!this.isStalePolling(bot, generation)) {
+        this.reconnectAttempts = 0
+        this.conflictAttempts = 0
+      }
     }, this.stabilityResetMs)
   }
 
@@ -403,12 +549,7 @@ class TelegramAdapter extends ChannelAdapter {
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null
       if (this.shouldStop) return
-      this.startBot().catch((err) => {
-        const msg = describeTelegramError(err)
-        this.markDisconnected(msg)
-        this.log.error(`Telegram reconnect failed: ${msg}`)
-        this.scheduleReconnect()
-      })
+      this.startBot().catch((err) => this.handleTransportFailure(err, 'Telegram reconnect failed'))
     }, delay)
   }
 
@@ -421,6 +562,8 @@ class TelegramAdapter extends ChannelAdapter {
 
   protected override async performDisconnect(): Promise<void> {
     this.shouldStop = true
+    this.lifecycleAbort?.abort()
+    this.lifecycleAbort = null
     this.pollingGeneration++
     this.pollingBot = null
     this.clearReconnectTimer()
