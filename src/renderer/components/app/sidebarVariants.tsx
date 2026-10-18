@@ -5,9 +5,8 @@ import type { SidebarAppId } from '@renderer/utils/sidebar'
 import { getSidebarFavoriteKey, getSidebarMenuPath, isSidebarAppId } from '@renderer/utils/sidebar'
 import type { AgentEntity } from '@shared/data/api/schemas/agents'
 import type { AssistantIconType, SidebarFavoriteItem } from '@shared/data/preference/preferenceTypes'
-import type { MiniApp } from '@shared/data/types/miniApp'
 
-import { MiniAppIcon, type ResolvedSidebarEntry } from '../Sidebar'
+import type { ResolvedSidebarEntry } from '../Sidebar'
 import { SIDEBAR_ICON_COMPONENTS } from './sidebarIcons'
 
 /** Exhaustiveness guard: a new `SidebarFavoriteItem` type must add a `case` below. */
@@ -32,7 +31,6 @@ const ENTITY_ICON_PIXEL_SIZE = { md: 18, lg: 24 } as const
 export interface SidebarVariantContext {
   t: (key: string) => string
   defaultPaintingProvider: string
-  installedMiniApps: Map<string, MiniApp>
   installedAgents: Map<string, AgentEntity>
   installedAssistants: Map<string, Assistant>
   /** Icon-type preferences, so pinned rows match what the assistant / agent rails show. */
@@ -41,11 +39,9 @@ export interface SidebarVariantContext {
   defaultModelId: string | null
   visibleAppCount: number
   openApp: (id: SidebarAppId, options?: { inNewTab?: boolean }) => void
-  openMiniApp: (id: string, options?: { inNewTab?: boolean }) => void
   openAgent: (id: string, options?: { inNewTab?: boolean }) => void
   openAssistant: (id: string, options?: { inNewTab?: boolean }) => void
   removeApp: (id: SidebarAppId) => void
-  removeMiniApp: (id: string) => void
   removeAgent: (id: string) => void
   removeAssistant: (id: string) => void
 }
@@ -87,39 +83,6 @@ const appVariant: SidebarVariantDescriptor<Extract<SidebarFavoriteItem, { type: 
           label: ctx.t('launchpad.unpin_from_sidebar'),
           enabled: !isLastApp,
           onSelect: () => ctx.removeApp(id)
-        }
-      ]
-    }
-  }
-}
-
-const miniAppVariant: SidebarVariantDescriptor<Extract<SidebarFavoriteItem, { type: 'mini_app' }>> = {
-  resolve: (item, ctx) => {
-    const app = ctx.installedMiniApps.get(item.id)
-    // Stale mini app (no matching installed app) is dropped from the list but stays
-    // in the preference.
-    if (!app) return null
-
-    const title = app.nameKey ? ctx.t(app.nameKey) : app.name
-    const tab = {
-      title,
-      // Uploaded logo → main-resolved `logoSrc`; preset key → `logo`.
-      miniApp: { id: app.appId, logo: app.logoSrc ?? app.logo, url: app.url }
-    }
-
-    return {
-      key: getSidebarFavoriteKey(item),
-      label: title,
-      renderIcon: (_size, miniAppSize) => <MiniAppIcon tab={tab} size={miniAppSize} />,
-      isActive: (active) => active.activeTabId === app.appId,
-      onOpen: () => ctx.openMiniApp(app.appId),
-      onOpenNewTab: () => ctx.openMiniApp(app.appId, { inNewTab: true }),
-      contextMenuItems: [
-        {
-          type: 'item',
-          id: `sidebar.remove-mini-app.${app.appId}`,
-          label: ctx.t('launchpad.unpin_from_sidebar'),
-          onSelect: () => ctx.removeMiniApp(app.appId)
         }
       ]
     }
@@ -210,7 +173,8 @@ export function resolveSidebarEntry(
     case 'app':
       return appVariant.resolve(favorite, ctx)
     case 'mini_app':
-      return miniAppVariant.resolve(favorite, ctx)
+      // cherry-lite: mini apps were removed; stale pins stay in the preference but never render.
+      return null
     case 'agent':
       return agentVariant.resolve(favorite, ctx)
     case 'assistant':

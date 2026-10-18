@@ -74,11 +74,6 @@ const SIDEBAR_APP_DEFINITIONS = [
     routePrefix: '/app/translate'
   },
   {
-    id: 'mini_app',
-    routePrefix: '/app/mini-app',
-    exactRouteFocus: true
-  },
-  {
     id: 'knowledge',
     routePrefix: '/app/knowledge'
   },

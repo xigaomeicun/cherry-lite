@@ -10,7 +10,7 @@ const mocks = vi.hoisted(() => ({
   language: 'en-US',
   openFeedback: vi.fn(),
   openReleaseNotes: vi.fn(),
-  openSmartMiniApp: vi.fn(),
+  openWebsite: vi.fn(),
   showDoctor: vi.fn()
 }))
 
@@ -24,8 +24,8 @@ vi.mock('@renderer/hooks/useOpenReleaseNotes', () => ({
   useOpenReleaseNotes: () => mocks.openReleaseNotes
 }))
 
-vi.mock('@renderer/hooks/useMiniAppPopup', () => ({
-  useMiniAppPopup: () => ({ openSmartMiniApp: mocks.openSmartMiniApp })
+vi.mock('@renderer/ipc', () => ({
+  ipcApi: { request: mocks.openWebsite }
 }))
 
 vi.mock('@renderer/components/doctor', () => ({
@@ -115,22 +115,14 @@ describe('HelpMenu', () => {
     ['zh-CN', 'https://docs.cherryai.com.cn/'],
     ['zh-TW', 'https://docs.cherryai.com.cn/'],
     ['en-US', 'https://docs.cherryai.com.cn/docs/en-us']
-  ])('opens the language-specific guide in app content for %s', async (language, expectedUrl) => {
+  ])('(cherry-lite) opens the language-specific guide in the browser for %s', async (language, expectedUrl) => {
     mocks.language = language
     render(<HelpMenu layout="full" onFeedbackClick={mocks.openFeedback} />)
     const user = await openMenu()
 
     await user.click(screen.getByRole('button', { name: 'help.guide' }))
 
-    await waitFor(() =>
-      expect(mocks.openSmartMiniApp).toHaveBeenCalledWith(
-        expect.objectContaining({
-          appId: 'cherrystudio-guide',
-          name: 'help.guide',
-          url: expectedUrl
-        })
-      )
-    )
+    await waitFor(() => expect(mocks.openWebsite).toHaveBeenCalledWith('system.shell.open_website', expectedUrl))
   })
 
   it('requests the feedback dialog from the secondary menu action', async () => {

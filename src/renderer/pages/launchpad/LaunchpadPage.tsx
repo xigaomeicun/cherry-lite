@@ -5,28 +5,21 @@ import agentsIcon from '@renderer/assets/images/apps/launchpad-agents.svg'
 import assistantsIcon from '@renderer/assets/images/apps/launchpad-assistants.svg'
 import filesIcon from '@renderer/assets/images/apps/launchpad-files.svg'
 import knowledgeIcon from '@renderer/assets/images/apps/launchpad-knowledge.svg'
-import miniAppIcon from '@renderer/assets/images/apps/launchpad-mini-app.svg'
 import notesIcon from '@renderer/assets/images/apps/launchpad-notes.svg'
 import paintingsIcon from '@renderer/assets/images/apps/launchpad-paintings.svg'
 import translateIcon from '@renderer/assets/images/apps/launchpad-translate.svg'
 import { CommandContextMenu, type CommandContextMenuExtraItem } from '@renderer/components/command'
-import App from '@renderer/components/MiniApp/MiniApp'
 import Scrollbar from '@renderer/components/Scrollbar'
 import { useLaunchpadAppOrder } from '@renderer/hooks/useLaunchpadAppOrder'
-import { useMiniApps } from '@renderer/hooks/useMiniApps'
 import { useSidebarFavorites } from '@renderer/hooks/useSidebarFavorites'
 import { getSidebarIconLabelKey } from '@renderer/i18n/label'
-import { toast } from '@renderer/services/toast'
 import type { SidebarAppId } from '@renderer/utils/sidebar'
 import { getSidebarMenuPath } from '@renderer/utils/sidebar'
-import type { MiniApp as MiniAppType } from '@shared/data/types/miniApp'
 import { useNavigate } from '@tanstack/react-router'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useMemo, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 
 const BASE_URL = 'https://www.cherry-ai.com/'
-// cherry-lite: these sidebar apps stay reachable from the sidebar but get no launchpad tile.
-const LAUNCHPAD_HIDDEN_APPS: ReadonlySet<SidebarAppId> = new Set(['mini_app'])
 
 const LAUNCHPAD_GRID_CLASS = 'grid grid-cols-6 justify-items-center gap-2 px-2'
 const LAUNCHPAD_ITEM_CLASS = 'mx-auto w-[92px]'
@@ -42,7 +35,6 @@ const APP_ICON_SOURCES: Record<SidebarAppId, string> = {
   agents: agentsIcon,
   paintings: paintingsIcon,
   translate: translateIcon,
-  mini_app: miniAppIcon,
   knowledge: knowledgeIcon,
   files: filesIcon,
   notes: notesIcon
@@ -52,27 +44,12 @@ export default function LaunchpadPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const [defaultPaintingProvider] = usePreference('feature.paintings.default_provider')
-  const {
-    pinned,
-    openedKeepAliveMiniApps,
-    currentMiniAppId,
-    miniAppShow,
-    updateAppStatus,
-    hideMiniApp,
-    removeCustomMiniApp,
-    reorderMiniAppsByStatus
-  } = useMiniApps()
-  const { appFavorites, miniAppFavoriteIds, setAppPinned, toggleMiniApp } = useSidebarFavorites()
+  const { appFavorites, setAppPinned } = useSidebarFavorites()
   const { orderedAppIds, reorderApps } = useLaunchpadAppOrder()
   const suppressClickUntilRef = useRef(0)
   const draggedItemIdRef = useRef<string | null>(null)
 
   const visibleSidebarFavoriteSet = useMemo(() => new Set(appFavorites), [appFavorites])
-  const miniAppFavoriteIdSet = useMemo(() => new Set(miniAppFavoriteIds), [miniAppFavoriteIds])
-  const openedMiniAppIdSet = useMemo(
-    () => new Set(openedKeepAliveMiniApps.map((app) => app.appId)),
-    [openedKeepAliveMiniApps]
-  )
 
   const handleSortableDragStart = useCallback((event: { active: { id: string | number } }) => {
     draggedItemIdRef.current = String(event.active.id)
@@ -117,15 +94,6 @@ export default function LaunchpadPage() {
     void navigateToUrl(path)
   }
 
-  const openMiniApp = useCallback(
-    (appId: string) => {
-      if (shouldSuppressLaunchClick(appId)) return
-
-      void navigateToUrl(`/app/mini-app/${appId}`)
-    },
-    [navigateToUrl, shouldSuppressLaunchClick]
-  )
-
   const pinToSidebar = useCallback(
     (favorite: SidebarAppId) => {
       if (visibleSidebarFavoriteSet.has(favorite)) return
@@ -165,7 +133,6 @@ export default function LaunchpadPage() {
   const appMenuItems = useMemo(
     () =>
       orderedAppIds.flatMap((favorite) => {
-        if (LAUNCHPAD_HIDDEN_APPS.has(favorite)) return []
         if (!getSidebarMenuPath(favorite, defaultPaintingProvider)) return []
 
         return [
@@ -180,45 +147,12 @@ export default function LaunchpadPage() {
     [defaultPaintingProvider, getAppContextMenuItems, orderedAppIds, t]
   )
 
-  // Mini app tiles are ordered by their global `orderKey` (shared with the mini
-  // app settings page), independent of the sidebar favorites. Every pinned mini
-  // app is drag-sortable in one grid; reordering persists purely to `orderKey`.
-  const sortedMiniApps = useMemo(
-    () => [...pinned].sort((a, b) => (a.orderKey < b.orderKey ? -1 : a.orderKey > b.orderKey ? 1 : 0)),
-    [pinned]
-  )
-
-  // Hold the drop result in local optimistic state so the Sortable keeps the tile
-  // at its dropped slot while the async order-key write settles. Without this the
-  // tile snaps back to its old position for one render — before the reordered
-  // `/mini-apps` cache lands — and then jumps forward, a visible flashback. The
-  // resync preserves the reference only when the refreshed list contains the same
-  // objects in the same order; a rename/logo refresh with the same ids still adopts
-  // the fresh objects.
-  const [orderedMiniApps, setOrderedMiniApps] = useState(sortedMiniApps)
-  useEffect(() => {
-    setOrderedMiniApps((prev) => (sameMiniAppItems(prev, sortedMiniApps) ? prev : sortedMiniApps))
-  }, [sortedMiniApps])
-
-  const launchpadMiniAppsVisible = orderedMiniApps.length > 0
-
   const handleAppsSortEnd = useCallback(
     ({ oldIndex, newIndex }: { oldIndex: number; newIndex: number }) => {
       const nextItems = arrayMove(appMenuItems, oldIndex, newIndex)
       reorderApps(nextItems.map((item) => item.id))
     },
     [appMenuItems, reorderApps]
-  )
-
-  const handleMiniAppsSortEnd = useCallback(
-    ({ oldIndex, newIndex }: { oldIndex: number; newIndex: number }) => {
-      const nextItems = arrayMove(orderedMiniApps, oldIndex, newIndex)
-      setOrderedMiniApps(nextItems)
-      reorderMiniAppsByStatus('pinned', nextItems).catch(() => {
-        toast.error(t('miniApp.reorder_failed'))
-      })
-    },
-    [orderedMiniApps, reorderMiniAppsByStatus, t]
   )
 
   const renderAppMenuItem = (item: (typeof appMenuItems)[number]) => (
@@ -239,27 +173,6 @@ export default function LaunchpadPage() {
         </span>
       </button>
     </CommandContextMenu>
-  )
-
-  const renderMiniAppItem = (app: MiniAppType) => (
-    <div
-      key={app.appId}
-      className={`${LAUNCHPAD_ITEM_CLASS} flex justify-center rounded-[8px] px-0 py-2 transition-transform duration-200 hover:scale-105 active:scale-95`}>
-      <App
-        app={app}
-        size={56}
-        variant="launchpad"
-        onOpen={openMiniApp}
-        onUpdateStatus={updateAppStatus}
-        onHide={hideMiniApp}
-        onRemoveCustom={removeCustomMiniApp}
-        onToggleSidebarFavorite={toggleMiniApp}
-        isPinned
-        isSidebarFavorite={miniAppFavoriteIdSet.has(app.appId)}
-        isOpened={openedMiniAppIdSet.has(app.appId)}
-        isActive={miniAppShow && currentMiniAppId === app.appId}
-      />
-    </div>
   )
 
   return (
@@ -284,38 +197,8 @@ export default function LaunchpadPage() {
               />
             </div>
           </section>
-
-          {launchpadMiniAppsVisible && (
-            <section className="flex flex-col gap-2">
-              <h2 className="m-0 px-9 py-0 font-semibold text-[14px] text-foreground opacity-80">
-                {t('launchpad.miniApps')}
-              </h2>
-              <div className={LAUNCHPAD_GRID_CLASS}>
-                <Sortable
-                  items={orderedMiniApps}
-                  itemKey="appId"
-                  layout="grid"
-                  listStyle={SORTABLE_CONTENTS_STYLE}
-                  onDragStart={handleSortableDragStart}
-                  onDragEnd={handleSortableDragSettled}
-                  onDragCancel={handleSortableDragSettled}
-                  onSortEnd={handleMiniAppsSortEnd}
-                  renderItem={(app) => renderMiniAppItem(app)}
-                />
-              </div>
-            </section>
-          )}
         </div>
       </Scrollbar>
     </div>
   )
-}
-
-/** Same pinned mini app objects in the same order. */
-function sameMiniAppItems(a: MiniAppType[], b: MiniAppType[]): boolean {
-  if (a.length !== b.length) return false
-  for (let i = 0; i < a.length; i++) {
-    if (a[i] !== b[i]) return false
-  }
-  return true
 }

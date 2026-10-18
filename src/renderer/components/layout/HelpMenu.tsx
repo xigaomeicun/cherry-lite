@@ -1,10 +1,9 @@
 import { Button, MenuItem, MenuList, Popover, PopoverContent, PopoverTrigger, Tooltip } from '@cherrystudio/ui'
 import { loggerService } from '@logger'
-import AppLogo from '@renderer/assets/images/logo.png'
 import { DoctorPopup } from '@renderer/components/doctor'
 import type { SidebarVisibleLayout } from '@renderer/components/Sidebar'
-import { useMiniAppPopup } from '@renderer/hooks/useMiniAppPopup'
 import { useOpenReleaseNotes } from '@renderer/hooks/useOpenReleaseNotes'
+import { ipcApi } from '@renderer/ipc'
 import { BookOpen, CircleQuestionMark, MessageSquareText, Sparkles, Stethoscope } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -21,7 +20,6 @@ export function HelpMenu({
   onOverlayOpenChange?: (open: boolean) => void
 }) {
   const { t, i18n } = useTranslation()
-  const { openSmartMiniApp } = useMiniAppPopup()
   const openReleaseNotes = useOpenReleaseNotes()
   const [menuOpen, setMenuOpen] = useState(false)
   const firstActionRef = useRef<HTMLButtonElement>(null)
@@ -59,12 +57,7 @@ export function HelpMenu({
       language === 'zh-CN' || language === 'zh-TW'
         ? 'https://docs.cherryai.com.cn/'
         : 'https://docs.cherryai.com.cn/docs/en-us'
-    openSmartMiniApp({
-      appId: 'cherrystudio-guide',
-      name: t('help.guide'),
-      url,
-      logo: AppLogo
-    })
+    void ipcApi.request('system.shell.open_website', url)
   }
 
   const trigger =

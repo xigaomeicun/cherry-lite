@@ -50,7 +50,8 @@ function hibernateTab(tab: Tab, hibernatedIds: ReadonlySet<string>): Tab {
 // Route no longer served — its orphaned pinned tabs are dropped on restore.
 const LEGACY_LIBRARY_ROUTE_PATH = '/app/library'
 // cherry-lite: OpenClaw (`/app/openclaw`) and the Code page (`/app/code`) were removed, so their
-// persisted pins are dropped on restore instead of resurrecting a dead route.
+// persisted pins are dropped on restore instead of resurrecting a dead route. Mini Apps
+// (`/app/mini-app` and `/app/mini-app/<id>`) were removed as well.
 const REMOVED_ROUTE_PATHS = new Set([LEGACY_LIBRARY_ROUTE_PATH, '/app/openclaw', '/app/code'])
 
 function routePathOfTab(tab: Tab): string | null {
@@ -80,7 +81,7 @@ export function migratePinnedTabs(pinnedTabs: Tab[]): { tabs: Tab[]; changed: bo
       continue
     }
     const path = routePathOfTab(tab)
-    if (path && REMOVED_ROUTE_PATHS.has(path)) {
+    if (path && (REMOVED_ROUTE_PATHS.has(path) || path === '/app/mini-app' || path.startsWith('/app/mini-app/'))) {
       changed = true
       continue
     }

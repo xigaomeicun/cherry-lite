@@ -1,7 +1,6 @@
 import type { Assistant } from '@renderer/types/assistant'
 import type { AgentEntity } from '@shared/data/api/schemas/agents'
 import type { SidebarFavoriteItem } from '@shared/data/preference/preferenceTypes'
-import type { MiniApp } from '@shared/data/types/miniApp'
 import { render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 
@@ -11,7 +10,6 @@ function createContext(overrides: Partial<SidebarVariantContext> = {}): SidebarV
   return {
     t: (key: string) => key,
     defaultPaintingProvider: 'aihubmix',
-    installedMiniApps: new Map<string, MiniApp>(),
     installedAgents: new Map<string, AgentEntity>(),
     installedAssistants: new Map<string, Assistant>(),
     assistantIconType: 'emoji',
@@ -19,11 +17,9 @@ function createContext(overrides: Partial<SidebarVariantContext> = {}): SidebarV
     defaultModelId: null,
     visibleAppCount: 2,
     openApp: vi.fn(),
-    openMiniApp: vi.fn(),
     openAgent: vi.fn(),
     openAssistant: vi.fn(),
     removeApp: vi.fn(),
-    removeMiniApp: vi.fn(),
     removeAgent: vi.fn(),
     removeAssistant: vi.fn(),
     ...overrides
@@ -139,27 +135,9 @@ describe('sidebarVariants icons', () => {
       expect(openApp).toHaveBeenCalledWith('assistants', { inNewTab: true })
     })
 
-    it('wires openMiniApp with and without inNewTab for mini_app variant', () => {
-      const openMiniApp = vi.fn()
-      const miniApp = {
-        appId: 'mini-1',
-        name: 'Mini App',
-        url: 'https://example.com'
-      } as MiniApp
-      const ctx = createContext({
-        openMiniApp,
-        installedMiniApps: new Map([['mini-1', miniApp]])
-      })
+    it('(cherry-lite) ignores stale mini_app pins after the Mini Apps feature was removed', () => {
       const favorite: SidebarFavoriteItem = { type: 'mini_app', id: 'mini-1' }
-
-      const entry = resolveSidebarEntry(favorite, ctx)
-      expect(entry).not.toBeNull()
-
-      entry?.onOpen()
-      expect(openMiniApp).toHaveBeenCalledWith('mini-1')
-
-      entry?.onOpenNewTab?.()
-      expect(openMiniApp).toHaveBeenCalledWith('mini-1', { inNewTab: true })
+      expect(resolveSidebarEntry(favorite, createContext())).toBeNull()
     })
 
     it('wires openAgent with and without inNewTab for agent variant', () => {

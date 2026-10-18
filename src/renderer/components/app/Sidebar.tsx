@@ -5,10 +5,8 @@ import { useAgents } from '@renderer/hooks/agent/useAgent'
 import { useTabs } from '@renderer/hooks/tab'
 import { useAssistantsApi } from '@renderer/hooks/useAssistant'
 import useAvatar from '@renderer/hooks/useAvatar'
-import { useMiniApps } from '@renderer/hooks/useMiniApps'
 import { useSidebarFavorites } from '@renderer/hooks/useSidebarFavorites'
 import { openSettingsTab } from '@renderer/services/mainWindowNavigation'
-import { MINI_APP_ROUTE_PREFIX, miniAppIdFromTabUrl } from '@renderer/utils/miniAppKeepAlive'
 import { getDefaultRouteTitle } from '@renderer/utils/routeTitle'
 import type { SidebarAppId } from '@renderer/utils/sidebar'
 import {
@@ -49,17 +47,14 @@ export default function Sidebar({
   const {
     favorites,
     appFavorites,
-    miniAppFavoriteIds,
     agentFavoriteIds,
     assistantFavoriteIds,
     setAppPinned,
-    removeMiniApp,
     removeAgent,
     removeAssistant,
     reorderFavorites
   } = useSidebarFavorites()
-  const { activeTab, tabs, updateTab, openTab, setActiveTab } = useTabs()
-  const { miniApps, pinned } = useMiniApps({ enabled: miniAppFavoriteIds.length > 0 })
+  const { activeTab, updateTab, openTab } = useTabs()
   const { agents } = useAgents({ enabled: agentFavoriteIds.length > 0 })
   const { assistants } = useAssistantsApi({ enabled: assistantFavoriteIds.length > 0 })
   const [defaultPaintingProvider] = usePreference('feature.paintings.default_provider')
@@ -124,17 +119,6 @@ export default function Sidebar({
 
   // Menu items
   const pathname = activeTab?.url || '/'
-  const activeMiniAppId = miniAppIdFromTabUrl(activeTab?.url) ?? undefined
-  const openableMiniAppById = useMemo(() => {
-    const appById = new Map<string, (typeof miniApps)[number]>()
-    for (const app of miniApps) {
-      appById.set(app.appId, app)
-    }
-    for (const app of pinned) {
-      appById.set(app.appId, app)
-    }
-    return appById
-  }, [miniApps, pinned])
 
   const handleRemoveSidebarFavorite = useCallback(
     (favorite: SidebarAppId) => {
@@ -156,13 +140,6 @@ export default function Sidebar({
 
       if (activeTab?.isPinned) {
         openTab(path, { forceNew: true, title, icon: options?.icon })
-        return
-      }
-
-      // Keep a Mini App's owning tab intact when leaving it so the global
-      // WebView pool can preserve the guest instead of treating it as closed.
-      if (miniAppIdFromTabUrl(activeTab?.url)) {
-        openTab(path, { title, icon: options?.icon })
         return
       }
 
@@ -212,33 +189,6 @@ export default function Sidebar({
     setFeedbackOpen(true)
   }, [])
 
-  const handleOpenMiniAppTab = useCallback(
-    (appId: string, options?: { inNewTab?: boolean }) => {
-      const app = openableMiniAppById.get(appId)
-      if (!app) return
-
-      const path = `${MINI_APP_ROUTE_PREFIX}${app.appId}`
-      const title = app.nameKey ? t(app.nameKey) : app.name
-      // Uploaded logo → main-resolved `logoSrc`; preset key → `logo`.
-      const icon = app.logoSrc ?? app.logo
-      if (options?.inNewTab) {
-        navigateRouteTab(path, title, { ...options, icon })
-        return
-      }
-
-      if (activeTab?.url === path) return
-
-      const existingTab = tabs.find((tab) => tab.type === 'route' && tab.url === path)
-      if (existingTab) {
-        setActiveTab(existingTab.id)
-        return
-      }
-
-      navigateRouteTab(path, title, { ...options, icon })
-    },
-    [activeTab, navigateRouteTab, openableMiniAppById, setActiveTab, t, tabs]
-  )
-
   // Pinned entities reuse tabs like mini apps do; the route interceptor turns the
   // `agentId` / `assistantId` param into that entity's most recent conversation.
   const handleOpenAgentTab = useCallback(
@@ -264,7 +214,6 @@ export default function Sidebar({
     () => ({
       t,
       defaultPaintingProvider,
-      installedMiniApps: openableMiniAppById,
       installedAgents,
       installedAssistants,
       assistantIconType,
@@ -272,18 +221,15 @@ export default function Sidebar({
       defaultModelId,
       visibleAppCount: appFavorites.length,
       openApp: handleNavigate,
-      openMiniApp: handleOpenMiniAppTab,
       openAgent: handleOpenAgentTab,
       openAssistant: handleOpenAssistantTab,
       removeApp: handleRemoveSidebarFavorite,
-      removeMiniApp,
       removeAgent,
       removeAssistant
     }),
     [
       t,
       defaultPaintingProvider,
-      openableMiniAppById,
       installedAgents,
       installedAssistants,
       assistantIconType,
@@ -291,11 +237,9 @@ export default function Sidebar({
       defaultModelId,
       appFavorites.length,
       handleNavigate,
-      handleOpenMiniAppTab,
       handleOpenAgentTab,
       handleOpenAssistantTab,
       handleRemoveSidebarFavorite,
-      removeMiniApp,
       removeAgent,
       removeAssistant
     ]
@@ -359,7 +303,7 @@ export default function Sidebar({
   const sidebarProps = {
     isFullscreen,
     entries,
-    active: { activeItem, activeTabId: activeMiniAppId },
+    active: { activeItem, activeTabId: undefined },
     title: sidebarUser.name,
     logo: sidebarLogo,
     onHeaderClick: sidebarUser.onClick,
