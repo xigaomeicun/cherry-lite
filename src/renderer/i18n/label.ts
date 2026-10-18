@@ -202,7 +202,6 @@ const sidebarIconKeyMap = {
   mini_app: 'miniApp.title',
   knowledge: 'knowledge.title',
   files: 'files.title',
-  code_tools: 'code.title',
   notes: 'notes.title'
 } as const
 
@@ -222,7 +221,6 @@ const sidebarFavoriteKeyMap = {
   mini_app: 'miniApp.title',
   knowledge: 'knowledge.title',
   files: 'files.title',
-  code_tools: 'code.title',
   notes: 'notes.title'
 } as const
 export const getSidebarFavoriteLabelKey = (key: string): string => {

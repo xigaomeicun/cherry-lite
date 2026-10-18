@@ -87,10 +87,6 @@ const SIDEBAR_APP_DEFINITIONS = [
     routePrefix: '/app/files'
   },
   {
-    id: 'code_tools',
-    routePrefix: '/app/code'
-  },
-  {
     id: 'notes',
     routePrefix: '/app/notes'
   }

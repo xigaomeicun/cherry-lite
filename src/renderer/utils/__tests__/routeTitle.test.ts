@@ -47,7 +47,6 @@ describe('routeTitle', () => {
         ['/app/mini-app', '小程序'],
         ['/app/knowledge', '知识库'],
         ['/app/files', '文件'],
-        ['/app/code', 'Code'],
         ['/app/notes', '笔记'],
         ['/app/release-notes', '更新日志'],
         ['/settings', '设置']

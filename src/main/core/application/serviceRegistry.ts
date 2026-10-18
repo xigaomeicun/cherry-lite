@@ -43,7 +43,6 @@ import { CitationPreviewService } from '@main/services/CitationPreviewService'
 import { CodeCliService } from '@main/services/codeCli'
 import { CommandService } from '@main/services/CommandService'
 import { ConversationNavigationService } from '@main/services/ConversationNavigationService'
-import { DeepSeekHarnessService } from '@main/services/deepSeekHarness'
 import { DoctorService } from '@main/services/diagnostics'
 import { DirectoryTreeManager, FileManager } from '@main/services/file'
 import { HermesDashboardService } from '@main/services/HermesDashboardService'
@@ -117,7 +116,6 @@ export const services = {
   ConversationNavigationService,
   CitationPreviewService,
   CherryCloudService,
-  DeepSeekHarnessService,
   HermesDashboardService,
   LanTransferService,
   FileManager,

@@ -1,6 +1,5 @@
 import type { Tab } from '@renderer/hooks/tab'
 import {
-  Code,
   FileSearch,
   Folder,
   Globe,
@@ -30,7 +29,6 @@ export const ROUTE_ICONS: Record<string, IconComponent> = {
   '/app/knowledge': FileSearch,
   '/app/file-preview': ScanSearch,
   '/app/files': Folder,
-  '/app/code': Code,
   '/app/notes': NotepadText,
   '/app/release-notes': Sparkles,
   '/settings': Settings

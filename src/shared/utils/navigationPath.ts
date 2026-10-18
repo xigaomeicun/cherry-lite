@@ -43,7 +43,6 @@ const KNOWN_NAVIGATION_ROUTES = [
   '/app/notes',
   '/app/knowledge',
   '/app/mini-app',
-  '/app/code',
   '/app/launchpad',
   '/app/agents',
   '/settings/general',

@@ -3,7 +3,6 @@ import { usePreference } from '@data/hooks/usePreference'
 import { arrayMove } from '@dnd-kit/sortable'
 import agentsIcon from '@renderer/assets/images/apps/launchpad-agents.svg'
 import assistantsIcon from '@renderer/assets/images/apps/launchpad-assistants.svg'
-import codeToolsIcon from '@renderer/assets/images/apps/launchpad-code-tools.svg'
 import filesIcon from '@renderer/assets/images/apps/launchpad-files.svg'
 import knowledgeIcon from '@renderer/assets/images/apps/launchpad-knowledge.svg'
 import miniAppIcon from '@renderer/assets/images/apps/launchpad-mini-app.svg'
@@ -27,7 +26,7 @@ import { useTranslation } from 'react-i18next'
 
 const BASE_URL = 'https://www.cherry-ai.com/'
 // cherry-lite: these sidebar apps stay reachable from the sidebar but get no launchpad tile.
-const LAUNCHPAD_HIDDEN_APPS: ReadonlySet<SidebarAppId> = new Set(['mini_app', 'code_tools'])
+const LAUNCHPAD_HIDDEN_APPS: ReadonlySet<SidebarAppId> = new Set(['mini_app'])
 
 const LAUNCHPAD_GRID_CLASS = 'grid grid-cols-6 justify-items-center gap-2 px-2'
 const LAUNCHPAD_ITEM_CLASS = 'mx-auto w-[92px]'
@@ -46,7 +45,6 @@ const APP_ICON_SOURCES: Record<SidebarAppId, string> = {
   mini_app: miniAppIcon,
   knowledge: knowledgeIcon,
   files: filesIcon,
-  code_tools: codeToolsIcon,
   notes: notesIcon
 }
 

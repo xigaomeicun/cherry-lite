@@ -12,7 +12,6 @@ import { cherryCloudHandlers } from './cherryCloud'
 import { cherryinHandlers } from './cherryin'
 import { citationHandlers } from './citation'
 import { codeCliHandlers } from './codeCli'
-import { deepSeekHarnessHandlers } from './deepSeekHarness'
 import { diagnosticsHandlers } from './diagnostics'
 import { doctorHandlers } from './doctor'
 import { exportHandlers } from './export'
@@ -65,7 +64,6 @@ export const ipcHandlers: IpcHandlersFor<IpcRequestSchemas> = {
   ...cherryCloudHandlers,
   ...citationHandlers,
   ...codeCliHandlers,
-  ...deepSeekHarnessHandlers,
   ...diagnosticsHandlers,
   ...doctorHandlers,
   ...exportHandlers,

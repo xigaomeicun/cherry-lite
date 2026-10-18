@@ -1,7 +1,6 @@
 import type { SidebarAppId } from '@renderer/utils/sidebar'
 import type { LucideIcon } from 'lucide-react'
 import {
-  Code,
   FileSearch,
   Folder,
   Languages,
@@ -26,6 +25,5 @@ export const SIDEBAR_ICON_COMPONENTS: Record<SidebarAppId, LucideIcon> = {
   mini_app: LayoutGrid,
   knowledge: FileSearch,
   files: Folder,
-  code_tools: Code,
   notes: NotepadText
 }
