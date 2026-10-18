@@ -140,7 +140,6 @@ vi.mock('react-i18next', () => ({
           'files.title': 'Files',
           'knowledge.title': 'Knowledge',
           'launchpad.apps': 'Apps',
-          'launchpad.deepseek_harness_shortcut': 'DSH',
           'launchpad.miniApps': 'Mini Apps',
           'launchpad.pin_to_sidebar': 'Add to Sidebar',
           'launchpad.unpin_from_sidebar': 'Remove from Sidebar',
@@ -266,7 +265,7 @@ describe('LaunchpadPage', () => {
 
     const [persisted] = mocks.setAppOrder.mock.calls.at(-1) as unknown as [SidebarAppId[]]
     expect(persisted.slice(0, 3)).toEqual(['assistants', 'agents', 'translate'])
-    expect(persisted).toHaveLength(systemSortable.items.length)
+    expect(persisted).toEqual(expect.arrayContaining(systemSortable.items.map((item: { id: string }) => item.id)))
     expect(mocks.setSidebarFavorites).not.toHaveBeenCalled()
   })
 
@@ -280,18 +279,12 @@ describe('LaunchpadPage', () => {
     expect(mocks.navigate).toHaveBeenCalledWith({ to: '/app/knowledge' })
   })
 
-  it('opens the dedicated DeepSeek Harness CodeMate view from its app shortcut', async () => {
-    const user = userEvent.setup()
-
+  it('has no DSH, Mini Apps or Code app tiles (cherry-lite)', () => {
     render(<LaunchpadPage />)
-    const shortcut = screen.getByRole('button', { name: 'DSH' })
 
-    await user.click(shortcut)
-
-    expect(mocks.navigate).toHaveBeenCalledWith({
-      to: '/app/code',
-      search: { tool: 'deepseek-harness' }
-    })
+    expect(screen.queryByRole('button', { name: 'DSH' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Mini Apps' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Code' })).not.toBeInTheDocument()
   })
 
   it('suppresses only the dragged launchpad item click', () => {

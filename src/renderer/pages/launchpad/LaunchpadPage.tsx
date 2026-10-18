@@ -4,7 +4,6 @@ import { arrayMove } from '@dnd-kit/sortable'
 import agentsIcon from '@renderer/assets/images/apps/launchpad-agents.svg'
 import assistantsIcon from '@renderer/assets/images/apps/launchpad-assistants.svg'
 import codeToolsIcon from '@renderer/assets/images/apps/launchpad-code-tools.svg'
-import dshIcon from '@renderer/assets/images/apps/launchpad-dsh.svg'
 import filesIcon from '@renderer/assets/images/apps/launchpad-files.svg'
 import knowledgeIcon from '@renderer/assets/images/apps/launchpad-knowledge.svg'
 import miniAppIcon from '@renderer/assets/images/apps/launchpad-mini-app.svg'
@@ -27,7 +26,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 const BASE_URL = 'https://www.cherry-ai.com/'
-const DEEPSEEK_HARNESS_URL = '/app/code?tool=deepseek-harness'
+// cherry-lite: these sidebar apps stay reachable from the sidebar but get no launchpad tile.
+const LAUNCHPAD_HIDDEN_APPS: ReadonlySet<SidebarAppId> = new Set(['mini_app', 'code_tools'])
 
 const LAUNCHPAD_GRID_CLASS = 'grid grid-cols-6 justify-items-center gap-2 px-2'
 const LAUNCHPAD_ITEM_CLASS = 'mx-auto w-[92px]'
@@ -128,10 +128,6 @@ export default function LaunchpadPage() {
     [navigateToUrl, shouldSuppressLaunchClick]
   )
 
-  const openDeepSeekHarness = () => {
-    void navigateToUrl(DEEPSEEK_HARNESS_URL)
-  }
-
   const pinToSidebar = useCallback(
     (favorite: SidebarAppId) => {
       if (visibleSidebarFavoriteSet.has(favorite)) return
@@ -167,11 +163,11 @@ export default function LaunchpadPage() {
     [pinToSidebar, t, unpinFromSidebar, visibleSidebarFavoriteSet]
   )
 
-  // Sidebar-backed app tiles keep their existing launchpad order. The direct
-  // Harness shortcut is fixed because it is not a sidebar destination.
+  // Sidebar-backed app tiles keep their existing launchpad order.
   const appMenuItems = useMemo(
     () =>
       orderedAppIds.flatMap((favorite) => {
+        if (LAUNCHPAD_HIDDEN_APPS.has(favorite)) return []
         if (!getSidebarMenuPath(favorite, defaultPaintingProvider)) return []
 
         return [
@@ -288,19 +284,6 @@ export default function LaunchpadPage() {
                 onSortEnd={handleAppsSortEnd}
                 renderItem={(item) => renderAppMenuItem(item)}
               />
-              <button
-                type="button"
-                onClick={openDeepSeekHarness}
-                className={`${LAUNCHPAD_ITEM_CLASS} group flex cursor-pointer flex-col items-center gap-1 rounded-2xl px-1 py-2 text-center outline-none transition-transform duration-200 hover:scale-105 focus-visible:scale-105 active:scale-95`}>
-                <span className={APP_ICON_TILE_CLASS}>
-                  <span className={APP_ICON_FRAME_CLASS}>
-                    <img src={dshIcon} alt="" className={APP_ICON_CLASS} draggable={false} />
-                  </span>
-                </span>
-                <span className="w-full overflow-hidden text-ellipsis whitespace-nowrap text-[12px] text-foreground">
-                  {t('launchpad.deepseek_harness_shortcut')}
-                </span>
-              </button>
             </div>
           </section>
 
