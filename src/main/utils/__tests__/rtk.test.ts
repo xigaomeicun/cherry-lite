@@ -166,7 +166,7 @@ describe('rtk utils', () => {
         } else if (failure === 'snapshot timeout') {
           binaryManagerMock.getToolSnapshots.mockReturnValueOnce(new Promise(() => {}))
         } else if (failure === 'version rejection') {
-          executeCommandMock.mockRejectedValueOnce(new CommandFailedError(2, '', 'version probe failed'))
+          executeCommandMock.mockRejectedValueOnce(new Error('version probe failed'))
         } else {
           executeCommandMock.mockImplementationOnce(
             (_path: string, _args: string[], options: { timeout: number }) =>
