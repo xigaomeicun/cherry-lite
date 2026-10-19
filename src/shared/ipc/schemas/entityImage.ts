@@ -3,9 +3,8 @@ import * as z from 'zod'
 
 /**
  * Shared entity-image schema atoms — the `LogoImageIntent` union and its byte
- * guard, reused by the per-domain set-logo commands (`provider.set_logo` in
- * `./provider`, `mini_app.settings.set_logo` in `./miniApp`). The routes live in those
- * domain files; this module holds only the shared pieces. `LogoKeySchema` is the
+ * guard, reused by the set-logo command (`provider.set_logo` in `./provider`) and by
+ * main's `setMiniAppLogo`. The routes live in the domain files; this module holds only the shared pieces. `LogoKeySchema` is the
  * shared no-dep leaf, also used by the DataApi `logo.ts`.
  */
 

@@ -44,7 +44,7 @@ export const CreateMiniAppSchema = z.strictObject({
   url: MiniAppUrlSchema,
   /**
    * Custom logo — a preset key only (`{ kind: 'key', key }`). Uploaded images
-   * go through the `mini_app.settings.set_logo` IpcApi command, not this DTO.
+   * go through `setMiniAppLogo` (main), not this DTO; cherry-lite has no IPC command for it.
    */
   logo: CreateLogoSchema.optional()
 })
@@ -63,7 +63,7 @@ export const UpdateMiniAppSchema = z.strictObject({
   name: z.string().min(1).optional(),
   url: MiniAppUrlSchema.optional(),
   // Logo edits (preset key / image upload / clear) go through the
-  // `mini_app.settings.set_logo` IpcApi command, not this PATCH body.
+  // main-side `setMiniAppLogo` orchestrator (no IPC command in cherry-lite), not this PATCH body.
   /** Installed apps only; `null` = follow the global default model. */
   aiModelId: UniqueModelIdSchema.nullable().optional(),
   /** Installed apps only; `null` = follow the global quick model. */

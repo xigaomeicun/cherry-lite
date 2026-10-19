@@ -44,7 +44,7 @@ const logger = loggerService.withContext('DataApi:MiniAppService')
 
 /**
  * Internal update input. `logo` is NOT part of the PATCH DTO (logo edits go
- * through the `mini_app.settings.set_logo` IpcApi command); the command orchestrator
+ * through the logo orchestrator in `entityLogo.ts`; its IPC command was removed in cherry-lite); the orchestrator
  * passes a `LogoBindInput` here after creating the `file_entry`.
  */
 export type UpdateMiniAppInput = UpdateMiniAppDto & { logo?: LogoBindInput }
@@ -370,7 +370,7 @@ export class MiniAppService {
   /**
    * Bind a packaged icon to an installed (`kind='app'`) row. The installer's own
    * entry: `update()` rejects `logo` on app rows because it backs the
-   * user-reachable `mini_app.settings.set_logo` command, whereas the packaged icon is
+   * `setMiniAppLogo` orchestrator (cherry-lite: no IPC command any more), whereas the packaged icon is
    * written only by install / update / rollback code.
    */
   setInstalledLogo(appId: string, logo: LogoBindInput): void {

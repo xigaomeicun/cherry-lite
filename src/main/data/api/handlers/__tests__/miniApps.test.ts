@@ -267,7 +267,7 @@ describe('miniAppHandlers', () => {
       })
 
       // Logo edits no longer ride in the PATCH body (they go through the
-      // `mini_app.settings.set_logo` command); only name/url/status are delegated here.
+      // main-side `setMiniAppLogo` orchestrator); only name/url/status are delegated here.
       expect(updateMock).toHaveBeenCalledWith('custom-app', {
         name: 'Renamed App',
         url: 'https://renamed.app'

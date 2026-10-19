@@ -29,7 +29,7 @@ export function setMiniAppLogo(appId: string, image: LogoImageIntent): Promise<v
   })
 }
 
-/** Installer-only: a packaged icon onto an installed app row. Not reachable from `mini_app.settings.set_logo`. */
+/** Installer-only: a packaged icon onto an installed app row. Not reachable from `setMiniAppLogo`. */
 export function setInstalledMiniAppLogo(appId: string, image: LogoImageIntent): Promise<void> {
   return bindLogoImage(image, (logo) => {
     miniAppService.setInstalledLogo(appId, logo)
