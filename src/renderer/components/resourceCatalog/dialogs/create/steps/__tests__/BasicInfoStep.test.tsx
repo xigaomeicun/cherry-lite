@@ -107,9 +107,13 @@ describe('BasicInfoStep', () => {
     ).toBeVisible()
   })
 
-  it('offers Claude and Pi for creation without exposing DeepSeek Harness', () => {
+  it('offers Pi before Claude for creation without exposing DeepSeek Harness', () => {
     render(<Harness runtimeSelectable />)
 
+    expect(screen.getAllByRole('radio')).toEqual([
+      screen.getByRole('radio', { name: /runtime.option.pi/ }),
+      screen.getByRole('radio', { name: /runtime.option.claude_code/ })
+    ])
     expect(screen.getByText('library.config.agent.field.runtime.immutable_hint')).toBeVisible()
     expect(screen.queryByRole('img', { name: /runtime\.immutable_hint/ })).not.toBeInTheDocument()
     expect(screen.getByRole('radio', { name: /runtime.option.claude_code/ })).toBeChecked()
@@ -141,6 +145,20 @@ describe('BasicInfoStep', () => {
       'agent.settings.tooling.permissionMode.auto.title'
     )
     expect(screen.getByTestId('permission-mode')).toHaveTextContent('auto')
+  })
+
+  it.each(['pi', 'claude-code'] as const)('still displays the runtime summary for an existing %s agent', (runtime) => {
+    function ExistingAgentRuntime() {
+      const { t } = useTranslation()
+      return <AgentRuntimeSummary value={runtime} t={t} />
+    }
+
+    render(<ExistingAgentRuntime />)
+
+    const key = runtime === 'pi' ? 'pi' : 'claude_code'
+    expect(screen.getByText(`library.config.agent.field.runtime.option.${key}`)).toBeVisible()
+    expect(screen.getByText(`library.config.agent.field.runtime.option_description.${key}`)).toBeVisible()
+    expect(screen.queryByRole('radio')).not.toBeInTheDocument()
   })
 
   it('clears the missing-model warning when a prefilled model resolves asynchronously', async () => {
