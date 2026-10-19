@@ -86,17 +86,34 @@ export function useFollowupQueue({
     cacheService.setCasual(keyFor(scopeKeyRef.current), next, QUEUE_TTL)
   }, [])
 
+  // cherry-lite (deviates from upstream #21863): an item taken out for editing is volatile, so when the
+  // scope changes or the composer unmounts it is written back to its original slot in the scope's
+  // persisted queue instead of being dropped. Sent/removed items have already cleared `takenRef`.
+  const returnTakenToCache = useCallback(() => {
+    const taken = takenRef.current
+    takenRef.current = null
+    if (!taken) return
+    const current = itemsRef.current
+    if (current.some((item) => item.id === taken.item.id)) return
+    const next = [...current]
+    next.splice(Math.min(taken.slot, next.length), 0, taken.item)
+    itemsRef.current = next
+    persist(next)
+  }, [persist])
+
+  useEffect(() => returnTakenToCache, [returnTakenToCache])
+
   // Reload when switching conversations; the previous queue stays in its own scoped cache entry.
   useEffect(() => {
     if (scopeKeyRef.current === scopeKey) return
+    returnTakenToCache()
     scopeKeyRef.current = scopeKey
-    takenRef.current = null
     admissionsRef.current = new Set()
     itemsRef.current = loadQueue(scopeKey)
     setItems(itemsRef.current)
     pausedRef.current = loadPaused(scopeKey)
     setPausedState(pausedRef.current)
-  }, [scopeKey])
+  }, [scopeKey, returnTakenToCache])
 
   const setPaused = useCallback((nextPaused: boolean) => {
     cacheService.setCasual(pausedKeyFor(scopeKeyRef.current), nextPaused)

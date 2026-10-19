@@ -398,7 +398,8 @@ describe('queued edit switching', () => {
     }
   )
 
-  it('discards taken metadata and admissions on scope change and ignores old-scope success', async () => {
+  // cherry-lite: deviates from upstream #21863 — the taken item is written back to its scope on switch.
+  it('returns the taken item to its scope on scope change, drops admissions and ignores old-scope success', async () => {
     const {
       result,
       rerender,
@@ -432,13 +433,46 @@ describe('queued edit switching', () => {
       result.current.takeForEdit(d.id, capture)
     })
     expect(result.current.items, 'old success must not clear the new scope taken record').toEqual([c])
-    expect(store.get('followup-queue.s1'), 'old success must not mutate the prior scope cache').toEqual([a])
+    expect(store.get('followup-queue.s1'), 'taken B returns to its slot; old success must not remove A').toEqual([a, b])
     act(() => {
       rerender({ scopeKey: 's1', isFulfilled: false })
     })
     act(() => {
       expect(result.current.takeForEdit(a.id, capture), 'scope reload must discard old admission').toEqual(a)
     })
-    expect(result.current.items, 'scope reload must not reinsert old taken B').toEqual([])
+    expect(store.get('followup-queue.s2'), 'taken D returns to s2 on the switch back').toEqual([c, d])
+    expect(result.current.items, 'B survives the scope round-trip').toEqual([b])
+  })
+
+  it('returns the taken item to its original slot in the cache on unmount', () => {
+    const {
+      result,
+      unmount,
+      entries: [a, b, c]
+    } = setup(['A', 'B', 'C'])
+    act(() => {
+      result.current.takeForEdit(b.id, capture)
+    })
+    expect(store.get('followup-queue.s1')).toEqual([a, c])
+    unmount()
+    expect(store.get('followup-queue.s1'), 'unmount must not lose the taken item').toEqual([a, b, c])
+  })
+
+  it('does not return a taken item that was released (sent) or removed before unmount', () => {
+    const {
+      result,
+      unmount,
+      entries: [a, b, c]
+    } = setup(['A', 'B', 'C'])
+    act(() => {
+      result.current.takeForEdit(b.id, capture)
+      result.current.releaseEdit()
+    })
+    act(() => {
+      result.current.takeForEdit(c.id, capture)
+      result.current.removeId(c.id)
+    })
+    unmount()
+    expect(store.get('followup-queue.s1')).toEqual([a])
   })
 })
