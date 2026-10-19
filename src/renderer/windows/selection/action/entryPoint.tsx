@@ -15,7 +15,9 @@ await prepareWindow({
     'feature.selection.auto_close',
     'feature.selection.auto_pin',
     'feature.selection.action_window_opacity',
-    'feature.quick_assistant.assistant_id'
+    'feature.quick_assistant.assistant_id',
+    'feature.translate.action.alter_lang',
+    'feature.translate.action.preferred_lang'
   ]
 })
 
