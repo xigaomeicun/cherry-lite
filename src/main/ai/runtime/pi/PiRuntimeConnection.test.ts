@@ -10,6 +10,7 @@ import { CHERRY_CLOUD_MODEL_GROUP, CHERRY_CLOUD_PROVIDER_ID } from '@shared/data
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { AgentRuntimeConnectInput, AgentRuntimeEvent, AgentRuntimeUserInput } from '../types'
+import { buildPiMcpToolName } from './piMcpExtension'
 import type * as PiSdk from './piSdk'
 
 const PI_ROOT = '/cherry/Data/Agents/.pi'
@@ -904,7 +905,7 @@ describe('PiRuntimeConnection', () => {
 
     await new PiRuntimeConnection({ ...input, resumeToken: 'missing-id' }).start()
     expect(mocks.sessionOpen).not.toHaveBeenCalled()
-    expect(mocks.sessionCreate).toHaveBeenCalledWith(WORKSPACE, PI_SESSIONS, { id: SESSION_ID })
+    expect(mocks.sessionCreate).toHaveBeenCalledWith(WORKSPACE, PI_SESSIONS, { id: 'missing-id' })
   })
 
   it('emits turn-complete only on agent_end, not per turn_end, plus a resume token', async () => {
@@ -1780,6 +1781,84 @@ describe('PiRuntimeConnection', () => {
     await expect(
       approvalGateHandler()({ type: 'tool_call', toolName, toolCallId: 'tc-mcp-live', input: {} }, {})
     ).resolves.toMatchObject({ block: true })
+  })
+
+  it.each(['auto', 'bypassPermissions'])(
+    'wires delegation approval to the live %s mode and interaction',
+    async (permission_mode) => {
+      mocks.getAgent.mockReturnValue({ id: 'agent-1', model: 'p::m', configuration: { permission_mode } })
+      const conn = await new PiRuntimeConnection(input).start()
+      const authorize = approvalGateHandler()
+      for (const name of ['session_create', 'session_send']) {
+        const event = {
+          type: 'tool_call',
+          toolName: buildPiMcpToolName('cherry-tools', name),
+          toolCallId: name,
+          input: {}
+        }
+        for (let call = 0; call < 2; call++) await expect(authorize(event, {})).resolves.toBeUndefined()
+        mocks.getInteractionState.mockReturnValue({ currentTurn: 'headless', userResponse: 'unavailable' })
+        await expect(authorize(event, {})).resolves.toMatchObject({ block: true })
+        mocks.getInteractionState.mockReturnValue({ currentTurn: 'interactive', userResponse: 'stream' })
+      }
+      expect(toolApprovalRegistry.size()).toBe(0)
+
+      mocks.getAgent.mockReturnValue({ id: 'agent-1', model: 'p::m', configuration: { permission_mode: 'default' } })
+      await expect(conn.reconcile({ modelId: 'p::m' })).resolves.toBe('patched')
+      const pending = authorize(
+        {
+          type: 'tool_call',
+          toolName: buildPiMcpToolName('cherry-tools', 'session_send'),
+          toolCallId: 'after-mode-change',
+          input: {}
+        },
+        {}
+      )
+      await vi.waitFor(() => expect(toolApprovalRegistry.size()).toBe(1))
+      toolApprovalRegistry.abort(SESSION_ID, 'test-cancel')
+      await expect(pending).resolves.toMatchObject({ block: true })
+      await conn.close()
+    }
+  )
+
+  describe('skill installation approval', () => {
+    const installSkill = {
+      type: 'tool_call',
+      toolName: 'mcp__skills__install_skill',
+      toolCallId: 'tc-skill',
+      input: {}
+    }
+    const startWithMode = (permission_mode: string) => {
+      mocks.getAgent.mockReturnValue({ id: 'agent-1', model: 'p::m', configuration: { permission_mode } })
+      return new PiRuntimeConnection(input).start()
+    }
+
+    it('blocks an auto-mode install on a channel or scheduled turn', async () => {
+      mocks.getInteractionState.mockReturnValue({ currentTurn: 'headless', userResponse: 'unavailable' })
+      const conn = await startWithMode('auto')
+
+      await expect(approvalGateHandler()(installSkill, {})).resolves.toMatchObject({ block: true })
+      expect(toolApprovalRegistry.size()).toBe(0)
+      await conn.close()
+    })
+
+    it('asks before an interactive auto-mode install', async () => {
+      const conn = await startWithMode('auto')
+
+      void approvalGateHandler()(installSkill, {})
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      expect(toolApprovalRegistry.size()).toBe(1)
+      toolApprovalRegistry.abort(SESSION_ID, 'test-boundary')
+      await conn.close()
+    })
+
+    it('installs unattended under bypassPermissions', async () => {
+      mocks.getInteractionState.mockReturnValue({ currentTurn: 'headless', userResponse: 'unavailable' })
+      const conn = await startWithMode('bypassPermissions')
+
+      await expect(approvalGateHandler()(installSkill, {})).resolves.toBeUndefined()
+      await conn.close()
+    })
   })
 
   describe('MCP bridging', () => {

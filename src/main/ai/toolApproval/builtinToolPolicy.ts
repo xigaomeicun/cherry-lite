@@ -37,8 +37,11 @@ import {
   WEB_FETCH_TOOL_NAME,
   WEB_SEARCH_TOOL_NAME
 } from '@shared/ai/builtinTools'
+import type { AgentPermissionMode } from '@shared/data/api/schemas/agents'
 
-export type BuiltinToolApproval = 'auto' | 'required' | 'runtime'
+import type { ToolGuardInteractionState } from './toolGuards'
+
+export type BuiltinToolApproval = 'auto' | 'required' | 'delegation' | 'runtime'
 export type BuiltinToolBypassApproval = 'lift' | 'enforce'
 
 /** The Cherry-owned MCP servers. Which of them a session mounts is the runtime's call. */
@@ -56,6 +59,7 @@ export interface BuiltinToolPolicyEntry {
   readonly toolName: string
   /**
    * `auto`: Cherry pre-approves the tool; `required`: every interactive call asks unless bypassed;
+   * `delegation`: interactive-only, with approval following the session permission mode;
    * `runtime`: the runtime's ordinary permission-mode semantics decide.
    */
   readonly approval: BuiltinToolApproval
@@ -92,8 +96,8 @@ const BUILTIN_TOOL_POLICIES = {
   cherrySessionRead: tool(CHERRY_MCP_SERVER.CHERRY_TOOLS, SESSION_READ_TOOL_NAME, 'auto'),
   cherryAgentList: tool(CHERRY_MCP_SERVER.CHERRY_TOOLS, 'agent_list', 'auto'),
   cherrySessionDeliveries: tool(CHERRY_MCP_SERVER.CHERRY_TOOLS, SESSION_DELIVERIES_TOOL_NAME, 'auto'),
-  cherrySessionCreate: tool(CHERRY_MCP_SERVER.CHERRY_TOOLS, SESSION_CREATE_TOOL_NAME, 'required', 'enforce'),
-  cherrySessionSend: tool(CHERRY_MCP_SERVER.CHERRY_TOOLS, SESSION_SEND_TOOL_NAME, 'required', 'enforce'),
+  cherrySessionCreate: tool(CHERRY_MCP_SERVER.CHERRY_TOOLS, SESSION_CREATE_TOOL_NAME, 'delegation'),
+  cherrySessionSend: tool(CHERRY_MCP_SERVER.CHERRY_TOOLS, SESSION_SEND_TOOL_NAME, 'delegation'),
   cherryCliList: tool(CHERRY_MCP_SERVER.CHERRY_TOOLS, CLI_LIST_TOOL_NAME, 'auto'),
   cherryCliSearch: tool(CHERRY_MCP_SERVER.CHERRY_TOOLS, CLI_SEARCH_TOOL_NAME, 'auto'),
   cherryCliInstall: tool(CHERRY_MCP_SERVER.CHERRY_TOOLS, CLI_INSTALL_TOOL_NAME, 'required'),
@@ -102,7 +106,7 @@ const BUILTIN_TOOL_POLICIES = {
 
   agentMemory: tool(CHERRY_MCP_SERVER.AGENT_MEMORY, 'memory', 'auto'),
   searchSkills: tool(CHERRY_MCP_SERVER.SKILLS, 'search_skills', 'auto'),
-  installSkill: tool(CHERRY_MCP_SERVER.SKILLS, 'install_skill', 'runtime'),
+  installSkill: tool(CHERRY_MCP_SERVER.SKILLS, 'install_skill', 'required'),
   // A stdio install launches an arbitrary local command with the caller's env, so this asks per call
   // like cli_install rather than deferring to the runtime's permission mode.
   installMcpServer: tool(CHERRY_MCP_SERVER.MCP_MANAGER, 'install_mcp_server', 'required'),
@@ -119,6 +123,16 @@ const BUILTIN_TOOL_POLICIES = {
 } as const satisfies Record<string, BuiltinToolPolicyEntry>
 
 const BUILTIN_TOOL_POLICY_ENTRIES: readonly BuiltinToolPolicyEntry[] = Object.values(BUILTIN_TOOL_POLICIES)
+
+/** Auto-approval never authorizes another unattended delegation hop. */
+export function resolveDelegationApproval(
+  mode: AgentPermissionMode | undefined,
+  interaction: ToolGuardInteractionState
+): 'allow' | 'ask' | 'deny' {
+  if (interaction.currentTurn === 'headless' || interaction.userResponse === 'unavailable') return 'deny'
+  return mode === 'auto' || mode === 'bypassPermissions' ? 'allow' : 'ask'
+}
+
 const BUILTIN_TOOL_POLICY_BY_RUNTIME_NAME = new Map(
   BUILTIN_TOOL_POLICY_ENTRIES.map((entry) => [toMcpRuntimeName(entry), entry])
 )

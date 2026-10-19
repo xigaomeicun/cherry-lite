@@ -42,6 +42,7 @@ import { skillService } from '@main/ai/skills/SkillService'
 import {
   findBuiltinToolPolicy,
   listBuiltinToolPolicies,
+  resolveDelegationApproval,
   toCherryBuiltinRuntimeName,
   toMcpRuntimeName
 } from '@main/ai/toolApproval/builtinToolPolicy'
@@ -513,9 +514,19 @@ async function buildToolPermissions(
     // `canUseTool` under bypassPermissions.
     const interactionState = application.get('AgentSessionRuntimeService').getInteractionState(session.id)
     const policy = findBuiltinToolPolicy(toolName, mountedServers)
+    const delegationApproval =
+      policy?.approval === 'delegation'
+        ? resolveDelegationApproval(snapshot.getPermissionMode(), interactionState)
+        : undefined
+    if (delegationApproval === 'deny') {
+      return { behavior: 'deny', message: HEADLESS_INTERACTIVE_TOOL_DENIAL }
+    }
+    // Ordinary delegation is approved by PreToolUse. Reaching this callback means the SDK still
+    // requires a user decision, even when matchedAskRule is absent.
     const approvalHoldsInThisMode =
-      policy?.approval === 'required' &&
-      !(snapshot.getPermissionMode() === 'bypassPermissions' && policy.bypassApproval === 'lift')
+      policy?.approval === 'delegation' ||
+      (policy?.approval === 'required' &&
+        !(snapshot.getPermissionMode() === 'bypassPermissions' && policy.bypassApproval === 'lift'))
     const requiresInteractiveResponder = claudeToolRequiresUserInteraction(toolName) || approvalHoldsInThisMode
     if (requiresInteractiveResponder && interactionState.userResponse === 'unavailable') {
       return { behavior: 'deny', message: HEADLESS_INTERACTIVE_TOOL_DENIAL }
@@ -525,7 +536,7 @@ async function buildToolPermissions(
     // AskUserQuestion produces user-authored tool input; it is not an operation that a permission
     // mode can meaningfully approve on the user's behalf. Keep it on the response path even when
     // bypassPermissions marks every ordinary tool as auto-approved.
-    if (toolName !== ASK_USER_QUESTION_TOOL_NAME && access?.approval === 'auto') {
+    if (toolName !== ASK_USER_QUESTION_TOOL_NAME && !approvalHoldsInThisMode && access?.approval === 'auto') {
       return { behavior: 'allow', updatedInput: input }
     }
 
