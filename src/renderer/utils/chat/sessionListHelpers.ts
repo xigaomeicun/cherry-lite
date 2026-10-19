@@ -451,8 +451,10 @@ export function canDropSessionItemInDisplayGroup({
   sourceGroupId: string
   targetGroupId: string
 }) {
-  if (targetGroupId === SESSION_PINNED_GROUP_ID) return false
   if (mode === 'time') return false
+  if (sourceGroupId === SESSION_PINNED_GROUP_ID || targetGroupId === SESSION_PINNED_GROUP_ID) {
+    return sourceGroupId === targetGroupId
+  }
   if (sourceGroupId === targetGroupId) return true
   // A cross-group drop is a valid gesture only where we can actually reassign the session.
   return getSessionMoveTargetAgentId({ mode, sourceGroupId, targetGroupId }) !== undefined
