@@ -141,7 +141,7 @@ export function ImagePreviewDialog({
           <DialogTitle className="sr-only">{mergedLabels.dialogTitle ?? mergedLabels.close}</DialogTitle>
           <Button
             aria-label={mergedLabels.close}
-            className="absolute top-4 right-4 z-20 size-9 rounded-none bg-transparent p-0 text-white shadow-none transition-none hover:bg-transparent hover:text-white"
+            className="absolute top-[calc(1rem+var(--image-preview-titlebar-height,0px))] right-4 z-20 size-9 rounded-none bg-transparent p-0 text-white shadow-none transition-none hover:bg-transparent hover:text-white"
             onClick={close}
             size="icon"
             type="button"
@@ -166,7 +166,7 @@ export function ImagePreviewDialog({
           {hasMultipleItems && (
             <Button
               aria-label={mergedLabels.previous}
-              className="absolute left-4 top-1/2 z-10 size-10 -translate-y-1/2 rounded-full border-border bg-popover text-popover-foreground shadow-md hover:bg-accent hover:text-accent-foreground disabled:opacity-30"
+              className="absolute top-1/2 left-4 z-10 size-10 -translate-y-1/2 rounded-full border-border bg-popover text-popover-foreground shadow-md hover:bg-accent hover:text-accent-foreground disabled:opacity-30"
               disabled={currentIndex === 0}
               onClick={showPrevious}
               size="icon"
@@ -178,7 +178,7 @@ export function ImagePreviewDialog({
           {hasMultipleItems && (
             <Button
               aria-label={mergedLabels.next}
-              className="absolute right-4 top-1/2 z-10 size-10 -translate-y-1/2 rounded-full border-border bg-popover text-popover-foreground shadow-md hover:bg-accent hover:text-accent-foreground disabled:opacity-30"
+              className="absolute top-1/2 right-4 z-10 size-10 -translate-y-1/2 rounded-full border-border bg-popover text-popover-foreground shadow-md hover:bg-accent hover:text-accent-foreground disabled:opacity-30"
               disabled={currentIndex === items.length - 1}
               onClick={showNext}
               size="icon"
