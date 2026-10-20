@@ -4,8 +4,6 @@ import {
   FUNASR_MODEL_ID,
   KOKORO_TTS_MODEL_ID,
   LOCAL_VOICE_MODEL_IDS,
-  type LocalSpeechModelId,
-  type LocalTranscriptionModelId,
   type LocalVoiceModelDescriptor,
   MAX_SPEECH_SPEED,
   MIN_SPEECH_SPEED,
@@ -13,16 +11,27 @@ import {
   TranscriptionLanguageSource,
   VOICE_SESSION_SOURCES,
   VOICE_SESSION_TRIGGERS,
-  type VoiceModelLookup,
+  VoiceModelSupport,
   WINDOWS_ASR_MODEL_ID,
   WINDOWS_TTS_MODEL_ID
 } from '@shared/ai/localVoice'
+import { SpeechInputKind, SpeechOutputKind, TranscriptionInputKind, TranscriptionOutputKind } from '@shared/ai/voice'
 import { LOCAL_MODEL_DOWNLOAD_RESULTS } from '@shared/data/presets/localModel'
 import { FileEntryIdSchema, InternalEntrySchema } from '@shared/data/types/file'
 import { voiceErrorCodes } from '@shared/ipc/errors/voice'
 import * as z from 'zod'
 
 import { defineRoute } from '../define'
+
+const voiceCapabilities = z.strictObject({
+  speech: z.array(z.strictObject({ input: z.enum(SpeechInputKind), output: z.enum(SpeechOutputKind) })).optional(),
+  transcription: z
+    .array(z.strictObject({ input: z.enum(TranscriptionInputKind), output: z.enum(TranscriptionOutputKind) }))
+    .optional()
+})
+const voiceModelDescriptor: z.ZodType<LocalVoiceModelDescriptor> = z
+  .custom<LocalVoiceModelDescriptor>()
+  .and(z.object({ voiceCapabilities }))
 
 const languageTag = z
   .string()
@@ -243,15 +252,21 @@ export const voiceRequestSchemas = {
   'ai.voice.session.discard': defineRoute({ input: session, output: z.void() }),
   'ai.voice.models.list': defineRoute({
     input: z.void(),
-    output: z.custom<{
-      models: readonly LocalVoiceModelDescriptor[]
-      defaultAsrModelId?: LocalTranscriptionModelId
-      defaultSpeechModelId?: LocalSpeechModelId
-    }>()
+    output: z.object({
+      models: z.array(voiceModelDescriptor).readonly(),
+      defaultAsrModelId: asrModelId.optional(),
+      defaultSpeechModelId: speechModelId.optional()
+    })
   }),
   'ai.voice.model.describe': defineRoute({
     input: z.strictObject({ modelId: z.string().min(1).max(256) }),
-    output: z.custom<VoiceModelLookup>()
+    output: z.union([
+      z.strictObject({ support: z.literal(VoiceModelSupport.UnknownModel), model: z.null() }),
+      z.strictObject({
+        support: z.enum(VoiceModelSupport).exclude(['UnknownModel']),
+        model: voiceModelDescriptor
+      })
+    ])
   }),
   'ai.voice.model.download': defineRoute({
     input: z.strictObject({ modelId }),

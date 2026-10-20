@@ -19,9 +19,12 @@ import {
 import type { SpeechModelDefinition, TranscriptionModelDefinition } from '../voiceModelTypes'
 import type { LocalVoiceStatus } from '../voiceModelTypes'
 import { getVoiceEnvironment, type VoiceEnvironment } from '../voicePlatform'
-import { VoiceRuntimeError } from '../VoiceRuntimeError'
+import { checkAbort, VoiceRuntimeError } from '../VoiceRuntimeError'
 import { inspectCanonicalWav } from './inspectCanonicalWav'
-import { checkAbort, decodeVoiceRecording, nativeClient, normalizeFailure, withScratch } from './nativeSupport'
+import { decodeVoiceRecording } from './recordingDecoder'
+import { withScratch } from './scratch'
+import { completeSpeechOperation, completeTranscriptionOperation } from './sdkOperations'
+import { nativeClient, normalizeFailure } from './systemSpeech'
 
 const logger = loggerService.withContext('AppleVoiceAdapter')
 
@@ -232,7 +235,7 @@ export const appleTranscriptionDefinition: TranscriptionModelDefinition = {
   status: (options, signal) => getAppleVoiceStatus(APPLE_ASR_MODEL_ID, options, signal),
   locales: listAppleAsrLocales,
   installLocale: installAppleAsrAsset,
-  createModel: createAppleTranscriptionModel
+  transcriptionOperations: [completeTranscriptionOperation(createAppleTranscriptionModel)]
 }
 
 export const appleSpeechDefinition: SpeechModelDefinition = {
@@ -247,5 +250,5 @@ export const appleSpeechDefinition: SpeechModelDefinition = {
   status: (options, signal) => getAppleVoiceStatus(APPLE_TTS_MODEL_ID, options, signal),
   voices: listAppleVoices,
   getDefaultVoice: getDefaultAppleVoice,
-  createModel: createAppleSpeechModel
+  speechOperations: [completeSpeechOperation(createAppleSpeechModel)]
 }

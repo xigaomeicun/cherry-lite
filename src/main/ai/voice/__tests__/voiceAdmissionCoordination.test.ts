@@ -35,8 +35,10 @@ vi.hoisted(() => {
 
 vi.mock('../localAdapters', async (importOriginal) => {
   const actual = await importOriginal<typeof LocalAdapters>()
+  const { speechFixture } = await import('./voiceExecutionFixtures')
   return {
     ...actual,
+    getSpeechOperations: (id: string) => [speechFixture(id, native.speech)],
     resolveSpeechConfiguration: (...args: Parameters<typeof actual.resolveSpeechConfiguration>) =>
       native.resolveSpeech(...args),
     resolveTranscriptionConfiguration: (...args: Parameters<typeof actual.resolveTranscriptionConfiguration>) =>
@@ -208,7 +210,6 @@ describe('voice admission coordination through the renderer coordinators', () =>
     vi.mocked(application.get).mockImplementation(((name: string) => {
       if (name === 'VoiceSessionService') return rootService
       if (name === 'MediaProtocolService') return media
-      if (name === 'AiService') return { generateSpeech: native.speech, transcribe: vi.fn() }
       if (name === 'UtilityProcessManager') return { register: vi.fn() }
       if (name === 'IpcApiService') return runtime
       if (name === 'WindowManager')

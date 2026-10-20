@@ -8,6 +8,7 @@ import { WindowType } from '@main/core/window/types'
 import { MediaKind } from '@main/services/mediaProtocol'
 import type { LocalSpeechModelId, LocalTranscriptionModelId } from '@shared/ai/localVoice'
 import { type LocalVoiceModelId, type VoiceSessionSource, type VoiceSessionTrigger } from '@shared/ai/localVoice'
+import { SpeechInputKind, SpeechOutputKind, TranscriptionInputKind, TranscriptionOutputKind } from '@shared/ai/voice'
 import type { FileEntryId, InternalFileEntry } from '@shared/data/types/file'
 import type { VoiceErrorReason } from '@shared/ipc/errors/voice'
 import type { VoiceSessionCommand, VoiceSessionPhase, VoiceSessionState } from '@shared/ipc/schemas/voice'
@@ -15,6 +16,8 @@ import type { InputFor, OutputFor } from '@shared/ipc/types'
 import type { WebContents } from 'electron'
 import { session as electronSession } from 'electron'
 
+import { startSpeech, startTranscription } from './execution'
+import type { VoiceExecution } from './executionTypes'
 import {
   cancelVoiceModelDownload,
   describeVoiceModel,
@@ -77,6 +80,7 @@ type Session = {
   requestId?: string
   // Not an inspection: the next manual admission must still be able to displace it.
   preflightAbort?: AbortController
+  execution?: VoiceExecution
   operation?: VoiceOperation
   speechPlan?: ReturnType<typeof resolveSpeechRequest>
   selectedModel?: LocalVoiceModelId
@@ -96,7 +100,8 @@ type ActiveOperation = { session: Session; requestId: string; controller: AbortC
 @Injectable('VoiceSessionService')
 @ServicePhase(Phase.WhenReady)
 @DependsOn([
-  'AiService',
+  'TtsInferenceService',
+  'AsrInferenceService',
   'FileManager',
   'WindowManager',
   'UtilityProcessManager',
@@ -133,8 +138,10 @@ export class VoiceSessionService extends BaseService {
     this.accepting = false
     for (const controller of this.inspections.values()) controller.abort(new VoiceRuntimeError('aborted'))
     const cleanup = [...this.sessions.values()].map((session) => this.closeSession(session, true))
-    await Promise.allSettled([...cleanup, ...this.inspections.keys()])
+    const [results] = await Promise.all([Promise.allSettled(cleanup), Promise.allSettled(this.inspections.keys())])
     this.releaseLease()
+    const failures = results.filter((result) => result.status === 'rejected').map((result) => result.reason)
+    if (failures.length) throw new AggregateError(failures, 'Voice session cleanup failed')
   }
 
   protected override async onDestroy(): Promise<void> {
@@ -290,7 +297,16 @@ export class VoiceSessionService extends BaseService {
         if (!['audio/webm', 'video/webm', 'audio/webm;codecs=opus'].includes(audio.mime))
           throw new VoiceRuntimeError('invalid_audio')
         signal.throwIfAborted()
-        const transcript = await application.get('AiService').transcribe(modelId, audio.content, { language }, signal)
+        const execution = startTranscription(
+          {
+            modelId,
+            input: { kind: TranscriptionInputKind.Audio, audio: audio.content },
+            output: TranscriptionOutputKind.Final,
+            options: { language }
+          },
+          signal
+        )
+        const transcript = await this.consumeExecution(session, execution, execution.completed)
         signal.throwIfAborted()
         await this.deleteFile(session, input.fileEntryId)
         return { sessionId: session.id, requestId: input.requestId, ...transcript }
@@ -362,9 +378,16 @@ export class VoiceSessionService extends BaseService {
         modelId,
         'speech',
         async (signal) => {
-          const result = await application
-            .get('AiService')
-            .generateSpeech(modelId, normalizedText, definiteOptions, signal)
+          const execution = startSpeech(
+            {
+              modelId,
+              input: { kind: SpeechInputKind.Text, text: normalizedText },
+              output: SpeechOutputKind.Audio,
+              options: definiteOptions
+            },
+            signal
+          )
+          const result = await this.consumeExecution(session, execution, execution.output)
           signal.throwIfAborted()
           const wav = Buffer.from(result.audio)
           if (
@@ -782,6 +805,16 @@ export class VoiceSessionService extends BaseService {
     })
   }
 
+  private async consumeExecution<T>(session: Session, execution: VoiceExecution, result: Promise<T>): Promise<T> {
+    session.execution = execution
+    try {
+      return await result
+    } finally {
+      await execution.closed
+      if (session.execution === execution) session.execution = undefined
+    }
+  }
+
   private async run<T>(
     session: Session,
     requestId: string,
@@ -799,6 +832,7 @@ export class VoiceSessionService extends BaseService {
     if (session.closed || (session.kind !== 'install' && this.lease !== session)) {
       throw new VoiceRuntimeError('aborted')
     }
+    if (session.execution) throw new VoiceRuntimeError('operation_failed')
     if (this.active || this.inspections.size || session.pending.size) throw new VoiceRuntimeError('busy')
     if (session.requestId === requestId && session.operation !== undefined)
       throw new VoiceRuntimeError('invalid_request')
@@ -937,8 +971,10 @@ export class VoiceSessionService extends BaseService {
     session.detach()
     session.preflightAbort?.abort(new VoiceRuntimeError('aborted'))
     if (this.active?.session === session) this.active.controller.abort(new VoiceRuntimeError('aborted'))
+    const execution = session.execution
     const cleanup = (async () => {
       try {
+        if (execution) await execution.cancel()
         await Promise.allSettled(session.pending)
         for (const id of [...session.files.keys()]) {
           try {
