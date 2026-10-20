@@ -19,6 +19,7 @@ const state = vi.hoisted(() => ({
 }))
 
 vi.mock('@renderer/services/voice', async (importOriginal) => ({
+  speechPlaybackService: (await importOriginal<typeof VoiceModule>()).speechPlaybackService,
   VoiceDomainError: (await importOriginal<typeof VoiceModule>()).VoiceDomainError,
   voiceService: {
     initialize: state.initialize,
