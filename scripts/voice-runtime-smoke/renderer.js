@@ -9,6 +9,7 @@ module.exports = async function runVoiceRuntimeSmoke(expectedUrl, language = 'en
     'VOICE_BUSY',
     'VOICE_FORBIDDEN',
     'VOICE_INVALID_AUDIO',
+    'VOICE_NO_SPEECH',
     'VOICE_ABORTED',
     'VOICE_STOPPED',
     'VOICE_INVALID_REQUEST',

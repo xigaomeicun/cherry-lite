@@ -65,6 +65,7 @@ vi.mock('react-i18next', () => ({
         'agent.settings.toolsMcp.mcp.tab': 'MCP',
         'selection.name': '划词助手',
         'settings.appearance.title': '外观',
+        'settings.voice.title': '语音',
         'settings.channels.title': '频道',
         'settings.dependencies.title': '环境依赖',
         'settings.dependencies.localModels.title': '本地模型',
@@ -128,6 +129,14 @@ describe('SettingsPage', () => {
     expect(navigateMock).toHaveBeenCalledWith({ to: '/settings/general' })
     fireEvent.click(localModelsItem)
     expect(navigateMock).toHaveBeenCalledWith({ to: '/settings/local-models' })
+  })
+
+  it('exposes Voice as a searchable personal settings destination', () => {
+    render(<SettingsPage />)
+
+    fireEvent.click(screen.getByRole('button', { name: '语音' }))
+
+    expect(navigateMock).toHaveBeenCalledWith({ to: '/settings/voice' })
   })
 
   it('keeps document processing and OCR together in tools and dependencies in the system group', () => {

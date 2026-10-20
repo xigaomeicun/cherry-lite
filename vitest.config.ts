@@ -30,7 +30,7 @@ export default defineConfig({
         extends: true,
         plugins: mainConfig.plugins,
         resolve: {
-          alias: mainConfig.resolve.alias
+          alias: { ...mainConfig.resolve.alias, '@renderer': resolve('src/renderer') }
         },
         test: {
           name: 'main',

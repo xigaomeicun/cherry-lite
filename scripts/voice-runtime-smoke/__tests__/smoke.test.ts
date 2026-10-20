@@ -197,6 +197,7 @@ function browserEnvironment(
     preempted,
     requestedModels,
     languageRequests,
+    activeSessionId: () => lease?.sessionId,
     resourcesClosed: () => recorderStopped && contextClosed && tracksStopped && !lease
   }
 }
@@ -260,12 +261,13 @@ describe('voice smoke renderer contract', () => {
       passed: true,
       apple: { transcriptNonEmpty: true },
       funasr: { reason: 'unsupported' },
-      cleanupSucceeded: true
+      cleanupSucceeded: true,
+      sessionsDiscarded: 3
     })
     expect(fixture.requestedModels).toEqual(['local-voice::apple-system-asr', 'local-voice::funasr-nano'])
     expect(fixture.created.size).toBe(3)
-    expect(fixture.preempted.size).toBe(0)
     expect(fixture.discarded).toEqual(fixture.created)
+    expect(fixture.preempted.size).toBe(0)
     expect(fixture.resourcesClosed()).toBe(true)
     expect(JSON.stringify(result)).not.toContain('Private transcript')
     expect(JSON.stringify(result)).not.toContain('e0b0c5ec-dcb8-4f77-b027-0a3c05637786')
@@ -288,6 +290,49 @@ describe('voice smoke renderer contract', () => {
       text: '这是樱桃工作室的本地语音验证。今天天空晴朗，我们正在检查离线语音转写功能。'
     })
     expect(fixture.discarded).toEqual(fixture.created)
+  })
+
+  it('reads owned speech output even when generic file access is unavailable', async () => {
+    const fixture = browserEnvironment('success')
+    const ipc = fixture.globals.window.api.ipcApi
+    const originalRequest = ipc.request
+    ipc.request = async (route, input) =>
+      route === 'file.read' ? { ok: false, error: { code: 'VOICE_FORBIDDEN' } } : originalRequest(route, input)
+
+    const result = await runInNewContext(createVoiceRuntimeSmokeExpression(expectedUrl), fixture.globals)
+
+    expect(result).toMatchObject({ passed: true, sessionsDiscarded: 3, cleanupSucceeded: true })
+    expect(fixture.resourcesClosed()).toBe(true)
+  })
+
+  it('fails an upload after another recording takes ownership without discarding the replacement', async () => {
+    const fixture = browserEnvironment('success')
+    const ipc = fixture.globals.window.api.ipcApi
+    const originalRequest = ipc.request
+    const replacementSession = randomUUID()
+    ipc.request = async (route, input) => {
+      if (route === 'file.voice_recording.create') {
+        await originalRequest('ai.voice.recording.start', {
+          sessionId: replacementSession,
+          requestId: randomUUID(),
+          source: 'automation'
+        })
+      }
+      return originalRequest(route, input)
+    }
+
+    const result = await runInNewContext(createVoiceRuntimeSmokeExpression(expectedUrl), fixture.globals)
+
+    expect(result).toMatchObject({
+      passed: false,
+      stage: 'apple_upload',
+      code: 'VOICE_INVALID_REQUEST',
+      cleanupSucceeded: true
+    })
+    expect(fixture.activeSessionId()).toBe(replacementSession)
+    expect(fixture.discarded.has(replacementSession)).toBe(false)
+    expect(result.apple).toBeUndefined()
+    expect(result.funasr).toBeUndefined()
   })
 
   it('rejects unapproved test languages before any IPC session is created', async () => {

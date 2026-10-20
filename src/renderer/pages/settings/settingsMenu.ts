@@ -2,6 +2,7 @@ import { GatewayIcon } from '@renderer/components/icons/GatewayIcon'
 import { McpLogo } from '@renderer/components/icons/SvgIcon'
 import {
   Activity,
+  AudioLines,
   Bell,
   CalendarClock,
   Cloud,
@@ -117,6 +118,12 @@ export const settingsMenu: readonly SettingsMenuEntry[] = [
     route: '/settings/notifications',
     titleKey: 'settings.notification.title',
     icon: createElement(Bell),
+    groupKey: 'settings.menuGroups.personal'
+  },
+  {
+    route: '/settings/voice',
+    titleKey: 'settings.voice.title',
+    icon: createElement(AudioLines),
     groupKey: 'settings.menuGroups.personal'
   },
   {
