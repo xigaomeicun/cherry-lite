@@ -61,6 +61,8 @@ import { Download, Mic, Play, Square } from 'lucide-react'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { DictationShortcutSettings } from './DictationShortcutSettings'
+
 type ModelStatus = 'unsupported' | 'not_installed' | 'installing' | 'ready' | 'failed' | 'loading'
 
 interface StatusState {
@@ -872,7 +874,7 @@ function VoiceSettings() {
         </SettingRow>
         {testingMicrophone || microphoneError || microphonesFailed ? (
           <div className="space-y-3 pt-3">
-            <div role="status" className="text-sm text-muted-foreground">
+            <div role="status" className="text-muted-foreground text-sm">
               {testingMicrophone
                 ? t(microphoneReady ? 'settings.voice.microphone.listening' : 'settings.voice.dictation.phase.starting')
                 : null}
@@ -948,7 +950,7 @@ function VoiceSettings() {
                     className="group/model cursor-pointer hover:bg-accent data-[highlighted]:bg-accent [&>span:last-child]:flex-1">
                     <span>{t(MODEL_LABEL_KEYS[model.id])}</span>
                     {downloadable && status?.status !== 'ready' ? (
-                      <span className="ml-auto inline-flex items-center gap-1 text-link group-hover/model:underline group-data-[highlighted]/model:underline">
+                      <span className="text-link ml-auto inline-flex items-center gap-1 group-hover/model:underline group-data-[highlighted]/model:underline">
                         <Download className="size-3" aria-hidden="true" />
                         {t(
                           !status
@@ -1007,7 +1009,7 @@ function VoiceSettings() {
                     disabled={option.disabled}>
                     <span>{option.label}</span>
                     {needsLocaleInstallation(option.value) ? (
-                      <span className="inline-flex items-center gap-1 text-link group-hover/locale:underline group-data-[highlighted]/locale:underline">
+                      <span className="text-link inline-flex items-center gap-1 group-hover/locale:underline group-data-[highlighted]/locale:underline">
                         <Download className="size-3" aria-hidden="true" />
                         {t('settings.dependencies.localModels.download')}
                       </span>
@@ -1027,6 +1029,8 @@ function VoiceSettings() {
             </SelectContent>
           </Select>
         </SettingRow>
+        <SettingDivider />
+        <DictationShortcutSettings />
         <SettingDivider />
         <div
           id="setting-voice-recognition-status"
@@ -1207,12 +1211,12 @@ function VoiceSettings() {
               {speechBusy ? <Square className="size-4" /> : <Play className="size-4" />}
               {t(speechBusy ? 'common.stop' : 'settings.voice.action.play_preview')}
             </Button>
-            <span role="status" data-testid="speech-status" className="text-sm text-muted-foreground">
+            <span role="status" data-testid="speech-status" className="text-muted-foreground text-sm">
               {t(statusKey(speechStatus))}
             </span>
           </div>
           {speechError ? (
-            <p id="voice-speech-error" role="alert" className="text-sm text-error">
+            <p id="voice-speech-error" role="alert" className="text-error text-sm">
               {t(errorKey(speechError))}
             </p>
           ) : null}
@@ -1233,7 +1237,7 @@ function VoiceSettings() {
       </SettingGroup>
 
       {actionFailed ? (
-        <p role="alert" className="mt-4 text-destructive text-sm">
+        <p role="alert" className="mt-4 text-sm text-destructive">
           {t(errorKey(actionFailed))}
         </p>
       ) : null}

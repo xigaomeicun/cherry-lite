@@ -17,7 +17,9 @@ await prepareWindow({
     'feature.selection.action_window_opacity',
     'feature.quick_assistant.assistant_id',
     'feature.translate.action.alter_lang',
-    'feature.translate.action.preferred_lang'
+    'feature.translate.action.preferred_lang',
+    'feature.voice.dictation.hold_shortcut',
+    'feature.voice.dictation.toggle_shortcut'
   ]
 })
 
