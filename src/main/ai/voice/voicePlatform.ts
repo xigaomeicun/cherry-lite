@@ -7,6 +7,7 @@ import {
   type LocalSpeechModelId,
   type LocalTranscriptionModelId,
   SHERPA_VOICE_SUPPORTED_PLATFORM_KEYS,
+  VoiceModelSupport,
   WINDOWS_ASR_MODEL_ID,
   WINDOWS_TTS_MODEL_ID
 } from '@shared/ai/localVoice'
@@ -91,4 +92,14 @@ export async function openSystemVoiceSettings(): Promise<void> {
   const url = urls[process.platform]
   if (!url) throw new VoiceRuntimeError('unsupported')
   await shell.openExternal(url)
+}
+
+export function mlxVoiceSupport(environment: VoiceEnvironment) {
+  if (environment.platform !== 'darwin') return VoiceModelSupport.UnsupportedPlatform
+  if (environment.arch !== 'arm64') return VoiceModelSupport.UnsupportedArchitecture
+  const major = environment.majorVersion ?? 0
+  const minor = environment.minorVersion ?? 0
+  if (!Number.isInteger(major) || major < 26 || (major === 26 && (!Number.isInteger(minor) || minor < 2)))
+    return VoiceModelSupport.UnsupportedVersion
+  return VoiceModelSupport.Supported
 }

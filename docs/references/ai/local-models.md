@@ -11,7 +11,7 @@ sources:
 # Local Models
 
 Cherry Studio can run four model capabilities on the user's own machine: knowledge-base
-embedding, PaddleOCR text recognition, FunASR Nano speech recognition, and speech synthesis with Qwen3-TTS or Kokoro. Their model
+embedding, PaddleOCR text recognition, speech recognition with FunASR Nano or Qwen3-ASR, and speech synthesis with Qwen3-TTS or Kokoro. Their model
 bundles and required native runtimes are fetched on demand rather than shipped in the installer.
 
 One module owns the whole path: what can be installed, how bytes get onto disk safely,
@@ -45,15 +45,15 @@ src/main/ai/localModel/
     ├── capabilityHooks.ts         ← removal behavior keyed by capability
     ├── embedding/                 ← facade, protocol, pooling, model paths, limits
     ├── ocr/                       ← facade, protocol, model paths
-    ├── asr/                       ← facade, protocol, FunASR model paths
+    ├── asr/                       ← facade, discriminated engine requests, selected model paths
     └── tts/                       ← facade, complete WAV and bounded PCM contracts
 ```
 
 ## The catalog is the only per-model code
 
-Everything about a model is one entry in `catalog/catalog.ts`. Nothing else in the
-subsystem branches per model, which is the property that keeps a third or fourth model
-from adding a third or fourth copy of the download machinery.
+Installation metadata belongs in `catalog/catalog.ts`. Downloads and removal are generic over
+that catalog. Inference dispatches on the selected bundle’s engine architecture; a new engine
+adds its own typed handler without duplicating installation machinery.
 
 ### Bundles
 
@@ -103,7 +103,7 @@ names its runtime artifacts directly; it does not resolve them through a default
 ### Shared artifacts
 
 A **shared artifact** is a pinned native runtime. Embedding and OCR use
-`onnxruntime-node`; ASR and Kokoro use `sherpa-onnx`; Qwen3-TTS uses a Cherry-distributed mlx-node archive. Bundles declare what they need in `requires`, and
+`onnxruntime-node`; FunASR and Kokoro use `sherpa-onnx`; Qwen3-ASR and Qwen3-TTS share a Cherry-distributed mlx-node archive. Bundles declare what they need in `requires`, and
 that declaration is what makes the runtime removable: it outlives a bundle exactly as long
 as another *installed* bundle still requires it.
 
@@ -409,3 +409,27 @@ Voice identity and synthesis language are separate. `locale` is the voice's defa
 `languages` enumerates its supported synthesis languages. Without `languages`, a system voice
 supports only its locale. Resolution preserves a supported explicit language, and UI language
 changes preserve compatible voices. Unsupported combinations remain unavailable.
+
+## Downloadable Qwen3-ASR
+
+`qwen3-asr-1.7b-8bit` provides complete-audio recognition on Apple Silicon with macOS 26.2+.
+It uses the existing MLX native artifact shared with Qwen3-TTS and an application-owned
+`@cherrystudio/mlx-asr` JavaScript package. Its official 1.7B checkpoint, conversion revision,
+standard safetensors shards and checksums are pinned in `catalog/qwen3AsrRelease.json`.
+The audio encoder stays dense; the decoder uses affine 8-bit/group-size 64 quantization.
+Model files use pinned GitHub release assets and a pinned ModelScope revision, with the same
+SHA-256 at both sources. China egress prefers ModelScope; other regions prefer GitHub.
+
+Voice selection preserves the bundle ID through status, installation, inference and removal.
+`inference.asr` dispatches discriminated Sherpa/MLX requests and lazily loads only the selected
+engine. MLX receives 16 kHz mono Float32 PCM decoded from the existing bounded WAV/WebM path;
+it does not require Sherpa for decoding. Language is detected automatically. Only final text
+is exposed; the model has no reliable timestamps, so segments remain empty. Truncated native
+results fail instead of returning partial text as complete recognition.
+
+The ASR queue owns one resident model. Switching models, cancelling native work or removing
+resident weights waits for process exit. Successful calls may reuse the warm model until idle
+release. The pinned native API has no model-dispose method; process exit releases its model
+thread and allocations. ASR removal preserves the MLX artifact while installed TTS still
+requires it, and does not stop the independent TTS process. Continuous PCM capture and live
+transcription revisions are separate capabilities.

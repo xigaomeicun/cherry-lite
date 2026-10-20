@@ -12,9 +12,9 @@ visible through `closed` and `cancel()`; the owning session retains that failed 
 Cancellation checks use `checkAbort` from the voice error module.
 
 `voiceAudioProcess` declares the `voice.audio` utility process. VoiceSessionService
-registers it. Apple and FunASR pass canonical WAV bytes through `inspectCanonicalWav`
-and request `decode` only for WebM. Windows ASR requests `decode` for its accepted
-input. Every decode uses a combined owner/caller/timeout AbortSignal. The process
+registers it. Apple, FunASR, Qwen3-ASR, and Windows ASR pass canonical WAV bytes through
+`inspectCanonicalWav` and request `decode` only for WebM. Every decode uses a
+combined owner/caller/timeout AbortSignal. The process
 uses terminate cancellation, so the caller cannot release its operation lease before
 the old generation exits.
 
@@ -42,3 +42,8 @@ never returned. The decoder stores no files, so abort leaves no derived disk sta
 
 See [the fixture provenance](./__tests__/fixtures/README.md) and
 [dependency notices](./NOTICE.txt). Keep the notices in the packaged application.
+
+`qwen3Asr` converts validated PCM16 WAV samples into 16 kHz Float32 PCM, preserving byte
+view offsets, and sends them to the existing ASR inference service. It creates no scratch
+files and exposes only final text. MLX platform support is shared with Qwen3-TTS in
+`voicePlatform`; native loading and model caches remain in the utility process.

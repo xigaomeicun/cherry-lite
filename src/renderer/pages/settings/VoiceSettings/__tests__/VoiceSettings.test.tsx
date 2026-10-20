@@ -391,6 +391,37 @@ describe('VoiceSettings', () => {
     expect(voice.funAsrDownload).not.toHaveBeenCalled()
   })
 
+  it('opens the Qwen3 ASR resource card without replacing the current recognition model', async () => {
+    MockUsePreferenceUtils.setPreferenceValue('feature.voice.recognition.model_id', APPLE_ASR_MODEL_ID)
+    voice.listModels.mockResolvedValue({
+      models: [
+        ...models,
+        {
+          id: 'local-voice::qwen3-asr-1.7b',
+          name: 'Qwen3-ASR 1.7B (8-bit)',
+          localeSelection: null,
+          resourceOperations: [VoiceResourceOperation.Download]
+        }
+      ],
+      defaultAsrModelId: APPLE_ASR_MODEL_ID,
+      defaultSpeechModelId: APPLE_TTS_MODEL_ID
+    })
+    voice.getModelStatus.mockImplementation(async ({ modelId }) =>
+      modelId === 'local-voice::qwen3-asr-1.7b'
+        ? { status: 'not_installed', reason: 'model_required' }
+        : { status: 'ready' }
+    )
+    render(<VoiceSettings />)
+    const user = userEvent.setup()
+    await waitFor(() =>
+      expect(screen.getByRole('combobox', { name: 'Recognition model' })).toHaveTextContent('Apple System')
+    )
+    await user.click(screen.getByRole('combobox', { name: 'Recognition model' }))
+    await user.click(await screen.findByRole('option', { name: /Qwen3-ASR.*Download/ }))
+    expect(navigate).toHaveBeenCalledWith({ to: '/settings/local-models', hash: 'qwen3-asr-1.7b-8bit' })
+    expect(MockUsePreferenceUtils.getPreferenceValue('feature.voice.recognition.model_id')).toBe(APPLE_ASR_MODEL_ID)
+  })
+
   it('selects FunASR when its download completes while the recognition menu stays open', async () => {
     publishAsrInstallation({ status: 'downloading', percent: 25 })
     voice.resolveTranscription.mockImplementation(async ({ modelId }) => ({

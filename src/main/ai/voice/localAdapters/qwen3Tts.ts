@@ -14,7 +14,6 @@ import {
   MIN_SPEECH_SPEED,
   QWEN3_TTS_BUNDLE_ID,
   QWEN3_TTS_MODEL_ID,
-  VoiceModelSupport,
   VoiceResourceOperation
 } from '@shared/ai/localVoice'
 import { SpeechInputKind, SpeechOutputKind } from '@shared/ai/voice'
@@ -22,7 +21,7 @@ import { LOCAL_MODEL_STATUS_CACHE_KEY } from '@shared/data/presets/localModel'
 
 import type { SpeechExecution, SpeechSource } from '../executionTypes'
 import type { LocalVoiceStatus, SpeechModelDefinition } from '../voiceModelTypes'
-import type { VoiceEnvironment } from '../voicePlatform'
+import { mlxVoiceSupport } from '../voicePlatform'
 import { checkAbort, VoiceRuntimeError } from '../VoiceRuntimeError'
 import { withScratch } from './scratch'
 import { completeSpeechOperation } from './sdkOperations'
@@ -50,16 +49,6 @@ const VOICES: LocalSpeechVoice[] = [
   ['ono_anna', 'Ono Anna', 'ja-JP'],
   ['sohee', 'Sohee', 'ko-KR']
 ].map(([id, name, locale]) => ({ id, name, locale, languages: Object.keys(LANGUAGES) }))
-
-export function qwen3TtsSupport(environment: VoiceEnvironment) {
-  if (environment.platform !== 'darwin') return VoiceModelSupport.UnsupportedPlatform
-  if (environment.arch !== 'arm64') return VoiceModelSupport.UnsupportedArchitecture
-  const major = environment.majorVersion ?? 0
-  const minor = environment.minorVersion ?? 0
-  if (!Number.isInteger(major) || major < 26 || (major === 26 && (!Number.isInteger(minor) || minor < 2)))
-    return VoiceModelSupport.UnsupportedVersion
-  return VoiceModelSupport.Supported
-}
 
 export function getQwen3TtsStatus(signal?: AbortSignal): LocalVoiceStatus {
   checkAbort(signal)
@@ -153,7 +142,7 @@ export function createQwen3SpeechModel(options: SpeechOptions): SpeechModelV3 {
 export const qwen3SpeechDefinition: SpeechModelDefinition = {
   id: QWEN3_TTS_MODEL_ID,
   adapterId: 'mlx',
-  support: qwen3TtsSupport,
+  support: mlxVoiceSupport,
   describe: () => ({
     ...LOCAL_VOICE_MODELS.find((model) => model.id === QWEN3_TTS_MODEL_ID)!,
     localeSelection: null,

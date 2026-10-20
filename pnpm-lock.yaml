@@ -100,6 +100,9 @@ importers:
       '@anthropic-ai/claude-agent-sdk':
         specifier: 0.3.284
         version: 0.3.284(@anthropic-ai/sdk@0.93.0(zod@4.3.4))(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@4.3.4))(zod@4.3.4)
+      '@cherrystudio/mlx-asr':
+        specifier: github:CherryHQ/mlx-node#ad3bf3ec3a141ec06fb8f73933685b1420ed09ac&path:distribution/asr
+        version: https://codeload.github.com/CherryHQ/mlx-node/tar.gz/ad3bf3ec3a141ec06fb8f73933685b1420ed09ac#path:distribution/asr
       '@cherrystudio/mlx-tts':
         specifier: github:CherryHQ/mlx-node#f4c21043f557965345b527bc04179ad26d08378f&path:distribution/tts
         version: https://codeload.github.com/CherryHQ/mlx-node/tar.gz/f4c21043f557965345b527bc04179ad26d08378f#path:distribution/tts
@@ -2766,6 +2769,10 @@ packages:
     peerDependenciesMeta:
       typescript:
         optional: true
+
+  '@cherrystudio/mlx-asr@https://codeload.github.com/CherryHQ/mlx-node/tar.gz/ad3bf3ec3a141ec06fb8f73933685b1420ed09ac#path:distribution/asr':
+    resolution: {gitHosted: true, integrity: sha512-oUswcywFB8j5sfDyKfn+QICE4ax0mwE/VgsN22if1ipkd8nsQ2FOyq3C3kzlZjMUjqgUgyPktyhCsceWhLaaKA==, path: distribution/asr, tarball: https://codeload.github.com/CherryHQ/mlx-node/tar.gz/ad3bf3ec3a141ec06fb8f73933685b1420ed09ac}
+    version: 0.0.16-cherry.1
 
   '@cherrystudio/mlx-tts@https://codeload.github.com/CherryHQ/mlx-node/tar.gz/f4c21043f557965345b527bc04179ad26d08378f#path:distribution/tts':
     resolution: {gitHosted: true, integrity: sha512-5d0uEhagGMP3xQaML3xsNzOXEsQR8OK4NYsFuUDSzmxbenvl079rahSvxACOqfBP0ssIXJhbzsYY9B5WS15NPg==, path: distribution/tts, tarball: https://codeload.github.com/CherryHQ/mlx-node/tar.gz/f4c21043f557965345b527bc04179ad26d08378f}
@@ -16725,6 +16732,8 @@ snapshots:
   '@cherrystudio/analytics-client@1.3.1(typescript@5.9.3)':
     optionalDependencies:
       typescript: 5.9.3
+
+  '@cherrystudio/mlx-asr@https://codeload.github.com/CherryHQ/mlx-node/tar.gz/ad3bf3ec3a141ec06fb8f73933685b1420ed09ac#path:distribution/asr': {}
 
   '@cherrystudio/mlx-tts@https://codeload.github.com/CherryHQ/mlx-node/tar.gz/f4c21043f557965345b527bc04179ad26d08378f#path:distribution/tts': {}
 

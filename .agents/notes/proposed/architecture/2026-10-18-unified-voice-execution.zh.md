@@ -64,7 +64,8 @@ Status: proposed
 | AC3 | 此次 main 合并前，适配器拆分通过 13 个 Main 文件共 273 项测试。开发版 Electron 完成 Apple 与 Qwen3 WAV 生成及播放，并回到 idle。后续定向测试覆盖了 Windows 标准 WAV、字节偏移输入、取消和超时清理。 | 原生 ASR 资源不可用；本地未执行 Windows 与打包环境验证。较早的 Electron 验证不代表合并后当前提交的实机验证。 |
 | AC4（部分） | PR 2 已实现类型化有界输入输出、有序 EOF、等待写入者上限及清理确认。定向单元测试覆盖流和普通请求行为。真实 Electron 普通目录和 ASAR smoke 通过；双向队列每个方向的峰值为 6,016 字节 / 2 帧，低于 8,192 字节 / 3 帧上限。 | PR 3 已将真实 Qwen3 生产者通过有界 IPC 接入 Worklet。队列测量不是 RSS 或音频质量证据。未验证 Windows。 |
 | AC5 | PR 3 实现类型化 PCM 输出、挂接与消费额度、原生背压、源采样率 Worklet 播放、EOF 排空和新尝试重试。开发版 Electron 中的真实 Qwen3 热启动首次消费为 514 ms，生成结束为 13,950 ms，欠载为零，Renderer 缓冲峰值为 23,936 帧，低于 24,000 帧上限。暂停期间消费游标不变；停止后 40 ms 释放会话，随后重启成功。新尝试重试保留冻结配置，0.75 倍速与 1.5 倍速在 48 kHz 输出设备上均无欠载并完整排空。界面暂停、继续和停止操作也已通过。生产 Vite Worklet 产物在普通目录和 ASAR 中均播放了 24 kHz 双声道的 12,000 帧。 | 通过 Web Audio 观察了设备输出时间；未进行人工听感验收、Windows 或完整打包应用中的 Qwen3 推理验证。原生与 utility 层的数值是强制预算，不是 RSS 测量。 |
-| AC6–AC8 | 实现方案中已有详细提案。 | 本分支未实现或验证 PR 4–6。 |
+| AC6（部分） | PR 4 增加有类型的 Sherpa/MLX 分派、所选 bundle 安装和 Qwen3-ASR 1.7B 完整识别。Electron 中英文 WebM 识别、取消后重试，以及 unpacked/ASAR 包路径下的原生识别均通过。GitHub/ModelScope 共 18 个模型文件 URL 均可匿名读取，发布的 SHA-256 元数据一致。 | 未覆盖真实麦克风听写和其他平台；ASAR utility/package 测试不等同于完整应用打包验收。仍缺少正式 Spec Approval。 |
+| AC7–AC8 | 实现方案中已有详细提案。 | 本分支未实现或验证 PR 5–6。 |
 
 PR 3 沿用现有服务依赖图，不增加单例服务。`VoiceSessionService` 拥有各个 `VoiceStream`，中继只接收发送和过期回调。Renderer 输出适配器拥有音频图和可观察的关闭 Promise。MLX 在播放期间通过有界的两段文本队列继续处理有限文本。实现使用源采样率 AudioContext，将设备采样率转换交给浏览器，不引入自定义重采样器。运行预算为一秒原生 PCM、四条 utility 消息 / 131,072 字节、一秒 Renderer PCM、15 秒挂接、120 秒加载或未受背压阻塞的生产者读取，以及 15 分钟流保留时间。暂停包含在保留预算中，等待消费额度不计为生产者停滞。Worklet 在已有一秒上限内积累 500 ms 源音频后起播，短音频在 EOF 时起播；这消除了最初 1.5 倍速测试中观察到的欠载。
 
@@ -421,7 +422,7 @@ PR 4 可以在 PR 1 后独立推进。它将模型交付、权重格式和加载
 
 ## 逐 PR 实现方案
 
-状态：PR 1 已创建 [Draft PR #21795](https://github.com/CherryHQ/cherry-studio/pull/21795)，PR 2 已完成基础设施实现和进程 smoke 验证；PR 3 补齐真实 Qwen3 生产者到播放器联调以及打包 Worklet 证据；PR 4–6 待实现。方案基于 `9d1bf05fe2c` 的代码结构，并在合入 `425b15397e7` 后补齐 Kokoro 完整结果适配，细化 [统一接口和流式执行方案](2026-10-18-unified-voice-execution.md#detailed-interface-design) 中的六个 PR。下文保留各 PR 的实施目标，不能将后续接口、文件和验收项视为已交付。
+状态：PR 1 已创建 [Draft PR #21795](https://github.com/CherryHQ/cherry-studio/pull/21795)，PR 2 已完成基础设施实现和进程 smoke 验证；PR 3 补齐真实 Qwen3 生产者到播放器联调以及打包 Worklet 证据；PR 4 接入 Qwen3-ASR 完整识别；PR 5–6 待实现。方案基于 `9d1bf05fe2c` 的代码结构，并在合入 `425b15397e7` 后补齐 Kokoro 完整结果适配，细化 [统一接口和流式执行方案](2026-10-18-unified-voice-execution.md#detailed-interface-design) 中的六个 PR。下文保留各 PR 的实施目标，不能将后续接口、文件和验收项视为已交付。
 
 PR 1 已提供完整结果操作表、统一执行句柄和能力描述，迁移了 VoiceSessionService 的调用与依赖；清理失败通过 `closed` 保持可观察。共享层目前只定义已支持的完整输入输出标签，PCM 与增量标签随对应 PR 加入。定向自动化及 Node/Web 类型检查通过；合入 `46ef0b8ce37` 之前，开发版 Electron 已验证 Apple/Qwen3 TTS 生成、播放结束、Qwen 取消与随后重启操作。原生 ASR 因本地资源未安装尚未完成实机识别，Windows 与打包产物也仍需对应环境验收。
 
@@ -609,6 +610,22 @@ Electron 实机记录冷/热首音、生成结束时间、总播放时长、欠�
 ### PR 4：MLX Qwen3-ASR 完整识别
 
 建议标题：`feat(local-asr): add MLX Qwen3 transcription`。依赖 PR 1 和可用的匹配分发产物，不依赖流式听写 UI；只公布 `Audio → Final`。
+
+实现选择：使用 Qwen3-ASR 1.7B，复用未变更的 `mlx-node-5db3d24bc87a-r2`
+原生产物。固定版本的加载器按 1.7B 张量布局校验；0.6B 需要单独修复上游并重新验证原生包。
+使用固定版本的原生转换器转换官方 `Qwen/Qwen3-ASR-1.7B-hf` 修订
+`bcd2b5b7f32b480ab5790554cfa8347f246a14f3`，音频权重保持稠密，解码器采用
+仿射 8-bit/group-size 64 量化。标准 safetensors 分片保持张量值不变。配套 fork 负责
+ASR JavaScript 打包和模型产物来源记录，不替换共享原生二进制。
+
+生命周期验证：应用完成 GitHub 全量模型下载及校验。已安装的 FunASR 与 Qwen3
+往返切换两次，每次选择都产生一个独立的 ASR 进程。移除 Qwen3 后，再次指定 Qwen3
+会失败而非回退；驻留 TTS 的 PID 不变，且仍能成功合成。Electron WebM 识别、取消后
+重试及 unpacked/ASAR utility-package 加载均通过。配套分发见
+[fork PR #1](https://github.com/CherryHQ/mlx-node/pull/1)。
+
+原生验证：约四秒的中英文完整录音均返回预期最终文本，静音返回空文本。单文件和分片
+权重均能用现有原生包加载。这些样本是合成语音，不能据此认定真实麦克风或流式听写已验收。
 
 #### 模型与引擎接口
 

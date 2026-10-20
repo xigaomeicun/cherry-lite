@@ -64,7 +64,8 @@ This is a retrospective record of the user-authorized design and PR 1 implementa
 | AC3 | Before that main merge, the adapter split passed 273 tests across 13 Main files. Development Electron generated and played Apple and Qwen3 WAV to completion and returned to idle. Windows canonical WAV, byte-offset input, cancellation, and timeout cleanup were covered by the later focused tests. | Native ASR resources were unavailable; Windows and packaged execution were not exercised locally. The earlier Electron run is not an exact-head run after the merge. |
 | AC4 (partial) | PR 2 implements typed bounded input/output, ordered EOF, pending-writer limits, and cleanup acknowledgement. Focused unit tests cover stream and ordinary request behavior. Real Electron unpacked and ASAR smoke passed; duplex queue peaks were 6,016 bytes / 2 frames per direction against limits of 8,192 bytes / 3 frames. | PR 3 now exercises the real Qwen3 producer through bounded IPC and the Worklet. Queue measurements are not RSS or audio-quality evidence. Windows was not exercised. |
 | AC5 | PR 3 implements typed PCM output, attachment/consumption credits, native backpressure, source-rate Worklet playback, EOF drain and fresh-attempt retry. Real Qwen3 development Electron measured hot first consumption at 514 ms, generation completion at 13,950 ms, zero underruns and a peak of 23,936 frames against a 24,000-frame renderer bound. Pause preserved the consumption cursor; stop released the session in 40 ms and restart succeeded. Fresh-attempt retry preserved frozen options, and 0.75×/1.5× runs drained without underruns on a 48 kHz output device. UI pause/resume/stop also passed. Production Vite Worklet assets played 12,000 stereo frames at 24 kHz from both unpacked and ASAR paths. | Device output timing was observed through Web Audio; human listening, Windows and full packaged-application Qwen3 inference were not exercised. The native/utility limits are enforced budgets, not measured RSS. |
-| AC6–AC8 | Detailed proposals exist in the implementation plan. | PR 4–6 are not implemented or verified by this branch. |
+| AC6 (partial) | PR 4 adds typed Sherpa/MLX dispatch, selected-bundle installation and Qwen3-ASR 1.7B complete recognition. Electron WebM recognition passed for English and Chinese; cancellation/retry and native recognition from unpacked/ASAR package paths passed. All 18 GitHub/ModelScope model-file URLs are anonymously readable with matching published SHA-256 metadata. | Real microphone dictation and other platforms are not covered; complete application packaging is distinct from the ASAR utility/package harness. Formal Spec Approval is still absent. |
+| AC7–AC8 | Detailed proposals exist in the implementation plan. | PR 5–6 are not implemented or verified by this branch. |
 
 PR 3 uses the existing service graph without new singleton services. `VoiceSessionService` owns each `VoiceStream`; the relay receives narrow send/expiry callbacks. Renderer output adapters own their audio graphs and observable close promises. MLX segments the finite text in its bounded two-segment queue while playback continues. The implementation delegates device-rate conversion to a source-rate AudioContext instead of introducing a custom resampler. Runtime budgets are one second of native PCM, four utility messages / 131,072 bytes, one second of renderer PCM, 15 seconds for attachment, 120 seconds for loading or an unblocked producer read, and 15 minutes of stream retention. These budgets include pauses without treating blocked credit as a producer stall. The Worklet starts after 500 ms of source audio (or EOF for shorter clips), within the existing one-second bound; this eliminated the underruns observed in the initial 1.5× run.
 
@@ -421,7 +422,7 @@ Before implementation, use a small Stage B prototype to confirm generic stream A
 
 ## Per-PR implementation plan
 
-Status: PR 1 has [Draft PR #21795](https://github.com/CherryHQ/cherry-studio/pull/21795); PR 2 has an infrastructure implementation and process-smoke evidence; PR 3 adds real Qwen3 producer-to-player integration and packaged Worklet evidence; PR 4–6 remain unimplemented. This plan uses the `9d1bf05fe2c` code layout, adds Kokoro complete-result adaptation after merging `425b15397e7`, and details the six PRs in the [unified interface and streaming design](2026-10-18-unified-voice-execution.md#detailed-interface-design). The sections below retain implementation targets; future interfaces, files, and acceptance items are not delivered features.
+Status: PR 1 has [Draft PR #21795](https://github.com/CherryHQ/cherry-studio/pull/21795); PR 2 has an infrastructure implementation and process-smoke evidence; PR 3 adds real Qwen3 producer-to-player integration and packaged Worklet evidence; PR 4 adds Qwen3-ASR complete recognition; PR 5–6 remain unimplemented. This plan uses the `9d1bf05fe2c` code layout, adds Kokoro complete-result adaptation after merging `425b15397e7`, and details the six PRs in the [unified interface and streaming design](2026-10-18-unified-voice-execution.md#detailed-interface-design). The sections below retain implementation targets; future interfaces, files, and acceptance items are not delivered features.
 
 PR 1 provides complete-result operation tables, unified execution handles, and capability descriptions, and migrates VoiceSessionService calls/dependencies. Cleanup failure remains observable through `closed`. Shared types currently define only supported complete-input/output tags; PCM and incremental tags arrive with their respective PRs. Focused automation and Node/Web typechecks passed. Before merging `46ef0b8ce37`, development Electron verified Apple/Qwen3 TTS generation, playback completion, Qwen cancellation, and subsequent restart. Native ASR recognition remains unverified because local resources were not installed; Windows and packaged artifacts still need their corresponding environments.
 
@@ -609,6 +610,26 @@ Real Electron records cold/warm first sound, generation end, total playback dura
 ### PR 4: MLX Qwen3-ASR complete recognition
 
 Suggested title: `feat(local-asr): add MLX Qwen3 transcription`. Depends on PR 1 and a matching available distribution, not streaming dictation UI. Advertise only `Audio → Final`.
+
+Implementation decision: use Qwen3-ASR 1.7B with the unchanged `mlx-node-5db3d24bc87a-r2`
+native artifact. The pinned loader validates 1.7B tensor layout; 0.6B requires a separate
+upstream fix and native verification. Convert official `Qwen/Qwen3-ASR-1.7B-hf` revision
+`bcd2b5b7f32b480ab5790554cfa8347f246a14f3` with the pinned native converter, keeping audio
+weights dense and quantizing decoder weights to affine 8-bit/group-size 64. Standard
+safetensors sharding preserves values. The supporting fork owns ASR JavaScript packaging
+and model-artifact provenance; it does not replace the shared native binary.
+
+Lifecycle validation: the application downloaded and verified the full GitHub bundle.
+Alternating installed FunASR and Qwen3 twice produced a distinct single ASR process per
+selection. Removing Qwen3 rejected subsequent Qwen3 inference instead of falling back;
+the resident TTS PID stayed unchanged and synthesized again successfully. Electron WebM
+recognition, cancellation/retry, and unpacked/ASAR utility-package loading passed. The
+supporting distribution is [fork PR #1](https://github.com/CherryHQ/mlx-node/pull/1).
+
+Native validation: complete English and Chinese recordings (about four seconds each)
+produce the expected final text, and silence produces empty text. Both single-file and
+sharded weights load with the existing native package. These fixtures are synthesized
+speech; they do not establish live microphone or streaming-dictation acceptance.
 
 #### Model and engine interfaces
 
