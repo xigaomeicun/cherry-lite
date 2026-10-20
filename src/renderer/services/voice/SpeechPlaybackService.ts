@@ -13,6 +13,7 @@ import {
   type ReadableTextTrigger
 } from './readableText'
 import type { SpeechPlayback } from './speechPlaybackTypes'
+import type { SpeechTextInput } from './SpeechTextInput'
 import {
   type SpeechInput,
   type SpeechPreferenceInput,
@@ -48,6 +49,7 @@ export interface SpeechPlaybackStartInput {
   readonly sourceLabel: SpeechPlaybackSourceLabel
   readonly sourceEntityId: string
   readonly signal?: AbortSignal
+  readonly textInput?: SpeechTextInput
 }
 
 export type SpeechPlaybackStartResult =
@@ -65,6 +67,8 @@ type PlaybackVoiceService = Pick<
   | 'subscribeCommands'
   | 'subscribeInterruptions'
   | 'generateSpeech'
+  | 'writeSpeechText'
+  | 'finishSpeechText'
   | 'abortSpeech'
   | 'releaseOutput'
   | 'reportPlayback'
@@ -116,6 +120,8 @@ interface PlaybackRun {
   cleanupError?: VoiceDomainError
   detachAbort?: () => void
   pendingEnded?: SpeechPlayback
+  textInput?: SpeechTextInput
+  inputTask?: Promise<void>
 }
 
 const logger = loggerService.withContext('SpeechPlaybackService')
@@ -214,10 +220,11 @@ export class SpeechPlaybackService {
     if (input.signal?.aborted) throw new VoiceDomainError('aborted')
     const plan = this.planText(input.text, {
       trigger: input.trigger,
-      mode: input.mode,
+      mode: input.textInput ? 'selection' : input.mode,
       confirmed: input.confirmed
     })
     if (plan.status !== 'ready') return planningResult(plan)
+    if (input.textInput) plan.chunks = [input.text]
 
     if (!sourceLabels.has(input.sourceLabel)) {
       this.publishStartFailure(undefined, plan.chunks.length, 'invalid_request')
@@ -280,7 +287,8 @@ export class SpeechPlaybackService {
       stopped: false,
       audioFailureRevision: 0,
       operation,
-      detachAbort
+      detachAbort,
+      textInput: input.textInput
     }
     startedRun = run
     this.runs.set(run.sessionId, run)
@@ -291,6 +299,27 @@ export class SpeechPlaybackService {
     }
 
     await this.finishGeneration(run, operation, deferredVisibilityToken)
+    if (run.textInput) {
+      const textInput = run.textInput
+      run.inputTask = (async () => {
+        let sequence = 0
+        for await (const event of textInput) {
+          this.assertCurrent(run)
+          await this.voice.writeSpeechText({
+            sessionId: run.sessionId,
+            requestId: operation.requestId,
+            sequence,
+            event
+          })
+          sequence++
+        }
+        this.assertCurrent(run)
+        await this.voice.finishSpeechText({ sessionId: run.sessionId, requestId: operation.requestId, sequence })
+      })().catch((error: unknown) => {
+        textInput.cancel()
+        if (!run.stopped) void this.failPlayback(run, errorReason(error)).catch(() => undefined)
+      })
+    }
     return { status: 'started' }
   }
 
@@ -368,7 +397,7 @@ export class SpeechPlaybackService {
       ...(preferences.modelId && { modelId: preferences.modelId }),
       text: chunks[index],
       preferStream: true,
-      remainingText: chunks.slice(index + 1),
+      ...(input.textInput ? { textStream: true as const } : { remainingText: chunks.slice(index + 1) }),
       ...(preferences.voice && { voice: preferences.voice }),
       ...(preferences.language && { language: preferences.language }),
       speed: preferences.speed,
@@ -727,6 +756,7 @@ export class SpeechPlaybackService {
   private terminate(run: PlaybackRun, publishIdle: boolean): Promise<void> {
     if (run.cleanup) return run.cleanup
     run.stopped = true
+    run.textInput?.cancel()
     run.detachAbort?.()
     run.detachAbort = undefined
     run.cleanupError = undefined
@@ -734,6 +764,7 @@ export class SpeechPlaybackService {
     const cleanup = (async () => {
       const tasks = [
         localCleanup,
+        ...(run.inputTask ? [run.inputTask] : []),
         run.target?.desired === 'stopped'
           ? this.report(run, 'stopped').then(() => undefined)
           : this.voice.discardSession(run.sessionId)
@@ -759,6 +790,7 @@ export class SpeechPlaybackService {
   }
 
   private releaseRun(run: PlaybackRun, publishIdle: boolean): void {
+    run.textInput?.cancel()
     run.detachAbort?.()
     run.detachAbort = undefined
     this.runs.delete(run.sessionId)

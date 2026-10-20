@@ -392,6 +392,22 @@ applies speed conversion once, and splits writes into at most 4,096 source frame
 one-second native audio buffer and two queued text segments. Utility-process output is capped at
 four messages / 131,072 bytes, with one pending writer and a 65,536-byte message limit.
 
+Qwen3-TTS also declares `TextStream → PcmStream`. Automatic reading submits stable
+assistant body text before completion through one speech execution; reasoning is excluded.
+Plain sentences can commit early, while incomplete Markdown stays pending until a safe
+block boundary or EOF. Complete-text models retain completion-time automatic reading.
+
+`ai.voice.text.write` accepts sequenced text/flush events for the owning session/request;
+`ai.voice.text.finish` closes input without cancelling the remaining audio. Main permits
+one pending write, at most 2,048 characters per text event and 5,000 cumulative characters.
+The renderer additionally bounds pending text to 5,000 characters / 64 events and raw
+snapshots to 20,000 characters. Overflow stops automatic reading with a localized notice;
+chat generation continues. The utility input has one 32,768-byte frame and one pending
+writer. The native engine owns segmentation, with flush marking a stable commit boundary.
+Cancellation, scope exit, disabling automatic reading and preemption invalidate the attempt,
+close its text input and release voice resources; late snapshots cannot restart it.
+Incremental speech has no retry-from-start control because some text may already be audible.
+
 Playback attaches after installing its listener and Worklet. Main limits outstanding renderer
 audio to one second of source frames; cumulative acknowledgements represent actual Worklet
 consumption, so pausing propagates backpressure to inference. Playback starts after 500 ms of

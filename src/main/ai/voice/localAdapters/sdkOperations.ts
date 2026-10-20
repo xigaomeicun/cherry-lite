@@ -38,7 +38,9 @@ function completeExecution<T>(work: (signal: AbortSignal) => Promise<T>, signal?
   }
 }
 
-export function completeSpeechOperation(createModel: (options: SpeechOptions) => SpeechModelV3): SpeechOperation {
+export function completeSpeechOperation(
+  createModel: (options: SpeechOptions) => SpeechModelV3
+): Extract<SpeechOperation, { input: typeof SpeechInputKind.Text; output: typeof SpeechOutputKind.Audio }> {
   return {
     input: SpeechInputKind.Text,
     output: SpeechOutputKind.Audio,

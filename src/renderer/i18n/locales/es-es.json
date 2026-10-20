@@ -5622,6 +5622,7 @@
   "settings.voice.auto_read.disclosure.content": "La lectura automática solo usa el servicio de voz local del sistema. El texto de la respuesta permanece en este dispositivo y no se envía a un proveedor de voz remoto.",
   "settings.voice.auto_read.disclosure.title": "¿Activar la lectura automática local?",
   "settings.voice.auto_read.label": "Leer las respuestas automáticamente",
+  "settings.voice.auto_read.text_limit": "La lectura automática se ha detenido porque el texto o el contenido pendiente superó el límite. La generación del chat continúa.",
   "settings.voice.automatic": "Automático",
   "settings.voice.description": "Configura el reconocimiento y la reproducción de voz locales.",
   "settings.voice.dictation.elapsed": "{{seconds}} s",

@@ -28,7 +28,11 @@ export class TtsInferenceService extends InferenceServiceBase<TtsInferenceContra
     super(ttsInferenceProcess, 'tts')
   }
 
-  stream(modelId: LocalModelBundleId, input: Omit<TtsSynthesizeInput, 'outputPath'>, signal?: AbortSignal) {
+  stream(
+    modelId: LocalModelBundleId,
+    input: Omit<TtsSynthesizeInput, 'outputPath' | 'text'> & { text?: string },
+    signal?: AbortSignal
+  ) {
     return this.openStream(
       modelId,
       'synthesize',
@@ -43,7 +47,7 @@ export class TtsInferenceService extends InferenceServiceBase<TtsInferenceContra
       },
       {
         signal,
-        input: { maxFrameBytes: 256, maxBufferedBytes: 256, maxBufferedFrames: 1, maxPendingWrites: 1 },
+        input: { maxFrameBytes: 32768, maxBufferedBytes: 32768, maxBufferedFrames: 1, maxPendingWrites: 1 },
         output: { maxFrameBytes: 65536, maxBufferedBytes: 131072, maxBufferedFrames: 4, maxPendingWrites: 1 }
       }
     )

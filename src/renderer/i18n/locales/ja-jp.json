@@ -5622,6 +5622,7 @@
   "settings.voice.auto_read.disclosure.content": "自動読み上げはローカルのシステム音声サービスのみを使用します。応答テキストはこのデバイスに保持され、リモートの音声プロバイダーには送信されません。",
   "settings.voice.auto_read.disclosure.title": "ローカルの自動読み上げを有効にしますか？",
   "settings.voice.auto_read.label": "応答を自動的に読み上げる",
+  "settings.voice.auto_read.text_limit": "テキストまたは再生待ちの音声が上限を超えたため、自動読み上げを停止しました。チャットの生成は続行します。",
   "settings.voice.automatic": "自動選択",
   "settings.voice.description": "ローカルの音声認識と音声再生を設定します。",
   "settings.voice.dictation.elapsed": "{{seconds}} 秒",

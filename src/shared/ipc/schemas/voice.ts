@@ -67,6 +67,7 @@ const speechInput = sessionAdmission
     modelId: z.enum([APPLE_TTS_MODEL_ID, WINDOWS_TTS_MODEL_ID, QWEN3_TTS_MODEL_ID, KOKORO_TTS_MODEL_ID]).optional(),
     text: z.string().trim().min(1).max(10_000),
     preferStream: z.boolean().optional(),
+    textStream: z.literal(true).optional(),
     remainingText: z.array(z.string().trim().min(1).max(10_000)).max(1000).optional(),
     retryAttemptId: z.number().int().positive().optional(),
     voice: z.string().min(1).max(256).optional(),
@@ -233,6 +234,17 @@ export const voiceRequestSchemas = {
         .optional()
     })
   }),
+  'ai.voice.text.write': defineRoute({
+    input: abort.extend({
+      sequence: revision,
+      event: z.discriminatedUnion('type', [
+        z.strictObject({ type: z.literal('text'), text: z.string().min(1).max(2048) }),
+        z.strictObject({ type: z.literal('flush') })
+      ])
+    }),
+    output: z.void()
+  }),
+  'ai.voice.text.finish': defineRoute({ input: abort.extend({ sequence: revision }), output: z.void() }),
   'ai.speech.abort': defineRoute({ input: abort, output: z.void() }),
   'ai.voice.stream.attach': defineRoute({ input: abort.extend({ attemptId: revision }), output: z.void() }),
   'ai.voice.stream.acknowledge': defineRoute({

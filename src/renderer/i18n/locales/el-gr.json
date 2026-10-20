@@ -5622,6 +5622,7 @@
   "settings.voice.auto_read.disclosure.content": "Η αυτόματη εκφώνηση χρησιμοποιεί μόνο την τοπική υπηρεσία ομιλίας του συστήματος. Το κείμενο της απάντησης παραμένει σε αυτή τη συσκευή και δεν αποστέλλεται σε απομακρυσμένο πάροχο φωνής.",
   "settings.voice.auto_read.disclosure.title": "Ενεργοποίηση τοπικής αυτόματης εκφώνησης;",
   "settings.voice.auto_read.label": "Αυτόματη εκφώνηση απαντήσεων",
+  "settings.voice.auto_read.text_limit": "Η αυτόματη ανάγνωση σταμάτησε επειδή το κείμενο ή το περιεχόμενο σε αναμονή υπερέβη το όριο. Η δημιουργία της απάντησης συνεχίζεται.",
   "settings.voice.automatic": "Αυτόματα",
   "settings.voice.description": "Ρύθμιση τοπικής αναγνώρισης και αναπαραγωγής ομιλίας.",
   "settings.voice.dictation.elapsed": "{{seconds}} δ",

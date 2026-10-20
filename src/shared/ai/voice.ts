@@ -1,4 +1,4 @@
-export const SpeechInputKind = { Text: 'text' } as const
+export const SpeechInputKind = { Text: 'text', TextStream: 'text-stream' } as const
 export type SpeechInputKind = (typeof SpeechInputKind)[keyof typeof SpeechInputKind]
 
 export const SpeechOutputKind = { Audio: 'audio', PcmStream: 'pcm-stream' } as const
@@ -48,3 +48,6 @@ export type TranscriptionStreamEvent = { readonly sessionId: string; readonly re
   | { readonly type: 'ready' }
   | { readonly type: 'revision'; readonly update: TranscriptRevision }
 )
+
+export const SPEECH_TEXT_STREAM_LIMIT = 5_000
+export type SpeechTextEvent = { readonly type: 'text'; readonly text: string } | { readonly type: 'flush' }

@@ -5622,6 +5622,7 @@
   "settings.voice.auto_read.disclosure.content": "Das automatische Vorlesen verwendet ausschließlich den lokalen System-Sprachdienst. Der Antworttext bleibt auf diesem Gerät und wird nicht an einen entfernten Sprachanbieter gesendet.",
   "settings.voice.auto_read.disclosure.title": "Lokales automatisches Vorlesen aktivieren?",
   "settings.voice.auto_read.label": "Antworten automatisch vorlesen",
+  "settings.voice.auto_read.text_limit": "Das automatische Vorlesen wurde gestoppt, da der Text oder die ausstehende Sprachausgabe das Limit überschritten hat. Die Chatgenerierung wird fortgesetzt.",
   "settings.voice.automatic": "Automatisch",
   "settings.voice.description": "Lokale Spracherkennung und Sprachwiedergabe konfigurieren.",
   "settings.voice.dictation.elapsed": "{{seconds}} s",

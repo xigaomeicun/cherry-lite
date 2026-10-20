@@ -51,6 +51,7 @@ import { VoiceInputStream } from './VoiceInputStream'
 import { getMicrophoneStatus, openMicrophoneSettings, openSystemVoiceSettings } from './voicePlatform'
 import { VoiceRuntimeError } from './VoiceRuntimeError'
 import { VoiceStream } from './VoiceStream'
+import { VoiceTextInput } from './VoiceTextInput'
 
 const logger = loggerService.withContext('VoiceSessionService')
 const PLAYBACK_CONFIRMATION_TIMEOUT_MS = 15_000
@@ -90,6 +91,7 @@ type Session = {
   resolvedAdapter?: string
   terminalStatus?: 'completed' | 'failed' | 'aborted'
   cleanup?: Promise<void>
+  textInput?: VoiceTextInput
   inputStream?: VoiceInputStream
   stream?: VoiceStream
   outputId?: string
@@ -414,6 +416,21 @@ export class VoiceSessionService extends BaseService {
     return result
   }
 
+  writeText(owner: VoiceOwner, input: InputFor<'ai.voice.text.write'>): Promise<void> {
+    return this.requireTextInput(owner, input).write(input.sequence, input.event)
+  }
+
+  finishText(owner: VoiceOwner, input: InputFor<'ai.voice.text.finish'>): void {
+    this.requireTextInput(owner, input).finish(input.sequence)
+  }
+
+  private requireTextInput(owner: VoiceOwner, input: { sessionId: string; requestId: string }): VoiceTextInput {
+    const session = this.requireLeaseSession(owner, input.sessionId)
+    if (!session.textInput || session.requestId !== input.requestId || session.closed)
+      throw new VoiceRuntimeError('invalid_request')
+    return session.textInput
+  }
+
   async speech(owner: VoiceOwner, input: InputFor<'ai.speech.generate'>) {
     const resolvesPreferences = input.preferenceResolution === true
     if (resolvesPreferences) {
@@ -466,24 +483,30 @@ export class VoiceSessionService extends BaseService {
       session.speechPlan ??= plan
       const normalizedText = input.text.normalize('NFC').trim()
       const ready = Promise.withResolvers<OutputFor<'ai.speech.generate'>>()
+      const inputKind = input.textStream ? SpeechInputKind.TextStream : SpeechInputKind.Text
       const streaming =
-        input.preferStream &&
+        (input.preferStream || input.textStream) &&
         describeVoiceModel(modelId).model?.voiceCapabilities.speech?.some(
-          (operation) => operation.output === SpeechOutputKind.PcmStream
+          (operation) => operation.input === inputKind && operation.output === SpeechOutputKind.PcmStream
         )
+      if (input.textStream && (!streaming || input.remainingText?.length || input.retryAttemptId !== undefined))
+        throw new VoiceRuntimeError('unsupported')
       const work = this.run(
         session,
         input.requestId,
         modelId,
         'speech',
         async (signal) => {
+          if (input.textStream) session.textInput = new VoiceTextInput(normalizedText)
           const execution = startSpeech(
             {
               modelId,
-              input: {
-                kind: SpeechInputKind.Text,
-                text: streaming ? [normalizedText, ...(input.remainingText ?? [])].join('\n') : normalizedText
-              },
+              input: session.textInput
+                ? { kind: SpeechInputKind.TextStream, events: session.textInput }
+                : {
+                    kind: SpeechInputKind.Text,
+                    text: streaming ? [normalizedText, ...(input.remainingText ?? [])].join('\n') : normalizedText
+                  },
               output: streaming ? SpeechOutputKind.PcmStream : SpeechOutputKind.Audio,
               options: definiteOptions
             },
@@ -563,6 +586,7 @@ export class VoiceSessionService extends BaseService {
               playback: createPlaybackSnapshot(session.playback, true)
             }
           } finally {
+            session.textInput?.close()
             if (session.execution === execution) {
               await execution.cancel()
               session.execution = undefined
@@ -651,7 +675,11 @@ export class VoiceSessionService extends BaseService {
     if (!session || session.id !== input.sessionId || session.closed || !session.playback) {
       throw new VoiceRuntimeError('invalid_request')
     }
-    const next = applyPlaybackCommand(session.playback, input.command, Boolean(session.outputId || session.stream))
+    const next = applyPlaybackCommand(
+      session.playback,
+      input.command,
+      Boolean(session.outputId || (session.stream && !session.textInput))
+    )
     if (next === session.playback) return this.getState(owner)
     if (input.command === 'retry' && session.stream) {
       session.stream.close()
@@ -965,7 +993,10 @@ export class VoiceSessionService extends BaseService {
       ...(session.source && { source: session.source }),
       ...(session.trigger && { trigger: session.trigger }),
       ...(session.playback && {
-        playback: createPlaybackSnapshot(session.playback, Boolean(session.outputId || session.stream))
+        playback: createPlaybackSnapshot(
+          session.playback,
+          Boolean(session.outputId || (session.stream && !session.textInput))
+        )
       }),
       ...(reason && { reason })
     }
@@ -1001,7 +1032,10 @@ export class VoiceSessionService extends BaseService {
       revision: this.revision,
       command,
       ...(session.playback && {
-        playback: createPlaybackSnapshot(session.playback, Boolean(session.outputId || session.stream))
+        playback: createPlaybackSnapshot(
+          session.playback,
+          Boolean(session.outputId || (session.stream && !session.textInput))
+        )
       })
     })
   }
@@ -1167,6 +1201,7 @@ export class VoiceSessionService extends BaseService {
     }
     session.closed = true
     session.inputStream?.close()
+    session.textInput?.close()
     session.stream?.close()
     this.clearPlaybackTimeout(session)
     this.removeOutput(session)

@@ -98,12 +98,15 @@ export const ttsHandlers: UtilityProcessHandlers<TtsInferenceContract> = {
 }
 
 export const ttsStreamHandlers: UtilityProcessStreamHandlers<TtsInferenceContract> = {
-  async synthesize(input, { signal, write }) {
+  async synthesize(input, { signal, write, input: events }) {
     const model = await loadModel(input.modelDir)
     signal.throwIfAborted()
     const { sampleRate, channels } = model.capabilities
     await write({ metadata: { type: 'format', sampleRate, channels } })
-    const stream = model.synthesizeStream(input.text, {
+    async function* textEvents() {
+      for await (const event of events) yield event.metadata
+    }
+    const stream = model.synthesizeStream(input.text ?? textEvents(), {
       voice: input.voice,
       language: input.language,
       signal,

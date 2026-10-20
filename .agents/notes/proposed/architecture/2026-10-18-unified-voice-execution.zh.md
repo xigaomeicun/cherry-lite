@@ -8,7 +8,7 @@ Status: proposed
 
 系统语音、MLX 和 Sherpa 的生成与取消行为不同。如果把这些差异放进播放或听写调用方，用户流程就会与引擎耦合。将输出生成、执行清理、模型驻留和播放结束视为同一个事件，会导致资源过早释放或无限保留。流式传输还需要消费者确认路径：无限发送普通进程事件无法提供背压。
 
-本笔记负责记录六阶段语音方案中可能被重新讨论的决策。[接口设计](2026-10-18-unified-voice-execution.md#detailed-interface-design)和[实现方案](2026-10-18-unified-voice-execution.md#per-pr-implementation-plan)保留协议及文件层面的详细提案。[适配器 README](../../../../src/main/ai/voice/localAdapters/README.md)描述当前私有实现。
+本笔记负责记录六阶段语音方案中可能被重新讨论的决策。[接口设计](2026-10-18-unified-voice-execution.md#detailed-interface-design)和[实现方案](2026-10-18-unified-voice-execution.md#capability-implementation-plan)保留协议及文件层面的详细提案。[适配器 README](../../../../src/main/ai/voice/localAdapters/README.md)描述当前私有实现。
 
 ## 提案
 
@@ -45,32 +45,32 @@ Status: proposed
 
 ## 验收标准
 
-- AC1 — 现有完整结果 TTS/ASR 保留选中模型、音色、语言、输出及脱敏错误行为；拒绝不支持的操作组合，只公布已实现能力 (verification: unit 与 Node/Web typechecks; owner: PR 1)
-- AC2 — 消费开始前和原生执行期间的取消均能结算，不遗留等待者；临时目录清理失败可观察，输入字节归执行所有，活动播放在自身结束前保留媒体 (verification: unit 与 Electron; owner: PR 1)
-- AC3 — 系统语音、FunASR、Qwen3-TTS 和 Kokoro 的完整结果路径在迁移后仍可用于各自支持的平台，包括打包后的原生加载与 Windows 标准 WAV 输入 (verification: unit、Electron 与 packaged artifact; owner: PR 1)
-- AC4 — 真实 utility process 在慢消费下遵守已声明的队列预算；取消、输入 EOF、崩溃与重启能结算读写双方，普通请求行为不变 (verification: unit 与带队列测量的 Electron process smoke; owner: PR 2，与 PR 3 联合验证)
-- AC5 — Qwen3 试听和手动朗读在生成结束前播放；暂停和恢复保持有界且不重复，EOF 排空尾部，停止或模型维护释放执行所有权 (verification: renderer、Electron 与打包后的 AudioWorklet; owner: PR 3)
-- AC6 — 匹配的 MLX ASR 分发产物可安装、选择、加载、取消和移除，不替换成其他模型，不删除仍被 TTS 使用的共享 artifact (verification: unit、Electron 与 packaged artifact; owner: PR 4)
-- AC7 — 连续听写展示修订，正常停止时保留已接受的尾部，只向正确输入框提交一次最终文本，不静默丢弃输入或提交已取消任务 (verification: renderer、Electron 与 packaged artifact; owner: PR 5)
-- AC8 — 增量朗读在回答结束前开始，排除 reasoning，不重复文本或分段，并在输入 EOF、中断或失败时正确关闭 (verification: renderer 与 Electron; owner: PR 6)
+- AC1 — 现有完整结果 TTS/ASR 保留选中模型、音色、语言、输出及脱敏错误行为；拒绝不支持的操作组合，只公布已实现能力 (verification: unit 与 Node/Web typechecks; owner: 统一完整结果执行)
+- AC2 — 消费开始前和原生执行期间的取消均能结算，不遗留等待者；临时目录清理失败可观察，输入字节归执行所有，活动播放在自身结束前保留媒体 (verification: unit 与 Electron; owner: 统一完整结果执行)
+- AC3 — 系统语音、FunASR、Qwen3-TTS 和 Kokoro 的完整结果路径在迁移后仍可用于各自支持的平台，包括打包后的原生加载与 Windows 标准 WAV 输入 (verification: unit、Electron 与 packaged artifact; owner: 统一完整结果执行)
+- AC4 — 真实 utility process 在慢消费下遵守已声明的队列预算；取消、输入 EOF、崩溃与重启能结算读写双方，普通请求行为不变 (verification: unit 与带队列测量的 Electron process smoke; owner: 有界进程流，与 TTS 流式播放联合验证)
+- AC5 — Qwen3 试听和手动朗读在生成结束前播放；暂停和恢复保持有界且不重复，EOF 排空尾部，停止或模型维护释放执行所有权 (verification: renderer、Electron 与打包后的 AudioWorklet; owner: TTS 流式播放)
+- AC6 — 匹配的 MLX ASR 分发产物可安装、选择、加载、取消和移除，不替换成其他模型，不删除仍被 TTS 使用的共享 artifact (verification: unit、Electron 与 packaged artifact; owner: MLX ASR 完整识别)
+- AC7 — 连续听写展示修订，正常停止时保留已接受的尾部，只向正确输入框提交一次最终文本，不静默丢弃输入或提交已取消任务 (verification: renderer、Electron 与 packaged artifact; owner: 连续 PCM 听写)
+- AC8 — 增量朗读在回答结束前开始，排除 reasoning，不重复文本或分段，并在输入 EOF、中断或失败时正确关闭 (verification: renderer 与 Electron; owner: 增量正文朗读)
 - AC9 — Apple 系统 TTS 在完整合成结束前开始 PCM 播放，保持帧顺序和末尾音频，并在取消完成前释放 helper；完整音频和其他适配器继续可用（验证：原生、包协议、Electron 与打包路径测试；owner：Apple 流式扩展）
 
 ## 证据与审批边界
 
-这是对用户已授权设计及 PR 1 实现的补充记录，不是已经执行 Spec-first 评审的证据。2026-10-18 核对时，[PR #21795](https://github.com/CherryHQ/cherry-studio/pull/21795) 为开放的 Draft，提交为 `1d98ad19aef9d04fd8a1b3b899be2c2826602905`；GitHub stack 发现结果显示没有关联 stack，评审中没有 Approval。尚未建立单独获批的 Spec head。本次不声明生命周期迁移。 用户于 2026-10-18 明确授权实现 PR 2；开始实施时，PR #21795 仍为 Draft，head 为 `240554f11d36c72d640531b31d67affbd85674b0`，没有 Approval。
+本记录维护用户已授权的设计和实现。2026-10-18 开始实现时，[评审记录](https://github.com/CherryHQ/cherry-studio/pull/21795) 尚无正式 Spec Approval。用户授权和实现证据不能代替 Spec 批准。本次不声明生命周期迁移。
 
 | 标准 | 已有证据 | 剩余边界 |
 | --- | --- | --- |
 | AC1–AC2 | 合入 main 的 `46ef0b8ce37` 后，10 个 Main 定向测试文件共 265 项通过；Node/Web 类型检查、定向 lint 和文档检查通过。测试包含 `execution.test.ts`、`sdkOperations.test.ts`、`scratch.test.ts`、会话与准入测试、适配器测试及语音 IPC handler。 | 单元测试不能证明所有原生平台或打包路径。 |
 | AC3 | 此次 main 合并前，适配器拆分通过 13 个 Main 文件共 273 项测试。开发版 Electron 完成 Apple 与 Qwen3 WAV 生成及播放，并回到 idle。后续定向测试覆盖了 Windows 标准 WAV、字节偏移输入、取消和超时清理。 | 原生 ASR 资源不可用；本地未执行 Windows 与打包环境验证。较早的 Electron 验证不代表合并后当前提交的实机验证。 |
-| AC4（部分） | PR 2 已实现类型化有界输入输出、有序 EOF、等待写入者上限及清理确认。定向单元测试覆盖流和普通请求行为。真实 Electron 普通目录和 ASAR smoke 通过；双向队列每个方向的峰值为 6,016 字节 / 2 帧，低于 8,192 字节 / 3 帧上限。 | PR 3 已将真实 Qwen3 生产者通过有界 IPC 接入 Worklet。队列测量不是 RSS 或音频质量证据。未验证 Windows。 |
-| AC5 | PR 3 实现类型化 PCM 输出、挂接与消费额度、原生背压、源采样率 Worklet 播放、EOF 排空和新尝试重试。开发版 Electron 中的真实 Qwen3 热启动首次消费为 514 ms，生成结束为 13,950 ms，欠载为零，Renderer 缓冲峰值为 23,936 帧，低于 24,000 帧上限。暂停期间消费游标不变；停止后 40 ms 释放会话，随后重启成功。新尝试重试保留冻结配置，0.75 倍速与 1.5 倍速在 48 kHz 输出设备上均无欠载并完整排空。界面暂停、继续和停止操作也已通过。生产 Vite Worklet 产物在普通目录和 ASAR 中均播放了 24 kHz 双声道的 12,000 帧。 | 通过 Web Audio 观察了设备输出时间；未进行人工听感验收、Windows 或完整打包应用中的 Qwen3 推理验证。原生与 utility 层的数值是强制预算，不是 RSS 测量。 |
-| AC6（部分） | PR 4 增加有类型的 Sherpa/MLX 分派、所选 bundle 安装和 Qwen3-ASR 1.7B 完整识别。Electron 中英文 WebM 识别、取消后重试，以及 unpacked/ASAR 包路径下的原生识别均通过。GitHub/ModelScope 共 18 个模型文件 URL 均可匿名读取，发布的 SHA-256 元数据一致。 | 未覆盖真实麦克风听写和其他平台；ASAR utility/package 测试不等同于完整应用打包验收。仍缺少正式 Spec Approval。 |
-| AC7（部分） | PR 5 接通有界 PCM 采集、有类型的输入 IPC、Qwen 流式识别、文本修订及恰好一次完成提交。Electron 中将 48 kHz 音频经真实 16 kHz 采集 Worklet 输入后，中英文最终文本正确，录音中有修订，分析器电平非零，音轨已释放。采集中取消未插入文字，随后中英文会话均成功完成。约 50 秒的不重复原生录音跨窗口后保留了最后一句。 | 真实麦克风输入为静音：采集与释放通过，真人语音识别尚未验证。另一项 53 秒重复句原生测试遗漏了最后一次重复，应用层未添加补偿。打包采集与完整时长压力验收仍未完成。 |
-| AC8 | 实现方案中已有详细提案。 | 本分支未实现或验证 PR 6。 |
+| AC4（部分） | 有界进程流已实现类型化有界输入输出、有序 EOF、等待写入者上限及清理确认。定向单元测试覆盖流和普通请求行为。真实 Electron 普通目录和 ASAR smoke 通过；双向队列每个方向的峰值为 6,016 字节 / 2 帧，低于 8,192 字节 / 3 帧上限。 | TTS 流式播放已将真实 Qwen3 生产者通过有界 IPC 接入 Worklet。队列测量不是 RSS 或音频质量证据。未验证 Windows。 |
+| AC5 | TTS 流式播放实现类型化 PCM 输出、挂接与消费额度、原生背压、源采样率 Worklet 播放、EOF 排空和新尝试重试。开发版 Electron 中的真实 Qwen3 热启动首次消费为 514 ms，生成结束为 13,950 ms，欠载为零，Renderer 缓冲峰值为 23,936 帧，低于 24,000 帧上限。暂停期间消费游标不变；停止后 40 ms 释放会话，随后重启成功。新尝试重试保留冻结配置，0.75 倍速与 1.5 倍速在 48 kHz 输出设备上均无欠载并完整排空。界面暂停、继续和停止操作也已通过。生产 Vite Worklet 产物在普通目录和 ASAR 中均播放了 24 kHz 双声道的 12,000 帧。 | 通过 Web Audio 观察了设备输出时间；未进行人工听感验收、Windows 或完整打包应用中的 Qwen3 推理验证。原生与 utility 层的数值是强制预算，不是 RSS 测量。 |
+| AC6（部分） | MLX ASR 完整识别增加有类型的 Sherpa/MLX 分派、所选 bundle 安装和 Qwen3-ASR 1.7B 完整识别。Electron 中英文 WebM 识别、取消后重试，以及 unpacked/ASAR 包路径下的原生识别均通过。GitHub/ModelScope 共 18 个模型文件 URL 均可匿名读取，发布的 SHA-256 元数据一致。 | 未覆盖真实麦克风听写和其他平台；ASAR utility/package 测试不等同于完整应用打包验收。仍缺少正式 Spec Approval。 |
+| AC7（部分） | 连续 PCM 听写接通有界 PCM 采集、有类型的输入 IPC、Qwen 流式识别、文本修订及恰好一次完成提交。Electron 中将 48 kHz 音频经真实 16 kHz 采集 Worklet 输入后，中英文最终文本正确，录音中有修订，分析器电平非零，音轨已释放。采集中取消未插入文字，随后中英文会话均成功完成。约 50 秒的不重复原生录音跨窗口后保留了最后一句。 | 真实麦克风输入为静音：采集与释放通过，真人语音识别尚未验证。另一项 53 秒重复句原生测试遗漏了最后一次重复，应用层未添加补偿。打包采集与完整时长压力验收仍未完成。 |
+| AC8（部分） | 增量正文朗读实现了按能力选择的增量朗读、有界文本输入，以及主聊天、Agent 和快捷助手的生命周期接线。聚焦集成测试和真实 Qwen3/Electron 链路已通过。 | 三个窗口各自由真实提供商驱动的验收和其他平台仍未验证；仍缺少正式 Spec Approval。 |
 | AC9（部分） | Apple PCM helper 与适配器已实现。原生提前输出、精确帧序与尾音、背压下取消和重启、Electron 可见波形及暂停恢复停止，以及普通目录/ASAR 的生产包加载均通过。Electron 热启动首次消费为 1,184 ms，生产结束为 8,968 ms，完整排空 194,744 帧且欠载为零；Renderer 缓冲峰值为 21,944/22,050 帧。停止后 31 ms 回到空闲。 | 未验证完整签名应用打包、人工听感及旧 macOS/Intel 设备。传输上限不是原生引擎 RSS 测量。 |
 
-PR 3 沿用现有服务依赖图，不增加单例服务。`VoiceSessionService` 拥有各个 `VoiceStream`，中继只接收发送和过期回调。Renderer 输出适配器拥有音频图和可观察的关闭 Promise。MLX 在播放期间通过有界的两段文本队列继续处理有限文本。实现使用源采样率 AudioContext，将设备采样率转换交给浏览器，不引入自定义重采样器。运行预算为一秒原生 PCM、四条 utility 消息 / 131,072 字节、一秒 Renderer PCM、15 秒挂接、120 秒加载或未受背压阻塞的生产者读取，以及 15 分钟流保留时间。暂停包含在保留预算中，等待消费额度不计为生产者停滞。Worklet 在已有一秒上限内积累 500 ms 源音频后起播，短音频在 EOF 时起播；这消除了最初 1.5 倍速测试中观察到的欠载。
+TTS 流式播放沿用现有服务依赖图，不增加单例服务。`VoiceSessionService` 拥有各个 `VoiceStream`，中继只接收发送和过期回调。Renderer 输出适配器拥有音频图和可观察的关闭 Promise。MLX 在播放期间通过有界的两段文本队列继续处理有限文本。实现使用源采样率 AudioContext，将设备采样率转换交给浏览器，不引入自定义重采样器。运行预算为一秒原生 PCM、四条 utility 消息 / 131,072 字节、一秒 Renderer PCM、15 秒挂接、120 秒加载或未受背压阻塞的生产者读取，以及 15 分钟流保留时间。暂停包含在保留预算中，等待消费额度不计为生产者停滞。Worklet 在已有一秒上限内积累 500 ms 源音频后起播，短音频在 EOF 时起播；这消除了最初 1.5 倍速测试中观察到的欠载。
 
 任一标准未完成时，本笔记保持 proposed。后续实现层开始前，按当前流程建立 Spec 评审及 AC 覆盖关系。只有完整获批范围具备实际累计证据后才能迁移；Draft、推送或部分检查通过都不代表完成。
 
@@ -82,7 +82,7 @@ MLX ASR 源码支持不代表已有兼容的分发产物。原生 ASR、Windows 
 
 ## 详细接口设计
 
-状态：设计提案。历史源码基线：`9d1bf05fe2c`。以下调用关系和文件动作保留当时的改造目标；PR 1 的当前实现与验证状态以上文证据为准，不将“新增”视为仍未创建。本方案承接 [#21662](https://github.com/CherryHQ/cherry-studio/issues/21662) 的语音执行与播放边界，以及 [#21668](https://github.com/CherryHQ/cherry-studio/issues/21668) 的模型与引擎解耦。
+状态：设计提案。历史源码基线：`9d1bf05fe2c`。以下调用关系和文件动作保留当时的改造目标；统一完整结果执行的当前实现与验证状态以上文证据为准，不将“新增”视为仍未创建。本方案承接 [#21662](https://github.com/CherryHQ/cherry-studio/issues/21662) 的语音执行与播放边界，以及 [#21668](https://github.com/CherryHQ/cherry-studio/issues/21668) 的模型与引擎解耦。
 
 目标是让朗读、自动朗读和听写通过统一接口使用不同语音后端。模型适配器负责 MLX、Sherpa、系统语音和后续云端协议的差异；上层根据明确的输入输出能力选择操作。统一能力描述、执行结果、取消和释放语义，同时保留完整音频与连续音频的区别。
 
@@ -382,41 +382,41 @@ ASR 批次需要补齐模型包、JS API 和原生运行时版本匹配。fork �
 
 真实 Electron 验证单独记录首次可听延迟、源帧与消费帧连续性、欠载次数、峰值队列占用、暂停稳定性、冷/热启动和取消后重新执行；覆盖开发与打包资源路径。历史首块 PCM 数据只证明引擎输出，不替代扬声器首音、流式播放或 ASR 实机验收。
 
-### PR 拆分与依赖
+### 能力边界与依赖
 
-每个 PR 的类与接口、文件清单、资源释放顺序、类型约束和验收项见 [逐 PR 实现方案](2026-10-18-unified-voice-execution.md#per-pr-implementation-plan)。本节保留交付范围与依赖总览；实现方案中的新增符号均为提案，不代表已经实现。
+各项能力的类与接口、文件清单、资源释放顺序、类型约束和验收项见 [分能力实现方案](2026-10-18-unified-voice-execution.md#capability-implementation-plan)。本节保留交付范围与依赖总览；实现方案中的新增符号均为提案，不代表已经实现。
 
-建议拆为六个 Cherry Studio 实现 PR；MLX ASR 的发布产物若需要补齐，另有一个 `CherryHQ/mlx-node` 配套 PR。这是评审与交付划分，不要求一次创建全部分支。PR 1 已先行实现；后续实现层应按 Agent Note 流程建立独立 Spec 评审与 AC 覆盖关系，不能把本方案随附在实现 PR 中视为正式 Approval。
+设计分为六项能力；若缺少匹配产物，还需补齐原生 ASR 分发。每项能力都有独立的所有权和验收标准。实现顺序遵循技术依赖；正式 Spec 批准仍是独立要求。
 
-| PR | 建议标题 | 范围 | 依赖 | 独立验收 |
-| --- | --- | --- | --- | --- |
-| 1 | `refactor(voice): unify speech and transcription execution` | 常量与能力契约、统一执行句柄、完整结果适配；迁出 `AiService` 语音方法，补齐生命周期依赖。只声明本 PR 真正可执行的能力 | 无 | 现有系统语音、FunASR、Qwen3-TTS、Kokoro 的完整结果路径经过统一入口；选择、取消、文件释放和错误语义保持正确 |
-| 2 | `feat(utility-process): support bounded request streams` | 通用请求级输入输出流、容量控制、EOF、取消和进程退出结算；保持原 request/event 接口兼容。流量控制不携带 voice 业务语义 | 无硬性代码依赖；接口与 PR 1、3 对齐 | 真实 Electron 子进程中，慢消费和输入过载均有界，取消唤醒阻塞读写，退出后旧代帧无效，现有请求不受影响 |
-| 3 | `feat(voice): stream Qwen3 speech to playback` | TTS producer、推理执行全程占用、Main 会话与 IpcApi 流控、Renderer PCM 输出、播放状态迁移；有限媒体输出适配随真实消费者一起提取 | 1、2 | 试听与朗读在生成结束前出声；暂停、恢复、排空、停止、跨窗口仲裁、卸载和 worker 崩溃恢复通过；打包后的 AudioWorklet 可用 |
-| 4 | `feat(local-asr): add MLX Qwen3 transcription` | MLX ASR 的模型定义、包依赖、原生版本校验、模型下载与选择、完整音频识别适配。复用现有资源管理，不改流式听写 UI | 1；必要时依赖配套引擎发布 | 下载后可选择并识别；与 FunASR 切换不串模型；缺少选中模型时明确失败；取消、卸载、国内外源及打包加载正确，TTS 共用运行时无回归 |
-| 5 | `feat(voice): support streaming dictation` | 连续 PCM 采集、输入写入与结束、Qwen3-ASR stream、转录修订与最终提交；复用 PR 3 的身份、传输和清理规则 | 2、3、4 | 边录边更新预览；无静默丢帧；正常停止保留尾部；取消不提交；文本只插入一次且不误写其他输入框 |
-| 6 | `feat(voice): read incremental assistant text` | 将稳定可朗读正文提交到同一 speech execution，支持文本 flush 和输入结束；调整自动朗读调度，复用已有音频输出 | 3 | 回答未结束时可朗读；排除 reasoning；无重复文本和双重分段；暂停、输入结束、失败和中途打断正确 |
+| 能力 | 范围 | 依赖 | 独立验收 |
+| --- | --- | --- | --- |
+| 统一完整结果执行 | 常量与能力契约、统一执行句柄、完整结果适配；迁出 `AiService` 语音方法，补齐生命周期依赖。只声明真正可执行的能力 | 无 | 现有系统语音、FunASR、Qwen3-TTS、Kokoro 的完整结果路径经过统一入口；选择、取消、文件释放和错误语义保持正确 |
+| 有界进程流 | 通用请求级输入输出流、容量控制、EOF、取消和进程退出结算；保持原 request/event 接口兼容。流量控制不携带 voice 业务语义 | 无硬性代码依赖；接口与统一执行和流式播放对齐 | 真实 Electron 子进程中，慢消费和输入过载均有界，取消唤醒阻塞读写，退出后旧代帧无效，现有请求不受影响 |
+| TTS 流式播放 | TTS producer、推理执行全程占用、Main 会话与 IpcApi 流控、Renderer PCM 输出、播放状态迁移；有限媒体输出适配随真实消费者一起提取 | 统一执行、有界进程流 | 试听与朗读在生成结束前出声；暂停、恢复、排空、停止、跨窗口仲裁、卸载和 worker 崩溃恢复通过；打包后的 AudioWorklet 可用 |
+| MLX ASR 完整识别 | MLX ASR 的模型定义、包依赖、原生版本校验、模型下载与选择、完整音频识别适配。复用现有资源管理，不改流式听写 UI | 统一执行；匹配的原生分发 | 下载后可选择并识别；与 FunASR 切换不串模型；缺少选中模型时明确失败；取消、卸载、国内外源及打包加载正确，TTS 共用运行时无回归 |
+| 连续 PCM 听写 | 连续 PCM 采集、输入写入与结束、Qwen3-ASR stream、转录修订与最终提交；复用 TTS 流式播放的身份、传输和清理规则 | 有界进程流、流式播放生命周期、MLX ASR | 边录边更新预览；无静默丢帧；正常停止保留尾部；取消不提交；文本只插入一次且不误写其他输入框 |
+| 增量正文朗读 | 将稳定可朗读正文提交到同一 speech execution，支持文本 flush 和输入结束；调整自动朗读调度，复用已有音频输出 | 流式播放 | 回答未结束时可朗读；排除 reasoning；无重复文本和双重分段；暂停、输入结束、失败和中途打断正确 |
 
 ```mermaid
 flowchart LR
-  P1[PR 1 统一完整结果执行] --> P3[PR 3 TTS 流式播放]
-  P2[PR 2 通用进程流] --> P3
-  P1 --> P4[PR 4 MLX ASR 完整识别]
-  F[按需补齐 fork 分发] -.-> P4
-  P3 --> P5[PR 5 流式听写]
-  P4 --> P5
-  P3 --> P6[PR 6 增量正文朗读]
+  Execution[统一完整结果执行] --> Playback[TTS 流式播放]
+  Transport[有界进程流] --> Playback
+  Execution --> Asr[MLX ASR 完整识别]
+  Distribution[按需补齐原生分发] -.-> Asr
+  Playback --> Dictation[连续 PCM 听写]
+  Asr --> Dictation
+  Playback --> Reading[增量正文朗读]
 ```
 
-PR 2 与 PR 3 应先在同一验证分支跑通真实 Qwen3-TTS，再按基础设施与业务边界拆开评审，合并顺序为 2 → 3。PR 2 不以测试替身通过作为结束条件，也不为后续模型预建插件、调度或进程池接口。PR 3 保持从 producer 到播放器的完整交付，避免单独合并没有真实消费者的 PCM 播放器或传输层。
+有界进程流与流式播放须先通过真实 Qwen3-TTS 联合验证，再交付各自边界。测试替身不能单独证明传输验收通过；不为假想模型预建插件、调度或进程池接口。保持生产者到播放器的完整路径，PCM 播放器和传输层必须具有真实消费者。
 
-PR 4 可以在 PR 1 后独立推进。它将模型交付、权重格式和加载问题与连续录音问题分开验证；不代表 Sherpa 已支持第二个 ASR 模型，也不作为 #21668 全部验收完成的依据。PR 6 在 PR 3 后即可推进，不必等待 ASR。
+MLX ASR 完整识别可以在统一完整结果执行后独立推进。它将模型交付、权重格式和加载问题与连续录音问题分开验证；不代表 Sherpa 已支持第二个 ASR 模型，也不作为 #21668 全部验收完成的依据。增量正文朗读在 TTS 流式播放后即可推进，不必等待 ASR。
 
-配套 fork PR 仅在现有产物缺少 ASR JS API、导出或匹配原生能力时创建。它负责可重复构建、精确版本、原生导出及分发清单验证；Cherry 的音频传输、播放和会话逻辑留在主仓库。源码 PR 与 Release 发布是独立动作；准备并验证产物后再发布，主仓库引用前确认固定版本和校验值可获取。
+原生分发仅在现有产物缺少 ASR JS API、导出或匹配原生能力时扩展。它负责可重复构建、精确版本、原生导出及分发清单验证；Cherry 的音频传输、播放和会话逻辑留在主仓库。源码变更与 Release 发布是独立动作；准备并验证产物后再发布，主仓库引用前确认固定版本和校验值可获取。
 
-建议优先交付 PR 1 → 2 → 3，使统一接口首先支撑一条完整的流式 TTS 产品路径，再交付 PR 4 → 5。若当前最需要“边回答边朗读”，可把 PR 6 排在 PR 3 之后。
+先验证统一执行和有界传输，再验证流式播放。完整 ASR 可独立验证后再接连续听写；若优先需要边回答边朗读，增量正文朗读可直接接在流式播放之后。
 
-跨平台在线 ASR 或 FunASR VAD 分段、Sherpa 同引擎多模型验收、每个云端语音适配器以及 Realtime 分别另开后续 PR；不与上述六个 PR 捆绑。每个新增后端都必须使用已有统一契约，只有实际无法表达的能力才修改公共接口。
+跨平台在线 ASR 或 FunASR VAD 分段、Sherpa 同引擎多模型验收、每个云端语音适配器以及 Realtime 分别作为后续独立能力推进。每个新增后端都必须使用已有统一契约，只有实际无法表达的能力才修改公共接口。
 
 ### 方案决策
 
@@ -424,15 +424,15 @@ PR 4 可以在 PR 1 后独立推进。它将模型交付、权重格式和加载
 
 实现前需要以批次 B 的小范围原型确认通用进程流 API、批次大小、预缓冲与采样率转换方案。若原型证明现有 IPC 传输不足，再提出基础层扩展及规范变更，不在业务模块添加未经归属的专用通道。云端编码流、双向 Realtime、后台持续转录与多个模型同时运行留给有实际消费者的后续方案。
 
-## 逐 PR 实现方案
+## 分能力实现方案
 
-状态：PR 1 已创建 [Draft PR #21795](https://github.com/CherryHQ/cherry-studio/pull/21795)，PR 2 已完成基础设施实现和进程 smoke 验证；PR 3 补齐真实 Qwen3 生产者到播放器联调以及打包 Worklet 证据；PR 4 接入 Qwen3-ASR 完整识别；PR 5–6 待实现。方案基于 `9d1bf05fe2c` 的代码结构，并在合入 `425b15397e7` 后补齐 Kokoro 完整结果适配，细化 [统一接口和流式执行方案](2026-10-18-unified-voice-execution.md#detailed-interface-design) 中的六个 PR。下文保留各 PR 的实施目标，不能将后续接口、文件和验收项视为已交付。
+以下章节细化[统一接口和流式执行方案](2026-10-18-unified-voice-execution.md#detailed-interface-design)中的能力边界，保留源码基线 `9d1bf05fe2c` 时的设计目标及 `425b15397e7` 后补充的 Kokoro 完整结果适配；实现与验证状态以上文证据表为准。提案中的接口、文件和验收目标不代表已交付。
 
-PR 1 已提供完整结果操作表、统一执行句柄和能力描述，迁移了 VoiceSessionService 的调用与依赖；清理失败通过 `closed` 保持可观察。共享层目前只定义已支持的完整输入输出标签，PCM 与增量标签随对应 PR 加入。定向自动化及 Node/Web 类型检查通过；合入 `46ef0b8ce37` 之前，开发版 Electron 已验证 Apple/Qwen3 TTS 生成、播放结束、Qwen 取消与随后重启操作。原生 ASR 因本地资源未安装尚未完成实机识别，Windows 与打包产物也仍需对应环境验收。
+统一执行提供完整结果操作表、执行句柄、能力描述及 VoiceSessionService 集成。清理失败通过 `closed` 保持可观察；PCM 与增量类型归属对应能力。
 
-交付顺序为 PR 1 → PR 2 → PR 3；PR 4 可在 PR 1 后推进，PR 5 等待 PR 3、4，PR 6 只等待 PR 3。PR 2 的真实消费者验证与 PR 3 一起完成，再先合并基础设施 PR。可选的 fork 分发 PR 是 PR 4 的产物前置条件。
+依赖有界进程流之前，先与真实 TTS 生产者联合验证。完整 ASR 依赖统一执行及匹配的原生产物；连续听写还依赖共享流生命周期；增量正文朗读依赖流式播放，无需等待 ASR。
 
-### 所有 PR 共用的边界
+### 共用实现边界
 
 #### 所有权与服务依赖
 
@@ -462,9 +462,9 @@ PR 1 已提供完整结果操作表、统一执行句柄和能力描述，迁移
 
 开闭原则的目标是：增加同能力后端时只增加适配器、模型目录数据和引擎实现，业务消费者继续使用同一契约。不是承诺“加模型零改动”；静态 catalog、ID 联合和显式导出允许增加条目，新增输入输出语义则必须扩展公共契约并补齐所有消费者。不做动态插件、通用依赖注入容器或无实际消费者的抽象工厂。
 
-### PR 1：统一完整结果执行
+### 统一完整结果执行
 
-建议标题：`refactor(voice): unify speech and transcription execution`。无前置 PR，交付后现有功能完整可用；尚不开放流式能力。
+无前置能力，交付后现有功能完整可用；尚不开放流式能力。
 
 #### 类与接口
 
@@ -474,7 +474,7 @@ PR 1 已提供完整结果操作表、统一执行句柄和能力描述，迁移
 
 完整结果适配器内部继续调用现有 `createModel` 与 aiCore API。SDK 模型工厂成为适配器内部细节，公共执行入口不暴露 SDK 对象。先迁移两个不同后端验证共性，再提取确实重复的完整结果包装函数；不建立包含空方法的 `BaseVoiceAdapter`。
 
-本 PR 只注册 `Text → Audio` 与 `Audio → Final`。即使协议预留了其他标签，也不能提前向 UI 公布。完整 ASR 可以有一个最终 revision，但 `completed` 是最终提交的唯一依据；无更新的后端也必须完成，不强迫伪造中间结果。
+完整结果边界只注册 `Text → Audio` 与 `Audio → Final`。即使协议预留了其他标签，也不能提前向 UI 公布。完整 ASR 可以有一个最终 revision，但 `completed` 是最终提交的唯一依据；无更新的后端也必须完成，不强迫伪造中间结果。
 
 #### 文件组织
 
@@ -503,13 +503,13 @@ PR 1 已提供完整结果操作表、统一执行句柄和能力描述，迁移
 
 定向测试覆盖现有 `VoiceSessionService.test.ts`、`voiceAdmissionCoordination.test.ts`、Apple、Windows、FunASR、Qwen3-TTS、Kokoro adapter 测试、IPC handler 的 `voice.test.ts` 和 aiCore `voice.test.ts`。把 `src/main/ai/__tests__/AiService.voice.test.ts` 中有价值的契约断言迁至新增 `src/main/ai/voice/__tests__/execution.test.ts`，不保留只验证包装调用次数的测试。
 
-合并门槛：系统 TTS/ASR、FunASR、Qwen3-TTS、Kokoro 的原路径均不要求流式客户端；失败和取消后可再次启动；无临时文件与媒体 URL 泄漏。PR 1 不引入工作线程、PCM 通道或新的包依赖。
+合并门槛：系统 TTS/ASR、FunASR、Qwen3-TTS、Kokoro 的原路径均不要求流式客户端；失败和取消后可再次启动；无临时文件与媒体 URL 泄漏。统一完整结果执行不引入工作线程、PCM 通道或新的包依赖。
 
-### PR 2：通用请求级有界流
+### 通用请求级有界流
 
-建议标题：`feat(utility-process): support bounded request streams`。保持普通 request/event 行为，单独评审 core 协议变更；与 PR 3 原型联合验证后合并。
+保持普通 request/event 行为，单独评审 core 协议变更；与 TTS 流式播放原型联合验证。
 
-PR 2 当前实现使用主进程与子进程共享的请求级 `StreamChannel`，由仅主进程使用的 `StreamRequest` 管理结果与关闭所有权，`streamFrame.ts` 负责有界标量元数据和字节视图编码。不增加生命周期服务或语音依赖。每个方向显式指定容量；协议版本 2 会拒绝旧 bundle。[消费者参考](../../../../docs/references/utility-process/README.md#bounded-request-streams) 维护已交付 API。
+有界进程流当前实现使用主进程与子进程共享的请求级 `StreamChannel`，由仅主进程使用的 `StreamRequest` 管理结果与关闭所有权，`streamFrame.ts` 负责有界标量元数据和字节视图编码。不增加生命周期服务或语音依赖。每个方向显式指定容量；协议版本 2 会拒绝旧 bundle。[消费者参考](../../../../docs/references/utility-process/README.md#bounded-request-streams) 维护已交付 API。
 
 #### 接口与协议设计
 
@@ -547,21 +547,21 @@ interface UtilityProcessStream<InputFrame, OutputFrame, Result> {
 
 流请求登记成功即阻止 idle reaping；等待输入、暂停输出和 handler 清理期间仍为活跃。正常结束先完成数据边界和 handler 清理，再解除请求登记。取消、进程崩溃、维护停止都拒绝等待者并让句柄结算；数据晚到不能重建已结束的请求。`withStopped` 仍须确认退出后才执行维护回调。
 
-本 PR 不改变生命周期服务图，不依赖 VoiceSessionService 或推理服务。核心对象由 ProcessHost/utility server 持有，不能新增全局 StreamManager。遵守现有 child entry 的导入边界，不能让主进程 application/logger 进入子进程构建。
+进程流层不改变生命周期服务图，不依赖 VoiceSessionService 或推理服务。核心对象由 ProcessHost/utility server 持有，不能新增全局 StreamManager。遵守现有 child entry 的导入边界，不能让主进程 application/logger 进入子进程构建。
 
 #### 实施顺序与验收
 
 1. 流类型与帧守卫 → 编译证明方法、输入输出不能串用；拒绝超额、超长、乱序和已关闭写入。
 2. 主子进程状态与关闭 → 验证满队列时取消、未开始读取即取消、输入 EOF 后输出继续、崩溃与重启、重复取消。
-3. Electron smoke 与 PR 3 的真实 TTS producer → 测量峰值队列及各层在途量，证明普通请求和原取消策略不变。
+3. Electron smoke 与 TTS 流式播放的真实 TTS producer → 测量峰值队列及各层在途量，证明普通请求和原取消策略不变。
 
 新增 `src/main/core/utilityProcess/__tests__/ProcessHost.stream.test.ts` 与 `utilityProcessStream.test.ts`，并运行该目录已有 `protocolGuards.test.ts`、`serveUtilityProcess.test.ts`、`ProcessHost.cancellation.test.ts`、`ProcessHost.stop.test.ts`、`ProcessHost.lifecycle.test.ts`。扩展既有 smoke harness 后执行 `pnpm smoke:utility-process`，记录 Electron 实际版本与结果。
 
 合并门槛：慢消费者下内存预算可解释，取消不受信用额度影响，等待中的输入与输出都能退出，普通 request/event 测试保持通过。单纯模拟 MessagePort 的测试通过不算跨进程验收完成。
 
-### PR 3：Qwen3-TTS 流式播放闭环
+### Qwen3-TTS 流式播放闭环
 
-建议标题：`feat(voice): stream Qwen3 speech to playback`。依赖 PR 1、2，首次开放 `Text → PcmStream`；保持完整音频能力。
+依赖统一执行和有界进程流，首次开放 `Text → PcmStream`；保持完整音频能力。
 
 #### 类与接口
 
@@ -609,11 +609,11 @@ AudioWorklet 入口只导入可运行于音频线程的纯代码或类型，禁�
 
 断言真实契约：生成未完成时可消费首帧，暂停后内存有界，恢复不重复，尾部全部排空，停止后的旧帧不进入输出，卸载正在背压的模型不会死锁，卸载其他模型不打断当前模型。不同源/设备采样率下检查持续时间、帧连续性和尾部，不能只断言调用了 resume。
 
-Electron 实机记录冷/热首音、生成结束时间、总播放时长、欠载、最大各级缓冲和停止后恢复；覆盖开发与打包工作线程。未完成扬声器验证时只能报告协议/播放器局部测试通过。PR 3 合并后，试听和手动朗读都应使用同一输出适配路径，不单独合并无消费者的播放器。
+Electron 实机记录冷/热首音、生成结束时间、总播放时长、欠载、最大各级缓冲和停止后恢复；覆盖开发与打包工作线程。未完成扬声器验证时只能报告协议/播放器局部测试通过。TTS 流式播放使试听和手动朗读使用同一输出适配路径，不单独合并无消费者的播放器。
 
-### PR 4：MLX Qwen3-ASR 完整识别
+### MLX Qwen3-ASR 完整识别
 
-建议标题：`feat(local-asr): add MLX Qwen3 transcription`。依赖 PR 1 和可用的匹配分发产物，不依赖流式听写 UI；只公布 `Audio → Final`。
+依赖统一完整结果执行和可用的匹配分发产物，不依赖流式听写 UI；只公布 `Audio → Final`。
 
 实现选择：使用 Qwen3-ASR 1.7B，复用未变更的 `mlx-node-5db3d24bc87a-r2`
 原生产物。固定版本的加载器按 1.7B 张量布局校验；0.6B 需要单独修复上游并重新验证原生包。
@@ -626,7 +626,7 @@ ASR JavaScript 打包和模型产物来源记录，不替换共享原生二进�
 往返切换两次，每次选择都产生一个独立的 ASR 进程。移除 Qwen3 后，再次指定 Qwen3
 会失败而非回退；驻留 TTS 的 PID 不变，且仍能成功合成。Electron WebM 识别、取消后
 重试及 unpacked/ASAR utility-package 加载均通过。配套分发见
-[fork PR #1](https://github.com/CherryHQ/mlx-node/pull/1)。
+[原生分发变更](https://github.com/CherryHQ/mlx-node/pull/1)。
 
 原生验证：约四秒的中英文完整录音均返回预期最终文本，静音返回空文本。单文件和分片
 权重均能用现有原生包加载。这些样本是合成语音，不能据此认定真实麦克风或流式听写已验收。
@@ -667,21 +667,21 @@ ASR JavaScript 打包和模型产物来源记录，不替换共享原生二进�
 
 1. 核对精确版本的 ASR JS 导出、native 导出、权重格式和平台限制 → 缺产物先完成配套 fork 工作，不以 TTS 已工作推断 ASR 可用。
 2. 打通指定 bundle 安装/选择和强类型引擎分派 → 在只装一个引擎的环境验证另一个引擎缺失不阻塞当前模型。
-3. 完整音频识别接入 PR 1 → 验证 FunASR ↔ Qwen3-ASR 切换、取消、重试、模型移除与共享运行时更新。
+3. 完整音频识别接入统一完整结果执行 → 验证 FunASR ↔ Qwen3-ASR 切换、取消、重试、模型移除与共享运行时更新。
 
 新增 `localAdapters/__tests__/qwen3Asr.test.ts`、`runtime/__tests__/inferenceEntryAsr.test.ts`；运行现有 `capabilities/asr/__tests__/AsrInferenceService.test.ts`、`catalog/__tests__/catalog.test.ts`、`capabilities/__tests__/capabilityHooks.test.ts`、`LocalModelService.test.ts`、`BundleInstaller.test.ts`、`LocalModelStorageService.test.ts` 及 `inferenceEntryTts.test.ts` 的受影响消费者用例。目录以各所属模块为准，执行时列出完整文件路径。
 
 合并门槛：目标 Mac 的开发/打包加载均通过，普通完整录音能识别；所选模型缺失明确报错；安装源与校验可复现；ASR 卸载不破坏 TTS；其他平台原 Sherpa 路径不加载 MLX。不把这项验收写成 Sherpa 同引擎多模型已经完成。
 
-### PR 5：连续 PCM 听写
+### 连续 PCM 听写
 
-建议标题：`feat(voice): support streaming dictation`。依赖 PR 2、3、4，新增 `PcmStream → Revisions` 能力并复用已交付的会话与流控。
+依赖有界进程流、流式播放生命周期和 MLX ASR 完整识别，新增 `PcmStream → Revisions` 能力并复用已交付的会话与流控。
 
 #### 接口与文件
 
 `PcmCapture` 是 DictationService 拥有的普通资源类，提供开始、正常停止并排出尾部、立即取消三种行为。实际 MediaStream、tracks、AudioContext、worklet 和待提交批次只归它管理；设备切换不能在活动录音中静默重建输入源。
 
-`VoiceService` 使用 PR 3 的流身份和监听器，增加 PCM write / finish_input 调用；`VoiceInputStream` 在现有会话内拥有单个待交接 PCM 批次；播放用 `VoiceStream` 保持仅负责输出。`AsrInferenceService` 使用 PR 3 的整次流队列占用，MLX handler 串行 feed；输入 EOF 后 finish，映射修订与最终结果。原始 SDK stream 只存在于子进程。
+`VoiceService` 使用 TTS 流式播放的流身份和监听器，增加 PCM write / finish_input 调用；`VoiceInputStream` 在现有会话内拥有单个待交接 PCM 批次；播放用 `VoiceStream` 保持仅负责输出。`AsrInferenceService` 使用 TTS 流式播放的整次流队列占用，MLX handler 串行 feed；输入 EOF 后 finish，映射修订与最终结果。原始 SDK stream 只存在于子进程。
 
 | 文件 | 实现内容 |
 | --- | --- |
@@ -716,9 +716,9 @@ revision 使用单调版本和完整文本；provisional 起点统一成 UTF-16 
 
 实机证明边录边更新、正常停止保留尾词、取消后麦克风释放、焦点切换不误插入、设备断开后可重新开始。未安装或不支持流式模型时仍使用现有完整录音路径，按能力选择，不根据平台写条件分支。UI 不应把有滚动窗口延迟的模型描述成逐音素即时识别。
 
-### PR 6：增量正文朗读
+### 增量正文朗读
 
-建议标题：`feat(voice): read incremental assistant text`。依赖 PR 3，新增 `TextStream → PcmStream`，无需等待 ASR。
+依赖 TTS 流式播放，新增 `TextStream → PcmStream`，无需等待 ASR。
 
 #### 类、接口与接入点
 
@@ -752,17 +752,36 @@ LLM 生成不会因为语音消费慢而停止。朗读文本 backlog 必须有�
 
 实机在主聊天、Agent 与快捷助手分别验证：生成未结束即可听见正文；成功结束保留尾音；取消和关闭开关立即停止语音但不干扰聊天。不宣称未接入的消息运行时自动支持增量朗读。
 
-### 可选配套 PR：MLX ASR 分发
+#### 增量正文朗读实现证据
 
-仅在固定版本的产物不能支持 PR 4 时创建，范围在 `CherryHQ/mlx-node`。它交付匹配的 ASR JS 导出、native binding、平台资源与可复现构建/校验清单；不包含 Cherry 的 session、IPC、模型下载 UI 或播放器。
+用户于 2026-10-19 授权实现。`SpeechTextInput` 拥有 renderer 待消费队列，
+`VoiceTextInput` 拥有 Main 输入握手，`VoiceSessionService` 拥有执行与输入生命周期。
+没有新增生命周期服务或同阶段依赖。Qwen3 复用锁定原生包的增量文本输入和分段能力。
+共享 operation 类型区分 text 与 text-stream 输入，完整输入 adapter 不会误收异步输入。
+传输预算和公开行为记录在[本地模型](../../../../docs/references/ai/local-models.md)。
+
+聚焦测试覆盖稳定 Markdown 边界、排除 reasoning、重复快照、EOF 尾段排空、累计超限、
+能力查询期间取消、晚到更新、owner/request 身份和三个生产入口回调。这些入口测试使用
+受控快照运行协调器，不代表真实提供商对话验收。
+
+原生包探针在输入 EOF 前 142 ms 产出首个 PCM。macOS arm64 开发 Electron 实测经过真实
+renderer/Main/utility/Qwen3/player 链路：回答完成前 2,358 ms 开始消费；暂停时游标保持
+1,024 帧；成功排空全部 234,240 帧，零欠载，峰值缓冲 23,808 / 24,000 帧。取消后拒绝晚到
+文本，重新启动后排空 186,240 帧。应用播放条在回答 EOF 前显示了 16 个不同波形帧；暂停后
+波形归零，恢复后继续动画。这些时间来自本机受控快照测试，不是延迟保证。主聊天、
+Agent 和快捷助手各自由真实提供商驱动的验收仍待完成，因此 AC8 保持部分覆盖。
+
+### 可选原生 ASR 分发
+
+仅在固定版本的产物不能支持 MLX ASR 完整识别时创建，范围在 `CherryHQ/mlx-node`。它交付匹配的 ASR JS 导出、native binding、平台资源与可复现构建/校验清单；不包含 Cherry 的 session、IPC、模型下载 UI 或播放器。
 
 先验证完整识别，再验证实际 stream 的 feed/finish/cancel、修订与清理语义，清楚区分模型缓存和单次识别对象。对导出、平台要求、版本和权重格式建立一份一致的发布元数据；主仓库 pin 精确版本并校验哈希，不跟随浮动分支。
 
-验收包括干净目录安装、Electron utility process 加载、打包路径、本地完整输入和连续输入、取消后的再次加载；与现有 TTS 的共享原生能力一起回归。源码 PR 合并、准备草稿产物和正式发布是不同动作；公开发布前完成产物验证，不能把创建方案或源码 PR 当成发布授权。
+验收包括干净目录安装、Electron utility process 加载、打包路径、本地完整输入和连续输入、取消后的再次加载；与现有 TTS 的共享原生能力一起回归。源码变更集成、准备草稿产物和正式发布是不同动作；公开发布前完成产物验证，不能把创建方案或源码变更当成发布授权。
 
 ### 验证与交付记录
 
-每个实现 PR 在正文记录：实际改动的接口与所有权、同阶段服务依赖变化、显式测试文件及结果、实机平台/构建方式、未覆盖项。PR 3/5/6 还记录首音或首个 revision、队列峰值、尾部排空、取消与恢复结果。设计中的目标不能填成已经通过的证据。
+每项能力记录：实际改动的接口与所有权、同阶段服务依赖变化、显式测试文件及结果、实机平台/构建方式、未覆盖项。流式播放、连续听写和增量正文朗读还记录首音或首个 revision、队列峰值、尾部排空、取消与恢复结果。设计中的目标不能填成已经通过的证据。
 
 实施前运行 `pnpm install`，再用 `pnpm check --plan` 查看影响范围；根据上述用例选择 `pnpm test:main <完整测试文件路径...>`、`pnpm test:renderer <完整测试文件路径...>` 等命令。类型改动运行受影响项目的 typecheck，格式和 lint 只覆盖改动文件，不自动执行无过滤的全仓库测试。新增 schema、IPC 事件和 utility contract 同时检查生产者与消费者的编译类型。
 
@@ -770,7 +789,7 @@ LLM 生成不会因为语音消费慢而停止。朗读文本 backlog 必须有�
 
 ### Apple 系统 TTS 流式扩展
 
-用户在 PR 5 之后明确授权了此扩展。它增加完整文本到 PCM 输出，不包含增量文本输入（PR 6）或系统 ASR。现有 proposed 记录继续作为决策归属；这不代表已获 GitHub Spec 正式批准或完成其他 AC。
+此扩展将 Apple 系统语音接入共享流式播放生命周期。它增加完整文本到 PCM 输出，不包含增量文本输入或系统 ASR。现有 proposed 记录继续作为决策归属；这不代表已获 GitHub Spec 正式批准或完成其他 AC。
 
 `packages/system-speech` 拥有请求级 helper 和按需读取的有界 NDJSON 输出协议：一个格式帧、有序 Float32 小端 PCM 帧，以及精确总帧数的结束标记。每个 PCM 帧最多包含 1,024 帧、一个或两个声道；每行协议不超过 16 KiB。原生同步管道写入与 Node 按需读取传递背压，不增加应用音频队列或临时 WAV。平台回调仅存在于 helper。原生引擎内部内存不属于这些传输预算。
 

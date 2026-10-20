@@ -1,4 +1,4 @@
-import { TranscriptionInputKind } from '@shared/ai/voice'
+import { SpeechInputKind, TranscriptionInputKind } from '@shared/ai/voice'
 
 import type { SpeechExecution, SpeechRequest, TranscriptionExecution, TranscriptionRequest } from './executionTypes'
 import { getSpeechOperations, getTranscriptionOperations } from './localAdapters'
@@ -10,7 +10,11 @@ export function startSpeech(request: SpeechRequest, signal?: AbortSignal): Speec
     (operation) => operation.input === request.input.kind && operation.output === request.output
   )
   if (!operation) throw new VoiceRuntimeError('unsupported')
-  return operation.start(request.input, request.options, signal)
+  if (operation.input === SpeechInputKind.Text && request.input.kind === SpeechInputKind.Text)
+    return operation.start(request.input, request.options, signal)
+  if (operation.input === SpeechInputKind.TextStream && request.input.kind === SpeechInputKind.TextStream)
+    return operation.start(request.input, request.options, signal)
+  throw new VoiceRuntimeError('unsupported')
 }
 
 export function startTranscription(request: TranscriptionRequest, signal?: AbortSignal): TranscriptionExecution {

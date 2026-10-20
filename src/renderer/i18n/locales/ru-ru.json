@@ -5622,6 +5622,7 @@
   "settings.voice.auto_read.disclosure.content": "Автоматическое чтение использует только локальную системную службу речи. Текст ответа остаётся на этом устройстве и не отправляется удалённому поставщику голосовых услуг.",
   "settings.voice.auto_read.disclosure.title": "Включить локальное автоматическое чтение?",
   "settings.voice.auto_read.label": "Автоматически озвучивать ответы",
+  "settings.voice.auto_read.text_limit": "Автоматическое чтение остановлено: текст или очередь озвучивания превысили лимит. Генерация ответа продолжается.",
   "settings.voice.automatic": "Автоматически",
   "settings.voice.description": "Настройте локальное распознавание и воспроизведение речи.",
   "settings.voice.dictation.elapsed": "{{seconds}} с",

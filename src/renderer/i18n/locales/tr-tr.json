@@ -5622,6 +5622,7 @@
   "settings.voice.auto_read.disclosure.content": "Otomatik okuma yalnızca yerel sistem konuşma hizmetini kullanır. Yanıt metni bu cihazda kalır ve uzak bir ses sağlayıcısına gönderilmez.",
   "settings.voice.auto_read.disclosure.title": "Yerel otomatik okuma etkinleştirilsin mi?",
   "settings.voice.auto_read.label": "Yanıtları otomatik olarak oku",
+  "settings.voice.auto_read.text_limit": "Metin veya bekleyen seslendirme sınırı aştığı için otomatik okuma durduruldu. Sohbet yanıtı oluşturulmaya devam ediyor.",
   "settings.voice.automatic": "Otomatik",
   "settings.voice.description": "Yerel konuşma tanımayı ve sesli oynatmayı yapılandırın.",
   "settings.voice.dictation.elapsed": "{{seconds}} sn",

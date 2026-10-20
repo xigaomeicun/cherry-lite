@@ -8,7 +8,7 @@ English | [中文](2026-10-18-unified-voice-execution.zh.md)
 
 System speech, MLX, and Sherpa expose different production and cancellation behavior. Putting those differences in playback or dictation callers would couple user flows to engines. Treating generated output, execution cleanup, model residency, and playback completion as one event would either release resources too early or retain them indefinitely. Streaming also needs a consumer acknowledgement path: an unbounded sequence of ordinary process events cannot provide backpressure.
 
-This note owns the revisitable decisions for the six-stage voice plan. The [interface design](2026-10-18-unified-voice-execution.md#detailed-interface-design) and [implementation plan](2026-10-18-unified-voice-execution.md#per-pr-implementation-plan) retain detailed protocol and file-level proposals. The [adapter README](../../../../src/main/ai/voice/localAdapters/README.md) describes the current private implementation.
+This note owns the revisitable decisions for the six-stage voice plan. The [interface design](2026-10-18-unified-voice-execution.md#detailed-interface-design) and [implementation plan](2026-10-18-unified-voice-execution.md#capability-implementation-plan) retain detailed protocol and file-level proposals. The [adapter README](../../../../src/main/ai/voice/localAdapters/README.md) describes the current private implementation.
 
 ## Proposal
 
@@ -45,32 +45,32 @@ Deliver complete-result compatibility first, then bounded process streams and Qw
 
 ## Acceptance criteria
 
-- AC1 — Existing complete-result TTS/ASR preserves selected model, voice, language, output, and sanitized failure behavior; unsupported operation pairs are rejected and only implemented capabilities are published (verification: unit and Node/Web typechecks; owner: PR 1)
-- AC2 — Cancellation before consumption and during native work settles without abandoned waiters; scratch cleanup failures remain observable, input bytes are owned, and active playback retains its media until its own end (verification: unit and Electron; owner: PR 1)
-- AC3 — System, FunASR, Qwen3-TTS, and Kokoro complete-result paths remain usable on their supported platforms after migration, including packaged native loading and Windows canonical WAV input (verification: unit, Electron, and packaged artifact; owner: PR 1)
-- AC4 — Real utility processes remain within declared queue budgets under slow consumption; cancellation, input EOF, crash, and restart settle readers and writers without changing ordinary requests (verification: unit and Electron process smoke with queue measurements; owner: PR 2, integrated with PR 3)
-- AC5 — Qwen3 preview and manual read-aloud play before generation finishes; pause/resume stays bounded and nonduplicating, EOF drains the tail, and stop or model maintenance releases execution ownership (verification: renderer, Electron, and packaged AudioWorklet; owner: PR 3)
-- AC6 — A matching MLX ASR distribution can be installed, selected, loaded, cancelled, and removed without substituting another model or deleting a shared artifact still used by TTS (verification: unit, Electron, and packaged artifact; owner: PR 4)
-- AC7 — Continuous dictation displays revisions, retains the accepted tail on normal stop, commits final text once to the correct input, and never silently drops input or commits cancelled work (verification: renderer, Electron, and packaged artifact; owner: PR 5)
-- AC8 — Incremental read-aloud begins before the answer ends, excludes reasoning, avoids duplicate text and segmentation, and closes correctly on input EOF, interruption, or failure (verification: renderer and Electron; owner: PR 6)
+- AC1 — Existing complete-result TTS/ASR preserves selected model, voice, language, output, and sanitized failure behavior; unsupported operation pairs are rejected and only implemented capabilities are published (verification: unit and Node/Web typechecks; owner: unified complete-result execution)
+- AC2 — Cancellation before consumption and during native work settles without abandoned waiters; scratch cleanup failures remain observable, input bytes are owned, and active playback retains its media until its own end (verification: unit and Electron; owner: unified complete-result execution)
+- AC3 — System, FunASR, Qwen3-TTS, and Kokoro complete-result paths remain usable on their supported platforms after migration, including packaged native loading and Windows canonical WAV input (verification: unit, Electron, and packaged artifact; owner: unified complete-result execution)
+- AC4 — Real utility processes remain within declared queue budgets under slow consumption; cancellation, input EOF, crash, and restart settle readers and writers without changing ordinary requests (verification: unit and Electron process smoke with queue measurements; owner: bounded process streams, integrated with TTS streaming playback)
+- AC5 — Qwen3 preview and manual read-aloud play before generation finishes; pause/resume stays bounded and nonduplicating, EOF drains the tail, and stop or model maintenance releases execution ownership (verification: renderer, Electron, and packaged AudioWorklet; owner: TTS streaming playback)
+- AC6 — A matching MLX ASR distribution can be installed, selected, loaded, cancelled, and removed without substituting another model or deleting a shared artifact still used by TTS (verification: unit, Electron, and packaged artifact; owner: MLX ASR complete recognition)
+- AC7 — Continuous dictation displays revisions, retains the accepted tail on normal stop, commits final text once to the correct input, and never silently drops input or commits cancelled work (verification: renderer, Electron, and packaged artifact; owner: continuous PCM dictation)
+- AC8 — Incremental read-aloud begins before the answer ends, excludes reasoning, avoids duplicate text and segmentation, and closes correctly on input EOF, interruption, or failure (verification: renderer and Electron; owner: incremental body reading)
 - AC9 — Apple system TTS starts PCM playback before complete synthesis, preserves frame order and the final tail, and releases its helper before cancellation settles; finite-audio and other adapters remain usable (verification: native, package contract, Electron and packaged-path harness; owner: Apple streaming extension)
 
 ## Evidence and approval boundary
 
-This is a retrospective record of the user-authorized design and PR 1 implementation, not evidence that a Spec-first review occurred. On 2026-10-18, [PR #21795](https://github.com/CherryHQ/cherry-studio/pull/21795) was an open Draft at `1d98ad19aef9d04fd8a1b3b899be2c2826602905`; GitHub stack discovery reported no attached stack, and its reviews contained no Approval. A separate approved Spec head has not been established. No lifecycle transition is claimed. The user explicitly authorized PR 2 implementation on 2026-10-18; PR #21795 was still Draft at `240554f11d36c72d640531b31d67affbd85674b0` with no Approval when that work started.
+This records the user-authorized design and implementation. The [review record](https://github.com/CherryHQ/cherry-studio/pull/21795) had no formal Spec Approval when implementation began on 2026-10-18. User authorization and implementation evidence do not replace Spec approval. No lifecycle transition is claimed.
 
 | Criteria | Available evidence | Remaining boundary |
 | --- | --- | --- |
 | AC1–AC2 | After the merge of main at `46ef0b8ce37`, 10 focused Main test files passed 265 tests; Node/Web typechecks, scoped lint, and the docs gate passed. Tests include `execution.test.ts`, `sdkOperations.test.ts`, `scratch.test.ts`, session/admission tests, adapter tests, and the voice IPC handler. | Unit results do not establish every native platform or packaged path. |
 | AC3 | Before that main merge, the adapter split passed 273 tests across 13 Main files. Development Electron generated and played Apple and Qwen3 WAV to completion and returned to idle. Windows canonical WAV, byte-offset input, cancellation, and timeout cleanup were covered by the later focused tests. | Native ASR resources were unavailable; Windows and packaged execution were not exercised locally. The earlier Electron run is not an exact-head run after the merge. |
-| AC4 (partial) | PR 2 implements typed bounded input/output, ordered EOF, pending-writer limits, and cleanup acknowledgement. Focused unit tests cover stream and ordinary request behavior. Real Electron unpacked and ASAR smoke passed; duplex queue peaks were 6,016 bytes / 2 frames per direction against limits of 8,192 bytes / 3 frames. | PR 3 now exercises the real Qwen3 producer through bounded IPC and the Worklet. Queue measurements are not RSS or audio-quality evidence. Windows was not exercised. |
-| AC5 | PR 3 implements typed PCM output, attachment/consumption credits, native backpressure, source-rate Worklet playback, EOF drain and fresh-attempt retry. Real Qwen3 development Electron measured hot first consumption at 514 ms, generation completion at 13,950 ms, zero underruns and a peak of 23,936 frames against a 24,000-frame renderer bound. Pause preserved the consumption cursor; stop released the session in 40 ms and restart succeeded. Fresh-attempt retry preserved frozen options, and 0.75×/1.5× runs drained without underruns on a 48 kHz output device. UI pause/resume/stop also passed. Production Vite Worklet assets played 12,000 stereo frames at 24 kHz from both unpacked and ASAR paths. | Device output timing was observed through Web Audio; human listening, Windows and full packaged-application Qwen3 inference were not exercised. The native/utility limits are enforced budgets, not measured RSS. |
-| AC6 (partial) | PR 4 adds typed Sherpa/MLX dispatch, selected-bundle installation and Qwen3-ASR 1.7B complete recognition. Electron WebM recognition passed for English and Chinese; cancellation/retry and native recognition from unpacked/ASAR package paths passed. All 18 GitHub/ModelScope model-file URLs are anonymously readable with matching published SHA-256 metadata. | Real microphone dictation and other platforms are not covered; complete application packaging is distinct from the ASAR utility/package harness. Formal Spec Approval is still absent. |
-| AC7 (partial) | PR 5 connects bounded PCM capture, typed input IPC, Qwen streaming, revisions, and exactly-once completion. Electron 48 kHz audio routed through the real 16 kHz capture worklet produced correct English and Chinese final text, intermediate revisions, nonzero analyser levels and released tracks. Cancelling during capture inserted no text; subsequent English and Chinese sessions succeeded. A roughly 50-second non-repeating native recording retained its final sentence across window rollover. | The actual microphone produced silence: capture/release passed, live spoken recognition remains unverified. A separate 53-second repeated-sentence native probe omitted the final repetition; no application-side repair is applied. Packaged capture and full-duration stress acceptance remain outstanding. |
-| AC8 | Detailed proposal exists in the implementation plan. | PR 6 is not implemented or verified by this branch. |
+| AC4 (partial) | Bounded process streams implement typed bounded input/output, ordered EOF, pending-writer limits, and cleanup acknowledgement. Focused unit tests cover stream and ordinary request behavior. Real Electron unpacked and ASAR smoke passed; duplex queue peaks were 6,016 bytes / 2 frames per direction against limits of 8,192 bytes / 3 frames. | TTS streaming playback now exercises the real Qwen3 producer through bounded IPC and the Worklet. Queue measurements are not RSS or audio-quality evidence. Windows was not exercised. |
+| AC5 | TTS streaming playback implements typed PCM output, attachment/consumption credits, native backpressure, source-rate Worklet playback, EOF drain and fresh-attempt retry. Real Qwen3 development Electron measured hot first consumption at 514 ms, generation completion at 13,950 ms, zero underruns and a peak of 23,936 frames against a 24,000-frame renderer bound. Pause preserved the consumption cursor; stop released the session in 40 ms and restart succeeded. Fresh-attempt retry preserved frozen options, and 0.75×/1.5× runs drained without underruns on a 48 kHz output device. UI pause/resume/stop also passed. Production Vite Worklet assets played 12,000 stereo frames at 24 kHz from both unpacked and ASAR paths. | Device output timing was observed through Web Audio; human listening, Windows and full packaged-application Qwen3 inference were not exercised. The native/utility limits are enforced budgets, not measured RSS. |
+| AC6 (partial) | MLX ASR complete recognition adds typed Sherpa/MLX dispatch, selected-bundle installation and Qwen3-ASR 1.7B complete recognition. Electron WebM recognition passed for English and Chinese; cancellation/retry and native recognition from unpacked/ASAR package paths passed. All 18 GitHub/ModelScope model-file URLs are anonymously readable with matching published SHA-256 metadata. | Real microphone dictation and other platforms are not covered; complete application packaging is distinct from the ASAR utility/package harness. Formal Spec Approval is still absent. |
+| AC7 (partial) | Continuous PCM dictation connects bounded PCM capture, typed input IPC, Qwen streaming, revisions, and exactly-once completion. Electron 48 kHz audio routed through the real 16 kHz capture worklet produced correct English and Chinese final text, intermediate revisions, nonzero analyser levels and released tracks. Cancelling during capture inserted no text; subsequent English and Chinese sessions succeeded. A roughly 50-second non-repeating native recording retained its final sentence across window rollover. | The actual microphone produced silence: capture/release passed, live spoken recognition remains unverified. A separate 53-second repeated-sentence native probe omitted the final repetition; no application-side repair is applied. Packaged capture and full-duration stress acceptance remain outstanding. |
+| AC8 (partial) | Incremental body reading implements capability-selected incremental reading, bounded text input, and lifecycle wiring in main chat, Agent and Quick Assistant. Focused integration tests and the real Qwen3/Electron pipeline passed. | Provider-driven acceptance in all three windows and other platforms remain unverified; formal Spec Approval is absent. |
 | AC9 (partial) | Apple PCM helper and adapter are implemented. Native early output, exact framing/tail, blocked cancellation/restart, visible Electron waveform/pause/resume/stop, and production package loading from unpacked/ASAR paths passed. A warm Electron run consumed first audio at 1,184 ms, ended production at 8,968 ms and drained all 194,744 frames with zero underruns; peak renderer occupancy was 21,944/22,050 frames. Stop returned idle in 31 ms. | Full signed application packaging, human listening and older macOS/Intel devices were not exercised. Transport bounds do not measure native-engine RSS. |
 
-PR 3 uses the existing service graph without new singleton services. `VoiceSessionService` owns each `VoiceStream`; the relay receives narrow send/expiry callbacks. Renderer output adapters own their audio graphs and observable close promises. MLX segments the finite text in its bounded two-segment queue while playback continues. The implementation delegates device-rate conversion to a source-rate AudioContext instead of introducing a custom resampler. Runtime budgets are one second of native PCM, four utility messages / 131,072 bytes, one second of renderer PCM, 15 seconds for attachment, 120 seconds for loading or an unblocked producer read, and 15 minutes of stream retention. These budgets include pauses without treating blocked credit as a producer stall. The Worklet starts after 500 ms of source audio (or EOF for shorter clips), within the existing one-second bound; this eliminated the underruns observed in the initial 1.5× run.
+TTS streaming playback uses the existing service graph without new singleton services. `VoiceSessionService` owns each `VoiceStream`; the relay receives narrow send/expiry callbacks. Renderer output adapters own their audio graphs and observable close promises. MLX segments the finite text in its bounded two-segment queue while playback continues. The implementation delegates device-rate conversion to a source-rate AudioContext instead of introducing a custom resampler. Runtime budgets are one second of native PCM, four utility messages / 131,072 bytes, one second of renderer PCM, 15 seconds for attachment, 120 seconds for loading or an unblocked producer read, and 15 minutes of stream retention. These budgets include pauses without treating blocked credit as a producer stall. The Worklet starts after 500 ms of source audio (or EOF for shorter clips), within the existing one-second bound; this eliminated the underruns observed in the initial 1.5× run.
 
 Keep this note proposed while any criterion is incomplete. Before future implementation layers, establish the Spec review and AC coverage required by the current workflow. Transition only when the complete approved scope has actual cumulative evidence; a draft, a push, or a passing subset does not establish completion.
 
@@ -82,7 +82,7 @@ MLX ASR source support does not establish a compatible distributable artifact. N
 
 ## Detailed interface design
 
-Status: design proposal. Historical source baseline: `9d1bf05fe2c`. The call relationships and file actions below preserve the refactoring targets at that baseline; the evidence above governs PR 1's current implementation and verification status, and “new” does not mean a file is still absent. This proposal builds on the voice execution and playback boundaries in [#21662](https://github.com/CherryHQ/cherry-studio/issues/21662) and model/engine separation in [#21668](https://github.com/CherryHQ/cherry-studio/issues/21668).
+Status: design proposal. Historical source baseline: `9d1bf05fe2c`. The call relationships and file actions below preserve the refactoring targets at that baseline; the evidence above governs unified complete-result execution's current implementation and verification status, and “new” does not mean a file is still absent. This proposal builds on the voice execution and playback boundaries in [#21662](https://github.com/CherryHQ/cherry-studio/issues/21662) and model/engine separation in [#21668](https://github.com/CherryHQ/cherry-studio/issues/21668).
 
 The goal is to let read-aloud, automatic reading, and dictation use different voice backends through unified interfaces. Model adapters own differences between MLX, Sherpa, system speech, and future cloud protocols; callers select operations by explicit input/output capabilities. Unify capability descriptions, execution results, cancellation, and release semantics while preserving the distinction between complete and continuous audio.
 
@@ -382,41 +382,41 @@ New tests must catch real failures: capacity overflow, duplicate samples, lost t
 
 Record actual Electron first-audible latency, source/consumed-frame continuity, underruns, peak queue occupancy, pause stability, cold/warm startup, and restart after cancellation separately. Cover development and packaged resource paths. Historical first-PCM-chunk data proves engine output only, not speaker latency, streaming playback, or real-device ASR acceptance.
 
-### PR split and dependencies
+### Capability boundaries and dependencies
 
-See the [per-PR implementation plan](2026-10-18-unified-voice-execution.md#per-pr-implementation-plan) for classes/interfaces, files, release order, type constraints, and acceptance. This section summarizes scope and dependencies; proposed symbols do not establish implementation.
+See the [capability implementation plan](2026-10-18-unified-voice-execution.md#capability-implementation-plan) for classes/interfaces, files, release order, type constraints, and acceptance. This section summarizes scope and dependencies; proposed symbols do not establish implementation.
 
-Split into six Cherry Studio implementation PRs, with an optional supporting `CherryHQ/mlx-node` PR if ASR distribution is incomplete. This divides review and delivery, not a requirement to create all branches immediately. PR 1 was implemented first. Future layers must establish separate Spec review and AC coverage under the Agent Note workflow; attaching this proposal to an implementation PR is not formal Approval.
+The design has six capability areas, plus native ASR distribution when matching artifacts are unavailable. Each area has independent ownership and acceptance criteria. Implementation order follows technical dependencies; formal Spec approval remains a separate requirement.
 
-| PR | Suggested title | Scope | Dependencies | Independent acceptance |
-| --- | --- | --- | --- | --- |
-| 1 | `refactor(voice): unify speech and transcription execution` | Constants/capabilities, unified handles, complete-result adapters, migration from `AiService`, and lifecycle dependencies; advertise only executable capabilities | None | Existing system speech, FunASR, Qwen3-TTS, and Kokoro complete-result paths use the unified entry; selection, cancellation, file release, and errors remain correct |
-| 2 | `feat(utility-process): support bounded request streams` | Generic request input/output streams, capacity, EOF, cancellation, and exit settlement; preserve request/event APIs without voice semantics | No hard code dependency; align with PR 1 and 3 | Real Electron child processes remain bounded under slow consumption/input overload; cancellation wakes reads/writes, old frames expire after exit, and existing requests work |
-| 3 | `feat(voice): stream Qwen3 speech to playback` | TTS producer, full-execution inference occupancy, Main/IpcApi flow control, Renderer PCM, playback state; extract finite-media adapters with real consumers | 1, 2 | Preview/read-aloud starts before generation ends; pause, resume, drain, stop, cross-window admission, unload, and worker recovery work; packaged AudioWorklet loads |
-| 4 | `feat(local-asr): add MLX Qwen3 transcription` | MLX ASR definitions, packages, native-version checks, download/selection, and complete-audio recognition; reuse resource management without streaming dictation UI | 1; supporting engine release if needed | Download/select/recognize works; switching with FunASR preserves model identity; missing selected models fail; cancellation, unload, domestic/international sources, and packaged loading work without shared-TTS-runtime regression |
-| 5 | `feat(voice): support streaming dictation` | Continuous PCM capture, input/write/end, Qwen3-ASR stream, revisions, and final submission; reuse PR 3 identity/transport/cleanup | 2, 3, 4 | Preview updates while recording; no silent drops; normal stop retains tail; cancellation never submits; text inserts once into the correct input |
-| 6 | `feat(voice): read incremental assistant text` | Stable readable body enters one speech execution with flush/EOF; update automatic reading and reuse audio output | 3 | Read before answer completion; exclude reasoning; no duplicate text or segmentation; pause, input end, failure, and interruption work |
+| Capability | Scope | Dependencies | Independent acceptance |
+| --- | --- | --- | --- |
+| Unified complete-result execution | Constants/capabilities, unified handles, complete-result adapters, migration from `AiService`, and lifecycle dependencies; advertise only executable capabilities | None | Existing system speech, FunASR, Qwen3-TTS, and Kokoro complete-result paths use the unified entry; selection, cancellation, file release, and errors remain correct |
+| Bounded process streams | Generic request input/output streams, capacity, EOF, cancellation, and exit settlement; preserve request/event APIs without voice semantics | No hard code dependency; align with unified execution and streaming playback | Real Electron child processes remain bounded under slow consumption/input overload; cancellation wakes reads/writes, old frames expire after exit, and existing requests work |
+| TTS streaming playback | TTS producer, full-execution inference occupancy, Main/IpcApi flow control, Renderer PCM, playback state; extract finite-media adapters with real consumers | Unified execution, bounded process streams | Preview/read-aloud starts before generation ends; pause, resume, drain, stop, cross-window admission, unload, and worker recovery work; packaged AudioWorklet loads |
+| MLX ASR complete recognition | MLX ASR definitions, packages, native-version checks, download/selection, and complete-audio recognition; reuse resource management without streaming dictation UI | Unified execution; matching native distribution | Download/select/recognize works; switching with FunASR preserves model identity; missing selected models fail; cancellation, unload, domestic/international sources, and packaged loading work without shared-TTS-runtime regression |
+| Continuous PCM dictation | Continuous PCM capture, input/write/end, Qwen3-ASR stream, revisions, and final submission; reuse TTS streaming playback identity/transport/cleanup | Bounded process streams, streaming playback lifecycle, MLX ASR | Preview updates while recording; no silent drops; normal stop retains tail; cancellation never submits; text inserts once into the correct input |
+| Incremental body reading | Stable readable body enters one speech execution with flush/EOF; update automatic reading and reuse audio output | Streaming playback | Read before answer completion; exclude reasoning; no duplicate text or segmentation; pause, input end, failure, and interruption work |
 
 ```mermaid
 flowchart LR
-  P1[PR 1 统一完整结果执行] --> P3[PR 3 TTS 流式播放]
-  P2[PR 2 通用进程流] --> P3
-  P1 --> P4[PR 4 MLX ASR 完整识别]
-  F[按需补齐 fork 分发] -.-> P4
-  P3 --> P5[PR 5 流式听写]
-  P4 --> P5
-  P3 --> P6[PR 6 增量正文朗读]
+  Execution[统一完整结果执行] --> Playback[TTS 流式播放]
+  Transport[有界进程流] --> Playback
+  Execution --> Asr[MLX ASR 完整识别]
+  Distribution[按需补齐原生分发] -.-> Asr
+  Playback --> Dictation[连续 PCM 听写]
+  Asr --> Dictation
+  Playback --> Reading[增量正文朗读]
 ```
 
-Validate PR 2 and PR 3 together on one validation branch with real Qwen3-TTS, then split infrastructure and business changes for review and merge 2 → 3. Test doubles alone do not finish PR 2; do not prebuild plugin, scheduling, or process-pool interfaces for hypothetical models. PR 3 delivers the entire producer-to-player path, avoiding a separately merged PCM player or transport without a real consumer.
+Validate bounded process streams and streaming playback together with real Qwen3-TTS before delivering either boundary. Test doubles alone do not establish transport acceptance; do not prebuild plugin, scheduling, or process-pool interfaces for hypothetical models. Keep the producer-to-player path complete, with real consumers for the PCM player and transport.
 
-PR 4 can proceed after PR 1. It validates model delivery, weight formats, and loading separately from continuous recording. It neither establishes a second Sherpa ASR model nor completes all of #21668. PR 6 can proceed after PR 3 without waiting for ASR.
+MLX ASR complete recognition can proceed after unified complete-result execution. It validates model delivery, weight formats, and loading separately from continuous recording. It neither establishes a second Sherpa ASR model nor completes all of #21668. Incremental body reading can proceed after TTS streaming playback without waiting for ASR.
 
-Create a supporting fork PR only if existing artifacts lack ASR JS APIs, exports, or matching native support. It owns reproducible builds, exact versions, native exports, and distribution manifests; Cherry audio transport, playback, and sessions remain in the main repository. Source PRs and Release publication are separate actions. Prepare and validate artifacts before publishing, and confirm pinned versions/checksums are available before referencing them from the main repository.
+Extend the native distribution only if existing artifacts lack ASR JS APIs, exports, or matching native support. It owns reproducible builds, exact versions, native exports, and distribution manifests; Cherry audio transport, playback, and sessions remain in the main repository. Source changes and release publication are separate actions. Prepare and validate artifacts before publishing, and confirm pinned versions/checksums are available before referencing them from the main repository.
 
-Prefer PR 1 → 2 → 3 to establish a complete streaming TTS product path, then PR 4 → 5. If reading while the answer is generated is the priority, schedule PR 6 immediately after PR 3.
+Validate unified execution and bounded transport first, then streaming playback. Complete ASR can be validated independently before continuous dictation. Incremental body reading can follow streaming playback whenever reading during answer generation is the priority.
 
-Cross-platform online ASR or FunASR VAD segmentation, Sherpa multi-model acceptance, individual cloud voice adapters, and Realtime each belong in later PRs rather than these six. New backends must use existing contracts; change public interfaces only for capabilities they cannot actually express.
+Cross-platform online ASR or FunASR VAD segmentation, Sherpa multi-model acceptance, individual cloud voice adapters, and Realtime each belong in separate follow-up capabilities. New backends must use existing contracts; change public interfaces only for capabilities they cannot actually express.
 
 ### Design decisions
 
@@ -424,15 +424,15 @@ Retain existing service ownership, unify backends behind stateless execution fun
 
 Before implementation, use a small Stage B prototype to confirm generic stream APIs, batch size, prebuffering, and sample-rate conversion. If measurements show existing IPC is inadequate, propose infrastructure/specification changes instead of an unowned business-specific channel. Leave cloud encoded streams, bidirectional Realtime, continuous background transcription, and concurrent models to later proposals with actual consumers.
 
-## Per-PR implementation plan
+## Capability implementation plan
 
-Status: PR 1 has [Draft PR #21795](https://github.com/CherryHQ/cherry-studio/pull/21795); PR 2 has an infrastructure implementation and process-smoke evidence; PR 3 adds real Qwen3 producer-to-player integration and packaged Worklet evidence; PR 4 adds Qwen3-ASR complete recognition; PR 5–6 remain unimplemented. This plan uses the `9d1bf05fe2c` code layout, adds Kokoro complete-result adaptation after merging `425b15397e7`, and details the six PRs in the [unified interface and streaming design](2026-10-18-unified-voice-execution.md#detailed-interface-design). The sections below retain implementation targets; future interfaces, files, and acceptance items are not delivered features.
+The following sections detail the capability boundaries in the [unified interface and streaming design](2026-10-18-unified-voice-execution.md#detailed-interface-design). They retain the design targets from source baseline `9d1bf05fe2c`, including Kokoro complete-result adaptation after `425b15397e7`; the evidence table above governs implementation and validation status. Proposed interfaces, files, and acceptance targets are not proof of delivery.
 
-PR 1 provides complete-result operation tables, unified execution handles, and capability descriptions, and migrates VoiceSessionService calls/dependencies. Cleanup failure remains observable through `closed`. Shared types currently define only supported complete-input/output tags; PCM and incremental tags arrive with their respective PRs. Focused automation and Node/Web typechecks passed. Before merging `46ef0b8ce37`, development Electron verified Apple/Qwen3 TTS generation, playback completion, Qwen cancellation, and subsequent restart. Native ASR recognition remains unverified because local resources were not installed; Windows and packaged artifacts still need their corresponding environments.
+Unified execution provides complete-result operation tables, handles, capability descriptions, and VoiceSessionService integration. Cleanup failure remains observable through `closed`; PCM and incremental types belong to their corresponding capabilities.
 
-Deliver PR 1 → PR 2 → PR 3. PR 4 can follow PR 1, PR 5 waits for PR 3 and 4, and PR 6 waits only for PR 3. Validate PR 2's real consumer together with PR 3, then merge infrastructure first. The optional fork distribution PR is an artifact prerequisite for PR 4 when needed.
+Validate bounded process streams with the real TTS producer before depending on that transport. Complete ASR requires unified execution and matching native artifacts. Continuous dictation additionally requires the shared stream lifecycle; incremental body reading depends on streaming playback and does not wait for ASR.
 
-### Boundaries shared by every PR
+### Shared implementation boundaries
 
 #### Ownership and service dependencies
 
@@ -462,9 +462,9 @@ Only value types cross processes. Capability tags use constant objects and deriv
 
 The open/closed goal is that another backend with existing capabilities adds an adapter, catalog data, and engine implementation while business consumers retain the same contract. It does not promise zero changes when adding a model: static catalogs, ID unions, and explicit exports may gain entries. New input/output semantics require contract changes and updates to every consumer. Do not add dynamic plugins, a generic dependency-injection container, or abstract factories without real consumers.
 
-### PR 1: Unified complete-result execution
+### Unified complete-result execution
 
-Suggested title: `refactor(voice): unify speech and transcription execution`. No prerequisite PR. Existing features remain fully usable after delivery, without exposing streaming yet.
+No prerequisite capability. Existing features remain fully usable after delivery, without exposing streaming yet.
 
 #### Classes and interfaces
 
@@ -474,7 +474,7 @@ Model definitions retain shared installation, support, language, and voice metad
 
 Complete-result adapters continue using existing `createModel` and aiCore APIs internally. SDK factories become private adapter details, never exposed by public execution entry points. Migrate two different backends to validate common behavior before extracting genuinely duplicated wrappers. Do not create a `BaseVoiceAdapter` with empty methods.
 
-Register only `Text → Audio` and `Audio → Final` in this PR. Reserved protocol tags cannot be advertised early. Complete ASR may emit one final revision, but only `completed` authorizes final submission. Backends without updates must still complete, without fabricated intermediate results.
+Register only `Text → Audio` and `Audio → Final` at the complete-result boundary. Reserved protocol tags cannot be advertised early. Complete ASR may emit one final revision, but only `completed` authorizes final submission. Backends without updates must still complete, without fabricated intermediate results.
 
 #### File organization
 
@@ -503,13 +503,13 @@ Load failure, SDK errors, empty recognition, and cancellation before output must
 
 Focused tests cover `VoiceSessionService.test.ts`, `voiceAdmissionCoordination.test.ts`, Apple, Windows, FunASR, Qwen3-TTS, and Kokoro adapters, IPC handler `voice.test.ts`, and aiCore `voice.test.ts`. Move valuable contract assertions from `src/main/ai/__tests__/AiService.voice.test.ts` into new `src/main/ai/voice/__tests__/execution.test.ts`; do not retain tests that only count wrapper calls.
 
-Merge gate: existing system TTS/ASR, FunASR, Qwen3-TTS, and Kokoro paths require no streaming client; restart works after failure/cancellation; temporary files and media URLs do not leak. PR 1 introduces no worklets, PCM channels, or package dependencies.
+Merge gate: existing system TTS/ASR, FunASR, Qwen3-TTS, and Kokoro paths require no streaming client; restart works after failure/cancellation; temporary files and media URLs do not leak. Unified complete-result execution introduces no worklets, PCM channels, or package dependencies.
 
-### PR 2: Generic request-level bounded streams
+### Generic request-level bounded streams
 
-Suggested title: `feat(utility-process): support bounded request streams`. Preserve ordinary request/event behavior, review core protocol changes separately, and merge after joint prototype validation with PR 3.
+Preserve ordinary request/event behavior, review core protocol changes separately, and validate with the streaming playback prototype.
 
-Current PR 2 implementation uses per-request `StreamChannel` shared by host and child, host-only `StreamRequest` for result/closure ownership, and `streamFrame.ts` for bounded scalar-metadata / byte-view encoding. It adds no lifecycle service or voice dependency. Limits are explicit per direction; protocol version 2 rejects stale bundles. The [consumer reference](../../../../docs/references/utility-process/README.md#bounded-request-streams) owns the delivered API.
+The bounded process-stream implementation uses per-request `StreamChannel` shared by host and child, host-only `StreamRequest` for result/closure ownership, and `streamFrame.ts` for bounded scalar-metadata / byte-view encoding. It adds no lifecycle service or voice dependency. Limits are explicit per direction; protocol version 2 rejects stale bundles. The [consumer reference](../../../../docs/references/utility-process/README.md#bounded-request-streams) owns the delivered API.
 
 #### Interface and protocol design
 
@@ -547,21 +547,21 @@ Bound pending writers in each direction and reject excess explicitly. Bounding s
 
 Registering a stream prevents idle reaping. Input waits, paused output, and handler cleanup remain active. Normal completion finishes data boundaries and handler cleanup before unregistering. Cancellation, crashes, and maintenance stop reject waiters and settle handles; late data cannot recreate finished requests. `withStopped` still confirms exit before invoking maintenance callbacks.
 
-This PR does not alter the lifecycle service graph or depend on VoiceSessionService/inference services. ProcessHost/utility server own core objects; no global StreamManager. Respect child-entry imports so Main application/logger do not enter child builds.
+The process-stream layer does not alter the lifecycle service graph or depend on VoiceSessionService/inference services. ProcessHost/utility server own core objects; no global StreamManager. Respect child-entry imports so Main application/logger do not enter child builds.
 
 #### Implementation order and acceptance
 
 1. Stream types and frame guards → prove method/input/output types cannot be mixed; reject excess, oversized, out-of-order, and post-close writes.
 2. Host/child state and closure → verify cancellation with full queues and before reading, continued output after input EOF, crash/restart, and repeated cancellation.
-3. Electron smoke plus PR 3's real TTS producer → measure peak queues and in-flight amounts at every layer; prove ordinary requests and existing cancellation policy remain unchanged.
+3. Electron smoke plus streaming playback’s real TTS producer → measure peak queues and in-flight amounts at every layer; prove ordinary requests and existing cancellation policy remain unchanged.
 
 Add `src/main/core/utilityProcess/__tests__/ProcessHost.stream.test.ts` and `utilityProcessStream.test.ts`; run existing `protocolGuards.test.ts`, `serveUtilityProcess.test.ts`, `ProcessHost.cancellation.test.ts`, `ProcessHost.stop.test.ts`, and `ProcessHost.lifecycle.test.ts` in that directory. Extend the existing harness and run `pnpm smoke:utility-process`, recording the actual Electron version and results.
 
 Merge gate: explainable memory budgets under slow consumption, credit-independent cancellation, settlement of waiting input/output, and passing ordinary request/event tests. Mock MessagePort tests alone do not establish cross-process acceptance.
 
-### PR 3: Complete Qwen3-TTS streaming playback path
+### Complete Qwen3-TTS streaming playback path
 
-Suggested title: `feat(voice): stream Qwen3 speech to playback`. Depends on PR 1 and 2. First expose `Text → PcmStream` while retaining complete audio.
+Depends on unified execution and bounded process streams. First expose `Text → PcmStream` while retaining complete audio.
 
 #### Classes and interfaces
 
@@ -609,11 +609,11 @@ Add `VoiceStream.test.ts`, `PcmPlayback.test.ts`, and pure PCM queue/conversion 
 
 Assert contracts: first frames consumable before generation completes, bounded paused memory, no duplicates after resume, complete tail drain, no output from old stopped frames, no deadlock unloading a backpressured model, and no interruption when unloading another model. For differing source/device rates, check duration, continuity, and tails rather than merely asserting resume was called.
 
-Real Electron records cold/warm first sound, generation end, total playback duration, underruns, maximum buffers per layer, and restart after stop, covering development and packaged worklets. Without speaker validation, report only protocol/player-local test success. After PR 3, preview and manual reading use the same output adaptation; do not merge a player without consumers separately.
+Real Electron records cold/warm first sound, generation end, total playback duration, underruns, maximum buffers per layer, and restart after stop, covering development and packaged worklets. Without speaker validation, report only protocol/player-local test success. Streaming playback makes preview and manual reading use the same output adaptation; do not merge a player without consumers separately.
 
-### PR 4: MLX Qwen3-ASR complete recognition
+### MLX Qwen3-ASR complete recognition
 
-Suggested title: `feat(local-asr): add MLX Qwen3 transcription`. Depends on PR 1 and a matching available distribution, not streaming dictation UI. Advertise only `Audio → Final`.
+Depends on unified complete-result execution and a matching available distribution, not streaming dictation UI. Advertise only `Audio → Final`.
 
 Implementation decision: use Qwen3-ASR 1.7B with the unchanged `mlx-node-5db3d24bc87a-r2`
 native artifact. The pinned loader validates 1.7B tensor layout; 0.6B requires a separate
@@ -628,7 +628,7 @@ Alternating installed FunASR and Qwen3 twice produced a distinct single ASR proc
 selection. Removing Qwen3 rejected subsequent Qwen3 inference instead of falling back;
 the resident TTS PID stayed unchanged and synthesized again successfully. Electron WebM
 recognition, cancellation/retry, and unpacked/ASAR utility-package loading passed. The
-supporting distribution is [fork PR #1](https://github.com/CherryHQ/mlx-node/pull/1).
+supporting distribution is documented in the [native distribution change](https://github.com/CherryHQ/mlx-node/pull/1).
 
 Native validation: complete English and Chinese recordings (about four seconds each)
 produce the expected final text, and silence produces empty text. Both single-file and
@@ -671,21 +671,21 @@ Removing Qwen3-ASR weights neither deletes artifacts still referenced by Qwen3-T
 
 1. Verify exact-version ASR JS/native exports, weight format, and platform limits → complete supporting fork work first if artifacts are missing; working TTS does not prove ASR works.
 2. Connect selected-bundle installation/selection and typed engine dispatch → with only one engine installed, verify the absent other engine cannot block the selected model.
-3. Integrate complete recognition with PR 1 → verify FunASR ↔ Qwen3-ASR switching, cancellation, retry, removal, and shared-runtime updates.
+3. Integrate complete recognition with unified complete-result execution → verify FunASR ↔ Qwen3-ASR switching, cancellation, retry, removal, and shared-runtime updates.
 
 Add `localAdapters/__tests__/qwen3Asr.test.ts` and `runtime/__tests__/inferenceEntryAsr.test.ts`. Run affected consumers in existing `capabilities/asr/__tests__/AsrInferenceService.test.ts`, `catalog/__tests__/catalog.test.ts`, `capabilities/__tests__/capabilityHooks.test.ts`, `LocalModelService.test.ts`, `BundleInstaller.test.ts`, `LocalModelStorageService.test.ts`, and `inferenceEntryTts.test.ts`. Resolve directories in their owning modules and list full paths when running tests.
 
 Merge gate: development/packaged loading on the target Mac works and ordinary complete recordings transcribe; missing selected models fail explicitly; installation sources/checksums are reproducible; ASR removal does not damage TTS; existing Sherpa paths on other platforms do not load MLX. Do not report this as completed Sherpa multi-model support.
 
-### PR 5: Continuous PCM dictation
+### Continuous PCM dictation
 
-Suggested title: `feat(voice): support streaming dictation`. Depends on PR 2, 3, and 4. Add `PcmStream → Revisions` using delivered sessions and flow control.
+Depends on bounded process streams, the streaming playback lifecycle, and MLX ASR complete recognition. Add `PcmStream → Revisions` using delivered sessions and flow control.
 
 #### Interfaces and files
 
 `PcmCapture` is an ordinary resource class owned by DictationService, with start, normal stop/tail drain, and immediate cancel behavior. It exclusively owns MediaStream, tracks, AudioContext, worklet, and pending batches. Device switching cannot silently recreate input during active recording.
 
-`VoiceService` reuses PR 3 stream identities/listeners and adds PCM write / finish_input. `VoiceInputStream` owns the single pending PCM handoff within the existing session; playback `VoiceStream` keeps its output-only responsibility. `AsrInferenceService` uses PR 3's full-stream queue occupancy; the MLX handler feeds serially, finishes after input EOF, and maps revisions/final results. Raw SDK streams remain exclusively in the child process.
+`VoiceService` reuses streaming playback identities/listeners and adds PCM write / finish_input. `VoiceInputStream` owns the single pending PCM handoff within the existing session; playback `VoiceStream` keeps its output-only responsibility. `AsrInferenceService` uses streaming playback’s full-stream queue occupancy; the MLX handler feeds serially, finishes after input EOF, and maps revisions/final results. Raw SDK streams remain exclusively in the child process.
 
 | File | Implementation |
 | --- | --- |
@@ -720,9 +720,9 @@ Contract cases cover exactly-once tail handling, continuous resampling, excessiv
 
 Real-device validation proves updates while recording, retained final words on normal stop, released microphones after cancellation, correct target after focus changes, and restart after disconnect. Missing/unsupported streaming models retain complete-recording behavior selected by capability rather than platform branches. UI must not describe rolling-window recognition latency as instantaneous phoneme-level recognition.
 
-### PR 6: Incremental assistant-body reading
+### Incremental assistant-body reading
 
-Suggested title: `feat(voice): read incremental assistant text`. Depends on PR 3, adds `TextStream → PcmStream`, and does not wait for ASR.
+Depends on TTS streaming playback, adds `TextStream → PcmStream`, and does not wait for ASR.
 
 #### Classes, interfaces, and integration points
 
@@ -756,17 +756,42 @@ Cover interleaved body/reasoning, unclosed code fences/links, replayed snapshots
 
 On real Electron, verify main chat, Agent, and Quick Assistant separately: audible body before generation ends, retained tail on success, and immediate speech stop on cancellation/toggle-off without disrupting chat. Do not claim incremental support for unintegrated message runtimes.
 
-### Optional supporting PR: MLX ASR distribution
+#### Incremental body reading evidence
 
-Create only if pinned artifacts cannot support PR 4, in `CherryHQ/mlx-node`. Deliver matching ASR JS exports, native bindings, platform resources, and reproducible build/checksum manifests. Exclude Cherry sessions, IPC, model-download UI, and players.
+The user authorized implementation on 2026-10-19. `SpeechTextInput` owns the renderer
+backlog, `VoiceTextInput` owns the Main input handshake, and `VoiceSessionService` owns
+both execution and input lifetime. No lifecycle service or same-phase dependency was added.
+Qwen3 reuses the pinned native package's incremental text input and segmentation. Shared
+operation types discriminate text versus text-stream inputs; complete adapters cannot
+accidentally receive an async input. Transport budgets and public behavior are documented in
+[Local Models](../../../../docs/references/ai/local-models.md).
+
+Focused tests cover stable Markdown boundaries, reasoning exclusion, duplicate snapshots,
+EOF tail drain, cumulative overflow, cancellation during capability discovery, late updates,
+owner/request identity, and the three production entry callbacks. These entry tests exercise
+the coordinator with controlled snapshots, not a real provider conversation.
+
+A native-package probe produced first PCM in 142 ms before input EOF. A development Electron
+run on macOS arm64 exercised the real renderer/Main/utility/Qwen3/player pipeline: first
+consumption in 2,358 ms before answer completion; pause kept the cursor at 1,024 frames;
+success drained all 234,240 frames with zero underruns and peak buffering of 23,808 / 24,000
+frames. Cancellation rejected late text, and restart drained 186,240 frames. The application
+playback bar showed 16 distinct waveform frames before answer EOF; pause flattened the bars
+and resume restarted animation. Timings describe
+this local controlled-snapshot run, not a latency guarantee. Provider-driven acceptance in
+main chat, Agent and Quick Assistant separately remains outstanding, so AC8 stays partial.
+
+### Optional native ASR distribution
+
+Create only if pinned artifacts cannot support MLX ASR complete recognition, in `CherryHQ/mlx-node`. Deliver matching ASR JS exports, native bindings, platform resources, and reproducible build/checksum manifests. Exclude Cherry sessions, IPC, model-download UI, and players.
 
 Verify complete recognition first, then actual stream feed/finish/cancel, revisions, and cleanup, distinguishing model cache from individual recognition objects. Maintain consistent release metadata for exports, platform requirements, versions, and weight formats. The main repository pins exact versions and validates hashes instead of following floating branches.
 
-Acceptance includes clean-directory installation, Electron utility-process loading, packaged paths, complete/continuous local input, and reload after cancellation, with regression coverage for shared native TTS support. Merging source PRs, preparing draft artifacts, and publishing releases are separate actions. Validate artifacts before public release; authorizing a proposal or source PR does not authorize publication.
+Acceptance includes clean-directory installation, Electron utility-process loading, packaged paths, complete/continuous local input, and reload after cancellation, with regression coverage for shared native TTS support. Integrating source changes, preparing draft artifacts, and publishing releases are separate actions. Validate artifacts before public release; authorizing a proposal or source change does not authorize publication.
 
 ### Verification and delivery records
 
-Each implementation PR records actual interface/ownership changes, same-phase dependency changes, explicit test files/results, real-device platform/build, and uncovered cases. PR 3/5/6 also record first sound/revision, peak queues, tail drain, cancellation, and recovery. Design targets cannot be reported as passed evidence.
+Each capability records actual interface/ownership changes, same-phase dependency changes, explicit test files/results, real-device platform/build, and uncovered cases. Streaming playback, continuous dictation, and incremental body reading also record first sound/revision, peak queues, tail drain, cancellation, and recovery. Design targets cannot be reported as passed evidence.
 
 Run `pnpm install` before implementation, then inspect scope with `pnpm check --plan`. Select `pnpm test:main <完整测试文件路径...>`, `pnpm test:renderer <完整测试文件路径...>`, or equivalent commands for the cases above. Type changes run affected-project typechecks; format/lint only changed files without automatically running unfiltered repository tests. New schemas, IPC events, and utility contracts require compilation checks for producers and consumers.
 
@@ -774,7 +799,7 @@ For changes only to this note, run `pnpm docs:index`, `pnpm docs:check`, and `gi
 
 ### Apple system TTS streaming extension
 
-The user explicitly authorized this extension after PR 5. It adds complete text to PCM output, not incremental text input (PR 6) or system ASR. The existing proposed note remains the owner; formal GitHub Spec approval and remaining ACs are not implied.
+This extension adds Apple system speech to the shared streaming playback lifecycle. It adds complete text to PCM output, not incremental text input or system ASR. The existing proposed note remains the owner; formal GitHub Spec approval and remaining ACs are not implied.
 
 `packages/system-speech` owns a request-scoped helper and a bounded, pull-consumed NDJSON output protocol: one format frame, ordered Float32 little-endian PCM frames, then an exact frame-count end marker. Each PCM frame holds at most 1,024 frames in one or two channels; each protocol line is limited to 16 KiB. The synchronous native pipe writer and Node pull reader propagate backpressure without an application audio queue or scratch WAV. Platform callbacks remain exclusively in the helper. Native-engine internal allocation is not covered by these transport budgets.
 

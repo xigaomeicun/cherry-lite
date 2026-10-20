@@ -5,6 +5,7 @@ import type {
   SpeechOutputKind,
   SpeechPcmChunk,
   SpeechPcmFormat,
+  SpeechTextEvent,
   TranscriptionInputKind,
   TranscriptionOutputKind,
   TranscriptRevision
@@ -43,7 +44,9 @@ export interface TranscriptionExecution extends VoiceExecution {
 
 export interface SpeechRequest {
   readonly modelId: LocalSpeechModelId
-  readonly input: { readonly kind: typeof SpeechInputKind.Text; readonly text: string }
+  readonly input:
+    | { readonly kind: typeof SpeechInputKind.Text; readonly text: string }
+    | { readonly kind: typeof SpeechInputKind.TextStream; readonly events: AsyncIterable<SpeechTextEvent> }
   readonly output: SpeechOutputKind
   readonly options: Readonly<SpeechOptions>
 }
@@ -62,16 +65,18 @@ export interface TranscriptionRequest {
 }
 
 export type SpeechOperation = {
-  [Output in SpeechOutputKind]: {
-    readonly input: SpeechRequest['input']['kind']
-    readonly output: Output
-    start(
-      input: SpeechRequest['input'],
-      options: Readonly<SpeechOptions>,
-      signal?: AbortSignal
-    ): SpeechExecution<Output>
-  }
-}[SpeechOutputKind]
+  [Kind in SpeechInputKind]: {
+    [Output in SpeechOutputKind]: {
+      readonly input: Kind
+      readonly output: Output
+      start(
+        input: Extract<SpeechRequest['input'], { kind: Kind }>,
+        options: Readonly<SpeechOptions>,
+        signal?: AbortSignal
+      ): SpeechExecution<Output>
+    }
+  }[SpeechOutputKind]
+}[SpeechInputKind]
 
 export type TranscriptionOperation = {
   [Kind in TranscriptionInputKind]: {

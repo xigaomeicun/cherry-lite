@@ -574,6 +574,14 @@ export class VoiceService {
     }
   }
 
+  writeSpeechText(input: InputFor<'ai.voice.text.write'>): Promise<void> {
+    return this.invoke(() => this.ipc.request('ai.voice.text.write', input))
+  }
+
+  finishSpeechText(input: InputFor<'ai.voice.text.finish'>): Promise<void> {
+    return this.invoke(() => this.ipc.request('ai.voice.text.finish', input))
+  }
+
   subscribeStream = (listener: (event: SpeechStreamEvent) => void): (() => void) => {
     this.streamListeners.add(listener)
     return () => this.streamListeners.delete(listener)

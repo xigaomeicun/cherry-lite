@@ -16,6 +16,8 @@ export type { ExecutionFinishEvent } from '@renderer/services/aiTransport'
 import type { ExecutionFinishEvent } from '@renderer/services/aiTransport'
 
 export interface UseExecutionOverlayOptions {
+  onUpdate?: (executionId: string, event: Pick<ExecutionFinishEvent, 'attemptId' | 'message'>) => void
+  onLeave?: () => void
   onFinish?: (executionId: string, event: ExecutionFinishEvent) => void
 }
 
@@ -46,6 +48,8 @@ export function useExecutionOverlay(
   uiMessagesRef.current = uiMessages
   const onFinishRef = useRef(options.onFinish)
   onFinishRef.current = options.onFinish
+  const optionsRef = useRef(options)
+  optionsRef.current = options
   const topicIdRef = useRef(topicId)
   topicIdRef.current = topicId
 
@@ -53,11 +57,17 @@ export function useExecutionOverlay(
   // precedes reader convergence for a new topicId.
   useEffect(() => {
     executionStreamOverlayService.acquire(topicId)
+    const onLeave = optionsRef.current.onLeave
+    const offUpdate = executionStreamOverlayService.onUpdate(topicId, (executionId, event) =>
+      optionsRef.current.onUpdate?.(executionId, event)
+    )
     const offFinish = executionStreamOverlayService.onFinish(topicId, (executionId, event) =>
       onFinishRef.current?.(executionId, event)
     )
     return () => {
+      offUpdate()
       offFinish()
+      onLeave?.()
       executionStreamOverlayService.release(topicId, consumer)
     }
   }, [consumer, topicId])

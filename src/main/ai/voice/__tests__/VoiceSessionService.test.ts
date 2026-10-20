@@ -270,6 +270,84 @@ describe('VoiceSessionService file and admission contract', () => {
     return { input: request, result: await service.speech(ownerValue, request) }
   }
 
+  it.each([false, true])('owns incremental speech input through EOF or cancellation (cancel=%s)', async (cancel) => {
+    const adapters = await import('../localAdapters')
+    const completed = Promise.withResolvers<void>()
+    const closed = Promise.withResolvers<void>()
+    const received: string[] = []
+    vi.spyOn(adapters, 'getSpeechOperations').mockReturnValue([
+      {
+        input: 'text-stream',
+        output: 'pcm-stream',
+        start(input) {
+          return {
+            output: Promise.resolve({
+              kind: 'pcm-stream',
+              format: { sampleRate: 24000, channels: 1 },
+              chunks: {
+                async *[Symbol.asyncIterator]() {
+                  let frame = 0
+                  try {
+                    for await (const event of input.events) {
+                      if (event.type === 'text') {
+                        received.push(event.text)
+                        yield { startFrame: frame++, samples: new Float32Array([0.5]) }
+                      }
+                    }
+                    completed.resolve()
+                  } catch (error) {
+                    completed.reject(error)
+                    throw error
+                  } finally {
+                    closed.resolve()
+                  }
+                }
+              }
+            }),
+            completed: completed.promise,
+            closed: closed.promise,
+            cancel: () => {
+              completed.reject(new VoiceRuntimeError('aborted'))
+              closed.resolve()
+              return closed.promise
+            }
+          }
+        }
+      }
+    ])
+    void completed.promise.catch(() => undefined)
+    const { input, result } = await speech(a, {
+      modelId: QWEN3_TTS_MODEL_ID,
+      voice: 'vivian',
+      language: 'en-US',
+      text: 'First.',
+      textStream: true
+    })
+    const identity = { sessionId: input.sessionId, requestId: input.requestId }
+    service.attachStream(a, { ...identity, attemptId: result.playback.attemptId })
+    await vi.waitFor(() => expect(received).toEqual(['First.']))
+    expect(() =>
+      service.writeText(owner(), { ...identity, sequence: 0, event: { type: 'text', text: 'Forbidden.' } })
+    ).toThrow(new VoiceRuntimeError('forbidden_owner'))
+    expect(() =>
+      service.writeText(a, { ...identity, requestId: randomUUID(), sequence: 0, event: { type: 'flush' } })
+    ).toThrow()
+    await service.writeText(a, { ...identity, sequence: 0, event: { type: 'text', text: 'Tail.' } })
+    if (cancel) {
+      await service.abort(a, identity, 'speech')
+      await expect(completed.promise).rejects.toMatchObject({ reason: 'aborted' })
+    } else {
+      service.finishText(a, { ...identity, sequence: 1 })
+      await completed.promise
+      await vi.waitFor(() => expect(runtime.send.mock.calls.some((call) => call[2]?.type === 'end')).toBe(true))
+      expect(received).toEqual(['First.', 'Tail.'])
+    }
+    await closed.promise
+    await expect(
+      Promise.resolve().then(() => service.writeText(a, { ...identity, sequence: 1, event: { type: 'flush' } }))
+    ).rejects.toMatchObject({ reason: expect.any(String) })
+  })
+
   it('authorizes PCM against both owner and request and waits for input EOF before completion', async () => {
     const adapters = await import('../localAdapters')
     vi.spyOn(adapters, 'getTranscriptionOperations').mockReturnValue([
