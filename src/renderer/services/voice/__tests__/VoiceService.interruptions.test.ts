@@ -10,7 +10,7 @@ it('delivers interruption while initialization has no admitted session and detac
     ipc: {
       request: vi.fn(() => new Promise<any>((done) => (resolve = done))),
       on: (_event, callback) => {
-        emit = callback
+        if (_event === 'ai.voice.session_event') emit = callback as (event: VoiceSessionEvent) => void
         return () => undefined
       }
     },
@@ -50,7 +50,7 @@ it('delivers a recording interruption when Main publishes ownership before the a
     ipc: {
       request,
       on: (_event, callback) => {
-        emit = callback
+        if (_event === 'ai.voice.session_event') emit = callback as (event: VoiceSessionEvent) => void
         return () => undefined
       }
     },
