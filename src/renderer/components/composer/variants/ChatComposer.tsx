@@ -92,6 +92,7 @@ import {
   ComposerToolbarControls,
   ComposerToolMenuControls
 } from './shared/ComposerControlScaffolding'
+import { ComposerDictationButton } from './shared/ComposerDictationButton'
 import { type AddNewTopicPayload, emptyActions, type ProviderActionHandlers } from './shared/composerProviderActions'
 import {
   buildComposerQueuedPayload,
@@ -1867,7 +1868,7 @@ const ChatComposerInner = ({
     onMentionedModelMultiSelectModeChange: handleMentionedModelMultiSelectModeChange,
     onMentionedModelSelectorRestore: handleMentionedModelSelectorRestore
   })
-  const sendAccessory: ComposerSurfaceProps['sendAccessory'] = (
+  const sendAccessory: ComposerSurfaceProps['sendAccessory'] = (inputAdapter) => (
     <>
       {speedControlModel ? (
         <ModelSpeedControl
@@ -1883,6 +1884,7 @@ const ChatComposerInner = ({
         />
       ) : null}
       <ChatComposerContextUsage usage={contextUsage} />
+      <ComposerDictationButton inputAdapter={inputAdapter} />
     </>
   )
 
@@ -1891,13 +1893,12 @@ const ChatComposerInner = ({
       couldAddImageFile={canAddImageFile}
       extensions={supportedExts}
       selectableKnowledgeBases={selectableKnowledgeBases}>
-      {displayAssistant && runtimeModel && (
-        <ComposerToolRuntimeHost scope={scope} assistant={displayAssistant} model={runtimeModel} />
-      )}
+      <ComposerToolRuntimeHost scope={scope} assistant={displayAssistant} model={runtimeModel} />
       <ResourceEditDialogEventHost />
       <ComposerPinnedToolsProvider value={pinnedToolIds}>
         <ComposerSurface
           showAiDisclaimer
+          voiceTarget={{ targetId: `composer:chat:${streamScopeKey}`, sourceEntityId: streamScopeKey }}
           text={text}
           onTextChange={handleTextChange}
           tokens={tokens}
@@ -1993,7 +1994,7 @@ const ChatComposerInner = ({
           quickPanelEnabled={config.enableQuickPanel ?? true}
           enableDragDrop={config.enableDragDrop ?? true}
           enableSpellCheck={enableSpellCheck}
-          editable={!searching && !isDirectSending}
+          editable={!searching && !isDirectSending && !isSavingEdit}
           fontSize={fontSize}
           narrowMode={forceNarrowLayout || narrowMode}
           railGutterPx={railGutterPx}

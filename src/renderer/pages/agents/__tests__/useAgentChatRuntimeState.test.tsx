@@ -433,7 +433,7 @@ describe('useAgentChatRuntimeState', () => {
     expect(sent).toBe(false)
   })
 
-  it('does not wire per-overlay finish refresh for agent sessions', () => {
+  it('wires only auto-read to overlay finish for agent sessions (no terminal refresh)', () => {
     renderHook(() =>
       useAgentChatRuntimeState({
         sessionId: 'session-1',
@@ -442,7 +442,7 @@ describe('useAgentChatRuntimeState', () => {
       })
     )
 
-    expect(mocks.useExecutionOverlay.mock.calls[0]?.[3]).toBeUndefined()
+    expect(mocks.useExecutionOverlay.mock.calls[0]?.[3]?.onFinish).toEqual(expect.any(Function))
     expect(mocks.refresh).not.toHaveBeenCalled()
     expect(mocks.disposeOverlay).not.toHaveBeenCalled()
   })

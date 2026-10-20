@@ -1,3 +1,22 @@
+import { loggerService } from '@logger'
+import {
+  DEFAULT_MESSAGE_MENUBAR_BUTTON_IDS,
+  type MessageMenuBarButtonId,
+  STREAMING_DISABLED_BUTTON_IDS
+} from '@renderer/components/chat/messages/frame/messageMenuBarConfig'
+import { getMessageDeleteUnavailableText } from '@renderer/components/chat/messages/utils/messageDeleteAvailability'
+import CopyIcon from '@renderer/components/icons/CopyIcon'
+import DeleteIcon from '@renderer/components/icons/DeleteIcon'
+import EditIcon from '@renderer/components/icons/EditIcon'
+import RefreshIcon from '@renderer/components/icons/RefreshIcon'
+import { readMessageAloud } from '@renderer/services/voice'
+import type { MessageExportView } from '@renderer/types/messageExport'
+import { formatErrorMessageWithPrefix } from '@renderer/utils/error'
+import { removeTrailingDoubleSpaces } from '@renderer/utils/markdownLight'
+import { createComposerRichClipboardContentFromParts } from '@renderer/utils/message/composerClipboard'
+import { getTranslationFromParts, hasTextParts } from '@renderer/utils/message/partsHelpers'
+import type { CherryMessagePart } from '@shared/data/types/message'
+import type { TranslateLanguage } from '@shared/data/types/translate'
 import dayjs from 'dayjs'
 import type { TFunction } from 'i18next'
 import {
@@ -13,28 +32,10 @@ import {
   Save,
   Split,
   ThumbsUp,
-  Upload
+  Upload,
+  Volume2
 } from 'lucide-react'
 import type { ReactNode, RefObject } from 'react'
-
-import { loggerService } from '@logger'
-import {
-  DEFAULT_MESSAGE_MENUBAR_BUTTON_IDS,
-  type MessageMenuBarButtonId,
-  STREAMING_DISABLED_BUTTON_IDS
-} from '@renderer/components/chat/messages/frame/messageMenuBarConfig'
-import { getMessageDeleteUnavailableText } from '@renderer/components/chat/messages/utils/messageDeleteAvailability'
-import CopyIcon from '@renderer/components/icons/CopyIcon'
-import DeleteIcon from '@renderer/components/icons/DeleteIcon'
-import EditIcon from '@renderer/components/icons/EditIcon'
-import RefreshIcon from '@renderer/components/icons/RefreshIcon'
-import type { MessageExportView } from '@renderer/types/messageExport'
-import { formatErrorMessageWithPrefix } from '@renderer/utils/error'
-import { removeTrailingDoubleSpaces } from '@renderer/utils/markdownLight'
-import { createComposerRichClipboardContentFromParts } from '@renderer/utils/message/composerClipboard'
-import { getTranslationFromParts } from '@renderer/utils/message/partsHelpers'
-import type { CherryMessagePart } from '@shared/data/types/message'
-import type { TranslateLanguage } from '@shared/data/types/translate'
 
 import { createActionRegistry } from '../../actions/actionRegistry'
 import type { ActionAvailabilityInput, ActionDescriptor, ResolvedAction } from '../../actions/actionTypes'
@@ -210,6 +211,20 @@ registerCommand('message.copy', async ({ actions, mainTextContent, messageParts,
   setCopied(true)
 })
 
+registerCommand('message.readAloud', async ({ message, messageParts }) => {
+  const activeElement = document.activeElement instanceof HTMLElement ? document.activeElement : undefined
+
+  await readMessageAloud({
+    messageId: message.id,
+    parts: messageParts,
+    ...(activeElement && {
+      focusOnClose: () => {
+        if (activeElement.isConnected) activeElement.focus()
+      }
+    })
+  })
+})
+
 registerCommand('message.edit', ({ message, startEditingMessage }) => {
   startEditingMessage?.(message.id)
 })
@@ -350,6 +365,17 @@ registerToolbarAction({
   label: ({ t }) => t('common.copy'),
   icon: ({ copied }) => (copied ? <Check size={15} color="var(--primary)" /> : <CopyIcon size={15} />),
   availability: toolbarAvailability('copy', ({ actions }) => !!actions.copyText)
+})
+
+registerToolbarAction({
+  id: 'read-aloud',
+  commandId: 'message.readAloud',
+  label: ({ t }) => t('chat.message.read_aloud.label'),
+  icon: <Volume2 size={15} />,
+  availability: ({ isAssistantMessage, isProcessing, message, messageParts }) => {
+    const visible = isAssistantMessage && message.status === 'success' && !isProcessing && hasTextParts(messageParts)
+    return { visible, enabled: visible }
+  }
 })
 
 registerToolbarAction({
