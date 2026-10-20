@@ -199,9 +199,7 @@ describe('ActionTranslate', () => {
       })
     )
 
-    render(
-      <ActionTranslate sourceEntityId="test-session" action={createAction()} scrollToBottom={state.scrollToBottom} />
-    )
+    render(<ActionTranslate action={createAction()} scrollToBottom={state.scrollToBottom} />)
     expect(state.detectLanguage).not.toHaveBeenCalled()
 
     await act(async () => resolveSaved({ preferred: 'en-us', alter: 'zh-cn' }))
@@ -217,13 +215,11 @@ describe('ActionTranslate', () => {
     state.detectLanguage.mockResolvedValue('ja-jp')
     const action = createAction()
 
-    const { rerender } = render(
-      <ActionTranslate sourceEntityId="test-session" action={action} scrollToBottom={state.scrollToBottom} />
-    )
+    const { rerender } = render(<ActionTranslate action={action} scrollToBottom={state.scrollToBottom} />)
     await waitFor(() => expect(state.translate).toHaveBeenCalledWith('There is no default export.', state.chinese))
 
     MockUsePreferenceUtils.setPreferenceValue('feature.translate.action.preferred_lang', 'en-us')
-    rerender(<ActionTranslate sourceEntityId="test-session" action={action} scrollToBottom={state.scrollToBottom} />)
+    rerender(<ActionTranslate action={action} scrollToBottom={state.scrollToBottom} />)
     await act(async () => {})
 
     expect(state.translate).toHaveBeenCalledTimes(1)
