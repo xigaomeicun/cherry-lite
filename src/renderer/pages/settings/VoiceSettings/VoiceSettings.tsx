@@ -132,6 +132,7 @@ function statusKey(status: StatusState): string {
 }
 
 function errorKey(error: boolean | string): string {
+  if (error === 'busy') return 'settings.voice.playback.error.busy'
   if (
     typeof error === 'string' &&
     [
