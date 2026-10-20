@@ -3,12 +3,12 @@ import { LocalModelDownloadProgress } from '@renderer/components/LocalModelDownl
 import { SettingHelpText, SettingRow, SettingRowTitle } from '@renderer/components/SettingsPrimitives'
 import { useLocalModel } from '@renderer/hooks/useLocalModel'
 import { toast } from '@renderer/services/toast'
-import { LOCAL_MODEL_BUNDLE_BY_CAPABILITY, type LocalModelCapability } from '@shared/data/presets/localModel'
+import { DEFAULT_LOCAL_MODEL_BUNDLE_BY_CAPABILITY, type LocalModelCapability } from '@shared/data/presets/localModel'
 import { Download, RefreshCw, SquareCheckBig, X } from 'lucide-react'
 import { useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 
-type FileProcessingLocalModelCapability = Exclude<LocalModelCapability, 'asr'>
+type FileProcessingLocalModelCapability = Extract<LocalModelCapability, 'embedding' | 'ocr'>
 
 const SUBTITLE_KEY = {
   embedding: 'settings.dependencies.localModels.embedding.subtitle',
@@ -34,7 +34,7 @@ type LocalModelRequirementProps = {
  */
 export function LocalModelRequirement({ capability, description, onReady }: LocalModelRequirementProps) {
   const { t } = useTranslation()
-  const { status, percent, download, cancel } = useLocalModel(LOCAL_MODEL_BUNDLE_BY_CAPABILITY[capability])
+  const { status, percent, download, cancel } = useLocalModel(DEFAULT_LOCAL_MODEL_BUNDLE_BY_CAPABILITY[capability])
   const onReadyRef = useRef(onReady)
 
   useEffect(() => {

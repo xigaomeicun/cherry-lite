@@ -8,6 +8,7 @@ import {
   type LocalVoiceModelDescriptor,
   MAX_SPEECH_SPEED,
   MIN_SPEECH_SPEED,
+  QWEN3_TTS_MODEL_ID,
   TranscriptionLanguageSource,
   VOICE_SESSION_SOURCES,
   VOICE_SESSION_TRIGGERS,
@@ -51,7 +52,7 @@ const modelId = z.enum(LOCAL_VOICE_MODEL_IDS)
 const asrModelId = z.enum([APPLE_ASR_MODEL_ID, WINDOWS_ASR_MODEL_ID, FUNASR_MODEL_ID])
 const speechInput = sessionAdmission
   .extend({
-    modelId: z.enum([APPLE_TTS_MODEL_ID, WINDOWS_TTS_MODEL_ID]).optional(),
+    modelId: z.enum([APPLE_TTS_MODEL_ID, WINDOWS_TTS_MODEL_ID, QWEN3_TTS_MODEL_ID]).optional(),
     text: z.string().trim().min(1).max(10_000),
     voice: z.string().min(1).max(256).optional(),
     preferenceResolution: z.literal(true).optional(),
@@ -148,7 +149,7 @@ const voiceStatus = z.strictObject({
     .enum(Object.keys(voiceErrorCodes) as [keyof typeof voiceErrorCodes, ...Array<keyof typeof voiceErrorCodes>])
     .optional()
 })
-const speechModelId = z.enum([APPLE_TTS_MODEL_ID, WINDOWS_TTS_MODEL_ID])
+const speechModelId = z.enum([APPLE_TTS_MODEL_ID, WINDOWS_TTS_MODEL_ID, QWEN3_TTS_MODEL_ID])
 
 export const voiceRequestSchemas = {
   'ai.voice.resources.open_settings': defineRoute({ input: z.void(), output: z.void() }),
@@ -252,12 +253,12 @@ export const voiceRequestSchemas = {
     output: z.custom<VoiceModelLookup>()
   }),
   'ai.voice.model.download': defineRoute({
-    input: z.strictObject({ modelId: asrModelId }),
+    input: z.strictObject({ modelId }),
     output: z.enum(LOCAL_MODEL_DOWNLOAD_RESULTS)
   }),
-  'ai.voice.model.cancel_download': defineRoute({ input: z.strictObject({ modelId: asrModelId }), output: z.void() }),
+  'ai.voice.model.cancel_download': defineRoute({ input: z.strictObject({ modelId }), output: z.void() }),
   'ai.voice.model.remove': defineRoute({
-    input: z.strictObject({ modelId: asrModelId }),
+    input: z.strictObject({ modelId }),
     output: z.strictObject({ removed: z.boolean() })
   }),
   'ai.transcription.locales.list': defineRoute({
@@ -275,8 +276,15 @@ export const voiceRequestSchemas = {
     })
   }),
   'ai.speech.voices.list': defineRoute({
-    input: z.strictObject({ modelId: z.enum([APPLE_TTS_MODEL_ID, WINDOWS_TTS_MODEL_ID]) }),
-    output: z.array(z.strictObject({ id: z.string(), name: z.string(), language: z.string() }))
+    input: z.strictObject({ modelId: z.enum([APPLE_TTS_MODEL_ID, WINDOWS_TTS_MODEL_ID, QWEN3_TTS_MODEL_ID]) }),
+    output: z.array(
+      z.strictObject({
+        id: z.string(),
+        name: z.string(),
+        language: z.string(),
+        languages: z.array(z.string()).optional()
+      })
+    )
   }),
   'ai.transcription.asset.install': defineRoute({
     input: request.extend({
