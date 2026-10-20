@@ -1,7 +1,8 @@
 import { once } from 'node:events'
 
+import { remoteLimits } from '@cherrystudio/remote-protocol'
 import type { ComponentLogger, Logger } from '@libp2p/interface'
-import { expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { WebSocket, WebSocketServer } from 'ws'
 
 import {
@@ -57,4 +58,66 @@ it('carries encrypted Unicode JSON-RPC across real WebSocket sockets without exp
     for (const client of server.clients) client.terminate()
     await new Promise<void>((resolve) => server.close(() => resolve()))
   }
+})
+
+class MockSocket {
+  binaryType = ''
+  bufferedAmount = 0
+  readyState = 1
+  sent: Uint8Array[] = []
+  closed: number | undefined
+  send(data: Uint8Array) {
+    this.sent.push(data)
+  }
+  close(code?: number) {
+    this.closed = code
+  }
+  addEventListener() {}
+  removeEventListener() {}
+}
+
+describe('RemoteSocketStream backpressure', () => {
+  afterEach(() => vi.useRealTimers())
+
+  it('pauses at the queued-bytes cap and resumes once bufferedAmount drains', async () => {
+    vi.useFakeTimers()
+    const socket = new MockSocket()
+    const stream = new RemoteSocketStream(socket, silent(), 'outbound')
+    const aborted = vi.fn()
+    stream.addEventListener('close', aborted)
+    socket.bufferedAmount = remoteLimits.queuedBytes - 10
+
+    stream.send(new Uint8Array(100))
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(socket.sent).toHaveLength(0)
+    expect(aborted).not.toHaveBeenCalled()
+    expect(stream.status).toBe('open')
+
+    socket.bufferedAmount = 0
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(socket.sent).toHaveLength(1)
+    expect(socket.sent[0].byteLength).toBe(100)
+    expect(aborted).not.toHaveBeenCalled()
+  })
+
+  it('aborts when the socket stays congested past the stall timeout', async () => {
+    vi.useFakeTimers()
+    const socket = new MockSocket()
+    const stream = new RemoteSocketStream(socket, silent(), 'outbound')
+    const closed = vi.fn()
+    stream.addEventListener('close', closed)
+    socket.bufferedAmount = remoteLimits.queuedBytes
+
+    stream.send(new Uint8Array(100))
+    await vi.advanceTimersByTimeAsync(10 * 60_000)
+    expect(socket.sent).toHaveLength(0)
+    expect(closed).toHaveBeenCalledTimes(1)
+  })
+
+  it('still aborts on a closed socket', () => {
+    const socket = new MockSocket()
+    const stream = new RemoteSocketStream(socket, silent(), 'outbound')
+    socket.readyState = 3
+    expect(() => stream.send(new Uint8Array(10))).toThrow('Remote socket unavailable')
+  })
 })
