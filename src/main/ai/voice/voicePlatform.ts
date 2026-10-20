@@ -1,6 +1,8 @@
 import {
   APPLE_ASR_MODEL_ID,
   APPLE_TTS_MODEL_ID,
+  FUNASR_MODEL_ID,
+  FUNASR_SUPPORTED_PLATFORM_KEYS,
   type LocalSpeechModelId,
   type LocalTranscriptionModelId,
   WINDOWS_ASR_MODEL_ID,
@@ -54,7 +56,8 @@ export function resolveDefaultAsrModel(
       return APPLE_ASR_MODEL_ID
   }
   if (platform.platform === 'win32' && platform.arch === 'x64') return WINDOWS_ASR_MODEL_ID
-  return undefined
+  const platformKey = `${platform.platform}-${platform.arch}`
+  return FUNASR_SUPPORTED_PLATFORM_KEYS.some((supported) => supported === platformKey) ? FUNASR_MODEL_ID : undefined
 }
 
 export function resolveDefaultSpeechModel(platform: {

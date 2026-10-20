@@ -8,13 +8,15 @@ import { Download, RefreshCw, SquareCheckBig, X } from 'lucide-react'
 import { useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 
+type FileProcessingLocalModelCapability = Exclude<LocalModelCapability, 'asr'>
+
 const SUBTITLE_KEY = {
   embedding: 'settings.dependencies.localModels.embedding.subtitle',
   ocr: 'settings.dependencies.localModels.ocr.subtitle'
-} as const satisfies Record<LocalModelCapability, string>
+} as const satisfies Record<FileProcessingLocalModelCapability, string>
 
 type LocalModelRequirementProps = {
-  capability: LocalModelCapability
+  capability: FileProcessingLocalModelCapability
   /** The processor's own description, shown either way. */
   description: string
   /** Commits a pending processor selection once this panel observes a ready model. */

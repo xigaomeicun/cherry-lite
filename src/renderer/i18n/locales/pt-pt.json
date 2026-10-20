@@ -5642,6 +5642,8 @@
   "settings.voice.recognition.model": "Modelo de reconhecimento",
   "settings.voice.recognition.title": "Reconhecimento de voz",
   "settings.voice.resources.open_settings": "Abrir definições de voz do sistema",
+  "settings.voice.resources.remove_description": "O reconhecimento com este modelo ficará indisponível até o voltar a transferir. A sua seleção será mantida.",
+  "settings.voice.resources.remove_title": "Remover o modelo de reconhecimento de voz?",
   "settings.voice.speech.language": "Idioma da voz",
   "settings.voice.speech.language_default": "Predefinição do idioma · {{name}}",
   "settings.voice.speech.model": "Modelo de voz",

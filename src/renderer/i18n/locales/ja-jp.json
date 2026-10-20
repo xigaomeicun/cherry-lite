@@ -5642,6 +5642,8 @@
   "settings.voice.recognition.model": "認識モデル",
   "settings.voice.recognition.title": "音声認識",
   "settings.voice.resources.open_settings": "システムの音声設定を開く",
+  "settings.voice.resources.remove_description": "再ダウンロードするまで、このモデルでの音声認識は使用できません。モデルの選択は保持されます。",
+  "settings.voice.resources.remove_title": "音声認識モデルを削除しますか？",
   "settings.voice.speech.language": "読み上げ言語",
   "settings.voice.speech.language_default": "言語のデフォルト · {{name}}",
   "settings.voice.speech.model": "音声モデル",

@@ -5642,6 +5642,8 @@
   "settings.voice.recognition.model": "Modèle de reconnaissance",
   "settings.voice.recognition.title": "Reconnaissance vocale",
   "settings.voice.resources.open_settings": "Ouvrir les paramètres vocaux du système",
+  "settings.voice.resources.remove_description": "La reconnaissance vocale avec ce modèle sera indisponible jusqu’à son prochain téléchargement. Votre sélection sera conservée.",
+  "settings.voice.resources.remove_title": "Supprimer le modèle de reconnaissance vocale ?",
   "settings.voice.speech.language": "Langue de synthèse",
   "settings.voice.speech.language_default": "Voix par défaut de la langue · {{name}}",
   "settings.voice.speech.model": "Modèle vocal",

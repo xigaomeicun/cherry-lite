@@ -5642,6 +5642,8 @@
   "settings.voice.recognition.model": "Erkennungsmodell",
   "settings.voice.recognition.title": "Spracherkennung",
   "settings.voice.resources.open_settings": "Systemspracheinstellungen öffnen",
+  "settings.voice.resources.remove_description": "Die Spracherkennung mit diesem Modell ist bis zum erneuten Download nicht verfügbar. Ihre Modellauswahl bleibt erhalten.",
+  "settings.voice.resources.remove_title": "Spracherkennungsmodell entfernen?",
   "settings.voice.speech.language": "Ausgabesprache",
   "settings.voice.speech.language_default": "Sprachstandard · {{name}}",
   "settings.voice.speech.model": "Sprachmodell",

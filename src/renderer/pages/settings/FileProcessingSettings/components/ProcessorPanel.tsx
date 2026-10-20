@@ -339,7 +339,7 @@ export function ProcessorPanel({
 
       {processor.id === 'paddleocr' ? <PaddleOcrDeploymentInfo /> : null}
 
-      {requiredLocalModel ? (
+      {requiredLocalModel === 'embedding' || requiredLocalModel === 'ocr' ? (
         <LocalModelRequirement
           capability={requiredLocalModel}
           description={t(getProcessorDescriptionKey(processor.id))}
