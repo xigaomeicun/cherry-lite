@@ -27,8 +27,6 @@ const markdownParser = unified()
   .freeze()
 
 const skippedHtmlSelectors = [
-  'code',
-  'pre',
   'math',
   'script',
   'style',
@@ -124,6 +122,7 @@ function phrasingToHtml(nodes: readonly PhrasingContent[]): string {
 function phrasingNodeToHtml(node: PhrasingContent): string {
   switch (node.type) {
     case 'text':
+    case 'inlineCode':
       return escapeHtml(node.value)
     case 'break':
       return '<br>'
@@ -138,7 +137,6 @@ function phrasingNodeToHtml(node: PhrasingContent): string {
     case 'link':
     case 'linkReference':
       return phrasingToHtml(node.children)
-    case 'inlineCode':
     case 'inlineMath':
     case 'footnoteReference':
       return ''
@@ -175,7 +173,10 @@ function blockToHtml(node: RootContent): string {
       return `<tr>${node.children.map(blockToHtml).join('')}</tr>`
     case 'html':
       return node.value
+    case 'code':
+      return `<pre><code>${escapeHtml(node.value)}</code></pre>`
     case 'text':
+    case 'inlineCode':
     case 'break':
     case 'image':
     case 'emphasis':
@@ -184,8 +185,6 @@ function blockToHtml(node: RootContent): string {
     case 'link':
     case 'linkReference':
       return `<p>${phrasingToHtml([node])}</p>`
-    case 'code':
-    case 'inlineCode':
     case 'math':
     case 'inlineMath':
     case 'definition':
