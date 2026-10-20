@@ -47,6 +47,7 @@ import {
   type PlaybackState,
   readyPlaybackOutput
 } from './playbackState'
+import { VoiceInputStream } from './VoiceInputStream'
 import { getMicrophoneStatus, openMicrophoneSettings, openSystemVoiceSettings } from './voicePlatform'
 import { VoiceRuntimeError } from './VoiceRuntimeError'
 import { VoiceStream } from './VoiceStream'
@@ -89,6 +90,7 @@ type Session = {
   resolvedAdapter?: string
   terminalStatus?: 'completed' | 'failed' | 'aborted'
   cleanup?: Promise<void>
+  inputStream?: VoiceInputStream
   stream?: VoiceStream
   outputId?: string
   chunkCount?: number
@@ -268,6 +270,94 @@ export class VoiceSessionService extends BaseService {
       durationMs: input.durationMs
     })
     return entry
+  }
+
+  async startStreamingTranscription(owner: VoiceOwner, input: InputFor<'ai.voice.transcription.start'>) {
+    const session = this.requireLeaseSession(owner, input.sessionId)
+    if (session.kind !== 'recording' || session.phase !== 'recording' || session.inputStream)
+      throw new VoiceRuntimeError('invalid_request')
+    const { modelId, options } = resolveTranscriptionRequest(input)
+    try {
+      const result = await this.run(
+        session,
+        input.requestId,
+        modelId,
+        'transcription',
+        async (signal) => {
+          const source = new VoiceInputStream()
+          session.inputStream = source
+          const abort = () => source.close()
+          signal.addEventListener('abort', abort, { once: true })
+          const deadline = setTimeout(() => {
+            if (this.active?.session === session) this.active.controller.abort(new VoiceRuntimeError('timeout'))
+          }, 420_000)
+          deadline.unref()
+          try {
+            const execution = startTranscription(
+              {
+                modelId,
+                input: { kind: TranscriptionInputKind.PcmStream, format: input.format, chunks: source },
+                output: TranscriptionOutputKind.Revisions,
+                options
+              },
+              signal
+            )
+            const updates = (async () => {
+              for await (const update of execution.updates) {
+                signal.throwIfAborted()
+                application.get('IpcApiService').send(owner.windowId, 'ai.voice.transcript_event', {
+                  sessionId: session.id,
+                  requestId: input.requestId,
+                  type: 'revision',
+                  update
+                })
+              }
+            })()
+            const work = (async () => {
+              await execution.ready
+              signal.throwIfAborted()
+              application.get('IpcApiService').send(owner.windowId, 'ai.voice.transcript_event', {
+                sessionId: session.id,
+                requestId: input.requestId,
+                type: 'ready'
+              })
+              const [result] = await Promise.all([execution.completed, updates])
+              return result
+            })()
+            void updates.catch(() => undefined)
+            return await this.consumeExecution(session, execution, work)
+          } finally {
+            clearTimeout(deadline)
+            source.close()
+            signal.removeEventListener('abort', abort)
+            session.inputStream = undefined
+          }
+        },
+        { failurePhase: 'failed' }
+      )
+      await this.closeSession(session)
+      return { text: result.text }
+    } catch (error) {
+      await this.closeSession(session, true)
+      throw error
+    }
+  }
+
+  writeInput(owner: VoiceOwner, input: InputFor<'ai.voice.input.write'>): Promise<void> {
+    return this.requireInputStream(owner, input).write({ startFrame: input.startFrame, samples: input.samples })
+  }
+
+  finishInput(owner: VoiceOwner, input: InputFor<'ai.voice.input.finish'>): void {
+    const source = this.requireInputStream(owner, input)
+    source.finish(input.frames)
+    this.transition(this.requireLeaseSession(owner, input.sessionId), 'recognizing')
+  }
+
+  private requireInputStream(owner: VoiceOwner, input: { sessionId: string; requestId: string }): VoiceInputStream {
+    const session = this.requireLeaseSession(owner, input.sessionId)
+    if (!session.inputStream || session.requestId !== input.requestId || session.closed)
+      throw new VoiceRuntimeError('invalid_request')
+    return session.inputStream
   }
 
   async transcribe(owner: VoiceOwner, input: InputFor<'ai.transcription.generate'>) {
@@ -1076,6 +1166,7 @@ export class VoiceSessionService extends BaseService {
       return terminal ? session.cleanup.catch(() => this.closeSession(session, true)) : session.cleanup
     }
     session.closed = true
+    session.inputStream?.close()
     session.stream?.close()
     this.clearPlaybackTimeout(session)
     this.removeOutput(session)

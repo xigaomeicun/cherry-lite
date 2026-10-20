@@ -78,6 +78,9 @@ function createHarness(
     }
   )
   const voice = {
+    startStreamingTranscription: () => {
+      throw new Error('Unexpected streaming path')
+    },
     initialize: vi.fn(async () => {
       events.push('initialize')
     }),

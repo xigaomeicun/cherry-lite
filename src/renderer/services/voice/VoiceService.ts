@@ -11,7 +11,9 @@ import {
   MIN_SPEECH_SPEED,
   TranscriptionLanguageSource
 } from '@shared/ai/localVoice'
+import type { SpeechPcmChunk, TranscriptRevision } from '@shared/ai/voice'
 import type { SpeechStreamEvent, SpeechStreamIdentity } from '@shared/ai/voice'
+import { TranscriptionInputKind, TranscriptionOutputKind } from '@shared/ai/voice'
 import { IpcError } from '@shared/ipc/errors/IpcError'
 import { voiceErrorCodes, type VoiceErrorReason } from '@shared/ipc/errors/voice'
 import type { voiceRequestSchemas, VoiceSessionEvent, VoiceSessionState } from '@shared/ipc/schemas/voice'
@@ -29,7 +31,7 @@ interface VoiceIpc {
     route: R,
     ...args: InputFor<R> extends void ? [] : [input: InputFor<R>]
   ): Promise<OutputFor<R>>
-  on<E extends 'ai.voice.session_event' | 'ai.voice.stream_event'>(
+  on<E extends 'ai.voice.session_event' | 'ai.voice.stream_event' | 'ai.voice.transcript_event'>(
     event: E,
     callback: (payload: EventPayload<E>) => void
   ): () => void
@@ -94,7 +96,14 @@ export type InstallTranscriptionAssetInput = Omit<
   requestId?: string
 }
 
+export interface StreamingTranscription extends VoiceOperation<{ text: string }> {
+  readonly ready: Promise<void>
+  write(chunk: SpeechPcmChunk): Promise<void>
+  finish(frames: number): Promise<void>
+}
+
 export interface ResolvedTranscriptionPreferences {
+  readonly streaming?: boolean
   readonly modelId?: LocalTranscriptionModelId
   readonly language?: InputFor<'ai.transcription.generate'>['language']
 }
@@ -185,7 +194,14 @@ export class VoiceService {
       language: input.language
     })
     if (resolved.status.status !== 'ready') throw new VoiceDomainError(resolved.status.reason ?? 'model_required')
-    return { modelId: resolved.modelId, language: resolved.language }
+    return {
+      modelId: resolved.modelId,
+      language: resolved.language,
+      streaming: resolved.capabilities?.transcription?.some(
+        (operation) =>
+          operation.input === TranscriptionInputKind.PcmStream && operation.output === TranscriptionOutputKind.Revisions
+      )
+    }
   }
 
   async readTranscriptionPreferenceInput(): Promise<ResolvedTranscriptionPreferences> {
@@ -466,6 +482,42 @@ export class VoiceService {
     return this.invoke(() =>
       this.ipc.request('file.voice_recording.create', { ...input, mimeType: 'audio/webm;codecs=opus' })
     )
+  }
+
+  startStreamingTranscription(
+    input: Omit<InputFor<'ai.voice.transcription.start'>, 'requestId'>,
+    onRevision: (update: TranscriptRevision) => void
+  ): StreamingTranscription {
+    const identity = { sessionId: input.sessionId, requestId: this.createId() }
+    let resolveReady!: () => void
+    let rejectReady!: (error: unknown) => void
+    const ready = new Promise<void>((resolve, reject) => {
+      resolveReady = resolve
+      rejectReady = reject
+    })
+    const unsubscribe = this.ipc.on('ai.voice.transcript_event', (event) => {
+      if (event.sessionId !== identity.sessionId || event.requestId !== identity.requestId) return
+      if (event.type === 'ready') resolveReady()
+      else onRevision(event.update)
+    })
+    const result = this.invoke(() => this.ipc.request('ai.voice.transcription.start', { ...input, ...identity }))
+      .catch((error: unknown) => {
+        rejectReady(error)
+        throw error
+      })
+      .finally(unsubscribe)
+    void result.catch(() => undefined)
+    void ready.catch(() => undefined)
+    return {
+      ...identity,
+      ready,
+      result,
+      write: (chunk) =>
+        this.invoke(() =>
+          this.ipc.request('ai.voice.input.write', { ...identity, ...chunk, samples: new Float32Array(chunk.samples) })
+        ),
+      finish: (frames) => this.invoke(() => this.ipc.request('ai.voice.input.finish', { ...identity, frames }))
+    }
   }
 
   transcribe(input: TranscriptionInput): VoiceOperation<OutputFor<'ai.transcription.generate'>> {

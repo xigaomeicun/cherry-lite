@@ -6,7 +6,8 @@ import type {
   SpeechPcmChunk,
   SpeechPcmFormat,
   TranscriptionInputKind,
-  TranscriptionOutputKind
+  TranscriptionOutputKind,
+  TranscriptRevision
 } from '@shared/ai/voice'
 
 export interface VoiceExecution {
@@ -32,14 +33,10 @@ export interface SpeechExecution<Output extends SpeechOutputKind = SpeechOutputK
   readonly completed: Promise<void>
 }
 
-export interface TranscriptRevision {
-  readonly revision: number
-  readonly text: string
-  readonly provisionalStart: number
-  readonly final: boolean
-}
+export type { TranscriptRevision } from '@shared/ai/voice'
 
 export interface TranscriptionExecution extends VoiceExecution {
+  readonly ready?: Promise<void>
   readonly updates: AsyncIterable<TranscriptRevision>
   readonly completed: Promise<TranscriptionResult>
 }
@@ -53,8 +50,14 @@ export interface SpeechRequest {
 
 export interface TranscriptionRequest {
   readonly modelId: LocalTranscriptionModelId
-  readonly input: { readonly kind: typeof TranscriptionInputKind.Audio; readonly audio: Uint8Array }
-  readonly output: typeof TranscriptionOutputKind.Final
+  readonly input:
+    | { readonly kind: typeof TranscriptionInputKind.Audio; readonly audio: Uint8Array }
+    | {
+        readonly kind: typeof TranscriptionInputKind.PcmStream
+        readonly format: SpeechPcmFormat
+        readonly chunks: AsyncIterable<SpeechPcmChunk>
+      }
+  readonly output: TranscriptionOutputKind
   readonly options: Readonly<TranscriptionOptions>
 }
 
@@ -70,12 +73,16 @@ export type SpeechOperation = {
   }
 }[SpeechOutputKind]
 
-export interface TranscriptionOperation {
-  readonly input: TranscriptionRequest['input']['kind']
-  readonly output: TranscriptionRequest['output']
-  start(
-    input: TranscriptionRequest['input'],
-    options: Readonly<TranscriptionOptions>,
-    signal?: AbortSignal
-  ): TranscriptionExecution
-}
+export type TranscriptionOperation = {
+  [Kind in TranscriptionInputKind]: {
+    readonly input: Kind
+    readonly output: Kind extends typeof TranscriptionInputKind.Audio
+      ? typeof TranscriptionOutputKind.Final
+      : typeof TranscriptionOutputKind.Revisions
+    start(
+      input: Extract<TranscriptionRequest['input'], { kind: Kind }>,
+      options: Readonly<TranscriptionOptions>,
+      signal?: AbortSignal
+    ): TranscriptionExecution
+  }
+}[TranscriptionInputKind]

@@ -220,6 +220,12 @@ export async function resolveTranscriptionConfiguration(
       const plan = resolveTranscriptionRequest({ ...input, modelId }, environment)
       const status = await transcriptionDefinition(modelId).status(plan.options, signal)
       const selection = {
+        capabilities: {
+          transcription: transcriptionDefinition(modelId).transcriptionOperations.map(({ input, output }) => ({
+            input,
+            output
+          }))
+        },
         modelId,
         language: plan.options.language
           ? { source: TranscriptionLanguageSource.Explicit, locale: plan.options.language }

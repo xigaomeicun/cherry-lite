@@ -6,8 +6,10 @@ import { UtilityProcessError } from '@main/core/utilityProcess/UtilityProcessErr
 import { regionService } from '@main/services/RegionService'
 import { LOCAL_VOICE_MODELS, VoiceResourceOperation } from '@shared/ai/localVoice'
 import { QWEN3_ASR_BUNDLE_ID, QWEN3_ASR_MODEL_ID } from '@shared/ai/localVoice'
+import { TranscriptionInputKind, TranscriptionOutputKind } from '@shared/ai/voice'
 import { LOCAL_MODEL_STATUS_CACHE_KEY } from '@shared/data/presets/localModel'
 
+import type { TranscriptionOperation } from '../executionTypes'
 import type { TranscriptionModelDefinition } from '../voiceModelTypes'
 import type { LocalVoiceStatus } from '../voiceModelTypes'
 import { mlxVoiceSupport } from '../voicePlatform'
@@ -120,6 +122,96 @@ export function createQwen3AsrTranscriptionModel(options: TranscriptionOptions):
   }
 }
 
+const streamingTranscription: TranscriptionOperation = {
+  input: TranscriptionInputKind.PcmStream,
+  output: TranscriptionOutputKind.Revisions,
+  start(input, options, signal) {
+    const controller = new AbortController()
+    const lifetime = signal ? AbortSignal.any([signal, controller.signal]) : controller.signal
+    const loadingTimer = setTimeout(() => controller.abort(new VoiceRuntimeError('timeout')), 120_000)
+    loadingTimer.unref()
+    const opened = Promise.resolve().then(async () => {
+      await requireReady(lifetime)
+      if (options.language || input.format.sampleRate !== 16000 || input.format.channels !== 1)
+        throw new VoiceRuntimeError('invalid_request')
+      return application.get('AsrInferenceService').stream(QWEN3_ASR_BUNDLE_ID, input.format.sampleRate, lifetime)
+    })
+    void opened.then((stream) => stream.completed).catch((error: unknown) => rejectReady(error))
+    const closed = opened.then(
+      (stream) => stream.closed,
+      () => undefined
+    )
+    let resolveReady!: () => void
+    let rejectReady!: (error: unknown) => void
+    const ready = new Promise<void>((resolve, reject) => {
+      resolveReady = resolve
+      rejectReady = reject
+    })
+    const pump = opened.then(async (stream) => {
+      await ready
+      for await (const chunk of input.chunks) {
+        lifetime.throwIfAborted()
+        await stream.write({
+          metadata: { startFrame: chunk.startFrame },
+          payload: new Uint8Array(chunk.samples.buffer, chunk.samples.byteOffset, chunk.samples.byteLength)
+        })
+      }
+      await stream.finishInput()
+    })
+    const completed = opened
+      .then(async (stream) => {
+        const [result] = await Promise.all([stream.completed, pump])
+        if (!result.text.trim()) throw new VoiceRuntimeError('no_speech')
+        return { text: result.text, segments: [] }
+      })
+      .catch(async (error: unknown) => {
+        const failure =
+          lifetime.reason instanceof VoiceRuntimeError ? lifetime.reason : normalizeFailure(error, lifetime)
+        rejectReady(failure)
+        controller.abort(failure)
+        await closed
+        throw failure
+      })
+      .finally(() => clearTimeout(loadingTimer))
+    void completed.catch(() => undefined)
+    void pump.catch((error: unknown) => controller.abort(error))
+    void ready.catch(() => undefined)
+    const updates = {
+      async *[Symbol.asyncIterator]() {
+        try {
+          const stream = await opened
+          let announced = false
+          for await (const frame of stream.output) {
+            if (frame.metadata.type === 'ready') {
+              if (announced) throw new VoiceRuntimeError('invalid_request')
+              announced = true
+              clearTimeout(loadingTimer)
+              resolveReady()
+            } else {
+              if (!announced) throw new VoiceRuntimeError('invalid_request')
+              yield frame.metadata
+            }
+          }
+        } catch (error) {
+          rejectReady(error)
+          controller.abort(error)
+          throw error
+        }
+      }
+    }
+    return {
+      ready,
+      updates,
+      completed,
+      closed,
+      cancel: async () => {
+        controller.abort()
+        await closed
+      }
+    }
+  }
+}
+
 export const qwen3AsrTranscriptionDefinition: TranscriptionModelDefinition = {
   id: QWEN3_ASR_MODEL_ID,
   adapterId: 'mlx',
@@ -135,7 +227,7 @@ export const qwen3AsrTranscriptionDefinition: TranscriptionModelDefinition = {
   }),
   status: (_options, signal) => getQwen3AsrStatus(signal),
   locales: async () => ({ supported: [], installed: [] }),
-  transcriptionOperations: [completeTranscriptionOperation(createQwen3AsrTranscriptionModel)],
+  transcriptionOperations: [completeTranscriptionOperation(createQwen3AsrTranscriptionModel), streamingTranscription],
   download: () =>
     application
       .get('LocalModelService')

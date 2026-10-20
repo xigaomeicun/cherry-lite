@@ -5,6 +5,7 @@ import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { CPU_LOCAL_INFERENCE_PROFILE } from '../inferenceAcceleration'
+import type { AsrInferenceContract } from '../inferenceProcess'
 import { loadInferenceEntries } from './inferenceEntryHarness'
 
 let appPath: string
@@ -22,6 +23,22 @@ beforeEach(async () => {
       static async load(dir) {
         if (dir === '/retry' && attempts++ === 0) throw new Error('load failed')
         return new Qwen3AsrModel()
+      }
+      async createStream() {
+        if (this.active) throw new Error('Previous stream leaked')
+        this.active = true
+        let count = 0
+        return {
+          feed: async (samples) => {
+            if (samples[0] === 2) throw new Error('Native feed failed')
+            count += samples.length
+            return { text: '🧪你好 ' + count, stableText: '🧪', revision: count, isFinal: false, reachedMaxTokens: false }
+          },
+          finish: async () => {
+            this.active = false
+            return { text: '🧪你好 ' + count, stableText: '🧪你好 ' + count, revision: count + 1, isFinal: true, reachedMaxTokens: false }
+          }
+        }
       }
       async transcribe(samples, options) {
         if (options.language) throw new Error('Expected automatic language detection')
@@ -75,5 +92,53 @@ describe('Qwen3 ASR utility entry', () => {
     request.source.sampleRate = 16000
     request.source.samples = new Float32Array()
     await expect(asr.transcribe(request)).rejects.toMatchObject({ code: 'VOICE_AUDIO_INVALID' })
+  })
+})
+
+describe('Qwen3 ASR streaming entry', () => {
+  async function run(samples: Float32Array[], offsets?: number[]) {
+    const { asrStreamHandlers } = await import('../utilityEntries/inferenceQwen3Asr')
+    const frames: Array<AsrInferenceContract['streams']['transcribe']['output']> = []
+    const result = await asrStreamHandlers.transcribe(
+      { modelDir: '/model', sampleRate: 16000 },
+      {
+        signal: new AbortController().signal,
+        logger: { debug() {}, info() {}, warn() {}, error() {} },
+        write: async (frame) => {
+          frames.push(frame)
+        },
+        input: {
+          async *[Symbol.asyncIterator]() {
+            let offset = 0
+            for (const [i, batch] of samples.entries()) {
+              yield { metadata: { startFrame: offsets?.[i] ?? offset }, payload: new Uint8Array(batch.buffer) }
+              offset += batch.length
+            }
+          }
+        }
+      }
+    )
+    return { result, frames }
+  }
+
+  it('preserves the partial tail and reports provisional positions in UTF-16', async () => {
+    await load()
+    const { result, frames } = await run([new Float32Array(1600), new Float32Array(131)])
+    expect(result).toEqual({ text: '🧪你好 1731' })
+    expect(frames[0]).toEqual({ metadata: { type: 'ready' } })
+    expect(frames[1].metadata).toMatchObject({ provisionalStart: 2, final: false })
+    expect(frames.at(-1)?.metadata).toMatchObject({ text: '🧪你好 1731', final: true })
+  })
+
+  it('rejects a discontinuity and releases the native stream before another attempt', async () => {
+    await load()
+    await expect(run([new Float32Array(1600), new Float32Array(1)], [0, 1601])).rejects.toThrow('sequence')
+    expect((await run([new Float32Array(7)])).result.text).toBe('🧪你好 7')
+  })
+
+  it('cleans up after a native feed failure and accepts a subsequent stream', async () => {
+    await load()
+    await expect(run([new Float32Array([2])])).rejects.toThrow('Native feed failed')
+    expect((await run([new Float32Array(9)])).result.text).toBe('🧪你好 9')
   })
 })

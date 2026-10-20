@@ -45,5 +45,5 @@ See [the fixture provenance](./__tests__/fixtures/README.md) and
 
 `qwen3Asr` converts validated PCM16 WAV samples into 16 kHz Float32 PCM, preserving byte
 view offsets, and sends them to the existing ASR inference service. It creates no scratch
-files and exposes only final text. MLX platform support is shared with Qwen3-TTS in
+files. It also adapts mono 16 kHz PCM streams to full-text revisions through the same ASR queue. MLX platform support is shared with Qwen3-TTS in
 `voicePlatform`; native loading and model caches remain in the utility process.

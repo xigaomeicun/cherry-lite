@@ -58,7 +58,7 @@ export function completeSpeechOperation(createModel: (options: SpeechOptions) =>
 
 export function completeTranscriptionOperation(
   createModel: (options: TranscriptionOptions) => TranscriptionModelV3
-): TranscriptionOperation {
+): Extract<TranscriptionOperation, { input: typeof TranscriptionInputKind.Audio }> {
   return {
     input: TranscriptionInputKind.Audio,
     output: TranscriptionOutputKind.Final,

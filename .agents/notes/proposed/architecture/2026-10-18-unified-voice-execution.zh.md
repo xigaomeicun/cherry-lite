@@ -65,7 +65,8 @@ Status: proposed
 | AC4（部分） | PR 2 已实现类型化有界输入输出、有序 EOF、等待写入者上限及清理确认。定向单元测试覆盖流和普通请求行为。真实 Electron 普通目录和 ASAR smoke 通过；双向队列每个方向的峰值为 6,016 字节 / 2 帧，低于 8,192 字节 / 3 帧上限。 | PR 3 已将真实 Qwen3 生产者通过有界 IPC 接入 Worklet。队列测量不是 RSS 或音频质量证据。未验证 Windows。 |
 | AC5 | PR 3 实现类型化 PCM 输出、挂接与消费额度、原生背压、源采样率 Worklet 播放、EOF 排空和新尝试重试。开发版 Electron 中的真实 Qwen3 热启动首次消费为 514 ms，生成结束为 13,950 ms，欠载为零，Renderer 缓冲峰值为 23,936 帧，低于 24,000 帧上限。暂停期间消费游标不变；停止后 40 ms 释放会话，随后重启成功。新尝试重试保留冻结配置，0.75 倍速与 1.5 倍速在 48 kHz 输出设备上均无欠载并完整排空。界面暂停、继续和停止操作也已通过。生产 Vite Worklet 产物在普通目录和 ASAR 中均播放了 24 kHz 双声道的 12,000 帧。 | 通过 Web Audio 观察了设备输出时间；未进行人工听感验收、Windows 或完整打包应用中的 Qwen3 推理验证。原生与 utility 层的数值是强制预算，不是 RSS 测量。 |
 | AC6（部分） | PR 4 增加有类型的 Sherpa/MLX 分派、所选 bundle 安装和 Qwen3-ASR 1.7B 完整识别。Electron 中英文 WebM 识别、取消后重试，以及 unpacked/ASAR 包路径下的原生识别均通过。GitHub/ModelScope 共 18 个模型文件 URL 均可匿名读取，发布的 SHA-256 元数据一致。 | 未覆盖真实麦克风听写和其他平台；ASAR utility/package 测试不等同于完整应用打包验收。仍缺少正式 Spec Approval。 |
-| AC7–AC8 | 实现方案中已有详细提案。 | 本分支未实现或验证 PR 5–6。 |
+| AC7（部分） | PR 5 接通有界 PCM 采集、有类型的输入 IPC、Qwen 流式识别、文本修订及恰好一次完成提交。Electron 中将 48 kHz 音频经真实 16 kHz 采集 Worklet 输入后，中英文最终文本正确，录音中有修订，分析器电平非零，音轨已释放。采集中取消未插入文字，随后中英文会话均成功完成。约 50 秒的不重复原生录音跨窗口后保留了最后一句。 | 真实麦克风输入为静音：采集与释放通过，真人语音识别尚未验证。另一项 53 秒重复句原生测试遗漏了最后一次重复，应用层未添加补偿。打包采集与完整时长压力验收仍未完成。 |
+| AC8 | 实现方案中已有详细提案。 | 本分支未实现或验证 PR 6。 |
 
 PR 3 沿用现有服务依赖图，不增加单例服务。`VoiceSessionService` 拥有各个 `VoiceStream`，中继只接收发送和过期回调。Renderer 输出适配器拥有音频图和可观察的关闭 Promise。MLX 在播放期间通过有界的两段文本队列继续处理有限文本。实现使用源采样率 AudioContext，将设备采样率转换交给浏览器，不引入自定义重采样器。运行预算为一秒原生 PCM、四条 utility 消息 / 131,072 字节、一秒 Renderer PCM、15 秒挂接、120 秒加载或未受背压阻塞的生产者读取，以及 15 分钟流保留时间。暂停包含在保留预算中，等待消费额度不计为生产者停滞。Worklet 在已有一秒上限内积累 500 ms 源音频后起播，短音频在 EOF 时起播；这消除了最初 1.5 倍速测试中观察到的欠载。
 
@@ -216,7 +217,7 @@ IpcApi schema 引用同一常量对象建立枚举校验，路由类型继续从
 | 现有系统 TTS 与 Kokoro | 完整文本 → 完整音频 |
 | Qwen3-TTS MLX | 完整文本 → PCM 流；完整音频路径保留 |
 | 现有系统 ASR 与 FunASR | 完整音频 → 最终文本 |
-| 后续 MLX Qwen3-ASR | 连续 PCM → 文本修订与最终结果，完成打包和实机验证后开放 |
+| MLX Qwen3-ASR | 连续 PCM → 可替换文本修订与最终结果；仍支持完整录音输入 |
 | 后续 FunASR VAD 连续模式 | 连续 PCM → 已完成分段；不能声明具有句内修订能力 |
 
 增量文本输入待消费者接入后才开放。云端模型必须沿用既有 provider/endpoint 解析和凭据管理；本方案不提前注册尚未实现的云端能力，也不假定所有云端音频都能直接转换为 PCM。
@@ -677,21 +678,21 @@ ASR JavaScript 打包和模型产物来源记录，不替换共享原生二进�
 
 `PcmCapture` 是 DictationService 拥有的普通资源类，提供开始、正常停止并排出尾部、立即取消三种行为。实际 MediaStream、tracks、AudioContext、worklet 和待提交批次只归它管理；设备切换不能在活动录音中静默重建输入源。
 
-`VoiceService` 使用 PR 3 的流身份和监听器，增加 PCM write / finish_input 调用；`VoiceStream` 增加有界输入方向，不建立另一套 ASR session。`AsrInferenceService` 使用 PR 3 的整次流队列占用，MLX handler 串行 feed；输入 EOF 后 finish，映射修订与最终结果。原始 SDK stream 只存在于子进程。
+`VoiceService` 使用 PR 3 的流身份和监听器，增加 PCM write / finish_input 调用；`VoiceInputStream` 在现有会话内拥有单个待交接 PCM 批次；播放用 `VoiceStream` 保持仅负责输出。`AsrInferenceService` 使用 PR 3 的整次流队列占用，MLX handler 串行 feed；输入 EOF 后 finish，映射修订与最终结果。原始 SDK stream 只存在于子进程。
 
 | 文件 | 实现内容 |
 | --- | --- |
 | `src/renderer/services/voice/{PcmCapture.ts,pcmCaptureProcessor.ts}`（新增） | 设备采集、有界批次、停止尾部及取消 |
 | `DictationService.ts`、`VoiceService.ts`、必要的 `VoiceTargetManager.ts`（同目录） | 连续识别编排、修订预览、已有目标绑定上的最终一次提交 |
 | `src/shared/ai/voice.ts`、voice IPC schema 与 handler | 输入格式与批次、finish、revision 联合及运行期约束 |
-| `src/main/ai/voice/{VoiceSessionService,VoiceStream}.ts`、`localAdapters/qwen3Asr.ts` | 输入授权/额度、执行终态与后端能力开放 |
+| `src/main/ai/voice/{VoiceSessionService,VoiceInputStream}.ts`、`localAdapters/qwen3Asr.ts` | 输入授权/额度、执行终态与后端能力开放 |
 | localModel 的 ASR protocol/service、`inferenceQwen3Asr.ts` | 连续识别、输入 EOF、SDK 资源释放和 revision 归一化 |
 
 预览接入现有听写展示入口，UI 不持有原生流。不新增设置时不修改 Preference；新增可见文案须走 i18n。若增加组件，沿用 `@cherrystudio/ui`，测试遵循前端测试指南。
 
 #### 流控、类型与关闭顺序
 
-采集格式记录真实采样率、声道与帧位置；输入边界明确下混与连续重采样由谁完成，转换状态跨批次保留且 EOF 时 flush。不得声明 16 kHz 却提交 48 kHz 样本。录音硬件不会等待模型容量，客户端必须有上限；达到上限即失败并停止采集，不静默丢掉旧样本。
+采集格式记录真实采样率、声道与帧位置。Web Audio 负责连续转换为单声道 16 kHz；Worklet 校验并分批发送转换后的样本，不另行实现重采样器。正常停止时在 EOF 排空已接受的 Worklet 尾部批次。不得声明 16 kHz 却提交 48 kHz 样本。录音硬件不会等待模型容量，客户端必须有上限；达到上限即失败并停止采集，不静默丢掉旧样本。
 
 `write` ACK 只意味着数据进入受限接收范围，仍需计算 Main/子进程已排队的总量；不能在每层提前 ACK 后各自无限缓冲。revision 消费慢时可以只保留最新完整快照，但最终结果和错误不能丢失；这项合并只用于完整文本快照，不能用于 PCM 或文本输入 delta。
 

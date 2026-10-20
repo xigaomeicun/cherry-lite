@@ -21,6 +21,23 @@ export class AsrInferenceService extends InferenceServiceBase<AsrInferenceContra
     super(asrInferenceProcess, 'asr')
   }
 
+  stream(modelId: LocalModelBundleId, sampleRate: number, signal: AbortSignal) {
+    return this.openStream(
+      modelId,
+      'transcribe',
+      () => {
+        const model = resolveAsrModelPaths(modelId)
+        if (model.engine !== AsrEngine.Mlx) throw new Error('Unsupported streaming ASR model')
+        return { modelDir: model.modelDir, sampleRate }
+      },
+      {
+        signal,
+        input: { maxFrameBytes: 8192, maxBufferedBytes: 65536, maxBufferedFrames: 10, maxPendingWrites: 1 },
+        output: { maxFrameBytes: 262144, maxBufferedBytes: 524288, maxBufferedFrames: 2, maxPendingWrites: 1 }
+      }
+    )
+  }
+
   async transcribe(
     modelId: LocalModelBundleId,
     source: AsrTranscribeSource,

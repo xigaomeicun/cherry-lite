@@ -15,6 +15,7 @@ import {
   APPLE_ASR_MODEL_ID,
   APPLE_TTS_MODEL_ID,
   FUNASR_MODEL_ID,
+  QWEN3_ASR_MODEL_ID,
   QWEN3_TTS_MODEL_ID,
   TranscriptionLanguageSource,
   WINDOWS_ASR_MODEL_ID,
@@ -268,6 +269,71 @@ describe('VoiceSessionService file and admission contract', () => {
     }
     return { input: request, result: await service.speech(ownerValue, request) }
   }
+
+  it('authorizes PCM against both owner and request and waits for input EOF before completion', async () => {
+    const adapters = await import('../localAdapters')
+    vi.spyOn(adapters, 'getTranscriptionOperations').mockReturnValue([
+      {
+        input: 'pcm-stream',
+        output: 'revisions',
+        start(input) {
+          let resolve!: (result: { text: string; segments: [] }) => void
+          let reject!: (error: unknown) => void
+          const completed = new Promise<{ text: string; segments: [] }>((yes, no) => {
+            resolve = yes
+            reject = no
+          })
+          const closed = completed.then(
+            () => undefined,
+            () => undefined
+          )
+          return {
+            ready: Promise.resolve(),
+            completed,
+            closed,
+            cancel: async () => {
+              await closed
+            },
+            updates: {
+              async *[Symbol.asyncIterator]() {
+                let frames = 0
+                try {
+                  for await (const chunk of input.chunks) {
+                    frames += chunk.samples.length
+                    yield { revision: frames, text: 'preview', provisionalStart: 0, final: false }
+                  }
+                  resolve({ text: `accepted ${frames}`, segments: [] })
+                } catch (error) {
+                  reject(error)
+                  throw error
+                }
+              }
+            }
+          }
+        }
+      }
+    ])
+    const identity = { sessionId: randomUUID(), requestId: randomUUID() }
+    await service.startRecording(a, { ...identity, source: 'dictation' })
+    identity.requestId = randomUUID()
+    const result = service.startStreamingTranscription(a, {
+      ...identity,
+      modelId: QWEN3_ASR_MODEL_ID,
+      format: { sampleRate: 16000, channels: 1 }
+    })
+    await vi.waitFor(() =>
+      expect(runtime.send).toHaveBeenCalledWith(a.windowId, 'ai.voice.transcript_event', { ...identity, type: 'ready' })
+    )
+    const chunk = { ...identity, startFrame: 0, samples: new Float32Array(131) }
+    expect(() => service.writeInput(owner(), chunk)).toThrow(VoiceRuntimeError)
+    expect(() => service.writeInput(a, { ...chunk, requestId: randomUUID() })).toThrow(VoiceRuntimeError)
+    await service.writeInput(a, chunk)
+    expect(service.getState(a).phase).toBe('recording')
+    service.finishInput(a, { ...identity, frames: 131 })
+    await expect(result).resolves.toEqual({ text: 'accepted 131' })
+    expect(service.getState(a).phase).toBe('idle')
+    expect(() => service.writeInput(a, chunk)).toThrow(VoiceRuntimeError)
+  })
 
   it('publishes a stream before producer completion, isolates owners and retains playback until acknowledged EOF', async () => {
     const finished = Promise.withResolvers<void>()

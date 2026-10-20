@@ -412,7 +412,7 @@ changes preserve compatible voices. Unsupported combinations remain unavailable.
 
 ## Downloadable Qwen3-ASR
 
-`qwen3-asr-1.7b-8bit` provides complete-audio recognition on Apple Silicon with macOS 26.2+.
+`qwen3-asr-1.7b-8bit` provides complete-audio and streaming PCM recognition on Apple Silicon with macOS 26.2+.
 It uses the existing MLX native artifact shared with Qwen3-TTS and an application-owned
 `@cherrystudio/mlx-asr` JavaScript package. Its official 1.7B checkpoint, conversion revision,
 standard safetensors shards and checksums are pinned in `catalog/qwen3AsrRelease.json`.
@@ -423,13 +423,26 @@ SHA-256 at both sources. China egress prefers ModelScope; other regions prefer G
 Voice selection preserves the bundle ID through status, installation, inference and removal.
 `inference.asr` dispatches discriminated Sherpa/MLX requests and lazily loads only the selected
 engine. MLX receives 16 kHz mono Float32 PCM decoded from the existing bounded WAV/WebM path;
-it does not require Sherpa for decoding. Language is detected automatically. Only final text
-is exposed; the model has no reliable timestamps, so segments remain empty. Truncated native
+it does not require Sherpa for decoding. Language is detected automatically. Complete recognition returns final text; streaming recognition
+returns replaceable full-text revisions. The model has no reliable timestamps, so segments remain empty. Truncated native
 results fail instead of returning partial text as complete recognition.
 
 The ASR queue owns one resident model. Switching models, cancelling native work or removing
 resident weights waits for process exit. Successful calls may reuse the warm model until idle
 release. The pinned native API has no model-dispose method; process exit releases its model
 thread and allocations. ASR removal preserves the MLX artifact while installed TTS still
-requires it, and does not stop the independent TTS process. Continuous PCM capture and live
-transcription revisions are separate capabilities.
+requires it, and does not stop the independent TTS process.
+
+Streaming dictation uses the same ASR queue for the full stream lifetime. Renderer `PcmCapture`
+owns the microphone, AudioContext and worklet. Web Audio continuously converts device input to
+mono 16 kHz; the application checks the actual context rate. The worklet sends 100 ms batches,
+with at most two seconds of unacknowledged audio. Main uses a single pending batch and the
+utility transport bounds input to ten frames / 65,536 bytes. A sustained overload fails explicitly.
+The model's default two-second decoding interval is independent of the transport batch size.
+
+Normal stop drains accepted worklet samples before input EOF and final recognition. Cancellation
+stops capture, discards queued PCM and terminates native work. Revisions are previews; only
+execution completion commits text, once, to the captured target. A lost target uses existing
+recovery. Streaming failures have no saved recording to retry. Models without the PCM/revisions
+capability retain complete-recording recognition. Microphone waveform updates use the capture
+analyser and do not wait for recognition. The existing five-minute recording limit still applies.

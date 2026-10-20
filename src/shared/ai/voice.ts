@@ -23,10 +23,10 @@ export interface SpeechStreamIdentity {
 export type SpeechStreamEvent = SpeechStreamIdentity &
   ({ readonly type: 'pcm'; readonly chunk: SpeechPcmChunk } | { readonly type: 'end'; readonly frames: number })
 
-export const TranscriptionInputKind = { Audio: 'audio' } as const
+export const TranscriptionInputKind = { Audio: 'audio', PcmStream: 'pcm-stream' } as const
 export type TranscriptionInputKind = (typeof TranscriptionInputKind)[keyof typeof TranscriptionInputKind]
 
-export const TranscriptionOutputKind = { Final: 'final' } as const
+export const TranscriptionOutputKind = { Final: 'final', Revisions: 'revisions' } as const
 export type TranscriptionOutputKind = (typeof TranscriptionOutputKind)[keyof typeof TranscriptionOutputKind]
 
 export interface VoiceCapabilities {
@@ -36,3 +36,15 @@ export interface VoiceCapabilities {
     readonly output: TranscriptionOutputKind
   }[]
 }
+
+export interface TranscriptRevision {
+  readonly revision: number
+  readonly text: string
+  readonly provisionalStart: number
+  readonly final: boolean
+}
+
+export type TranscriptionStreamEvent = { readonly sessionId: string; readonly requestId: string } & (
+  | { readonly type: 'ready' }
+  | { readonly type: 'revision'; readonly update: TranscriptRevision }
+)
