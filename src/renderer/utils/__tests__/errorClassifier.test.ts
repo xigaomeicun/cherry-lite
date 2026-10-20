@@ -19,6 +19,22 @@ function makeRetryError(overrides: Partial<SerializedError> = {}): SerializedErr
 }
 
 describe('classifyError', () => {
+  it('uses the parse diagnosis for a serialized unresolved tool call', () => {
+    expect(
+      classifyError(
+        makeError({
+          name: 'AI_InvalidResponseDataError',
+          message: "Expected 'function.name' to be a string."
+        }),
+        'custom'
+      )
+    ).toMatchObject({
+      category: 'parse',
+      i18nKey: 'error.diagnosis.parse',
+      navTarget: null
+    })
+  })
+
   it.each([
     ['auth', '/settings/provider?id=anthropic'],
     ['model', '/settings/provider?id=anthropic'],
