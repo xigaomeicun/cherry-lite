@@ -53,6 +53,7 @@ Deliver complete-result compatibility first, then bounded process streams and Qw
 - AC6 — A matching MLX ASR distribution can be installed, selected, loaded, cancelled, and removed without substituting another model or deleting a shared artifact still used by TTS (verification: unit, Electron, and packaged artifact; owner: PR 4)
 - AC7 — Continuous dictation displays revisions, retains the accepted tail on normal stop, commits final text once to the correct input, and never silently drops input or commits cancelled work (verification: renderer, Electron, and packaged artifact; owner: PR 5)
 - AC8 — Incremental read-aloud begins before the answer ends, excludes reasoning, avoids duplicate text and segmentation, and closes correctly on input EOF, interruption, or failure (verification: renderer and Electron; owner: PR 6)
+- AC9 — Apple system TTS starts PCM playback before complete synthesis, preserves frame order and the final tail, and releases its helper before cancellation settles; finite-audio and other adapters remain usable (verification: native, package contract, Electron and packaged-path harness; owner: Apple streaming extension)
 
 ## Evidence and approval boundary
 
@@ -67,6 +68,7 @@ This is a retrospective record of the user-authorized design and PR 1 implementa
 | AC6 (partial) | PR 4 adds typed Sherpa/MLX dispatch, selected-bundle installation and Qwen3-ASR 1.7B complete recognition. Electron WebM recognition passed for English and Chinese; cancellation/retry and native recognition from unpacked/ASAR package paths passed. All 18 GitHub/ModelScope model-file URLs are anonymously readable with matching published SHA-256 metadata. | Real microphone dictation and other platforms are not covered; complete application packaging is distinct from the ASAR utility/package harness. Formal Spec Approval is still absent. |
 | AC7 (partial) | PR 5 connects bounded PCM capture, typed input IPC, Qwen streaming, revisions, and exactly-once completion. Electron 48 kHz audio routed through the real 16 kHz capture worklet produced correct English and Chinese final text, intermediate revisions, nonzero analyser levels and released tracks. Cancelling during capture inserted no text; subsequent English and Chinese sessions succeeded. A roughly 50-second non-repeating native recording retained its final sentence across window rollover. | The actual microphone produced silence: capture/release passed, live spoken recognition remains unverified. A separate 53-second repeated-sentence native probe omitted the final repetition; no application-side repair is applied. Packaged capture and full-duration stress acceptance remain outstanding. |
 | AC8 | Detailed proposal exists in the implementation plan. | PR 6 is not implemented or verified by this branch. |
+| AC9 (partial) | Apple PCM helper and adapter are implemented. Native early output, exact framing/tail, blocked cancellation/restart, visible Electron waveform/pause/resume/stop, and production package loading from unpacked/ASAR paths passed. A warm Electron run consumed first audio at 1,184 ms, ended production at 8,968 ms and drained all 194,744 frames with zero underruns; peak renderer occupancy was 21,944/22,050 frames. Stop returned idle in 31 ms. | Full signed application packaging, human listening and older macOS/Intel devices were not exercised. Transport bounds do not measure native-engine RSS. |
 
 PR 3 uses the existing service graph without new singleton services. `VoiceSessionService` owns each `VoiceStream`; the relay receives narrow send/expiry callbacks. Renderer output adapters own their audio graphs and observable close promises. MLX segments the finite text in its bounded two-segment queue while playback continues. The implementation delegates device-rate conversion to a source-rate AudioContext instead of introducing a custom resampler. Runtime budgets are one second of native PCM, four utility messages / 131,072 bytes, one second of renderer PCM, 15 seconds for attachment, 120 seconds for loading or an unblocked producer read, and 15 minutes of stream retention. These budgets include pauses without treating blocked credit as a producer stall. The Worklet starts after 500 ms of source audio (or EOF for shorter clips), within the existing one-second bound; this eliminated the underruns observed in the initial 1.5× run.
 
@@ -214,7 +216,8 @@ Capabilities describe executable operations. Installation, system support, and a
 
 | Adapter path | Initial exposed capabilities |
 | --- | --- |
-| Existing system TTS and Kokoro | Complete text → complete audio |
+| Apple system TTS | Complete text → PCM stream; retain complete audio |
+| Windows system TTS and Kokoro | Complete text → complete audio |
 | Qwen3-TTS MLX | Complete text → PCM stream; retain complete audio |
 | Existing system ASR and FunASR | Complete audio → final text |
 | MLX Qwen3-ASR | Continuous PCM → replaceable text revisions and a final result; complete-recording input remains available |
@@ -768,3 +771,13 @@ Each implementation PR records actual interface/ownership changes, same-phase de
 Run `pnpm install` before implementation, then inspect scope with `pnpm check --plan`. Select `pnpm test:main <完整测试文件路径...>`, `pnpm test:renderer <完整测试文件路径...>`, or equivalent commands for the cases above. Type changes run affected-project typechecks; format/lint only changed files without automatically running unfiltered repository tests. New schemas, IPC events, and utility contracts require compilation checks for producers and consumers.
 
 For changes only to this note, run `pnpm docs:index`, `pnpm docs:check`, and `git diff --check`. Repository Oxfmt ignores Markdown; separately check final newlines, trailing whitespace, and closed fences. No Vitest run is needed. Update generated `docs/README.md` only through its index script.
+
+### Apple system TTS streaming extension
+
+The user explicitly authorized this extension after PR 5. It adds complete text to PCM output, not incremental text input (PR 6) or system ASR. The existing proposed note remains the owner; formal GitHub Spec approval and remaining ACs are not implied.
+
+`packages/system-speech` owns a request-scoped helper and a bounded, pull-consumed NDJSON output protocol: one format frame, ordered Float32 little-endian PCM frames, then an exact frame-count end marker. Each PCM frame holds at most 1,024 frames in one or two channels; each protocol line is limited to 16 KiB. The synchronous native pipe writer and Node pull reader propagate backpressure without an application audio queue or scratch WAV. Platform callbacks remain exclusively in the helper. Native-engine internal allocation is not covered by these transport budgets.
+
+The Apple adapter declares `Text → PcmStream` alongside complete audio and maps errors. Existing VoiceSessionService, VoiceStream, playback credits, waveform and player ownership remain unchanged; no new lifecycle service or dependency is added. The package stream handle owns the process, timeout/listeners and iterator; `completed` requires valid EOF and successful process exit, and `closed` means the child and stdio are closed. Early iterator exit or cancellation terminates the helper and waits for exit. A producer-read timeout applies only while a read is pending; downstream pause does not count as producer inactivity. The existing session retention deadline still applies.
+
+Alternatives: retaining a WAV before playback defeats first-audio latency; a flowing event reader or unbounded callback queue breaks backpressure; routing through a second utility child adds an unnecessary process. Windows and macOS ASR streaming remain separate extensions. Verification must cover malformed/truncated output, blocked-reader cancellation, missing voices, complete-audio regression, tail drain, pause/resume and restart.

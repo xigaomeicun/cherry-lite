@@ -1,5 +1,5 @@
 # Bilingual-pair consistency record (docs/i18n/README.md).
 # After editing either side, update its counterpart and re-record with:
 #   pnpm docs:check-pairing --write .agents/notes/proposed/architecture/2026-10-18-unified-voice-execution.md
-2026-10-18-unified-voice-execution.md: bc6150e37fc82b2a2c0df6bca487a0705f0ec611
-2026-10-18-unified-voice-execution.zh.md: c7a20d07c79ebb312516830e87abcbcc03bdce9f
+2026-10-18-unified-voice-execution.md: 1f23907734f210bc5be6cd4ae434acdad69bbe68
+2026-10-18-unified-voice-execution.zh.md: a327c9d17670c53fd6ad995f89bbec51d54a22d0

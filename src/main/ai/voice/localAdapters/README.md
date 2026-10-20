@@ -47,3 +47,9 @@ See [the fixture provenance](./__tests__/fixtures/README.md) and
 view offsets, and sends them to the existing ASR inference service. It creates no scratch
 files. It also adapts mono 16 kHz PCM streams to full-text revisions through the same ASR queue. MLX platform support is shared with Qwen3-TTS in
 `voicePlatform`; native loading and model caches remain in the utility process.
+
+Apple TTS declares both complete audio and PCM streaming. Its streaming execution
+owns the system helper handle through `systemSpeech`; the package owns native
+callback framing, backpressure and process cleanup. It reuses VoiceSessionService
+and VoiceStream playback credits without another utility process or temporary WAV.
+The source AudioContext converts the declared native sample rate for the device.

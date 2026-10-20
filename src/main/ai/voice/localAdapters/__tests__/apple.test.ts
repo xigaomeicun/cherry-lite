@@ -5,19 +5,22 @@ import { join } from 'node:path'
 import { application } from '@application'
 import { SystemSpeechError } from '@cherrystudio/system-speech/contracts'
 import { UtilityProcessError } from '@main/core/utilityProcess/UtilityProcessError'
-import { APPLE_ASR_MODEL_ID } from '@shared/ai/localVoice'
+import { APPLE_ASR_MODEL_ID, APPLE_TTS_MODEL_ID } from '@shared/ai/localVoice'
+import { SpeechInputKind, SpeechOutputKind } from '@shared/ai/voice'
 import { mockMainLoggerService } from '@test-mocks/MainLoggerService'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { startSpeech } from '../../execution'
 import { getLocalVoiceStatus } from '../../localAdapters'
 import { createAppleSpeechModel, createAppleTranscriptionModel } from '../apple'
 import { installAppleAsrAsset, listAppleAsrLocales } from '../apple'
 
-const mocks = vi.hoisted(() => ({ nativeRequest: vi.fn(), decode: vi.fn() }))
+const mocks = vi.hoisted(() => ({ nativeRequest: vi.fn(), nativeStream: vi.fn(), decode: vi.fn() }))
 
 vi.mock('@cherrystudio/system-speech/native', () => ({
   SystemSpeechNativeClient: class {
     request = mocks.nativeRequest
+    stream = mocks.nativeStream
   }
 }))
 vi.mock('@application', async () => {
@@ -454,5 +457,94 @@ describe('local Apple adapters', () => {
     expect(error).toMatchObject({ reason: 'operation_failed', message: 'operation_failed' })
     expect((error as Error).cause).toBeUndefined()
     expect(await readdir(directory)).toEqual([])
+  })
+})
+
+describe('Apple PCM execution', () => {
+  it('exposes early source PCM while producer completion and native cleanup remain pending', async () => {
+    const done = Promise.withResolvers<void>()
+    const closed = Promise.withResolvers<void>()
+    mocks.nativeStream.mockResolvedValue({
+      output: Promise.resolve({
+        format: { sampleRate: 22050, channels: 1 },
+        chunks: {
+          async *[Symbol.asyncIterator]() {
+            yield { startFrame: 0, samples: new Float32Array([0.25, -0.5]) }
+          }
+        }
+      }),
+      completed: done.promise,
+      closed: closed.promise
+    })
+    const execution = startSpeech({
+      modelId: APPLE_TTS_MODEL_ID,
+      input: { kind: SpeechInputKind.Text, text: 'hello' },
+      output: SpeechOutputKind.PcmStream,
+      options: { voice: 'voice.exact' }
+    })
+    const source = await execution.output
+    if (source.kind !== SpeechOutputKind.PcmStream) throw new Error('Missing PCM capability')
+    const received: number[] = []
+    for await (const chunk of source.chunks) received.push(...chunk.samples)
+    expect(received).toEqual([0.25, -0.5])
+    let settled = false
+    void execution.completed.then(() => {
+      settled = true
+    })
+    await Promise.resolve()
+    expect(settled).toBe(false)
+    done.resolve()
+    await execution.completed
+    let released = false
+    void execution.closed.then(() => {
+      released = true
+    })
+    await Promise.resolve()
+    expect(released).toBe(false)
+    closed.resolve()
+    await execution.closed
+    expect(await readdir(directory)).toEqual([])
+  })
+
+  it('joins native termination on cancel and preserves a stable public failure', async () => {
+    const done = Promise.withResolvers<void>()
+    const closed = Promise.withResolvers<void>()
+    mocks.nativeStream.mockImplementation(async (_request, { signal }) => {
+      signal.addEventListener(
+        'abort',
+        () => {
+          done.reject(new SystemSpeechError('cancelled'))
+        },
+        { once: true }
+      )
+      return {
+        output: Promise.resolve({
+          format: { sampleRate: 22050, channels: 1 },
+          chunks: { async *[Symbol.asyncIterator]() {} }
+        }),
+        completed: done.promise,
+        closed: closed.promise,
+        cancel: async () => {
+          await closed.promise
+        }
+      }
+    })
+    const execution = startSpeech({
+      modelId: APPLE_TTS_MODEL_ID,
+      input: { kind: SpeechInputKind.Text, text: 'hello' },
+      output: SpeechOutputKind.PcmStream,
+      options: { voice: 'voice.exact' }
+    })
+    await execution.output
+    let cancelled = false
+    const cancelling = execution.cancel().then(() => {
+      cancelled = true
+    })
+    await Promise.resolve()
+    expect(cancelled).toBe(false)
+    closed.resolve()
+    await cancelling
+    await expect(execution.completed).rejects.toMatchObject({ reason: 'aborted' })
+    await execution.cancel()
   })
 })

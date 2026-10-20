@@ -17,6 +17,7 @@ import { session } from 'electron'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type * as LocalAdapters from '../localAdapters'
+import type * as AppleAdapter from '../localAdapters/apple'
 import { VoiceRuntimeError } from '../VoiceRuntimeError'
 import { type VoiceOwner, VoiceSessionService } from '../VoiceSessionService'
 
@@ -33,12 +34,22 @@ vi.hoisted(() => {
   Object.assign(globalThis, { window: new EventTarget() })
 })
 
-vi.mock('../localAdapters', async (importOriginal) => {
-  const actual = await importOriginal<typeof LocalAdapters>()
+vi.mock('../localAdapters/apple', async (importOriginal) => {
+  const actual = await importOriginal<typeof AppleAdapter>()
   const { speechFixture } = await import('./voiceExecutionFixtures')
   return {
     ...actual,
-    getSpeechOperations: (id: string) => [speechFixture(id, native.speech)],
+    appleSpeechDefinition: {
+      ...actual.appleSpeechDefinition,
+      speechOperations: [speechFixture(actual.appleSpeechDefinition.id, native.speech)]
+    }
+  }
+})
+
+vi.mock('../localAdapters', async (importOriginal) => {
+  const actual = await importOriginal<typeof LocalAdapters>()
+  return {
+    ...actual,
     resolveSpeechConfiguration: (...args: Parameters<typeof actual.resolveSpeechConfiguration>) =>
       native.resolveSpeech(...args),
     resolveTranscriptionConfiguration: (...args: Parameters<typeof actual.resolveTranscriptionConfiguration>) =>

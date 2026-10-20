@@ -53,6 +53,7 @@ Status: proposed
 - AC6 — 匹配的 MLX ASR 分发产物可安装、选择、加载、取消和移除，不替换成其他模型，不删除仍被 TTS 使用的共享 artifact (verification: unit、Electron 与 packaged artifact; owner: PR 4)
 - AC7 — 连续听写展示修订，正常停止时保留已接受的尾部，只向正确输入框提交一次最终文本，不静默丢弃输入或提交已取消任务 (verification: renderer、Electron 与 packaged artifact; owner: PR 5)
 - AC8 — 增量朗读在回答结束前开始，排除 reasoning，不重复文本或分段，并在输入 EOF、中断或失败时正确关闭 (verification: renderer 与 Electron; owner: PR 6)
+- AC9 — Apple 系统 TTS 在完整合成结束前开始 PCM 播放，保持帧顺序和末尾音频，并在取消完成前释放 helper；完整音频和其他适配器继续可用（验证：原生、包协议、Electron 与打包路径测试；owner：Apple 流式扩展）
 
 ## 证据与审批边界
 
@@ -67,6 +68,7 @@ Status: proposed
 | AC6（部分） | PR 4 增加有类型的 Sherpa/MLX 分派、所选 bundle 安装和 Qwen3-ASR 1.7B 完整识别。Electron 中英文 WebM 识别、取消后重试，以及 unpacked/ASAR 包路径下的原生识别均通过。GitHub/ModelScope 共 18 个模型文件 URL 均可匿名读取，发布的 SHA-256 元数据一致。 | 未覆盖真实麦克风听写和其他平台；ASAR utility/package 测试不等同于完整应用打包验收。仍缺少正式 Spec Approval。 |
 | AC7（部分） | PR 5 接通有界 PCM 采集、有类型的输入 IPC、Qwen 流式识别、文本修订及恰好一次完成提交。Electron 中将 48 kHz 音频经真实 16 kHz 采集 Worklet 输入后，中英文最终文本正确，录音中有修订，分析器电平非零，音轨已释放。采集中取消未插入文字，随后中英文会话均成功完成。约 50 秒的不重复原生录音跨窗口后保留了最后一句。 | 真实麦克风输入为静音：采集与释放通过，真人语音识别尚未验证。另一项 53 秒重复句原生测试遗漏了最后一次重复，应用层未添加补偿。打包采集与完整时长压力验收仍未完成。 |
 | AC8 | 实现方案中已有详细提案。 | 本分支未实现或验证 PR 6。 |
+| AC9（部分） | Apple PCM helper 与适配器已实现。原生提前输出、精确帧序与尾音、背压下取消和重启、Electron 可见波形及暂停恢复停止，以及普通目录/ASAR 的生产包加载均通过。Electron 热启动首次消费为 1,184 ms，生产结束为 8,968 ms，完整排空 194,744 帧且欠载为零；Renderer 缓冲峰值为 21,944/22,050 帧。停止后 31 ms 回到空闲。 | 未验证完整签名应用打包、人工听感及旧 macOS/Intel 设备。传输上限不是原生引擎 RSS 测量。 |
 
 PR 3 沿用现有服务依赖图，不增加单例服务。`VoiceSessionService` 拥有各个 `VoiceStream`，中继只接收发送和过期回调。Renderer 输出适配器拥有音频图和可观察的关闭 Promise。MLX 在播放期间通过有界的两段文本队列继续处理有限文本。实现使用源采样率 AudioContext，将设备采样率转换交给浏览器，不引入自定义重采样器。运行预算为一秒原生 PCM、四条 utility 消息 / 131,072 字节、一秒 Renderer PCM、15 秒挂接、120 秒加载或未受背压阻塞的生产者读取，以及 15 分钟流保留时间。暂停包含在保留预算中，等待消费额度不计为生产者停滞。Worklet 在已有一秒上限内积累 500 ms 源音频后起播，短音频在 EOF 时起播；这消除了最初 1.5 倍速测试中观察到的欠载。
 
@@ -214,7 +216,8 @@ IpcApi schema 引用同一常量对象建立枚举校验，路由类型继续从
 
 | 适配路径 | 首期对外能力 |
 | --- | --- |
-| 现有系统 TTS 与 Kokoro | 完整文本 → 完整音频 |
+| Apple 系统 TTS | 完整文本 → PCM 流；保留完整音频 |
+| Windows 系统 TTS 与 Kokoro | 完整文本 → 完整音频 |
 | Qwen3-TTS MLX | 完整文本 → PCM 流；完整音频路径保留 |
 | 现有系统 ASR 与 FunASR | 完整音频 → 最终文本 |
 | MLX Qwen3-ASR | 连续 PCM → 可替换文本修订与最终结果；仍支持完整录音输入 |
@@ -764,3 +767,13 @@ LLM 生成不会因为语音消费慢而停止。朗读文本 backlog 必须有�
 实施前运行 `pnpm install`，再用 `pnpm check --plan` 查看影响范围；根据上述用例选择 `pnpm test:main <完整测试文件路径...>`、`pnpm test:renderer <完整测试文件路径...>` 等命令。类型改动运行受影响项目的 typecheck，格式和 lint 只覆盖改动文件，不自动执行无过滤的全仓库测试。新增 schema、IPC 事件和 utility contract 同时检查生产者与消费者的编译类型。
 
 仅更新本笔记时，运行 `pnpm docs:index`、`pnpm docs:check` 与 `git diff --check`。仓库 Oxfmt 忽略 Markdown，另检查末尾换行、行尾空白和 fenced block 闭合；无需运行 Vitest。生成的 `docs/README.md` 只通过索引脚本更新。
+
+### Apple 系统 TTS 流式扩展
+
+用户在 PR 5 之后明确授权了此扩展。它增加完整文本到 PCM 输出，不包含增量文本输入（PR 6）或系统 ASR。现有 proposed 记录继续作为决策归属；这不代表已获 GitHub Spec 正式批准或完成其他 AC。
+
+`packages/system-speech` 拥有请求级 helper 和按需读取的有界 NDJSON 输出协议：一个格式帧、有序 Float32 小端 PCM 帧，以及精确总帧数的结束标记。每个 PCM 帧最多包含 1,024 帧、一个或两个声道；每行协议不超过 16 KiB。原生同步管道写入与 Node 按需读取传递背压，不增加应用音频队列或临时 WAV。平台回调仅存在于 helper。原生引擎内部内存不属于这些传输预算。
+
+Apple adapter 在完整音频之外声明 `Text → PcmStream` 并映射错误。现有 VoiceSessionService、VoiceStream、播放额度、波形和播放器归属不变；不增加生命周期服务或依赖。包的流句柄拥有进程、超时、监听器和迭代器；`completed` 要求有效 EOF 和进程成功退出，`closed` 表示子进程及标准流已关闭。提前结束迭代或取消会终止 helper 并等待退出。生产者读取超时只在等待读取时生效；下游暂停不算生产者停滞。现有会话保留期限仍然适用。
+
+替代方案：先保留完整 WAV 再播放无法改善首音延迟；持续推送的事件读取或无界回调队列破坏背压；额外套一层 utility 子进程没有必要。Windows 和 macOS ASR 流式接入仍作为独立扩展。验证必须覆盖错误或截断协议、读取受阻时取消、缺失声音、完整音频回归、尾音排空、暂停恢复和重启。

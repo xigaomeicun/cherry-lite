@@ -16,11 +16,14 @@ import { describe, expect, it } from 'vitest'
 import { describeVoiceModel, listVoiceModels, resolveTranscriptionRequest } from '../localAdapters'
 
 describe('device-scoped voice catalog and request policy', () => {
-  it('advertises only implemented complete-result operations through the IPC contract', () => {
+  it('advertises implemented audio and PCM operations through the IPC contract', () => {
     const catalog = listVoiceModels({ platform: 'darwin', arch: 'arm64', majorVersion: 26, minorVersion: 3 })
     expect(voiceRequestSchemas['ai.voice.models.list'].output.safeParse(catalog).success).toBe(true)
     expect(catalog.models.find((model) => model.id === APPLE_TTS_MODEL_ID)?.voiceCapabilities).toEqual({
-      speech: [{ input: SpeechInputKind.Text, output: SpeechOutputKind.Audio }]
+      speech: [
+        { input: SpeechInputKind.Text, output: SpeechOutputKind.Audio },
+        { input: SpeechInputKind.Text, output: SpeechOutputKind.PcmStream }
+      ]
     })
     expect(catalog.models.find((model) => model.id === FUNASR_MODEL_ID)?.voiceCapabilities).toEqual({
       transcription: [{ input: TranscriptionInputKind.Audio, output: TranscriptionOutputKind.Final }]
