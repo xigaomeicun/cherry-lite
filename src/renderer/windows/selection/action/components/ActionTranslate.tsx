@@ -18,6 +18,7 @@ import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } fr
 import { useTranslation } from 'react-i18next'
 
 import { getSelectionActionErrorMessage } from '../errorMessage'
+import { ResultReadAloudButton } from './ResultReadAloudButton'
 import WindowFooter from './WindowFooter'
 
 // Lazy boundary (S6b): keeps the heavy message-content chain out of the action
@@ -29,13 +30,14 @@ const ActionResultContent = React.lazy(importActionResultContent)
 
 interface Props {
   action: SelectionActionItem
+  sourceEntityId: string
   scrollToBottom: () => void
 }
 
 const logger = loggerService.withContext('ActionTranslate')
 const TRANSLATION_MESSAGE_ID = 'selection-translation-result'
 const TRANSLATION_TOPIC_ID = 'selection-translation'
-const ActionTranslate: FC<Props> = ({ action, scrollToBottom }) => {
+const ActionTranslate: FC<Props> = ({ action, sourceEntityId, scrollToBottom }) => {
   const { t } = useTranslation()
   const selectedText = action.selectedText
 
@@ -434,7 +436,11 @@ const ActionTranslate: FC<Props> = ({ action, scrollToBottom }) => {
         )}
       </div>
       <div className="min-h-3" />
-      <WindowFooter loading={isStreaming} onPause={handlePause} onRegenerate={handleRegenerate} content={content} />
+      <WindowFooter loading={isStreaming} onPause={handlePause} onRegenerate={handleRegenerate} content={content}>
+        {!isStreaming && !error && content.trim() && (
+          <ResultReadAloudButton text={content} sourceEntityId={sourceEntityId} />
+        )}
+      </WindowFooter>
     </>
   )
 }

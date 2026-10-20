@@ -5,7 +5,7 @@ import { useWindowInitData } from '@renderer/hooks/useWindowInitData'
 import { ipcApi } from '@renderer/ipc'
 import { isMac } from '@renderer/utils/platform'
 import { cn } from '@renderer/utils/style'
-import type { SelectionActionItem } from '@shared/data/preference/preferenceTypes'
+import type { SelectionActionSession } from '@shared/types/selection'
 import Droplet from 'lucide-react/dist/esm/icons/droplet'
 import Minus from 'lucide-react/dist/esm/icons/minus'
 import Pin from 'lucide-react/dist/esm/icons/pin'
@@ -26,7 +26,7 @@ import ActionTranslate from './components/ActionTranslate'
  * `useEffect([action])` inside the content component.
  */
 const ActionWindow: FC = () => {
-  const action = useWindowInitData<SelectionActionItem>()
+  const action = useWindowInitData<SelectionActionSession>()
   if (!action) return null
   return <SelectionActionContent action={action} />
 }
@@ -39,7 +39,7 @@ const ActionWindow: FC = () => {
  * slider, scroll) so old state doesn't bleed into the new session, even when
  * the next action happens to be the same type as the previous one.
  */
-const SelectionActionContent: FC<{ action: SelectionActionItem }> = ({ action }) => {
+const SelectionActionContent: FC<{ action: SelectionActionSession }> = ({ action }) => {
   const { t } = useTranslation()
 
   const [isAutoClose] = usePreference('feature.selection.auto_close')
@@ -56,6 +56,7 @@ const SelectionActionContent: FC<{ action: SelectionActionItem }> = ({ action })
   // (not in an effect) so the remount lands before ActionGeneral sends.
   const [prevAction, setPrevAction] = useState(action)
   const [sessionId, setSessionId] = useState(0)
+  const sourceEntityId = action.sessionId
   if (action !== prevAction) {
     setPrevAction(action)
     setSessionId((n) => n + 1)
@@ -276,10 +277,22 @@ const SelectionActionContent: FC<{ action: SelectionActionItem }> = ({ action })
       <div className="flex h-full w-full justify-center overflow-auto">
         <div
           ref={contentElementRef}
-          className="flex max-w-[1280px] flex-1 select-text flex-col overflow-auto p-4 text-sm [-webkit-app-region:no-drag]">
-          {action.id == 'translate' && <ActionTranslate action={action} scrollToBottom={handleScrollToBottom} />}
+          className="flex min-w-0 max-w-[1280px] flex-1 select-text flex-col overflow-auto p-4 text-sm [-webkit-app-region:no-drag]">
+          {action.id == 'translate' && (
+            <ActionTranslate
+              key={sessionId}
+              action={action}
+              sourceEntityId={sourceEntityId}
+              scrollToBottom={handleScrollToBottom}
+            />
+          )}
           {action.id != 'translate' && (
-            <ActionGeneral key={sessionId} action={action} scrollToBottom={handleScrollToBottom} />
+            <ActionGeneral
+              key={sessionId}
+              action={action}
+              sourceEntityId={sourceEntityId}
+              scrollToBottom={handleScrollToBottom}
+            />
           )}
         </div>
       </div>
