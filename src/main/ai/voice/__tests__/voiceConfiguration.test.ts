@@ -3,6 +3,7 @@ import {
   APPLE_TTS_MODEL_ID,
   FUNASR_MODEL_ID,
   TranscriptionLanguageSource,
+  VoiceModelSupport,
   WINDOWS_ASR_MODEL_ID,
   WINDOWS_TTS_MODEL_ID
 } from '@shared/ai/localVoice'
@@ -24,6 +25,7 @@ describe('voice product defaults', () => {
       status: 'not_installed',
       reason: 'asset_required'
     })
+    vi.spyOn(funAsrTranscriptionDefinition, 'support').mockReturnValue(VoiceModelSupport.Supported)
     vi.spyOn(funAsrTranscriptionDefinition, 'status').mockResolvedValue({ status: 'ready' })
     expect(await resolveTranscriptionConfiguration({ language }, undefined, mac)).toEqual({
       modelId: FUNASR_MODEL_ID,
@@ -37,6 +39,7 @@ describe('voice product defaults', () => {
       status: 'not_installed',
       reason: 'asset_required'
     })
+    vi.spyOn(funAsrTranscriptionDefinition, 'support').mockReturnValue(VoiceModelSupport.Supported)
     vi.spyOn(funAsrTranscriptionDefinition, 'status').mockResolvedValue({ status: 'ready' })
     expect(
       await resolveTranscriptionConfiguration({ modelId: APPLE_ASR_MODEL_ID, language }, undefined, mac)
