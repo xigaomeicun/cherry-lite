@@ -42,7 +42,7 @@ import {
   SESSION_SEND_TOOL_NAME
 } from '@shared/ai/agentSessionDelivery'
 import { CONFIG_TOOL_NAME, CRON_TOOL_NAME, NOTIFY_TOOL_NAME } from '@shared/ai/builtinTools'
-import type { AgentSessionWorkspaceSource } from '@shared/data/api/schemas/agentWorkspaces'
+import { AGENT_WORKSPACE_TYPE, type AgentSessionWorkspaceSource } from '@shared/data/api/schemas/agentWorkspaces'
 import type { Trigger } from '@shared/data/api/schemas/jobs'
 import { ChannelConfigSchema } from '@shared/data/types/channel'
 import QRCode from 'qrcode'
@@ -369,7 +369,7 @@ const SESSION_DELIVERIES_TOOL: Tool = {
 const SESSION_CREATE_TOOL: Tool = {
   name: SESSION_CREATE_TOOL_NAME,
   description:
-    'Create a new Session and send its first durable message. Omit target_agent_id to use the current Agent; provide it to create the Session for another Agent. The new Session inherits the current workspace policy and uses the target Agent model.',
+    "Create a Session and send its first message. Omit target_agent_id for this Agent; it inherits the current workspace. With target_agent_id, the Session uses that Agent's own most recent workspace, falling back to the current workspace when the Agent has no Session.",
   inputSchema: {
     type: 'object',
     properties: {
@@ -715,6 +715,16 @@ export class CherryAutonomyTools {
     return { content: [{ type: 'text' as const, text: JSON.stringify({ deliveries }) }] }
   }
 
+  private resolveWorkspaceForNewSession(targetAgentId: string | undefined): AgentSessionWorkspaceSource {
+    if (!targetAgentId || targetAgentId === this.agentId) return this.workspace
+    // Match a human opening the target Agent: continue that Agent's own last workspace.
+    const latest = agentSessionService.getLatestActive({ agentId: targetAgentId })
+    if (!latest) return this.workspace
+    return latest.workspace.type === AGENT_WORKSPACE_TYPE.USER
+      ? { type: AGENT_WORKSPACE_TYPE.USER, workspaceId: latest.workspaceId }
+      : { type: AGENT_WORKSPACE_TYPE.SYSTEM }
+  }
+
   private async createSession(args: Record<string, unknown>) {
     this.assertCurrentSessionIdentity()
     this.assertSessionToolsAuthorized()
@@ -741,7 +751,7 @@ export class CherryAutonomyTools {
       senderAgentId: this.agentId,
       senderSessionId: this.sessionId,
       sessionName: title,
-      workspace: this.workspace,
+      workspace: this.resolveWorkspaceForNewSession(targetAgentId),
       content,
       ...(targetAgentId ? { targetAgentId } : {})
     })
