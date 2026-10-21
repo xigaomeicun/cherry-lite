@@ -14,6 +14,7 @@ const baseProps = {
   onRedo: vi.fn(),
   onOk: vi.fn(),
   onSave: vi.fn(),
+  onCopy: vi.fn(),
   onCancel: vi.fn()
 }
 
@@ -34,6 +35,7 @@ describe('Toolbar accessible names', () => {
       'Undo',
       'Redo',
       'Save image',
+      'Copy to clipboard',
       'Cancel',
       'Copy and close'
     ]
@@ -42,6 +44,15 @@ describe('Toolbar accessible names', () => {
     }
   })
 
+  it('copies the capture without closing the toolbar', () => {
+    const onCopy = vi.fn()
+    render(<Toolbar {...baseProps} activeTool={null} onCopy={onCopy} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Copy to clipboard' }))
+
+    expect(onCopy).toHaveBeenCalledOnce()
+    expect(screen.getByRole('button', { name: 'Copy to clipboard' })).toBeInTheDocument()
+  })
   it('reports pressed state on the tools only, so the plain actions do not read as toggles', () => {
     render(<Toolbar {...baseProps} activeTool="brush" />)
 

@@ -3341,6 +3341,7 @@
   "richEditor.toolbar.undo": "Revocar",
   "screenshot.action.cancel": "Cancelar",
   "screenshot.action.confirm": "Copiar y cerrar",
+  "screenshot.action.copy": "Copiar al portapapeles",
   "screenshot.action.redo": "Rehacer",
   "screenshot.action.save": "Guardar imagen",
   "screenshot.action.undo": "Deshacer",

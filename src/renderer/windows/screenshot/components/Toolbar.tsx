@@ -7,7 +7,7 @@
 
 import { Button, NormalTooltip } from '@cherrystudio/ui'
 import { cn } from '@cherrystudio/ui/lib/utils'
-import { Check, Download, MoveUpRight, Pencil, Redo2, Square, Type, Undo2, X } from 'lucide-react'
+import { Check, Copy, Download, MoveUpRight, Pencil, Redo2, Square, Type, Undo2, X } from 'lucide-react'
 import type { ComponentType, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent, ReactNode } from 'react'
 import { memo, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -26,6 +26,7 @@ interface ToolbarProps {
   onRedo: () => void
   onOk: () => void
   onSave: () => void
+  onCopy: () => void
   onCancel: () => void
   /**
    * OCR affordance, rendered with its own divider when present.
@@ -89,6 +90,7 @@ export const Toolbar = memo(function Toolbar({
   onRedo,
   onOk,
   onSave,
+  onCopy,
   onCancel,
   ocrSlot,
   onLayout
@@ -178,6 +180,7 @@ export const Toolbar = memo(function Toolbar({
       <ToolbarDivider />
 
       <ToolbarButton icon={<Download className="size-5" />} label={t('screenshot.action.save')} onClick={onSave} />
+      <ToolbarButton icon={<Copy className="size-5" />} label={t('screenshot.action.copy')} onClick={onCopy} />
       <ToolbarButton
         icon={<X className="size-5" />}
         label={t('screenshot.action.cancel')}

@@ -127,6 +127,7 @@ describe('Toolbar placement', () => {
     onRedo: noop,
     onOk: noop,
     onSave: noop,
+    onCopy: noop,
     onCancel: noop
   }
 

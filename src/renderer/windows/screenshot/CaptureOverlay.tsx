@@ -210,7 +210,7 @@ const CaptureOverlay: FC = () => {
   }, [])
 
   const handleExport = useCallback(
-    async (action: 'commit' | 'save') => {
+    async (action: 'commit' | 'copy' | 'save') => {
       if (!imageRef.current || !state.selection || !initData) return
       try {
         const pngBytes = await generateSelectionPng(
@@ -219,7 +219,9 @@ const CaptureOverlay: FC = () => {
           initData.display.scaleFactor,
           annotationCanvasRef.current
         )
-        await ipcApi.request(action === 'commit' ? 'screenshot.commit' : 'screenshot.save', { pngBytes })
+        const route =
+          action === 'commit' ? 'screenshot.commit' : action === 'copy' ? 'screenshot.copy' : 'screenshot.save'
+        await ipcApi.request(route, { pngBytes })
       } catch (error) {
         logger.error('Failed to export the selection', error as Error)
       }
@@ -228,6 +230,7 @@ const CaptureOverlay: FC = () => {
   )
 
   const handleOk = useCallback(() => void handleExport('commit'), [handleExport])
+  const handleCopy = useCallback(() => void handleExport('copy'), [handleExport])
   const handleSave = useCallback(() => void handleExport('save'), [handleExport])
   const handleCancel = useCallback(() => {
     void ipcApi.request('screenshot.cancel')
@@ -289,6 +292,7 @@ const CaptureOverlay: FC = () => {
           onFirstPaint={handleFirstPaint}
           onOk={handleOk}
           onSave={handleSave}
+          onCopy={handleCopy}
           onCancel={handleCancel}
         />
       )}
@@ -313,6 +317,7 @@ function OverlayContent({
   onFirstPaint,
   onOk,
   onSave,
+  onCopy,
   onCancel
 }: {
   image: HTMLImageElement
@@ -330,6 +335,7 @@ function OverlayContent({
   onFirstPaint: () => void
   onOk: () => void
   onSave: () => void
+  onCopy: () => void
   onCancel: () => void
 }) {
   const fullDisplayRect = useMemo<SelectionRect>(
@@ -468,6 +474,7 @@ function OverlayContent({
           onRedo={annotation.redo}
           onOk={onOk}
           onSave={onSave}
+          onCopy={onCopy}
           onCancel={onCancel}
           onLayout={setToolbarLayout}
           ocrSlot={

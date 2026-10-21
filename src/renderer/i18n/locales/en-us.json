@@ -3341,6 +3341,7 @@
   "richEditor.toolbar.undo": "Undo",
   "screenshot.action.cancel": "Cancel",
   "screenshot.action.confirm": "Copy and close",
+  "screenshot.action.copy": "Copy to clipboard",
   "screenshot.action.redo": "Redo",
   "screenshot.action.save": "Save image",
   "screenshot.action.undo": "Undo",

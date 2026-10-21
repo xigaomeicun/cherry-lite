@@ -3341,6 +3341,7 @@
   "richEditor.toolbar.undo": "取り消す",
   "screenshot.action.cancel": "キャンセル",
   "screenshot.action.confirm": "コピーして閉じる",
+  "screenshot.action.copy": "クリップボードにコピー",
   "screenshot.action.redo": "やり直す",
   "screenshot.action.save": "画像を保存",
   "screenshot.action.undo": "元に戻す",
