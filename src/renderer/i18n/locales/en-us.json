@@ -5700,7 +5700,7 @@
   "settings.voice.status.microphone_unavailable": "The selected microphone is unavailable.",
   "settings.voice.status.microphone_unreadable": "The microphone could not be opened. It may be in use.",
   "settings.voice.status.model_load_failed": "The local speech model could not be loaded.",
-  "settings.voice.status.model_required": "Download a speech recognition model in Local Models.",
+  "settings.voice.status.model_required": "Download a speech recognition model from the recognition model menu above.",
   "settings.voice.status.no_speech": "No speech was detected. Check your microphone and record again.",
   "settings.voice.status.not_installed": "Additional speech assets are required",
   "settings.voice.status.operation_failed": "The voice operation failed. Try again.",

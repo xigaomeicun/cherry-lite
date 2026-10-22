@@ -31,13 +31,11 @@ import { Route as SettingsCodeExecutionRouteImport } from './routes/settings/cod
 import { Route as SettingsDataRouteImport } from './routes/settings/data'
 import { Route as SettingsDependenciesRouteImport } from './routes/settings/dependencies'
 import { Route as SettingsDeviceConnectionsRouteImport } from './routes/settings/device-connections'
-import { Route as SettingsFileProcessingRouteImport } from './routes/settings/file-processing'
 import { Route as SettingsGeneralRouteImport } from './routes/settings/general'
 import { Route as SettingsLocalModelsRouteImport } from './routes/settings/local-models'
 import { Route as SettingsMcpRouteImport } from './routes/settings/mcp'
 import { Route as SettingsModelRouteImport } from './routes/settings/model'
 import { Route as SettingsNotificationsRouteImport } from './routes/settings/notifications'
-import { Route as SettingsOcrRouteImport } from './routes/settings/ocr'
 import { Route as SettingsPromptsRouteImport } from './routes/settings/prompts'
 import { Route as SettingsProviderRouteImport } from './routes/settings/provider'
 import { Route as SettingsQuickAssistantRouteImport } from './routes/settings/quick-assistant'
@@ -177,11 +175,6 @@ const SettingsDeviceConnectionsRoute =
     path: '/device-connections',
     getParentRoute: () => SettingsRoute,
   } as any)
-const SettingsFileProcessingRoute = SettingsFileProcessingRouteImport.update({
-  id: '/file-processing',
-  path: '/file-processing',
-  getParentRoute: () => SettingsRoute,
-} as any)
 const SettingsGeneralRoute = SettingsGeneralRouteImport.update({
   id: '/general',
   path: '/general',
@@ -205,11 +198,6 @@ const SettingsModelRoute = SettingsModelRouteImport.update({
 const SettingsNotificationsRoute = SettingsNotificationsRouteImport.update({
   id: '/notifications',
   path: '/notifications',
-  getParentRoute: () => SettingsRoute,
-} as any)
-const SettingsOcrRoute = SettingsOcrRouteImport.update({
-  id: '/ocr',
-  path: '/ocr',
   getParentRoute: () => SettingsRoute,
 } as any)
 const SettingsPromptsRoute = SettingsPromptsRouteImport.update({
@@ -374,13 +362,11 @@ export interface FileRoutesByFullPath {
   '/settings/data': typeof SettingsDataRoute
   '/settings/dependencies': typeof SettingsDependenciesRoute
   '/settings/device-connections': typeof SettingsDeviceConnectionsRoute
-  '/settings/file-processing': typeof SettingsFileProcessingRoute
   '/settings/general': typeof SettingsGeneralRoute
   '/settings/local-models': typeof SettingsLocalModelsRoute
   '/settings/mcp': typeof SettingsMcpRouteWithChildren
   '/settings/model': typeof SettingsModelRoute
   '/settings/notifications': typeof SettingsNotificationsRoute
-  '/settings/ocr': typeof SettingsOcrRoute
   '/settings/prompts': typeof SettingsPromptsRoute
   '/settings/provider': typeof SettingsProviderRoute
   '/settings/quick-assistant': typeof SettingsQuickAssistantRoute
@@ -431,12 +417,10 @@ export interface FileRoutesByTo {
   '/settings/data': typeof SettingsDataRoute
   '/settings/dependencies': typeof SettingsDependenciesRoute
   '/settings/device-connections': typeof SettingsDeviceConnectionsRoute
-  '/settings/file-processing': typeof SettingsFileProcessingRoute
   '/settings/general': typeof SettingsGeneralRoute
   '/settings/local-models': typeof SettingsLocalModelsRoute
   '/settings/model': typeof SettingsModelRoute
   '/settings/notifications': typeof SettingsNotificationsRoute
-  '/settings/ocr': typeof SettingsOcrRoute
   '/settings/prompts': typeof SettingsPromptsRoute
   '/settings/provider': typeof SettingsProviderRoute
   '/settings/quick-assistant': typeof SettingsQuickAssistantRoute
@@ -487,13 +471,11 @@ export interface FileRoutesById {
   '/settings/data': typeof SettingsDataRoute
   '/settings/dependencies': typeof SettingsDependenciesRoute
   '/settings/device-connections': typeof SettingsDeviceConnectionsRoute
-  '/settings/file-processing': typeof SettingsFileProcessingRoute
   '/settings/general': typeof SettingsGeneralRoute
   '/settings/local-models': typeof SettingsLocalModelsRoute
   '/settings/mcp': typeof SettingsMcpRouteWithChildren
   '/settings/model': typeof SettingsModelRoute
   '/settings/notifications': typeof SettingsNotificationsRoute
-  '/settings/ocr': typeof SettingsOcrRoute
   '/settings/prompts': typeof SettingsPromptsRoute
   '/settings/provider': typeof SettingsProviderRoute
   '/settings/quick-assistant': typeof SettingsQuickAssistantRoute
@@ -547,13 +529,11 @@ export interface FileRouteTypes {
     | '/settings/data'
     | '/settings/dependencies'
     | '/settings/device-connections'
-    | '/settings/file-processing'
     | '/settings/general'
     | '/settings/local-models'
     | '/settings/mcp'
     | '/settings/model'
     | '/settings/notifications'
-    | '/settings/ocr'
     | '/settings/prompts'
     | '/settings/provider'
     | '/settings/quick-assistant'
@@ -604,12 +584,10 @@ export interface FileRouteTypes {
     | '/settings/data'
     | '/settings/dependencies'
     | '/settings/device-connections'
-    | '/settings/file-processing'
     | '/settings/general'
     | '/settings/local-models'
     | '/settings/model'
     | '/settings/notifications'
-    | '/settings/ocr'
     | '/settings/prompts'
     | '/settings/provider'
     | '/settings/quick-assistant'
@@ -659,13 +637,11 @@ export interface FileRouteTypes {
     | '/settings/data'
     | '/settings/dependencies'
     | '/settings/device-connections'
-    | '/settings/file-processing'
     | '/settings/general'
     | '/settings/local-models'
     | '/settings/mcp'
     | '/settings/model'
     | '/settings/notifications'
-    | '/settings/ocr'
     | '/settings/prompts'
     | '/settings/provider'
     | '/settings/quick-assistant'
@@ -857,13 +833,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SettingsDeviceConnectionsRouteImport
       parentRoute: typeof SettingsRoute
     }
-    '/settings/file-processing': {
-      id: '/settings/file-processing'
-      path: '/file-processing'
-      fullPath: '/settings/file-processing'
-      preLoaderRoute: typeof SettingsFileProcessingRouteImport
-      parentRoute: typeof SettingsRoute
-    }
     '/settings/general': {
       id: '/settings/general'
       path: '/general'
@@ -897,13 +866,6 @@ declare module '@tanstack/react-router' {
       path: '/notifications'
       fullPath: '/settings/notifications'
       preLoaderRoute: typeof SettingsNotificationsRouteImport
-      parentRoute: typeof SettingsRoute
-    }
-    '/settings/ocr': {
-      id: '/settings/ocr'
-      path: '/ocr'
-      fullPath: '/settings/ocr'
-      preLoaderRoute: typeof SettingsOcrRouteImport
       parentRoute: typeof SettingsRoute
     }
     '/settings/prompts': {
@@ -1196,13 +1158,11 @@ interface SettingsRouteChildren {
   SettingsDataRoute: typeof SettingsDataRoute
   SettingsDependenciesRoute: typeof SettingsDependenciesRoute
   SettingsDeviceConnectionsRoute: typeof SettingsDeviceConnectionsRoute
-  SettingsFileProcessingRoute: typeof SettingsFileProcessingRoute
   SettingsGeneralRoute: typeof SettingsGeneralRoute
   SettingsLocalModelsRoute: typeof SettingsLocalModelsRoute
   SettingsMcpRoute: typeof SettingsMcpRouteWithChildren
   SettingsModelRoute: typeof SettingsModelRoute
   SettingsNotificationsRoute: typeof SettingsNotificationsRoute
-  SettingsOcrRoute: typeof SettingsOcrRoute
   SettingsPromptsRoute: typeof SettingsPromptsRoute
   SettingsProviderRoute: typeof SettingsProviderRoute
   SettingsQuickAssistantRoute: typeof SettingsQuickAssistantRoute
@@ -1229,13 +1189,11 @@ const SettingsRouteChildren: SettingsRouteChildren = {
   SettingsDataRoute: SettingsDataRoute,
   SettingsDependenciesRoute: SettingsDependenciesRoute,
   SettingsDeviceConnectionsRoute: SettingsDeviceConnectionsRoute,
-  SettingsFileProcessingRoute: SettingsFileProcessingRoute,
   SettingsGeneralRoute: SettingsGeneralRoute,
   SettingsLocalModelsRoute: SettingsLocalModelsRoute,
   SettingsMcpRoute: SettingsMcpRouteWithChildren,
   SettingsModelRoute: SettingsModelRoute,
   SettingsNotificationsRoute: SettingsNotificationsRoute,
-  SettingsOcrRoute: SettingsOcrRoute,
   SettingsPromptsRoute: SettingsPromptsRoute,
   SettingsProviderRoute: SettingsProviderRoute,
   SettingsQuickAssistantRoute: SettingsQuickAssistantRoute,

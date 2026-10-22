@@ -1,6 +1,7 @@
 import { Badge, Button, DescriptionSwitch, NormalTooltip } from '@cherrystudio/ui'
 import { usePreference } from '@data/hooks/usePreference'
 import { loggerService } from '@logger'
+import LocalModelDownloadPopup from '@renderer/components/popups/LocalModelDownloadPopup'
 import {
   SettingDivider,
   SettingGroup,
@@ -232,9 +233,17 @@ const ScreenshotSettings: FC = () => {
               <span className="text-muted-foreground text-xs leading-5">
                 {t('settings.screenshot.ocr.model.unavailable')}
               </span>
-              <Link to="/settings/local-models" className="shrink-0 text-link text-xs hover:underline">
-                {t('settings.screenshot.ocr.model.link')}
-              </Link>
+              <button
+                type="button"
+                className="shrink-0 cursor-pointer text-link text-xs hover:underline"
+                onClick={() =>
+                  void LocalModelDownloadPopup.show({
+                    id: DEFAULT_LOCAL_MODEL_BUNDLE_BY_CAPABILITY.ocr,
+                    description: t('settings.dependencies.localModels.ocr.subtitle')
+                  })
+                }>
+                {t('settings.dependencies.localModels.download')}
+              </button>
             </div>
           )}
         </div>

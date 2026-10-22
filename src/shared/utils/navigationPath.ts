@@ -54,8 +54,6 @@ const KNOWN_NAVIGATION_ROUTES = [
   '/settings/mcp',
   '/settings/websearch',
   '/settings/api-gateway',
-  '/settings/file-processing',
-  '/settings/ocr',
   '/settings/shortcut',
   '/settings/quick-assistant',
   '/settings/selection-assistant',

@@ -9,7 +9,6 @@ import {
   Command,
   Crop,
   FileBox,
-  FileCode,
   Globe,
   HardDrive,
   Info,
@@ -18,7 +17,6 @@ import {
   Palette,
   PictureInPicture2,
   Radio,
-  ScanText,
   Search,
   Settings2,
   Terminal,
@@ -88,18 +86,6 @@ export const settingsMenu: readonly SettingsMenuEntry[] = [
     route: '/settings/websearch',
     titleKey: 'settings.tool.websearch.title',
     icon: createElement(Search),
-    groupKey: 'settings.menuGroups.capabilities'
-  },
-  {
-    route: '/settings/file-processing',
-    titleKey: 'settings.tool.file_processing.features.document_to_markdown.title',
-    icon: createElement(FileCode),
-    groupKey: 'settings.menuGroups.capabilities'
-  },
-  {
-    route: '/settings/ocr',
-    titleKey: 'settings.tool.file_processing.features.image_to_text.title',
-    icon: createElement(ScanText),
     groupKey: 'settings.menuGroups.capabilities'
   },
   {

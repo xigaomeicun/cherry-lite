@@ -24,10 +24,11 @@ interface FileProcessorSelectorProps {
   value: string | null
   options: FileProcessorSelectorOption[]
   placeholder: string
-  settingsLabel: string
+  /** Optional: omitted once the dedicated file-processing settings page was removed. */
+  settingsLabel?: string
   'aria-label'?: string
   onChange: (value: string | null) => void
-  onSettingsNavigate: () => void
+  onSettingsNavigate?: () => void
 }
 
 const FILE_PROCESSOR_ROW_HEIGHT = 36
@@ -63,7 +64,7 @@ export const FileProcessorSelector = ({
 
   const handleSettingsNavigate = () => {
     setOpen(false)
-    onSettingsNavigate()
+    onSettingsNavigate?.()
   }
 
   const { activeIndex, activeOptionId, getOptionId, handleKeyDown, listboxId, listRef, setActiveIndex } =
@@ -97,11 +98,15 @@ export const FileProcessorSelector = ({
       width="var(--radix-popover-trigger-width)"
       contentHeight={contentHeight}
       bottomAction={[
-        {
-          icon: <Settings2 className="size-3.5" />,
-          label: settingsLabel,
-          onClick: handleSettingsNavigate
-        },
+        ...(settingsLabel && onSettingsNavigate
+          ? [
+              {
+                icon: <Settings2 className="size-3.5" />,
+                label: settingsLabel,
+                onClick: handleSettingsNavigate
+              }
+            ]
+          : []),
         {
           type: 'selectable',
           icon: <CircleSlash className="size-3.5" />,

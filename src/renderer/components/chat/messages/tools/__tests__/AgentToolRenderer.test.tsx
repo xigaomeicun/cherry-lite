@@ -1038,24 +1038,6 @@ describe('AgentToolRenderer', () => {
         query: { sessionId: 'session-1' }
       })
     })
-
-    it('uses the document processing feature title for the file-processing route', () => {
-      const toolResponse = createToolResponse({
-        tool: {
-          id: 'mcp__assistant__navigate',
-          name: 'mcp__assistant__navigate',
-          description: 'Navigate',
-          type: 'provider'
-        },
-        status: 'done',
-        arguments: { path: '/settings/file-processing' },
-        response: 'Navigate link created: /settings/file-processing'
-      })
-
-      render(<AgentToolRenderer toolResponse={toolResponse} />)
-
-      expect(screen.getByText(/Document Processing/)).toBeInTheDocument()
-    })
   })
 
   describe('meta tool rendering', () => {

@@ -5700,7 +5700,7 @@
   "settings.voice.status.microphone_unavailable": "所選麥克風無法使用。",
   "settings.voice.status.microphone_unreadable": "無法開啟麥克風，可能正由其他程式使用。",
   "settings.voice.status.model_load_failed": "無法載入本機語音模型。",
-  "settings.voice.status.model_required": "請在本地模型頁下載語音辨識模型。",
+  "settings.voice.status.model_required": "請在上方辨識模型選單中下載語音辨識模型。",
   "settings.voice.status.no_speech": "未偵測到語音，請檢查麥克風後重新錄音。",
   "settings.voice.status.not_installed": "需要其他語音資源",
   "settings.voice.status.operation_failed": "語音操作失敗，請再試一次。",

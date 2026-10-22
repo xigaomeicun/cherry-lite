@@ -81,7 +81,7 @@ describe('OcrStatusIcon', () => {
 
     // Order is the whole point: the overlay is a screen-saver-level always-on-top
     // full-screen window, so navigating first hides the settings page behind it.
-    expect(order).toEqual(['ipc:screenshot.cancel', 'nav:/settings/local-models'])
+    expect(order).toEqual(['ipc:screenshot.cancel', 'nav:/settings/screenshot'])
   })
 
   it('renders nothing while idle, so the toolbar has no dead affordance', () => {

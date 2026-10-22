@@ -1,6 +1,5 @@
 import LocalModelDownloadPopup from '@renderer/components/popups/LocalModelDownloadPopup'
 import { useLocalModel } from '@renderer/hooks/useLocalModel'
-import { openSettingsTab } from '@renderer/services/mainWindowNavigation'
 import type { FileProcessorId } from '@shared/data/preference/preferenceTypes'
 import { FILE_PROCESSOR_LOCAL_MODEL } from '@shared/data/presets/fileProcessing'
 import { DEFAULT_LOCAL_MODEL_BUNDLE_BY_CAPABILITY } from '@shared/data/presets/localModel'
@@ -10,8 +9,6 @@ import { useTranslation } from 'react-i18next'
 import { useOpenMineruConnectivity } from '../../hooks/useOpenMineruConnectivity'
 import { FileProcessorSelector, type FileProcessorSelectorOption } from './FileProcessorSelector'
 import { RagFieldLabel } from './panelPrimitives'
-
-const openFileProcessingSettings = () => openSettingsTab('/settings/file-processing')
 
 /**
  * Every processor with a local-model prerequisite is OCR-backed today, and
@@ -136,9 +133,7 @@ const FileProcessingSection = ({
         value={fileProcessorId}
         options={options}
         placeholder={t('knowledge.rag.file_processing_none')}
-        settingsLabel={t('common.go_to_settings')}
         onChange={(value) => void handleChange(value)}
-        onSettingsNavigate={openFileProcessingSettings}
       />
     </div>
   )

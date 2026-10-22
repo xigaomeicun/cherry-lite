@@ -12,6 +12,7 @@ import {
 import { useSharedCacheSelector } from '@data/hooks/useCache'
 import { useMultiplePreferences, usePreference } from '@data/hooks/usePreference'
 import { loggerService } from '@logger'
+import LocalModelDownloadPopup from '@renderer/components/popups/LocalModelDownloadPopup'
 import {
   SettingDescription,
   SettingDivider,
@@ -57,7 +58,6 @@ import {
 import { LOCAL_MODEL_STATUS_CACHE_KEY } from '@shared/data/presets/localModel'
 import type { VoiceErrorReason } from '@shared/ipc/errors/voice'
 import { defaultLanguage as fallbackSampleCatalog } from '@shared/utils/languages'
-import { useNavigate } from '@tanstack/react-router'
 import { Download, Mic, Play, Square } from 'lucide-react'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -200,7 +200,6 @@ async function settleSettingsInspections(pending: Set<Promise<unknown>>) {
 function VoiceSettings() {
   const { t, i18n } = useTranslation()
   const { theme } = useTheme()
-  const navigate = useNavigate()
   const [recognitionPreferences, setRecognitionPreferences] = useMultiplePreferences(RECOGNITION_PREFERENCE_KEYS)
   const { language: recognitionLanguage, modelId: recognitionModel } = recognitionPreferences
   const [speechPreferences, setSpeechPreferences] = useMultiplePreferences(SPEECH_PREFERENCE_KEYS)
@@ -911,9 +910,9 @@ function VoiceSettings() {
                 const selected = value.slice(DOWNLOAD_MODEL_PREFIX.length)
                 const bundleId = Object.entries(DOWNLOADABLE_TRANSCRIPTION_BUNDLES).find(([id]) => id === selected)?.[1]
                 if (bundleId)
-                  void navigate({
-                    to: '/settings/local-models',
-                    hash: bundleId === 'funasr-nano-int8' ? 'voice-resources' : bundleId
+                  void LocalModelDownloadPopup.show({
+                    id: bundleId,
+                    description: t(MODEL_LABEL_KEYS[selected as LocalVoiceModelId])
                   }).catch(() => setActionFailed(true))
                 return
               }
@@ -1080,9 +1079,9 @@ function VoiceSettings() {
                 if (value.startsWith(DOWNLOAD_MODEL_PREFIX)) {
                   const modelId = value.slice(DOWNLOAD_MODEL_PREFIX.length)
                   if (modelId in DOWNLOADABLE_SPEECH_BUNDLES) {
-                    void navigate({
-                      to: '/settings/local-models',
-                      hash: DOWNLOADABLE_SPEECH_BUNDLES[modelId as keyof typeof DOWNLOADABLE_SPEECH_BUNDLES]
+                    void LocalModelDownloadPopup.show({
+                      id: DOWNLOADABLE_SPEECH_BUNDLES[modelId as keyof typeof DOWNLOADABLE_SPEECH_BUNDLES],
+                      description: t(MODEL_LABEL_KEYS[modelId as LocalVoiceModelId])
                     }).catch(() => setActionFailed(true))
                   }
                   return

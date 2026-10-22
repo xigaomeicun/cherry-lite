@@ -3,10 +3,9 @@ import { usePreference } from '@data/hooks/usePreference'
 import { loggerService } from '@logger'
 import { useLocalModel } from '@renderer/hooks/useLocalModel'
 import { ipcApi } from '@renderer/ipc'
-import { popup } from '@renderer/services/popup'
 import { cn } from '@renderer/utils/style'
 import type { LocalModelBundleId, LocalModelCapability, LocalModelStatus } from '@shared/data/presets/localModel'
-import { Boxes, Download, Mic, RefreshCw, ScanText, Trash2, Volume2, X } from 'lucide-react'
+import { Boxes, Download, RefreshCw, Trash2, X } from 'lucide-react'
 import type { FC, ReactNode } from 'react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -22,39 +21,21 @@ const CARD_NOTICE_KEYS = {
 
 type CardNotice = keyof typeof CARD_NOTICE_KEYS
 
-/** Display metadata belongs to the installed model, not its capability. */
-const MODEL_CARDS = {
-  'qwen3-asr-1.7b-8bit': {
-    icon: <Mic className="size-5" />,
-    nameKey: 'settings.voice.model.qwen3_asr',
-    sources: ['Qwen/Qwen3-ASR-1.7B-hf']
-  },
-  'kokoro-multi-lang-v1.1': {
-    icon: <Volume2 className="size-5" />,
-    nameKey: 'settings.voice.model.kokoro_tts',
-    sources: ['csukuangfj/kokoro-multi-lang-v1_1']
-  },
-  'qwen3-tts-0.6b-customvoice-8bit': {
-    icon: <Volume2 className="size-5" />,
-    nameKey: 'settings.voice.model.qwen3_tts',
-    sources: ['Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice']
-  },
-  'funasr-nano-int8': {
-    icon: <Mic className="size-5" />,
-    nameKey: 'settings.voice.model.funasr',
-    sources: ['csukuangfj/sherpa-onnx-funasr-nano-int8-2025-12-30']
-  },
+/**
+ * Display metadata belongs to the installed model, not its capability.
+ * Only the local embedding model is surfaced on this page (cherry-lite trim);
+ * voice and OCR bundles are downloaded from their own feature pages via
+ * LocalModelDownloadPopup, and the registry entries stay untouched.
+ */
+const MODEL_CARDS: Partial<
+  Record<LocalModelBundleId, { icon: ReactNode; nameKey: string; sources: readonly string[] }>
+> = {
   'qwen3-embedding-0.6b': {
     icon: <Boxes className="size-5" />,
     nameKey: 'settings.dependencies.localModels.embedding.name',
     sources: ['onnx-community/Qwen3-Embedding-0.6B-ONNX']
-  },
-  'pp-ocrv6-medium': {
-    icon: <ScanText className="size-5" />,
-    nameKey: 'settings.dependencies.localModels.ocr.name',
-    sources: ['PaddlePaddle/PP-OCRv6_medium_det_onnx', 'PaddlePaddle/PP-OCRv6_medium_rec_onnx']
   }
-} as const satisfies Record<LocalModelBundleId, { icon: ReactNode; nameKey: string; sources: readonly string[] }>
+}
 
 /**
  * Settings-specific notice state layered over the shared local-model lifecycle.
@@ -107,27 +88,27 @@ function useLocalModelCard(id: LocalModelBundleId) {
 
 interface ModelCardProps {
   id: LocalModelBundleId
-  capability: LocalModelCapability
   /** Lifted so the section can hide every card at once when the platform is unsupported. */
   onStatusChange: (id: LocalModelBundleId, status: LocalModelStatus) => void
 }
 
-const ModelCard: FC<ModelCardProps> = ({ id, capability, onStatusChange }) => {
+const ModelCard: FC<ModelCardProps> = ({ id, onStatusChange }) => {
   const { t } = useTranslation()
   const { status, percent, notice, download, cancel, remove } = useLocalModelCard(id)
-  const { icon, nameKey, sources } = MODEL_CARDS[id]
+  const card = MODEL_CARDS[id]
 
   useEffect(() => {
     onStatusChange(id, status)
   }, [id, status, onStatusChange])
-  if (status === 'unsupported') return null
+  if (status === 'unsupported' || !card) return null
+  const { icon, nameKey, sources } = card
   const ready = status === 'ready'
   const downloading = status === 'downloading'
   const retrying = status === 'error'
 
   return (
     <div
-      id={id === 'funasr-nano-int8' ? 'voice-resources' : id}
+      id={id}
       role="listitem"
       className="flex flex-col rounded-xl border border-border p-4 transition-colors duration-200 ease-in-out hover:border-border-strong"
       style={{ backgroundColor: 'var(--settings-group-background, var(--card))' }}>
@@ -166,19 +147,7 @@ const ModelCard: FC<ModelCardProps> = ({ id, capability, onStatusChange }) => {
           <Button
             variant="ghost"
             size="icon-sm"
-            onClick={async () => {
-              if (
-                capability === 'asr' &&
-                !(await popup.confirm({
-                  title: t('settings.voice.resources.remove_title'),
-                  content: t('settings.voice.resources.remove_description'),
-                  okText: t('settings.dependencies.localModels.remove'),
-                  cancelText: t('common.cancel')
-                }))
-              )
-                return
-              await remove()
-            }}
+            onClick={() => void remove()}
             aria-label={t('settings.dependencies.localModels.remove')}>
             <Trash2 className="size-3.5" />
           </Button>
@@ -254,7 +223,7 @@ const LocalModelsSection: FC = () => {
     void ipcApi
       .request('local_model.list')
       .then((result) => {
-        if (mounted) setModels(result.models)
+        if (mounted) setModels(result.models.filter((model) => model.id in MODEL_CARDS))
       })
       .catch((error) => logger.warn('Failed to list local models', error as Error))
     return () => {
@@ -295,7 +264,7 @@ const LocalModelsSection: FC = () => {
       ) : (
         <div role="list" className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {models.map((model) => (
-            <ModelCard key={model.id} id={model.id} capability={model.capability} onStatusChange={handleStatusChange} />
+            <ModelCard key={model.id} id={model.id} onStatusChange={handleStatusChange} />
           ))}
         </div>
       )}

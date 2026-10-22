@@ -103,8 +103,8 @@ const confirm = vi.hoisted(() => vi.fn())
 vi.mock('@renderer/services/popup', () => ({ popup: { confirm } }))
 vi.mock('@renderer/hooks/useTheme', () => ({ useTheme: () => ({ theme: 'light' }) }))
 
-const navigate = vi.hoisted(() => vi.fn(async () => undefined))
-vi.mock('@tanstack/react-router', () => ({ useNavigate: () => navigate }))
+const showDownload = vi.hoisted(() => vi.fn(async () => false))
+vi.mock('@renderer/components/popups/LocalModelDownloadPopup', () => ({ default: { show: showDownload } }))
 
 import VoiceSettings from '../VoiceSettings'
 
@@ -386,7 +386,7 @@ describe('VoiceSettings', () => {
     await user.click(screen.getByRole('combobox', { name: 'Recognition model' }))
     await waitFor(() => expect(screen.getByRole('option', { name: /FunASR Nano.*Download/ })).toBeEnabled())
     await user.click(screen.getByRole('option', { name: /FunASR Nano.*Download/ }))
-    expect(navigate).toHaveBeenCalledWith({ to: '/settings/local-models', hash: 'voice-resources' })
+    expect(showDownload).toHaveBeenCalledWith(expect.objectContaining({ id: 'funasr-nano-int8' }))
     expect(MockUsePreferenceUtils.getPreferenceValue('feature.voice.recognition.model_id')).toBe(APPLE_ASR_MODEL_ID)
     expect(voice.funAsrDownload).not.toHaveBeenCalled()
   })
@@ -418,7 +418,7 @@ describe('VoiceSettings', () => {
     )
     await user.click(screen.getByRole('combobox', { name: 'Recognition model' }))
     await user.click(await screen.findByRole('option', { name: /Qwen3-ASR.*Download/ }))
-    expect(navigate).toHaveBeenCalledWith({ to: '/settings/local-models', hash: 'qwen3-asr-1.7b-8bit' })
+    expect(showDownload).toHaveBeenCalledWith(expect.objectContaining({ id: 'qwen3-asr-1.7b-8bit' }))
     expect(MockUsePreferenceUtils.getPreferenceValue('feature.voice.recognition.model_id')).toBe(APPLE_ASR_MODEL_ID)
   })
 
@@ -452,7 +452,7 @@ describe('VoiceSettings', () => {
     await waitFor(() =>
       expect(MockUsePreferenceUtils.getPreferenceValue('feature.voice.recognition.model_id')).toBe(FUNASR_MODEL_ID)
     )
-    expect(navigate).not.toHaveBeenCalled()
+    expect(showDownload).not.toHaveBeenCalled()
   })
 
   it.each([null, FUNASR_MODEL_ID])('refreshes the effective recognition status for preference %s', async (modelId) => {
@@ -463,7 +463,7 @@ describe('VoiceSettings', () => {
       status: { status: 'not_installed', reason: 'model_required' }
     })
     render(<VoiceSettings />)
-    const status = await screen.findByText('Download a speech recognition model in Local Models.')
+    const status = await screen.findByText('Download a speech recognition model from the recognition model menu above.')
 
     voice.resolveTranscription.mockResolvedValue({ modelId: FUNASR_MODEL_ID, status: { status: 'ready' } })
     publishAsrInstallation({ status: 'ready', percent: 100 })
@@ -492,8 +492,10 @@ describe('VoiceSettings', () => {
       publishAsrInstallation({ status: 'not_downloaded', percent: 0 })
       await user.click(await screen.findByRole('option', { name: 'FunASR Nano Download' }))
 
-      expect(navigate).toHaveBeenCalledWith({ to: '/settings/local-models', hash: 'voice-resources' })
-      expect(await screen.findByText('Download a speech recognition model in Local Models.')).toBeInTheDocument()
+      expect(showDownload).toHaveBeenCalledWith(expect.objectContaining({ id: 'funasr-nano-int8' }))
+      expect(
+        await screen.findByText('Download a speech recognition model from the recognition model menu above.')
+      ).toBeInTheDocument()
       expect(MockUsePreferenceUtils.getPreferenceValue('feature.voice.recognition.model_id')).toBe(FUNASR_MODEL_ID)
     }
   )
@@ -506,7 +508,7 @@ describe('VoiceSettings', () => {
       status: { status: 'not_installed', reason: 'model_required' }
     })
     render(<VoiceSettings />)
-    const status = await screen.findByText('Download a speech recognition model in Local Models.')
+    const status = await screen.findByText('Download a speech recognition model from the recognition model menu above.')
     const oldModelStatus = deferred<Awaited<ReturnType<VoiceService['getModelStatus']>>>()
     const oldConfiguration = deferred<Awaited<ReturnType<VoiceService['resolveTranscriptionConfiguration']>>>()
     voice.getModelStatus.mockReturnValueOnce(oldModelStatus.promise)
@@ -541,7 +543,7 @@ describe('VoiceSettings', () => {
     await waitFor(() => expect(model).toHaveTextContent('FunASR Nano'))
     await user.click(model)
     await user.click(await screen.findByRole('option', { name: /FunASR Nano.*Download/ }))
-    expect(navigate).toHaveBeenCalledWith({ to: '/settings/local-models', hash: 'voice-resources' })
+    expect(showDownload).toHaveBeenCalledWith(expect.objectContaining({ id: 'funasr-nano-int8' }))
     expect(MockUsePreferenceUtils.getPreferenceValue('feature.voice.recognition.model_id')).toBe(FUNASR_MODEL_ID)
   })
 
@@ -900,7 +902,9 @@ describe('VoiceSettings', () => {
       status: { status: 'not_installed', reason: 'model_required' }
     })
     render(<VoiceSettings />)
-    expect(await screen.findByText('Download a speech recognition model in Local Models.')).toBeInTheDocument()
+    expect(
+      await screen.findByText('Download a speech recognition model from the recognition model menu above.')
+    ).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /download model/i })).not.toBeInTheDocument()
   })
 
@@ -1017,7 +1021,7 @@ describe('VoiceSettings', () => {
       const user = userEvent.setup()
       await user.click(await screen.findByRole('combobox', { name: 'Speech model' }))
       await user.click(await screen.findByRole('option', { name: label }))
-      expect(navigate).toHaveBeenCalledWith({ to: '/settings/local-models', hash: bundleId })
+      expect(showDownload).toHaveBeenCalledWith(expect.objectContaining({ id: bundleId }))
       expect(MockUsePreferenceUtils.getPreferenceValue('feature.voice.speech.model_id')).toBeNull()
     }
   )

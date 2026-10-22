@@ -83,7 +83,7 @@ function mockRoutes(handler: (route: string, input?: { id: string }) => unknown)
   )
 }
 
-/** The embedding card is the first of the two rendered list items. */
+/** Only the embedding card is rendered on this page. */
 const embeddingCard = () => screen.getAllByRole('listitem')[0]
 
 describe('LocalModelsSection', () => {
@@ -100,7 +100,7 @@ describe('LocalModelsSection', () => {
       'href',
       'https://huggingface.co/onnx-community/Qwen3-Embedding-0.6B-ONNX'
     )
-    expect(screen.getAllByRole('link')).toHaveLength(3)
+    expect(screen.getAllByRole('link')).toHaveLength(1)
     expect(mockRequest.mock.calls.every(([route]) => route.startsWith('local_model.'))).toBe(true)
     expect(screen.queryByText('settings.voice.resources.system')).not.toBeInTheDocument()
   })
@@ -279,7 +279,7 @@ describe('LocalModelsSection', () => {
     expect(within(embeddingCard()).getByText('common.retry')).toBeInTheDocument()
   })
 
-  it('shows an explicit unsupported state once both cards report unsupported (e.g. Intel Mac)', async () => {
+  it('shows an explicit unsupported state once the embedding card reports unsupported (e.g. Intel Mac)', async () => {
     mockRoutes(() => Promise.resolve())
     publishLocalModelStatus(EMBEDDING, { status: 'unsupported', percent: 0 })
     publishLocalModelStatus(OCR, { status: 'unsupported', percent: 0 })
@@ -292,41 +292,28 @@ describe('LocalModelsSection', () => {
     expect(screen.queryAllByRole('listitem')).toHaveLength(0)
     expect(screen.getByText('settings.dependencies.localModels.title')).toBeInTheDocument()
   })
-  it('offers an ASR download in Local Models without changing the selected recognizer', async () => {
-    const asr = 'funasr-nano-int8'
-    MockUsePreferenceUtils.setPreferenceValue('feature.voice.recognition.model_id', 'local-voice::apple-system-asr')
-    mockRequest.mockImplementation(async (route) => {
-      if (route === 'local_model.list') return { models: [{ id: asr, capability: 'asr' }] }
-      if (route === 'local_model.download') return { result: 'ready' }
-      if (route === 'ai.voice.models.list') return { models: [] }
-      return undefined
-    })
-    render(<LocalModelsSection />)
-    const card = await screen.findByRole('listitem')
-    expect(within(card).getByText('settings.voice.model.funasr')).toBeInTheDocument()
-    await userEvent
-      .setup()
-      .click(within(card).getByRole('button', { name: 'settings.dependencies.localModels.download' }))
-    expect(mockRequest).toHaveBeenCalledWith('local_model.download', { id: asr })
-    act(() => publishLocalModelStatus(asr, { status: 'ready', percent: 100 }))
-    expect(within(card).getByText('settings.dependencies.localModels.status.ready')).toBeInTheDocument()
-    expect(MockUsePreferenceUtils.getPreferenceValue('feature.voice.recognition.model_id')).toBe(
-      'local-voice::apple-system-asr'
-    )
-  })
 
-  it('hides unsupported model downloads while retaining the supported ASR card', async () => {
+  it('renders only the embedding card even when the registry lists voice and OCR bundles', async () => {
     mockRequest.mockImplementation(async (route) => {
       if (route === 'local_model.list')
-        return { models: [...LISTED_MODELS.models, { id: 'funasr-nano-int8', capability: 'asr' }] }
-      if (route === 'ai.voice.models.list') return { models: [] }
+        return {
+          models: [
+            ...LISTED_MODELS.models,
+            { id: 'funasr-nano-int8', capability: 'asr' },
+            { id: 'qwen3-asr-1.7b-8bit', capability: 'asr' },
+            { id: 'kokoro-multi-lang-v1.1', capability: 'tts' },
+            { id: 'qwen3-tts-0.6b-customvoice-8bit', capability: 'tts' }
+          ]
+        }
       return undefined
     })
-    publishLocalModelStatus(EMBEDDING, { status: 'unsupported', percent: 0 })
-    publishLocalModelStatus(OCR, { status: 'unsupported', percent: 0 })
-    publishLocalModelStatus('funasr-nano-int8', { status: 'not_downloaded', percent: 0 })
+    publishLocalModelStatus(EMBEDDING, { status: 'ready', percent: 100 })
     render(<LocalModelsSection />)
     await waitFor(() => expect(screen.getAllByRole('listitem')).toHaveLength(1))
-    expect(screen.getByText('settings.voice.model.funasr')).toBeInTheDocument()
+    expect(screen.getByText('settings.dependencies.localModels.embedding.name')).toBeInTheDocument()
+    expect(screen.getByText('settings.dependencies.localModels.status.ready')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'settings.dependencies.localModels.remove' })).toBeInTheDocument()
+    expect(screen.queryByText('settings.voice.model.funasr')).not.toBeInTheDocument()
+    expect(screen.queryByText('settings.dependencies.localModels.ocr.name')).not.toBeInTheDocument()
   })
 })

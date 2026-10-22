@@ -5700,7 +5700,7 @@
   "settings.voice.status.microphone_unavailable": "所选麦克风不可用。",
   "settings.voice.status.microphone_unreadable": "无法打开麦克风，它可能正在被其他程序使用。",
   "settings.voice.status.model_load_failed": "无法加载本地语音模型。",
-  "settings.voice.status.model_required": "请在本地模型页下载语音识别模型。",
+  "settings.voice.status.model_required": "请在上方识别模型菜单中下载语音识别模型。",
   "settings.voice.status.no_speech": "未检测到语音，请检查麦克风后重新录音。",
   "settings.voice.status.not_installed": "需要其他语音资源",
   "settings.voice.status.operation_failed": "语音操作失败，请重试。",

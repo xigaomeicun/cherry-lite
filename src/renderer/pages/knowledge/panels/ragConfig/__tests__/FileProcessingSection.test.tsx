@@ -158,7 +158,7 @@ describe('FileProcessingSection', () => {
     expect(screen.getByRole('option', { name: 'Local document' })).toBeInTheDocument()
   })
 
-  it('clears the selection and opens document processing settings from the footer', () => {
+  it('clears the selection from the footer and no longer offers a settings shortcut', () => {
     const onFileProcessorChange = renderSection()
 
     fireEvent.click(screen.getByRole('button', { name: 'File processing' }))
@@ -166,8 +166,7 @@ describe('FileProcessingSection', () => {
     expect(onFileProcessorChange).toHaveBeenCalledWith(null)
 
     fireEvent.click(screen.getByRole('button', { name: 'File processing' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Go to settings' }))
-    expect(mocks.openSettingsTab).toHaveBeenCalledWith('/settings/file-processing')
+    expect(screen.queryByRole('button', { name: 'Go to settings' })).not.toBeInTheDocument()
   })
 
   it('focuses the list and skips unavailable processors during keyboard navigation', async () => {

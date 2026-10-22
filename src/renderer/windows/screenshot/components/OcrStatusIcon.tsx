@@ -38,12 +38,12 @@ interface OcrStatusIconProps {
 /** Matches the toolbar's own controls: its flip maths is derived from a 32 px button. */
 const BUTTON_CLASS = 'size-8'
 
-/** Open the local-model settings and take the overlay down on the way. */
+/** Open the screenshot settings (which offers the OCR model download) and take the overlay down on the way. */
 function goToModelSettings(): void {
   // Cancel first: the screen-saver-level overlay would otherwise cover the page we navigate to.
   // Neither call is awaited — the message only has to leave before the window is hidden.
   void ipcApi.request('screenshot.cancel')
-  openSettingsTab('/settings/local-models')
+  openSettingsTab('/settings/screenshot')
 }
 
 export function OcrStatusIcon({
