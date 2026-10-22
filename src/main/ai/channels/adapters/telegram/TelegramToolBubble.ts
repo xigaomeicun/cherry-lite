@@ -1,4 +1,4 @@
-import { BUBBLE_MAX_CHARS, describeToolCall } from './toolBubbleDescribe'
+import { BUBBLE_MAX_CHARS, compactBubbleLine, describeToolCall } from './toolBubbleDescribe'
 
 export type TelegramBubbleApi = {
   sendMessage(text: string): Promise<number>
@@ -39,11 +39,10 @@ export class TelegramToolBubbleController {
     private readonly log: TelegramBubbleLogger
   ) {}
 
-  onStart(toolCallId: string, toolName: string, input?: unknown): void {
-    const desc = describeToolCall(
-      toolName,
-      input && typeof input === 'object' ? (input as Record<string, unknown>) : null
-    )
+  onStart(toolCallId: string, toolName: string, input?: unknown, presetDescription?: string): void {
+    const desc = presetDescription
+      ? compactBubbleLine(presetDescription)
+      : describeToolCall(toolName, input && typeof input === 'object' ? (input as Record<string, unknown>) : null)
 
     if (!desc) {
       if (this.activeTools.has(toolCallId)) {

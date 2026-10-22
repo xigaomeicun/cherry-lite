@@ -810,7 +810,7 @@ class TelegramAdapter extends ChannelAdapter {
     const bubble = this.getBubbleController(chatId)
     if (!bubble) return
     if (event.kind === 'start') {
-      bubble.onStart(event.toolCallId, event.toolName, event.input)
+      bubble.onStart(event.toolCallId, event.toolName, event.input, event.description)
     } else if (event.kind === 'done') {
       bubble.onDone(event.toolCallId)
     }

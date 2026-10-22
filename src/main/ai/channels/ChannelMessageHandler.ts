@@ -1557,7 +1557,9 @@ export class ChannelMessageHandler {
         userParts,
         listeners: [
           sentinel,
-          new ChannelAdapterListener(adapter, chatId, false, responseOptions, session.workspace?.path)
+          new ChannelAdapterListener(adapter, chatId, false, responseOptions, session.workspace?.path, undefined, {
+            cursorToolBubbles: true
+          })
         ],
         headless: true,
         requireIdle: { expectedAgentId: session.agentId }

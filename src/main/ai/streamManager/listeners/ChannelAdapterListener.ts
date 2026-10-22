@@ -13,6 +13,7 @@ import {
   type SendMessageOptions,
   toolPermSent
 } from '@main/ai/channels'
+import { CursorToolLineParser, describeCursorToolLine } from '@main/ai/channels/adapters/telegram/cursorToolLines'
 import { toolApprovalRegistry } from '@main/ai/toolApproval/ToolApprovalRegistry'
 import { t } from '@main/i18n'
 import type { UniqueModelId } from '@shared/data/types/model'
@@ -23,12 +24,30 @@ import type { StreamDoneResult, StreamErrorResult, StreamListener, StreamPausedR
 const logger = loggerService.withContext('ChannelAdapterListener')
 const INCOMPLETE_CITATION_MARKER_PATTERN = /[ \t]?\[(?:c(?:i(?:t(?:e(?::[\w-]*)?)?)?)?)?$/
 
+export interface ChannelAdapterListenerOptions {
+  /**
+   * Telegram only: turn Cursor-model `[tool] <label>: <summary>` reasoning lines (tools the CPA
+   * gateway executes itself, so no tool_calls reach us) into ephemeral tool bubbles. Display-only —
+   * nothing is injected into the UI message stream or persisted. Skipped for group chats.
+   */
+  cursorToolBubbles?: boolean
+}
+
+/** Telegram group/supergroup/channel chat ids are negative; private chats are positive. */
+function isTelegramGroupChatId(chatId: string): boolean {
+  const n = Number(chatId)
+  return !Number.isFinite(n) || n < 0
+}
+
 /** IM-channel sink (Discord / Slack / Feishu / Telegram / etc). */
 export class ChannelAdapterListener implements StreamListener {
   readonly id: string
   private accumulatedText = ''
   private exitPlanCardSent = false
   private settled = false
+  private readonly cursorToolParser: CursorToolLineParser | null
+  private cursorToolSeq = 0
+  private activeCursorToolId: string | null = null
 
   constructor(
     private readonly adapter: ChannelAdapter,
@@ -50,8 +69,15 @@ export class ChannelAdapterListener implements StreamListener {
      * Extra allowed roots for outbound image resolution (defaults to the CPA
      * `~/.agents/workspace` dump). Pass `[]` in tests to disable.
      */
-    private readonly additionalRoots: readonly string[] | undefined = undefined
+    private readonly additionalRoots: readonly string[] | undefined = undefined,
+    options: ChannelAdapterListenerOptions = {}
   ) {
+    this.cursorToolParser =
+      options.cursorToolBubbles === true &&
+      this.adapter.channelType === 'telegram' &&
+      !isTelegramGroupChatId(this.platformChatId)
+        ? new CursorToolLineParser()
+        : null
     const responseKey = this.responseOptions?.replyToMessageId ?? 'unthreaded'
     this.id = `channel:${adapter.channelId}:${this.platformChatId}:${responseKey}`
   }
@@ -149,6 +175,14 @@ export class ChannelAdapterListener implements StreamListener {
       void update.catch(() => {})
     }
 
+    if (this.cursorToolParser) {
+      if (chunk.type === 'reasoning-delta' && chunk.delta) {
+        this.handleCursorToolReasoning(chunk.id, chunk.delta)
+      } else if (chunk.type === 'reasoning-end') {
+        this.cursorToolParser.end(chunk.id)
+      }
+    }
+
     if (chunk.type === 'tool-approval-request' && this.adapter.channelType === 'telegram') {
       this.sendTelegramApprovalCard(chunk)
     }
@@ -191,6 +225,35 @@ export class ChannelAdapterListener implements StreamListener {
         )
         ?.catch(() => {})
     }
+  }
+
+  /** Each new `[tool]` line replaces the previous one; turn end dismisses via `dismissToolProgress`. */
+  private handleCursorToolReasoning(reasoningId: string, delta: string): void {
+    if (!this.cursorToolParser) return
+    for (const line of this.cursorToolParser.push(reasoningId, delta)) {
+      const described = describeCursorToolLine(line)
+      if (!described) continue
+      if (this.activeCursorToolId) {
+        const previous = this.activeCursorToolId
+        void this.adapter
+          .onToolProgress?.(this.platformChatId, { kind: 'done', toolCallId: previous, ok: true }, this.responseOptions)
+          ?.catch(() => {})
+      }
+      const toolCallId = `cursor-tool-${++this.cursorToolSeq}`
+      this.activeCursorToolId = toolCallId
+      void this.adapter
+        .onToolProgress?.(
+          this.platformChatId,
+          { kind: 'start', toolCallId, toolName: described.toolName, description: described.description },
+          this.responseOptions
+        )
+        ?.catch(() => {})
+    }
+  }
+
+  private resetCursorToolState(): void {
+    this.cursorToolParser?.end()
+    this.activeCursorToolId = null
   }
 
   private sendTelegramApprovalCard(chunk: UIMessageChunk & { type: 'tool-approval-request' }): void {
@@ -310,12 +373,14 @@ export class ChannelAdapterListener implements StreamListener {
   }
 
   async onDone(result: StreamDoneResult): Promise<void> {
+    this.resetCursorToolState()
     await this.adapter.dismissToolProgress?.(this.platformChatId, this.responseOptions)?.catch(() => {})
     await this.finish(result.status)
   }
 
   // oxlint-disable-next-line no-unused-vars
   async onPaused(_result: StreamPausedResult): Promise<void> {
+    this.resetCursorToolState()
     await this.adapter.dismissToolProgress?.(this.platformChatId, this.responseOptions)?.catch(() => {})
     await this.finish('paused')
   }
@@ -357,6 +422,7 @@ export class ChannelAdapterListener implements StreamListener {
   }
 
   async onError(result: StreamErrorResult): Promise<void> {
+    this.resetCursorToolState()
     await this.adapter.dismissToolProgress?.(this.platformChatId, this.responseOptions)?.catch(() => {})
     if (this.settled) return
     this.settled = true

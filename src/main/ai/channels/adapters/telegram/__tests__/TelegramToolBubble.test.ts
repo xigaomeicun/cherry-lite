@@ -123,4 +123,15 @@ describe('TelegramToolBubbleController', () => {
     expect(sentMessages.length).toBe(2)
     expect(sentMessages[1].text).toContain('glob *.ts')
   })
+
+  it('uses a preset description as-is instead of deriving one from input', async () => {
+    controller.onStart('cursor-tool-1', 'bash', undefined, 'ls ~/Projects')
+    await vi.advanceTimersByTimeAsync(350)
+    expect(sentMessages).toEqual([{ id: 101, text: '● ls ~/Projects' }])
+
+    controller.onDone('cursor-tool-1')
+    controller.onStart('cursor-tool-2', 'view', undefined, 'view SKILL.md')
+    await vi.advanceTimersByTimeAsync(350)
+    expect(editedMessages.at(-1)).toEqual({ id: 101, text: '● view SKILL.md' })
+  })
 })

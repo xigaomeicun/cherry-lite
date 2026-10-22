@@ -83,7 +83,14 @@ export type SendMessageOptions = {
 }
 
 export type ToolProgressEvent =
-  | { kind: 'start'; toolCallId: string; toolName: string; input?: unknown }
+  | {
+      kind: 'start'
+      toolCallId: string
+      toolName: string
+      input?: unknown
+      /** Preformatted bubble line; when set, adapters show it as-is instead of deriving one from `input`. */
+      description?: string
+    }
   | { kind: 'done'; toolCallId: string; ok: boolean }
 export type ChannelStreamOutcome = { status: 'success' | 'paused' }
 export type ChannelStreamErrorOptions = { suppressDelivery: boolean }

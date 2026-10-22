@@ -365,4 +365,60 @@ describe('ChannelAdapterListener', () => {
     alive = false
     expect(listener.isAlive()).toBe(false)
   })
+
+  describe('Cursor [tool] reasoning lines', () => {
+    function reasoning(text: string, id = 'r1'): UIMessageChunk {
+      return { type: 'reasoning-delta', id, delta: text } as UIMessageChunk
+    }
+    const enabled = { cursorToolBubbles: true }
+
+    it('turns each [tool] line into a bubble that replaces the previous one', async () => {
+      const adapter = makeAdapter({ channelType: 'telegram' } as Partial<ChannelAdapter>)
+      const listener = new ChannelAdapterListener(adapter, '12345', false, undefined, undefined, [], enabled)
+
+      listener.onChunk(reasoning('准备列出目录\n[tool] shell(stream): ls ~/Pro'))
+      expect(adapter.onToolProgress).not.toHaveBeenCalled()
+      listener.onChunk(reasoning('jects\n思考\n[tool] read: /a/SKILL.md\n'))
+
+      expect(vi.mocked(adapter.onToolProgress).mock.calls.map(([, event]) => event)).toEqual([
+        { kind: 'start', toolCallId: 'cursor-tool-1', toolName: 'bash', description: 'ls ~/Projects' },
+        { kind: 'done', toolCallId: 'cursor-tool-1', ok: true },
+        { kind: 'start', toolCallId: 'cursor-tool-2', toolName: 'view', description: 'view SKILL.md' }
+      ])
+
+      await listener.onDone({ status: 'success' } as StreamDoneResult)
+      expect(adapter.dismissToolProgress).toHaveBeenCalledWith('12345', undefined)
+    })
+
+    it('never shows [tool] lines as reply text', () => {
+      const adapter = makeAdapter({ channelType: 'telegram' } as Partial<ChannelAdapter>)
+      const listener = new ChannelAdapterListener(adapter, '12345', false, undefined, undefined, [], enabled)
+      listener.onChunk(reasoning('[tool] shell: ls\n'))
+      expect(adapter.onTextUpdate).not.toHaveBeenCalled()
+    })
+
+    it('drops a partial line when the reasoning block ends', () => {
+      const adapter = makeAdapter({ channelType: 'telegram' } as Partial<ChannelAdapter>)
+      const listener = new ChannelAdapterListener(adapter, '12345', false, undefined, undefined, [], enabled)
+      listener.onChunk(reasoning('[tool] shell: ls'))
+      listener.onChunk({ type: 'reasoning-end', id: 'r1' } as UIMessageChunk)
+      listener.onChunk(reasoning('\n'))
+      expect(adapter.onToolProgress).not.toHaveBeenCalled()
+    })
+
+    it('is off by default, for group chats and for non-Telegram channels', () => {
+      const tg = makeAdapter({ channelType: 'telegram' } as Partial<ChannelAdapter>)
+      new ChannelAdapterListener(tg, '12345').onChunk(reasoning('[tool] shell: ls\n'))
+      new ChannelAdapterListener(tg, '-1001234', false, undefined, undefined, [], enabled).onChunk(
+        reasoning('[tool] shell: ls\n')
+      )
+      expect(tg.onToolProgress).not.toHaveBeenCalled()
+
+      const discord = makeAdapter({ channelType: 'discord' } as Partial<ChannelAdapter>)
+      new ChannelAdapterListener(discord, '12345', false, undefined, undefined, [], enabled).onChunk(
+        reasoning('[tool] shell: ls\n')
+      )
+      expect(discord.onToolProgress).not.toHaveBeenCalled()
+    })
+  })
 })
