@@ -44,7 +44,6 @@ describe('routeTitle', () => {
         ['/app/agents', '工作'],
         ['/app/paintings', '绘画'],
         ['/app/translate', '翻译'],
-        ['/app/knowledge', '知识库'],
         ['/app/files', '文件'],
         ['/app/notes', '笔记'],
         ['/app/release-notes', '更新日志'],
@@ -71,7 +70,7 @@ describe('routeTitle', () => {
       })
 
       it('should handle URLs with hash', () => {
-        expect(getDefaultRouteTitle('/app/knowledge#section1')).toBe('知识库')
+        expect(getDefaultRouteTitle('/app/notes#section1')).toBe('笔记')
       })
 
       it('should handle URLs with both query and hash', () => {

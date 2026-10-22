@@ -8,7 +8,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const exportActionsMock = vi.hoisted(() => ({
   saveTextFile: vi.fn(),
   saveImage: vi.fn(),
-  saveToKnowledge: vi.fn(),
   exportMessageAsMarkdown: vi.fn(),
   exportToNotes: vi.fn(),
   exportToWord: vi.fn(),
@@ -284,7 +283,6 @@ describe('useAgentMessageListProviderValue', () => {
     expect(value?.actions.editMessage).toBeUndefined()
     expect(value?.actions.saveTextFile).toBe(exportActionsMock.saveTextFile)
     expect(value?.actions.saveImage).toBe(exportActionsMock.saveImage)
-    expect(value?.actions.saveToKnowledge).toBe(exportActionsMock.saveToKnowledge)
     expect(value?.actions.exportMessageAsMarkdown).toBe(exportActionsMock.exportMessageAsMarkdown)
     expect(value?.actions.exportToNotes).toBe(exportActionsMock.exportToNotes)
     expect(value?.actions.exportToWord).toBe(exportActionsMock.exportToWord)

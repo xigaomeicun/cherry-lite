@@ -15,16 +15,11 @@ describe('buildCitationsGuidance', () => {
     expect(out).toContain('[cite:ID]')
   })
 
-  it('mentions only the kb tools when web is disabled', () => {
-    const out = buildCitationsGuidance({ web: false, kb: true })
-    expect(out).toContain('mcp__cherry-tools__kb_search')
-    expect(out).toContain('mcp__cherry-tools__kb_read')
-    expect(out).not.toContain('web_search')
-  })
-
-  it('mentions both tool groups when both are available', () => {
+  it('never mentions the removed kb tools (cherry-lite), even when kb is requested', () => {
+    expect(buildCitationsGuidance({ web: false, kb: true })).toBeUndefined()
     const out = buildCitationsGuidance({ web: true, kb: true })
     expect(out).toContain('mcp__cherry-tools__web_search')
-    expect(out).toContain('mcp__cherry-tools__kb_search')
+    expect(out).not.toContain('kb_search')
+    expect(out).not.toContain('kb_read')
   })
 })

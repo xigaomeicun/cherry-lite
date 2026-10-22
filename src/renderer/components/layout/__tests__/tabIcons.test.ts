@@ -1,6 +1,5 @@
 import type { Tab } from '@renderer/hooks/tab'
 import {
-  FileSearch,
   Folder,
   Globe,
   MessageCircle,
@@ -35,7 +34,6 @@ function webviewTab(url: string): Tab {
 describe('getTabIcon', () => {
   it.each([
     ['/app/agents', MousePointerClick],
-    ['/app/knowledge', FileSearch],
     ['/app/file-preview?path=%2Ftmp%2Freport.pdf', ScanSearch],
     ['/app/files', Folder],
     ['/app/notes', NotepadText],

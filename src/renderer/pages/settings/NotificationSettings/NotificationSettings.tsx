@@ -21,7 +21,6 @@ const NotificationSettings: FC = () => {
     completion_sound: 'app.notification.completion_sound.enabled',
     approval_sound: 'app.notification.approval_sound.enabled',
     backup: 'app.notification.backup.enabled',
-    knowledge: 'app.notification.knowledge.enabled',
     update: 'app.notification.update.enabled',
     'mini-app': 'app.notification.mini_app.enabled'
   })
@@ -85,14 +84,6 @@ const NotificationSettings: FC = () => {
           <Switch
             checked={notificationSettings.backup}
             onCheckedChange={(v) => handleNotificationChange('backup', v)}
-          />
-        </SettingRow>
-        <SettingDivider />
-        <SettingRow id="setting-notifications-knowledge-embed-notification" className="scroll-mt-6">
-          <SettingRowTitle>{t('settings.notification.knowledge_embed')}</SettingRowTitle>
-          <Switch
-            checked={notificationSettings.knowledge}
-            onCheckedChange={(v) => handleNotificationChange('knowledge', v)}
           />
         </SettingRow>
         <SettingDivider />

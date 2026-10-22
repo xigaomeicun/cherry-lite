@@ -207,10 +207,6 @@ vi.mock('@renderer/components/popups/PromptPopup', () => ({
   default: { show: hookMocks.promptShow }
 }))
 
-vi.mock('@renderer/components/SaveToKnowledgePopup', () => ({
-  default: { showForTopic: vi.fn() }
-}))
-
 // The confirm-and-run dialog itself is covered by its own unit test; here we just let it run
 // the gated action (as if the user confirmed).
 const { confirmActionShow } = vi.hoisted(() => ({

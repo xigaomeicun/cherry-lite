@@ -1323,20 +1323,12 @@ describe('edit dialogs', () => {
     expect(screen.getByText('Connected')).toBeInTheDocument()
   })
 
-  it('submits assistant knowledge, MCP, and model parameter changes', async () => {
+  it('submits assistant MCP and model parameter changes (no knowledge tab in cherry-lite)', async () => {
     render(<AssistantEditDialog open resource={ASSISTANT} onOpenChange={vi.fn()} />)
 
     expect(screen.queryByRole('button', { name: 'Tools' })).not.toBeInTheDocument()
     expect(screen.getByRole('tab', { name: 'MCP' })).toBeInTheDocument()
-    expect(screen.getByRole('tab', { name: 'Knowledge' })).toBeInTheDocument()
-
-    selectTab('Knowledge')
-    await waitFor(() => expect(screen.getByText('Linked knowledge')).toBeVisible())
-    expectHelpTrigger('Linked knowledge', 'Choose knowledge bases.')
-    const addKnowledgeButton = screen.getByRole('button', { name: 'Add knowledge base' })
-    fireEvent.click(addKnowledgeButton)
-    expect(screen.getByText('Knowledge One')).toBeInTheDocument()
-    fireEvent.click(screen.getByText('Knowledge One'))
+    expect(screen.queryByRole('tab', { name: 'Knowledge' })).not.toBeInTheDocument()
 
     selectTab('MCP')
     await waitFor(() => expect(screen.getByRole('radiogroup', { name: 'MCP Mode' })).toBeVisible())
@@ -1359,7 +1351,6 @@ describe('edit dialogs', () => {
     await waitFor(() =>
       expect(updateAssistantMock).toHaveBeenCalledWith({
         body: expect.objectContaining({
-          knowledgeBaseIds: ['kb-1'],
           mcpServerIds: ['mcp-1'],
           settings: expect.objectContaining({
             enableTemperature: true,
@@ -1696,7 +1687,7 @@ describe('edit dialogs', () => {
 
     expect(screen.queryByText('Plan model')).not.toBeInTheDocument()
     expect(screen.queryByText('Small model')).not.toBeInTheDocument()
-    expect(screen.getByRole('tab', { name: 'Knowledge' })).toBeInTheDocument()
+    expect(screen.queryByRole('tab', { name: 'Knowledge' })).not.toBeInTheDocument()
     expect(screen.getByRole('tab', { name: 'MCP' })).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: '技能' })).toBeInTheDocument()
 
@@ -1722,48 +1713,13 @@ describe('edit dialogs', () => {
     )
   })
 
-  it('removes deleted knowledge bases from an open agent form', async () => {
+  it('never offers the knowledge built-in tools, even for an agent still bound to a knowledge base', () => {
     const boundAgent = { ...AGENT, knowledgeBaseIds: ['kb-1'] }
-    const { rerender } = render(<AgentEditDialog open resource={boundAgent} onOpenChange={vi.fn()} />)
+    render(<AgentEditDialog open resource={boundAgent} onOpenChange={vi.fn()} />)
 
+    expect(screen.queryByRole('tab', { name: 'Knowledge' })).not.toBeInTheDocument()
     selectTab('Built-in tools')
-    expect(screen.getByText('Knowledge Search')).toBeInTheDocument()
-
-    knowledgeBasesState.current = []
-    rerender(<AgentEditDialog open resource={{ ...boundAgent, knowledgeBaseIds: [] }} onOpenChange={vi.fn()} />)
-
-    await waitFor(() => expect(screen.queryByText('Knowledge Search')).not.toBeInTheDocument())
-    expect(updateAgentMock).not.toHaveBeenCalled()
-  })
-
-  it('preserves a knowledge-base re-selection made while its removal is saving', async () => {
-    let resolveFirstSave: (() => void) | undefined
-    updateAgentMock.mockImplementationOnce(
-      () =>
-        new Promise((resolve) => {
-          resolveFirstSave = () => resolve({ ...AGENT, knowledgeBaseIds: [] })
-        })
-    )
-    const boundAgent = { ...AGENT, knowledgeBaseIds: ['kb-1'] }
-    const props = { open: true, onOpenChange: vi.fn(), initialTab: 'tools.knowledge' }
-    const { rerender } = render(<AgentEditDialog {...props} resource={boundAgent} />)
-
-    fireEvent.click(screen.getByRole('button', { name: 'Remove knowledge base' }))
-    await waitFor(() => expect(updateAgentMock).toHaveBeenCalledTimes(1))
-
-    fireEvent.click(screen.getByRole('button', { name: 'Add knowledge base' }))
-    fireEvent.click(screen.getByText('Knowledge One'))
-    rerender(<AgentEditDialog {...props} resource={{ ...boundAgent, knowledgeBaseIds: [] }} />)
-
-    selectTab('Built-in tools')
-    expect(screen.getByText('Knowledge Search')).toBeInTheDocument()
-
-    resolveFirstSave?.()
-    await waitFor(() =>
-      expect(updateAgentMock).toHaveBeenLastCalledWith({
-        body: expect.objectContaining({ knowledgeBaseIds: ['kb-1'] })
-      })
-    )
+    expect(screen.queryByText('Knowledge Search')).not.toBeInTheDocument()
   })
 
   it('opens the agent edit dialog directly on the requested initial tab', () => {

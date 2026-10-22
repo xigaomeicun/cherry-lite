@@ -1,7 +1,6 @@
 import attachmentTool from './definitions/attachmentTool'
 import dictationTool from './definitions/dictationTool'
 import generateImageTool from './definitions/generateImageTool'
-import knowledgeBaseTool from './definitions/knowledgeBaseTool'
 import mcpPromptTool from './definitions/mcpPromptTool'
 import mcpResourceTool from './definitions/mcpResourceTool'
 import mcpStatusTool from './definitions/mcpStatusTool'
@@ -23,7 +22,6 @@ export const BUILTIN_COMPOSER_TOOLS: ToolDefinition<any, any>[] = [
   dictationTool,
   quickPhrasesTool,
   webSearchTool,
-  knowledgeBaseTool,
   generateImageTool,
   slashCommandsTool,
   permissionModeTool,

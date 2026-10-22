@@ -266,10 +266,6 @@ registerCommand('message.saveFile', async ({ actions, mainTextContent, message }
   await actions.saveTextFile?.(fileName, mainTextContent)
 })
 
-registerCommand('message.saveKnowledge', async ({ actions, messageForExport }) => {
-  await actions.saveToKnowledge?.(messageForExport)
-})
-
 registerCommand('message.exportNotes', async ({ actions, messageForExport }) => {
   await actions.exportToNotes?.(messageForExport)
 })
@@ -568,13 +564,6 @@ registerAction({
       label: ({ t }) => t('notes.save'),
       order: 20,
       availability: ({ actions, isAssistantMessage }) => isAssistantMessage && !!actions.exportToNotes
-    },
-    {
-      id: 'save.knowledge',
-      commandId: 'message.saveKnowledge',
-      label: ({ t }) => t('chat.save.knowledge.title'),
-      order: 30,
-      availability: ({ actions }) => !!actions.saveToKnowledge
     }
   ]
 })

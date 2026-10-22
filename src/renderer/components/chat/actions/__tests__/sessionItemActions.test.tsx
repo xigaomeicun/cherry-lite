@@ -35,7 +35,6 @@ function createSessionActionFixture(overrides: Partial<SessionActionContext> = {
     onExportSiyuan: vi.fn(),
     onExportWord: vi.fn(),
     onExportYuque: vi.fn(),
-    onSaveToKnowledge: vi.fn(),
     onSaveToNotes: vi.fn(),
     onSetPanePosition: vi.fn(),
     panePosition: 'left',
@@ -57,7 +56,6 @@ describe('session item actions', () => {
       'session.rename',
       'session.position',
       'session.save-notes',
-      'session.save-knowledge',
       'session.export',
       'session.copy',
       'session.delete'
@@ -80,7 +78,6 @@ describe('session item actions', () => {
       'session.toggle-pin',
       'session.position',
       'session.save-notes',
-      'session.save-knowledge',
       'session.export',
       'session.copy'
     ])
@@ -110,7 +107,6 @@ describe('session item actions', () => {
       'session.rename',
       'session.position',
       'session.save-notes',
-      'session.save-knowledge',
       'session.export',
       'session.copy',
       'session.delete'
@@ -131,7 +127,6 @@ describe('session item actions', () => {
       'session.position',
       'session.open-in-new-window',
       'session.save-notes',
-      'session.save-knowledge',
       'session.export',
       'session.copy',
       'session.delete'

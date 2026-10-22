@@ -1245,7 +1245,7 @@ const ChatComposerInner = ({
   )
 
   // Editor→state reconciliation owned by the tools: attachmentTool prunes+dedupes files,
-  // knowledgeBaseTool prunes+re-adds knowledge bases (against the injected selectableKnowledgeBases).
+  // (cherry-lite) the knowledge-base composer tool was removed; KB selection state stays inert/empty.
   const reconcileTokens = useComposerTokenReconcile({ scope, assistant: displayAssistant, model: runtimeModel })
   const handleTokensChange = useCallback(
     (nextDraftTokens: readonly ComposerSerializedToken[]) => {

@@ -730,8 +730,7 @@ describe('messageMenuBarActions', () => {
     const context = createActionContext({
       actions: {
         deleteMessage: vi.fn(),
-        exportToNotes: vi.fn(),
-        saveToKnowledge: vi.fn()
+        exportToNotes: vi.fn()
       } as MessageListActions
     })
 
@@ -742,7 +741,7 @@ describe('messageMenuBarActions', () => {
       resolveMessageMenuBarMenuActions(context)
         .find((action) => action.id === 'save')
         ?.children.map((action) => action.id)
-    ).toEqual(['save.notes', 'save.knowledge'])
+    ).toEqual(['save.notes'])
   })
 
   it('keeps menu actions capability-driven instead of filtering by session roots', () => {

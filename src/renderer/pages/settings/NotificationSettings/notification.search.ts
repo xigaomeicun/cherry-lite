@@ -14,11 +14,6 @@ export const entries: SettingsSearchEntry[] = [
     groupKey: 'settings.notification.title'
   },
   {
-    anchorId: 'knowledge-embed-notification',
-    titleKey: 'settings.notification.knowledge_embed',
-    groupKey: 'settings.notification.title'
-  },
-  {
     anchorId: 'update-notification',
     titleKey: 'settings.notification.update',
     groupKey: 'settings.notification.title'

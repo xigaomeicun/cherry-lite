@@ -6,8 +6,7 @@ const optionalModules = vi.hoisted(() => ({
   exportServiceEvaluated: vi.fn(),
   knowledgeHookEvaluated: vi.fn(),
   notesSettingsEvaluated: vi.fn(),
-  obsidianPopupEvaluated: vi.fn(),
-  saveToKnowledgePopupEvaluated: vi.fn()
+  obsidianPopupEvaluated: vi.fn()
 }))
 
 vi.mock('@renderer/services/ExportService', () => {
@@ -25,11 +24,6 @@ vi.mock('@renderer/components/ObsidianExportPopup', () => {
   return { default: { show: vi.fn() } }
 })
 
-vi.mock('@renderer/components/SaveToKnowledgePopup', () => {
-  optionalModules.saveToKnowledgePopupEvaluated()
-  return { default: { showForNote: vi.fn() } }
-})
-
 vi.mock('../NotesSettings', () => {
   optionalModules.notesSettingsEvaluated()
   return { default: () => null }
@@ -45,7 +39,6 @@ describe('Notes optional workflow lazy boundaries', () => {
       expect(optionalModules.knowledgeHookEvaluated).not.toHaveBeenCalled()
       expect(optionalModules.notesSettingsEvaluated).not.toHaveBeenCalled()
       expect(optionalModules.obsidianPopupEvaluated).not.toHaveBeenCalled()
-      expect(optionalModules.saveToKnowledgePopupEvaluated).not.toHaveBeenCalled()
     },
     PROBE_TIMEOUT
   )
@@ -57,7 +50,6 @@ describe('Notes optional workflow lazy boundaries', () => {
         import('@renderer/services/ExportService'),
         import('@renderer/hooks/useKnowledgeBase'),
         import('@renderer/components/ObsidianExportPopup'),
-        import('@renderer/components/SaveToKnowledgePopup'),
         import('../NotesSettings')
       ])
 
@@ -65,7 +57,6 @@ describe('Notes optional workflow lazy boundaries', () => {
       expect(optionalModules.knowledgeHookEvaluated).toHaveBeenCalledTimes(1)
       expect(optionalModules.notesSettingsEvaluated).toHaveBeenCalledTimes(1)
       expect(optionalModules.obsidianPopupEvaluated).toHaveBeenCalledTimes(1)
-      expect(optionalModules.saveToKnowledgePopupEvaluated).toHaveBeenCalledTimes(1)
     },
     PROBE_TIMEOUT
   )

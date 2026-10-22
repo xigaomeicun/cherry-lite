@@ -1616,7 +1616,7 @@ describe('buildClaudeCodeSessionSettings', () => {
     expect(systemPrompt).not.toContain('mcp__cherry-tools__kb_search')
   })
 
-  it('includes kb_search in citation guidance when the agent has bound knowledge bases', async () => {
+  it('never cites the removed kb_search tool, even when the agent has bound knowledge bases', async () => {
     mocks.getAgent.mockReturnValue({
       id: 'agent-1',
       type: 'claude-code',
@@ -1634,12 +1634,12 @@ describe('buildClaudeCodeSessionSettings', () => {
 
     const settings = await buildClaudeCodeSessionSettings(session as never, {} as never)
 
-    expect(systemPromptText(settings.systemPrompt)).toContain('mcp__cherry-tools__kb_search')
+    expect(systemPromptText(settings.systemPrompt)).not.toContain('mcp__cherry-tools__kb_search')
   })
 
-  // The kb_* tools are exposed from the resolved scope, so an unbound Agent still gets them from the
-  // frozen composer selection alone — the guidance has to follow, or those results never get cited.
-  it('includes kb_search in citation guidance for a composer-only selection on an unbound Agent', async () => {
+  // (cherry-lite) the kb_* tools were removed with the knowledge-base feature, so even a stale
+  // composer selection must not point the model at them.
+  it('never cites the removed kb_search tool for a composer-only selection on an unbound Agent', async () => {
     mocks.getAgent.mockReturnValue({
       id: 'agent-1',
       type: 'claude-code',
@@ -1659,7 +1659,7 @@ describe('buildClaudeCodeSessionSettings', () => {
       knowledgeBaseIds: ['kb-selected']
     })
 
-    expect(systemPromptText(settings.systemPrompt)).toContain('mcp__cherry-tools__kb_search')
+    expect(systemPromptText(settings.systemPrompt)).not.toContain('mcp__cherry-tools__kb_search')
   })
 
   it('omits citation guidance when both web tools are disabled and no knowledge base is bound', async () => {
@@ -2535,10 +2535,11 @@ describe('buildClaudeCodeSessionSettings', () => {
     const cherryServer = (settings.mcpServers?.['cherry-tools'] as any)?.instance
     const handlers = cherryServer.server._requestHandlers
     const listed = await handlers.get('tools/list')({ method: 'tools/list', params: {} }, {})
-    expect(listed.tools.map((tool: { name: string }) => tool.name)).toEqual(
-      expect.arrayContaining(['kb_search', 'kb_read', 'kb_list', 'kb_manage', 'cli_list', 'cli_search', 'cli_install'])
-    )
-    expect(systemPromptText(settings.systemPrompt)).toContain('mcp__cherry-tools__kb_search')
+    const toolNames = listed.tools.map((tool: { name: string }) => tool.name)
+    expect(toolNames).toEqual(expect.arrayContaining(['cli_list', 'cli_search', 'cli_install']))
+    // (cherry-lite) the kb_* tools were removed with the knowledge-base feature.
+    expect(toolNames).not.toContain('kb_search')
+    expect(systemPromptText(settings.systemPrompt)).not.toContain('mcp__cherry-tools__kb_search')
   })
 
   it('exposes CLI management tools to a normal Agent session', async () => {

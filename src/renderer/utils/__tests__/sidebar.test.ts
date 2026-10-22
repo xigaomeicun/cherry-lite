@@ -25,7 +25,7 @@ const assistantFavorite = (id: string): SidebarFavoriteItem => ({ type: 'assista
 
 describe('sidebar config helpers', () => {
   it('keeps the fixed sidebar app order available', () => {
-    expect(SIDEBAR_FAVORITE_ORDER.slice(0, 5)).toEqual(['agents', 'assistants', 'paintings', 'translate', 'knowledge'])
+    expect(SIDEBAR_FAVORITE_ORDER.slice(0, 5)).toEqual(['agents', 'assistants', 'paintings', 'translate', 'files'])
   })
 
   it('preserves the preference order when reading ordered visible sidebar favorites', () => {
@@ -69,14 +69,14 @@ describe('sidebar config helpers', () => {
         appFavorite('assistants'),
         appFavorite('translate'),
         appFavorite('paintings'),
-        appFavorite('knowledge')
+        appFavorite('notes')
       ])
     ).toEqual([
       appFavorite('agents'),
       appFavorite('assistants'),
       appFavorite('translate'),
       appFavorite('paintings'),
-      appFavorite('knowledge')
+      appFavorite('notes')
     ])
   })
 
@@ -140,16 +140,16 @@ describe('sidebar config helpers', () => {
 
 describe('sidebar favorites mutations', () => {
   it('pins an app to the very end of the mixed list', () => {
-    expect(setSidebarAppPinned([appFavorite('assistants'), miniAppFavorite('calculator')], 'knowledge', true)).toEqual([
+    expect(setSidebarAppPinned([appFavorite('assistants'), miniAppFavorite('calculator')], 'notes', true)).toEqual([
       appFavorite('assistants'),
       miniAppFavorite('calculator'),
-      appFavorite('knowledge')
+      appFavorite('notes')
     ])
   })
 
   it('unpins the chat assistant like any other app', () => {
-    expect(setSidebarAppPinned([appFavorite('assistants'), appFavorite('knowledge')], 'assistants', false)).toEqual([
-      appFavorite('knowledge')
+    expect(setSidebarAppPinned([appFavorite('assistants'), appFavorite('notes')], 'assistants', false)).toEqual([
+      appFavorite('notes')
     ])
   })
 
@@ -242,9 +242,7 @@ describe('reorderSidebarFavorites (mixed cross-type reorder)', () => {
   })
 
   it('drops an app omitted from the requested reorder', () => {
-    expect(reorderSidebarFavorites([appFavorite('knowledge')], [appFavorite('knowledge')])).toEqual([
-      appFavorite('knowledge')
-    ])
+    expect(reorderSidebarFavorites([appFavorite('notes')], [appFavorite('notes')])).toEqual([appFavorite('notes')])
   })
 })
 

@@ -105,9 +105,6 @@ vi.mock('../steps/SystemPromptStep', () => ({
     </button>
   )
 }))
-vi.mock('../steps/KnowledgeStep', () => ({
-  KnowledgeStep: () => <div data-testid="knowledge-step" />
-}))
 vi.mock('../steps/CapabilityStep', () => ({
   CapabilityStep: () => <div data-testid="capability-step" />
 }))
@@ -161,7 +158,6 @@ describe('ResourceCreateWizard', () => {
     expect(screen.getByRole('button', { name: NEXT })).toBeEnabled()
 
     await user.click(screen.getByRole('button', { name: NEXT }))
-    await user.click(screen.getByRole('button', { name: NEXT }))
     await user.click(screen.getByRole('button', { name: CREATE }))
 
     expect(onSubmit).toHaveBeenCalledWith({
@@ -190,7 +186,6 @@ describe('ResourceCreateWizard', () => {
     // Name + default model are both set, so the first step is already cleared.
     expect(screen.getByRole('button', { name: NEXT })).toBeEnabled()
 
-    await user.click(screen.getByRole('button', { name: NEXT }))
     await user.click(screen.getByRole('button', { name: NEXT }))
     await user.click(screen.getByRole('button', { name: CREATE }))
 
@@ -245,9 +240,8 @@ describe('ResourceCreateWizard', () => {
     await user.click(screen.getByRole('button', { name: NEXT }))
     await user.click(screen.getByRole('button', { name: 'fill system prompt' }))
 
-    // Step 2 → 3 (assistant: knowledge)
-    await user.click(screen.getByRole('button', { name: NEXT }))
-    expect(screen.getByTestId('knowledge-step')).toBeInTheDocument()
+    // System Prompt is the last assistant step (cherry-lite removed the knowledge step).
+    expect(screen.queryByRole('button', { name: NEXT })).not.toBeInTheDocument()
 
     // Final create → mapped payload
     await user.click(screen.getByRole('button', { name: CREATE }))
@@ -273,7 +267,6 @@ describe('ResourceCreateWizard', () => {
 
     await user.click(screen.getByRole('button', { name: 'fill basic' }))
     await user.click(screen.getByRole('button', { name: NEXT }))
-    await user.click(screen.getByRole('button', { name: NEXT }))
     await user.click(screen.getByRole('button', { name: CREATE }))
 
     expect(await screen.findByText('Selected skill no longer exists')).toBeInTheDocument()
@@ -293,7 +286,6 @@ describe('ResourceCreateWizard', () => {
       await user.click(screen.getByRole('button', { name: 'switch to claude-code' }))
     }
     await user.click(screen.getByRole('button', { name: 'fill basic' }))
-    await user.click(screen.getByRole('button', { name: NEXT }))
     await user.click(screen.getByRole('button', { name: NEXT }))
     await user.click(screen.getByRole('button', { name: NEXT }))
     await user.click(screen.getByRole('button', { name: CREATE }))
@@ -318,13 +310,12 @@ describe('ResourceCreateWizard', () => {
     await user.click(screen.getByRole('button', { name: 'fill basic' }))
     await user.click(screen.getByRole('button', { name: NEXT }))
     await user.click(screen.getByRole('button', { name: NEXT }))
-    await user.click(screen.getByRole('button', { name: NEXT }))
     await user.click(screen.getByRole('button', { name: CREATE }))
 
     expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ agentType: 'pi', permissionMode: 'auto' }))
   })
 
-  it('shows the knowledge step after capability for the agent kind', async () => {
+  it('ends the agent wizard at the capability step (no knowledge step in cherry-lite)', async () => {
     const user = userEvent.setup()
     render(<ResourceCreateWizard kind="agent" open onOpenChange={vi.fn()} onSubmit={vi.fn()} />)
 
@@ -334,11 +325,8 @@ describe('ResourceCreateWizard', () => {
 
     expect(screen.getByTestId('capability-step')).toBeInTheDocument()
     expect(screen.queryByTestId('knowledge-step')).not.toBeInTheDocument()
-
-    await user.click(screen.getByRole('button', { name: NEXT }))
-
-    expect(screen.getByTestId('knowledge-step')).toBeInTheDocument()
-    expect(screen.queryByTestId('capability-step')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: NEXT })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: CREATE })).toBeInTheDocument()
   })
 
   it('does not render an invalid step when a closed agent wizard falls back to assistant kind', async () => {
@@ -349,8 +337,7 @@ describe('ResourceCreateWizard', () => {
     await user.click(screen.getByRole('button', { name: 'fill basic' }))
     await user.click(screen.getByRole('button', { name: NEXT }))
     await user.click(screen.getByRole('button', { name: NEXT }))
-    await user.click(screen.getByRole('button', { name: NEXT }))
-    expect(screen.getByTestId('knowledge-step')).toBeInTheDocument()
+    expect(screen.getByTestId('capability-step')).toBeInTheDocument()
 
     expect(() => rerender(<ResourceCreateWizard {...props} kind="assistant" open={false} />)).not.toThrow()
   })

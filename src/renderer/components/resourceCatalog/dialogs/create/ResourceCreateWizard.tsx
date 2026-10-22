@@ -18,7 +18,6 @@ import {
 } from '../components/EditDialogShared'
 import { BasicInfoStep } from './steps/BasicInfoStep'
 import { CapabilityStep } from './steps/CapabilityStep'
-import { KnowledgeStep } from './steps/KnowledgeStep'
 import { SystemPromptStep } from './steps/SystemPromptStep'
 import type { ResourceCreateWizardFormValues, ResourceCreateWizardKind, ResourceCreateWizardValues } from './types'
 
@@ -35,7 +34,7 @@ type ResourceCreateWizardProps = {
   initialName?: string
 }
 
-type StepId = 'basic' | 'system-prompt' | 'knowledge' | 'capability'
+type StepId = 'basic' | 'system-prompt' | 'capability'
 
 /** The avatar a brand-new resource starts with — exported so callers can preview what they'd create. */
 export function getResourceCreateDefaultAvatar(kind: ResourceCreateWizardKind) {
@@ -168,12 +167,12 @@ export function ResourceCreateWizard({
   const steps = useMemo<{ id: StepId; label: string }[]>(() => {
     const basic = { id: 'basic' as const, label: t('library.config.dialogs.create.step.basic') }
     const systemPrompt = { id: 'system-prompt' as const, label: t('library.config.prompt.label') }
-    const knowledge = { id: 'knowledge' as const, label: t('library.config.dialogs.create.step.knowledge') }
-    if (kind === 'assistant') return [basic, systemPrompt, knowledge]
+    // (cherry-lite) the knowledge-base step was removed together with the KB feature.
+    if (kind === 'assistant') return [basic, systemPrompt]
 
     const capability = { id: 'capability' as const, label: t('library.config.dialogs.create.step.capability') }
     const caps = AGENT_RUNTIME_CAPABILITIES[agentType]
-    return [basic, systemPrompt, ...(caps.skills ? [capability] : []), ...(caps.knowledgeBases ? [knowledge] : [])]
+    return [basic, systemPrompt, ...(caps.skills ? [capability] : [])]
   }, [agentType, kind, t])
 
   useEffect(() => {
@@ -363,9 +362,6 @@ export function ResourceCreateWizard({
                 ) : null}
                 {currentStep.id === 'system-prompt' ? (
                   <SystemPromptStep form={form} portalContainer={dialogContentElement} />
-                ) : null}
-                {currentStep.id === 'knowledge' ? (
-                  <KnowledgeStep form={form} isSubmitting={submitting} portalContainer={dialogContentElement} />
                 ) : null}
                 {currentStep.id === 'capability' ? (
                   <CapabilityStep form={form} portalContainer={dialogContentElement} />

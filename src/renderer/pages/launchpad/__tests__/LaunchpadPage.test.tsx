@@ -190,7 +190,7 @@ describe('LaunchpadPage', () => {
     expect(appsHeading.nextElementSibling).toHaveClass('grid-cols-6', 'justify-items-center', 'gap-2', 'px-2')
     expect(chatButton).toHaveClass('mx-auto', 'w-[92px]')
     expect(screen.getByRole('button', { name: 'Agent' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Knowledge' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Notes' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Manage' })).not.toBeInTheDocument()
   })
 
@@ -252,9 +252,9 @@ describe('LaunchpadPage', () => {
 
     render(<LaunchpadPage />)
 
-    await user.click(screen.getByRole('button', { name: 'Knowledge' }))
+    await user.click(screen.getByRole('button', { name: 'Notes' }))
 
-    expect(mocks.navigate).toHaveBeenCalledWith({ to: '/app/knowledge' })
+    expect(mocks.navigate).toHaveBeenCalledWith({ to: '/app/notes' })
   })
 
   it('has no DSH, Mini Apps or Code app tiles (cherry-lite)', () => {
@@ -263,6 +263,7 @@ describe('LaunchpadPage', () => {
     expect(screen.queryByRole('button', { name: 'DSH' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Mini Apps' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Code' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Knowledge' })).not.toBeInTheDocument()
   })
 
   it('suppresses only the dragged launchpad item click', () => {
@@ -270,10 +271,10 @@ describe('LaunchpadPage', () => {
 
     const systemSortable = mocks.sortableCalls.find((call) => call.itemKey === 'id')
     act(() => {
-      systemSortable.onDragStart({ active: { id: 'knowledge' } })
+      systemSortable.onDragStart({ active: { id: 'notes' } })
     })
 
-    fireEvent.click(screen.getByRole('button', { name: 'Knowledge' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Notes' }))
     fireEvent.click(screen.getByRole('button', { name: 'Chat' }))
 
     expect(mocks.navigate).toHaveBeenCalledTimes(1)
@@ -299,22 +300,22 @@ describe('LaunchpadPage', () => {
 
     expect(screen.getByTestId('menu-launchpad.unpin-from-sidebar.assistants')).toHaveTextContent('Remove from Sidebar')
     expect(screen.getByTestId('menu-launchpad.unpin-from-sidebar.assistants')).toBeDisabled()
-    expect(screen.getByTestId('menu-launchpad.pin-to-sidebar.knowledge')).toHaveTextContent('Add to Sidebar')
+    expect(screen.getByTestId('menu-launchpad.pin-to-sidebar.notes')).toHaveTextContent('Add to Sidebar')
 
-    await user.click(screen.getByTestId('menu-launchpad.pin-to-sidebar.knowledge'))
+    await user.click(screen.getByTestId('menu-launchpad.pin-to-sidebar.notes'))
 
-    expect(mocks.setSidebarFavorites).toHaveBeenCalledWith([appFavorite('assistants'), appFavorite('knowledge')])
+    expect(mocks.setSidebarFavorites).toHaveBeenCalledWith([appFavorite('assistants'), appFavorite('notes')])
   })
 
   it('removes an existing sidebar app icon from the context menu', async () => {
     const user = userEvent.setup()
-    mocks.sidebarFavorites = [appFavorite('assistants'), appFavorite('knowledge')]
+    mocks.sidebarFavorites = [appFavorite('assistants'), appFavorite('notes')]
 
     render(<LaunchpadPage />)
 
-    expect(screen.getByTestId('menu-launchpad.unpin-from-sidebar.knowledge')).toHaveTextContent('Remove from Sidebar')
+    expect(screen.getByTestId('menu-launchpad.unpin-from-sidebar.notes')).toHaveTextContent('Remove from Sidebar')
 
-    await user.click(screen.getByTestId('menu-launchpad.unpin-from-sidebar.knowledge'))
+    await user.click(screen.getByTestId('menu-launchpad.unpin-from-sidebar.notes'))
 
     expect(mocks.setSidebarFavorites).toHaveBeenCalledWith([appFavorite('assistants')])
   })

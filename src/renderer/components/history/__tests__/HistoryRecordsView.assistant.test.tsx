@@ -1,12 +1,11 @@
+import type * as PlatformModule from '@renderer/utils/platform'
+import type { Assistant } from '@shared/data/types/assistant'
+import type { Topic } from '@shared/data/types/topic'
 import { MockUseDataApiUtils } from '@test-mocks/renderer/useDataApi'
 import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-
-import type * as PlatformModule from '@renderer/utils/platform'
-import type { Assistant } from '@shared/data/types/assistant'
-import type { Topic } from '@shared/data/types/topic'
 
 import deDE from '../../../i18n/locales/de-de.json'
 import elGR from '../../../i18n/locales/el-gr.json'
@@ -228,10 +227,6 @@ vi.mock('@renderer/components/ObsidianExportPopup', () => ({
 
 vi.mock('@renderer/components/popups/PromptPopup', () => ({
   default: { show: hookMocks.promptShow }
-}))
-
-vi.mock('@renderer/components/SaveToKnowledgePopup', () => ({
-  default: { showForTopic: hookMocks.saveToKnowledge }
 }))
 
 // The confirm-and-run dialog itself is covered by its own unit test; here we just let it run
@@ -1184,7 +1179,6 @@ describe('HistoryRecordsView assistant mode', () => {
       'Clear messages',
       '',
       'Save to notes',
-      'Save to knowledge base',
       'ExportExport as ImageExport as MarkdownExport as Markdown with ReasoningExport as WordExport to NotionExport to YuqueExport to ObsidianExport to JoplinExport to Siyuan',
       'CopyCopy as ImageCopy as MarkdownCopy as Plain Text',
       '',

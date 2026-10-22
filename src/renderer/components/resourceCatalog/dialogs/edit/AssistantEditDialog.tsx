@@ -63,7 +63,6 @@ import {
   EditDialogShell,
   type EditDialogTab,
   FieldLabelWithHelp,
-  KnowledgeBaseField,
   type ModelLabels,
   PromptVariablesPopover,
   setFormValues,
@@ -111,13 +110,13 @@ type AssistantEditFormValues = {
 
 type CustomParameter = AssistantFormState['customParameters'][number]
 type CustomParameterType = CustomParameter['type']
-type AssistantToolTab = 'tools.mcp' | 'tools.knowledge'
+type AssistantToolTab = 'tools.mcp'
 
 const logger = loggerService.withContext('AssistantEditDialog')
 const UI_DEFAULT_MAX_TOKENS = 4096
 
 function isAssistantToolTab(value: string): value is AssistantToolTab {
-  return value === 'tools.mcp' || value === 'tools.knowledge'
+  return value === 'tools.mcp'
 }
 
 function defaultValuesForAssistant(resource: AssistantEditDialogResource): AssistantEditFormValues {
@@ -246,10 +245,7 @@ function AssistantEditDialogContent({
       {
         id: 'tools',
         label: t('library.config.dialogs.edit.tools_tab'),
-        children: [
-          { id: 'tools.knowledge', label: t('library.config.dialogs.edit.knowledge_tab') },
-          { id: 'tools.mcp', label: t('library.config.agent.section.tools.tab.mcp') }
-        ]
+        children: [{ id: 'tools.mcp', label: t('library.config.agent.section.tools.tab.mcp') }]
       }
     ],
     [t]
@@ -409,13 +405,7 @@ function AssistantEditDialogContent({
         </TabsContent>
         {isAssistantToolTab(activeTab) ? (
           <TabsContent value={activeTab} forceMount className="m-0">
-            {activeTab === 'tools.mcp' ? (
-              <AssistantToolsFields form={form} portalContainer={dialogContentElement} />
-            ) : (
-              <div className="grid gap-4">
-                <KnowledgeBaseField form={form} portalContainer={dialogContentElement} />
-              </div>
-            )}
+            <AssistantToolsFields form={form} portalContainer={dialogContentElement} />
           </TabsContent>
         ) : null}
         <TabsContent value="advanced" forceMount hidden={activeTab !== 'advanced'} className="m-0">

@@ -17,10 +17,6 @@ vi.mock('@renderer/utils/assistant', () => ({
   isSupportedToolUse: (...args: unknown[]) => mockIsSupportedToolUse(...args)
 }))
 
-vi.mock('@renderer/components/composer/tools/components/KnowledgeBaseButton', () => ({
-  KnowledgeBaseToolRuntime: () => null
-}))
-
 vi.mock('@renderer/components/composer/tools/components/QuickPhrasesButton', () => ({
   QuickPhrasesToolRuntime: () => null
 }))
@@ -61,9 +57,9 @@ describe('composer tool visibility', () => {
       } as any
     })
 
-    expect(tools.map((tool) => tool.key)).toEqual(
-      expect.arrayContaining(['web_search', 'generate_image', 'knowledge_base'])
-    )
+    expect(tools.map((tool) => tool.key)).toEqual(expect.arrayContaining(['web_search', 'generate_image']))
+    // (cherry-lite) the knowledge-base composer tool was removed with the KB feature.
+    expect(tools.map((tool) => tool.key)).not.toContain('knowledge_base')
   })
 
   it('keeps dictation available without mounting assistant tools in an unlinked chat with a default model', () => {
@@ -88,13 +84,13 @@ describe('composer tool visibility', () => {
     expect(getToolsForScope('quick-assistant', { model }).map((tool) => tool.key)).not.toContain('mcp_status')
   })
 
-  it('makes knowledge selection discoverable in Agent Session scope', () => {
+  it('no longer offers knowledge selection in Agent Session scope', () => {
     const tools = getToolsForScope(TopicType.Session, {
       model: { id: 'agent-model', providerId: 'provider-1', name: 'Agent model' } as any,
       session: { agentId: 'agent-1', knowledgeBaseIds: [] }
     })
 
-    expect(tools.map((tool) => tool.key)).toContain('knowledge_base')
+    expect(tools.map((tool) => tool.key)).not.toContain('knowledge_base')
   })
 
   it('exposes shared dictation only in Chat, Agent Session, and Painting composers', () => {

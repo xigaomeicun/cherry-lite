@@ -74,10 +74,6 @@ const SIDEBAR_APP_DEFINITIONS = [
     routePrefix: '/app/translate'
   },
   {
-    id: 'knowledge',
-    routePrefix: '/app/knowledge'
-  },
-  {
     id: 'files',
     routePrefix: '/app/files'
   },

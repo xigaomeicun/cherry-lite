@@ -1,5 +1,3 @@
-import type { ReactNode } from 'react'
-
 import type { DeleteMessageOptions, MessageDeleteAvailability } from '@renderer/hooks/chat/ChatWriteContext'
 import type { SerializedError } from '@renderer/types/error'
 import type { FileMetadata } from '@renderer/types/file'
@@ -28,6 +26,7 @@ import type {
 import type { Model } from '@shared/data/types/model'
 import type { TranslateLanguage } from '@shared/data/types/translate'
 import type { FileUrlString } from '@shared/types/file'
+import type { ReactNode } from 'react'
 
 import type { ActionAvailabilityInput } from '../actions/actionTypes'
 
@@ -364,7 +363,6 @@ export interface MessageListActions {
   saveCodeBlock?: (data: { msgBlockId: string; originalContent: string; newContent: string }) => void | Promise<void>
   saveTextFile?: (fileName: string, content: string) => string | null | void | Promise<string | null | void>
   saveImage?: (fileName: string, dataUrl: string) => boolean | Promise<boolean>
-  saveToKnowledge?: (message: MessageExportView) => void | Promise<void>
   exportMessageAsMarkdown?: (message: MessageExportView, includeReasoning?: boolean) => void | Promise<void>
   exportToNotes?: (message: MessageExportView) => void | Promise<void>
   exportToWord?: (markdown: string, title: string) => void | Promise<void>

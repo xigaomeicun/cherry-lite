@@ -41,7 +41,6 @@ const KNOWN_NAVIGATION_ROUTES = [
   '/app/translate',
   '/app/files',
   '/app/notes',
-  '/app/knowledge',
   '/app/launchpad',
   '/app/agents',
   '/settings/general',

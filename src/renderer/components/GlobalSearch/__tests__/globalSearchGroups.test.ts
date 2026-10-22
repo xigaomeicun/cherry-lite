@@ -193,7 +193,7 @@ describe('globalSearchGroups', () => {
     ).toEqual(['assistant'])
   })
 
-  it('includes knowledge bases in all search and supports knowledge filtering', () => {
+  it('no longer searches or renders knowledge bases (feature removed)', () => {
     const response: EntitySearchResponse = {
       query: 'docs',
       groups: [
@@ -211,8 +211,7 @@ describe('globalSearchGroups', () => {
       ]
     }
 
-    expect(getGlobalSearchTypes('all')).toEqual(['topic', 'session', 'assistant', 'agent', 'knowledge-base'])
-    expect(getGlobalSearchTypes('knowledge')).toEqual(['knowledge-base'])
+    expect(getGlobalSearchTypes('all')).toEqual(['topic', 'session', 'assistant', 'agent'])
     expect(
       buildGlobalSearchGroups({
         query: 'docs',
@@ -220,12 +219,7 @@ describe('globalSearchGroups', () => {
         recentItems: [],
         response
       })
-    ).toEqual([
-      expect.objectContaining({
-        id: 'knowledge-base',
-        items: [expect.objectContaining({ id: 'knowledge-base:knowledge-1' })]
-      })
-    ])
+    ).toEqual([])
   })
 
   it('creates entity-level recent entries and skips coarse chat routes', () => {

@@ -487,15 +487,15 @@ describe('app Sidebar', () => {
   })
 
   it('removes a sidebar app favorite from the context menu', () => {
-    mocks.sidebarFavorites = [appFavorite('assistants'), appFavorite('knowledge'), appFavorite('files')]
+    mocks.sidebarFavorites = [appFavorite('assistants'), appFavorite('notes'), appFavorite('files')]
 
     render(<Sidebar />)
 
-    expect(screen.getByTestId('sidebar-menu-sidebar.remove-app.knowledge')).toHaveTextContent(
+    expect(screen.getByTestId('sidebar-menu-sidebar.remove-app.notes')).toHaveTextContent(
       'launchpad.unpin_from_sidebar'
     )
 
-    fireEvent.click(screen.getByTestId('sidebar-menu-sidebar.remove-app.knowledge'))
+    fireEvent.click(screen.getByTestId('sidebar-menu-sidebar.remove-app.notes'))
 
     expect(mocks.setSidebarFavorites).toHaveBeenCalledWith([appFavorite('assistants'), appFavorite('files')])
   })
@@ -503,7 +503,7 @@ describe('app Sidebar', () => {
   it('allows removing the chat assistant from the sidebar when other apps remain', () => {
     mocks.sidebarFavorites = [
       { type: 'app', id: 'assistants' },
-      { type: 'app', id: 'knowledge' }
+      { type: 'app', id: 'notes' }
     ]
     render(<Sidebar />)
 
@@ -511,7 +511,7 @@ describe('app Sidebar', () => {
 
     fireEvent.click(screen.getByTestId('sidebar-menu-sidebar.remove-app.assistants'))
 
-    expect(mocks.setSidebarFavorites).toHaveBeenCalledWith([{ type: 'app', id: 'knowledge' }])
+    expect(mocks.setSidebarFavorites).toHaveBeenCalledWith([{ type: 'app', id: 'notes' }])
   })
 
   it('disables removing the last sidebar app', () => {
@@ -526,12 +526,12 @@ describe('app Sidebar', () => {
 
   it('opens the launchpad in a new tab from the manage sidebar context menu', async () => {
     const user = userEvent.setup()
-    mocks.sidebarFavorites = [appFavorite('knowledge')]
+    mocks.sidebarFavorites = [appFavorite('notes')]
 
     render(<Sidebar />)
 
-    const knowledgeItem = screen.getByRole('group', { name: 'knowledge' })
-    const manageSidebar = within(knowledgeItem).getByRole('button', { name: 'Manage Sidebar' })
+    const notesItem = screen.getByRole('group', { name: 'notes' })
+    const manageSidebar = within(notesItem).getByRole('button', { name: 'Manage Sidebar' })
 
     await user.click(manageSidebar)
 
@@ -542,16 +542,16 @@ describe('app Sidebar', () => {
   })
 
   it('reorders sidebar favorites through a single mixed drag', () => {
-    mocks.sidebarFavorites = [appFavorite('assistants'), appFavorite('knowledge'), appFavorite('files')]
+    mocks.sidebarFavorites = [appFavorite('assistants'), appFavorite('notes'), appFavorite('files')]
 
     render(<Sidebar />)
-    // Mixed list is [assistants, knowledge, files]; drag files to front.
+    // Mixed list is [assistants, notes, files]; drag files to front.
     act(() => mocks.onEntriesReorder?.({ oldIndex: 2, newIndex: 0 }))
 
     expect(mocks.setSidebarFavorites).toHaveBeenCalledWith([
       appFavorite('files'),
       appFavorite('assistants'),
-      appFavorite('knowledge')
+      appFavorite('notes')
     ])
   })
 

@@ -968,28 +968,6 @@ const Sessions = ({
     [getSessionExportOptions, notesPath]
   )
 
-  const handleSaveSessionToKnowledge = useCallback(
-    async (session: AgentSessionEntity) => {
-      try {
-        const [{ getAgentSessionExportTitle, getAgentSessionMessagesForExport }, { default: SaveToKnowledgePopup }] =
-          await Promise.all([
-            import('@renderer/services/agentSessionExport'),
-            import('@renderer/components/SaveToKnowledgePopup')
-          ])
-        const title = getAgentSessionExportTitle(session)
-        const messages = await getAgentSessionMessagesForExport(session, getSessionExportOptions(session))
-        const result = await SaveToKnowledgePopup.showForMessages(messages, title)
-        if (result?.success) {
-          toast.success(t('chat.save.topic.knowledge.success', { count: result.savedCount }))
-        }
-      } catch (err) {
-        logger.error('Failed to save agent session to knowledge base', { err, sessionId: session.id })
-        toast.error(t('chat.save.topic.knowledge.error.save_failed'))
-      }
-    },
-    [getSessionExportOptions, t]
-  )
-
   const handleCopySessionMarkdown = useCallback(
     async (session: AgentSessionEntity) => {
       const { copyAgentSessionAsMarkdown } = await import('@renderer/services/agentSessionExport')
@@ -1024,9 +1002,8 @@ const Sessions = ({
 
   const handleExportSessionWord = useCallback(
     async (session: AgentSessionEntity) => {
-      const { agentSessionToMarkdown, getAgentSessionExportTitle } = await import(
-        '@renderer/services/agentSessionExport'
-      )
+      const { agentSessionToMarkdown, getAgentSessionExportTitle } =
+        await import('@renderer/services/agentSessionExport')
       const title = getAgentSessionExportTitle(session)
       const markdown = await agentSessionToMarkdown(session, undefined, undefined, getSessionExportOptions(session))
       await ipcApi.request('export.word.from_markdown', {
@@ -1935,7 +1912,6 @@ const Sessions = ({
       onExportSiyuan: handleExportSessionSiyuan,
       onExportWord: handleExportSessionWord,
       onExportYuque: handleExportSessionYuque,
-      onSaveToKnowledge: handleSaveSessionToKnowledge,
       onSaveToNotes: handleSaveSessionToNotes
     }),
     [
@@ -1953,7 +1929,6 @@ const Sessions = ({
       handleExportSessionSiyuan,
       handleExportSessionWord,
       handleExportSessionYuque,
-      handleSaveSessionToKnowledge,
       handleSaveSessionToNotes
     ]
   )

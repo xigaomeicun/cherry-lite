@@ -17,7 +17,6 @@ import { externalAppRequestSchemas } from './externalApp'
 import { type FileEventSchemas, fileRequestSchemas } from './file'
 import { fileProcessingRequestSchemas } from './fileProcessing'
 import { type HermesDashboardEventSchemas, hermesDashboardRequestSchemas } from './hermesDashboard'
-import { knowledgeRequestSchemas } from './knowledge'
 import { localModelRequestSchemas } from './localModel'
 import { type McpEventSchemas, mcpRequestSchemas } from './mcp'
 import type { MiniAppEventSchemas } from './miniApp'
@@ -69,7 +68,6 @@ export const ipcRequestSchemas = {
   ...hermesDashboardRequestSchemas,
   ...fileRequestSchemas,
   ...fileProcessingRequestSchemas,
-  ...knowledgeRequestSchemas,
   ...localModelRequestSchemas,
   ...mcpRequestSchemas,
   ...navigationRequestSchemas,

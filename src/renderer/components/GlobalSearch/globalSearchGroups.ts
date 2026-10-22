@@ -17,7 +17,7 @@ export const GLOBAL_MESSAGE_SEARCH_GROUP_COLLAPSED_LIMIT = 3
 export const GLOBAL_SEARCH_ENTITY_GROUP_COLLAPSED_LIMIT = 5
 export const GLOBAL_SEARCH_MESSAGE_PREVIEW_LIMIT = 5
 
-export type GlobalSearchFilter = 'all' | 'topic' | 'session' | 'assistant' | 'agent' | 'knowledge'
+export type GlobalSearchFilter = 'all' | 'topic' | 'session' | 'assistant' | 'agent'
 export type GlobalMessageSearchSourceFilter = 'all' | 'topic' | 'session'
 type GlobalTopicMessageSearchResult = TopicMessageContentSearchItem & { sourceType: 'topic' }
 type GlobalSessionMessageSearchResult = SessionMessageContentSearchItem & { sourceType: 'session' }
@@ -89,12 +89,12 @@ export type GlobalSearchPanelGroup = {
 }
 
 const FILTER_TYPES: Record<GlobalSearchFilter, EntitySearchType[]> = {
-  all: ['topic', 'session', 'assistant', 'agent', 'knowledge-base'],
+  // (cherry-lite) knowledge bases are no longer searchable — the KB feature was removed.
+  all: ['topic', 'session', 'assistant', 'agent'],
   topic: ['topic'],
   session: ['session'],
   assistant: ['assistant'],
-  agent: ['agent'],
-  knowledge: ['knowledge-base']
+  agent: ['agent']
 }
 
 const INTERNAL_ROUTE_PREFIXES = ['/app/', '/settings']
@@ -330,7 +330,6 @@ export function buildGlobalSearchGroups({
   const includeSession = filter === 'all' || filter === 'session'
   const includeAssistant = filter === 'all' || filter === 'assistant'
   const includeAgent = filter === 'all' || filter === 'agent'
-  const includeKnowledge = filter === 'all' || filter === 'knowledge'
   const shouldCollapseEntityGroup = (groupId: GlobalSearchGroupId) =>
     filter === 'all' && (groupId === 'topic' || groupId === 'session') && !expandedGroupIds.has(groupId)
   const toPanelGroup = (groupId: GlobalSearchGroupId, items: GlobalSearchPanelItem[]): GlobalSearchPanelGroup => {
@@ -395,15 +394,6 @@ export function buildGlobalSearchGroups({
       result
     }))
     if (items.length > 0) groups.push({ id: 'agent', items })
-  }
-
-  if (includeKnowledge) {
-    const items = (itemsByType.get('knowledge-base') ?? []).map((result) => ({
-      kind: 'result' as const,
-      id: `${result.type}:${result.id}`,
-      result
-    }))
-    if (items.length > 0) groups.push({ id: 'knowledge-base', items })
   }
 
   return groups

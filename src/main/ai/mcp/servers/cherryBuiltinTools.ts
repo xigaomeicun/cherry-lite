@@ -14,8 +14,7 @@
  * protocol — it stays unaware of their domain logic:
  * - {@link CherryAutonomyTools} (`…__cron`, `…__notify`, `…__config`) — schedules,
  *   notifies, and self-configures the agent.
- * - {@link CherryKnowledgeTools} (`…__kb_search`, `…__kb_read`, `…__kb_list`,
- *   `…__kb_manage`) — owns knowledge-base exposure and per-call scope authorization.
+ * - (cherry-lite) the knowledge-base tools (`…__kb_*`) were removed with the KB feature.
  * - {@link CherryCliTools} (`…__cli_list`, `…__cli_search`, `…__cli_install`) —
  *   delegates live discovery and approved installation to BinaryManager.
  * - {@link CherryDocumentTools} (`…__to_markdown`) — converts workspace, agent-data, and
@@ -67,7 +66,6 @@ import * as z from 'zod'
 import { type CherryAgentContext, CherryAutonomyTools } from './cherryAutonomyTools'
 import { CherryCliTools } from './cherryCliTools'
 import { type CherryDocumentContext, CherryDocumentTools } from './cherryDocumentTools'
-import { CherryKnowledgeTools } from './cherryKnowledgeTools'
 
 export type { CherryAgentContext }
 export type CherryBuiltinToolsContext = CherryAgentContext & CherryDocumentContext
@@ -222,18 +220,11 @@ export class CherryBuiltinToolsServer {
 
   constructor(agentContext: CherryBuiltinToolsContext) {
     const autonomy = new CherryAutonomyTools(agentContext)
-    const knowledge = new CherryKnowledgeTools(agentContext)
     const cli = new CherryCliTools()
     const documents = new CherryDocumentTools(agentContext)
     this.mcpServer = new McpServer({ name: 'cherry-tools', version: '1.0.0' }, { capabilities: { tools: {} } })
     this.mcpServer.server.setRequestHandler(ListToolsRequestSchema, async () => ({
-      tools: [
-        ...listCherryBuiltinTools(),
-        ...knowledge.tools(),
-        ...autonomy.tools(),
-        ...cli.tools(),
-        ...documents.tools()
-      ]
+      tools: [...listCherryBuiltinTools(), ...autonomy.tools(), ...cli.tools(), ...documents.tools()]
     }))
     this.mcpServer.server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
       const { name } = request.params
@@ -245,9 +236,6 @@ export class CherryBuiltinToolsServer {
       }
       if (autonomy.handles(name)) {
         return autonomy.call(name, request.params.arguments ?? {})
-      }
-      if (knowledge.handles(name)) {
-        return knowledge.call(name, request.params.arguments)
       }
       return callCherryBuiltinTool(name, request.params.arguments, extra.signal)
     })

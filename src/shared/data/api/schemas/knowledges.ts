@@ -2,7 +2,7 @@
  * Knowledge DataApi schemas.
  *
  * Runtime/index operations are exposed through the KnowledgeService IpcApi routes
- * declared in `src/shared/ipc/schemas/knowledge`, not through DataApi.
+ * declared in the (cherry-lite: since removed) knowledge IPC routes, not through DataApi.
  */
 
 import type { CursorPaginationResponse } from '@shared/data/api/types'

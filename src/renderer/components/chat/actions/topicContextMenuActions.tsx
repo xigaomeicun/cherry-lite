@@ -7,7 +7,6 @@ import type { TFunction } from 'i18next'
 import {
   BrushCleaning,
   Copy,
-  Database,
   Edit3,
   ExternalLink,
   FileText,
@@ -70,7 +69,6 @@ export interface TopicActionContext {
   onOpenInNewTab?: TopicMenuHandler
   onOpenInNewWindow?: TopicMenuHandler
   onPinTopic: TopicMenuHandler
-  onSaveToKnowledge: TopicMenuHandler
   onSaveToNotes: TopicMenuHandler
   onSetPanePosition?: (position: TopicTabPosition) => void | Promise<void>
   onStartRename: TopicMenuHandler
@@ -175,11 +173,6 @@ topicActionRegistry.registerCommand({
 topicActionRegistry.registerCommand({
   id: 'topic.save-notes',
   run: ({ onSaveToNotes, topic }) => onSaveToNotes(topic)
-})
-
-topicActionRegistry.registerCommand({
-  id: 'topic.save-knowledge',
-  run: ({ onSaveToKnowledge, topic }) => onSaveToKnowledge(topic)
 })
 
 topicActionRegistry.registerCommand({
@@ -368,16 +361,6 @@ topicActionRegistry.registerAction({
   icon: () => <NotebookPen size={14} />,
   group: 'share',
   order: 50,
-  surface: 'menu'
-})
-
-topicActionRegistry.registerAction({
-  id: 'topic.save-knowledge',
-  commandId: 'topic.save-knowledge',
-  label: ({ t }) => t('chat.save.topic.knowledge.menu_title'),
-  icon: () => <Database size={14} />,
-  group: 'share',
-  order: 60,
   surface: 'menu'
 })
 

@@ -809,7 +809,7 @@ describe('GlobalSearchPanel', () => {
         enabled: true,
         query: expect.objectContaining({
           q: 'assistant',
-          types: ['topic', 'session', 'assistant', 'agent', 'knowledge-base']
+          types: ['topic', 'session', 'assistant', 'agent']
         })
       })
     )
@@ -1004,33 +1004,20 @@ describe('GlobalSearchPanel', () => {
           enabled: true,
           query: expect.objectContaining({
             q: 'plan',
-            types: ['topic', 'session', 'assistant', 'agent', 'knowledge-base']
+            types: ['topic', 'session', 'assistant', 'agent']
           })
         })
       )
     })
   })
 
-  it('updates query types when the knowledge filter is selected', async () => {
+  it('has no knowledge search filter (knowledge-base feature removed)', async () => {
     const user = userEvent.setup()
 
     render(<GlobalSearchPanel onClose={mocks.onClose} />)
 
     await typeSearchQuery(user, 'docs')
-    await user.click(screen.getByRole('button', { name: 'Search type: Knowledge' }))
-
-    await waitFor(() => {
-      expect(mocks.useQuery).toHaveBeenLastCalledWith(
-        '/search/entities',
-        expect.objectContaining({
-          enabled: true,
-          query: expect.objectContaining({
-            q: 'docs',
-            types: ['knowledge-base']
-          })
-        })
-      )
-    })
+    expect(screen.queryByRole('button', { name: 'Search type: Knowledge' })).not.toBeInTheDocument()
   })
 
   it('does not emit a topic selection when no target tab is opened', async () => {
@@ -2503,41 +2490,6 @@ describe('GlobalSearchPanel', () => {
         })
       )
     })
-  })
-
-  it('opens the active knowledge base result with Enter', async () => {
-    const user = userEvent.setup()
-    mocks.queryResult = {
-      query: 'docs',
-      groups: [
-        {
-          type: 'knowledge-base',
-          items: [
-            {
-              type: 'knowledge-base',
-              id: 'knowledge-1',
-              title: 'Docs',
-              emoji: '📚',
-              target: { knowledgeBaseId: 'knowledge-1' }
-            }
-          ]
-        }
-      ]
-    }
-
-    render(<GlobalSearchPanel onClose={mocks.onClose} />)
-
-    const input = screen.getByLabelText('Search conversations, tasks, assistants, agents, and knowledge...')
-    await user.type(input, 'docs')
-    await screen.findByText('Docs')
-    expect(screen.getAllByText('📚')).not.toHaveLength(0)
-    await user.keyboard('{Enter}')
-
-    expect(mocks.openTab).toHaveBeenCalledWith('/app/knowledge')
-    await waitFor(() => {
-      expect(mocks.eventEmit).toHaveBeenCalledWith('GLOBAL_SEARCH_SELECT_KNOWLEDGE_BASE', 'knowledge-1')
-    })
-    expect(mocks.onClose).toHaveBeenCalledTimes(1)
   })
 
   it('refreshes recent topic titles from /topics/:id on open', async () => {

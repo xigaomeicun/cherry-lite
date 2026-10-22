@@ -1,6 +1,6 @@
 import type { SidebarAppId } from '@renderer/utils/sidebar'
 import type { LucideIcon } from 'lucide-react'
-import { FileSearch, Folder, Languages, MessageSquare, MousePointerClick, NotepadText, Palette } from 'lucide-react'
+import { Folder, Languages, MessageSquare, MousePointerClick, NotepadText, Palette } from 'lucide-react'
 
 /**
  * Icon component for each built-in sidebar app. Keyed by the `SidebarAppId` union so the
@@ -13,7 +13,6 @@ export const SIDEBAR_ICON_COMPONENTS: Record<SidebarAppId, LucideIcon> = {
   agents: MousePointerClick,
   paintings: Palette,
   translate: Languages,
-  knowledge: FileSearch,
   files: Folder,
   notes: NotepadText
 }

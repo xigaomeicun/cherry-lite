@@ -7,7 +7,6 @@
 import type * as NodeFs from 'node:fs'
 import path from 'node:path'
 
-import type * as KnowledgeLookup from '@main/ai/tools/knowledgeLookup'
 import type { AgentEntity } from '@shared/data/api/schemas/agents'
 import type { AgentSessionEntity } from '@shared/data/api/schemas/agentSessions'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -19,7 +18,6 @@ const {
   mockRealpath,
   mockGetPath,
   mockPreferenceGet,
-  mockListOrOutlineKnowledge,
   mockMemoryConstructor,
   mockEnsureManagedDirectory
 } = vi.hoisted(() => ({
@@ -29,7 +27,6 @@ const {
   mockRealpath: vi.fn(),
   mockGetPath: vi.fn(() => '/tmp/managed-workspaces'),
   mockPreferenceGet: vi.fn(() => undefined),
-  mockListOrOutlineKnowledge: vi.fn(),
   mockMemoryConstructor: vi.fn(),
   mockEnsureManagedDirectory: vi.fn()
 }))
@@ -103,13 +100,6 @@ vi.mock('@data/services/AgentChannelService', () => ({
 
 vi.mock('@data/services/AgentService', () => ({
   agentService: { getAgent: mockGetAgent }
-}))
-
-// Spread the real module so the kb_* tool descriptions/schemas stay genuine; only the core call is
-// spied, to observe the id set the scope closure actually hands down.
-vi.mock('@main/ai/tools/knowledgeLookup', async (importOriginal) => ({
-  ...(await importOriginal<typeof KnowledgeLookup>()),
-  listOrOutlineKnowledge: mockListOrOutlineKnowledge
 }))
 
 vi.mock('@main/ai/mcp/servers/agentMemory', () => ({
@@ -318,23 +308,12 @@ describe('buildMcpServers', () => {
     expect(names).not.toContain('kb_manage')
   })
 
-  it('exposes the kb_* tools from cherry-tools when the agent is bound to a knowledge base', async () => {
+  it('never exposes kb_* tools (knowledge-base feature removed), even for a bound agent or the built-in Assistant', async () => {
     const boundAgent = { id: 'agent-1', mcps: [], knowledgeBaseIds: ['kb_a'] } as unknown as AgentEntity
     mockGetAgent.mockReturnValue(boundAgent)
-    const names = await cherryToolNames(buildMcpServers(session, boundAgent, WITHOUT_HOST_TOOLS))
-    expect(names).toEqual(expect.arrayContaining(['kb_search', 'kb_read', 'kb_list', 'kb_manage']))
-  })
+    const boundNames = await cherryToolNames(buildMcpServers(session, boundAgent, WITHOUT_HOST_TOOLS))
+    expect(boundNames).not.toContain('kb_search')
 
-  it('exposes the kb_* tools from a frozen composer selection when the Agent has no binding', async () => {
-    mockGetAgent.mockReturnValue(agent)
-    const names = await cherryToolNames(
-      buildMcpServers(session, agent, WITHOUT_HOST_TOOLS, undefined, undefined, undefined, ['kb-selected'])
-    )
-
-    expect(names).toEqual(expect.arrayContaining(['kb_search', 'kb_read', 'kb_list', 'kb_manage']))
-  })
-
-  it('exposes every cherry-tool to the built-in Assistant without a knowledge binding', async () => {
     const assistant = {
       id: 'agent-1',
       mcps: [],
@@ -342,91 +321,9 @@ describe('buildMcpServers', () => {
       configuration: { builtin_role: 'assistant' }
     } as unknown as AgentEntity
     mockGetAgent.mockReturnValue(assistant)
-
     const names = await cherryToolNames(buildMcpServers(session, assistant, WITH_HOST_TOOLS))
-
-    expect(names).toEqual(
-      expect.arrayContaining(['kb_search', 'kb_read', 'kb_list', 'kb_manage', 'cli_list', 'cli_search', 'cli_install'])
-    )
-  })
-
-  it('revokes unrestricted knowledge access when the built-in Assistant is deleted', async () => {
-    const assistant = {
-      id: 'agent-1',
-      mcps: [],
-      knowledgeBaseIds: [],
-      configuration: { builtin_role: 'assistant' }
-    } as unknown as AgentEntity
-    mockGetAgent.mockReturnValue(assistant)
-    const servers = buildMcpServers(session, assistant, WITH_HOST_TOOLS)
-
-    expect(await cherryToolNames(servers)).toContain('kb_search')
-
-    mockGetAgent.mockReturnValue(undefined)
-    expect(await cherryToolNames(servers)).not.toContain('kb_search')
-  })
-
-  /** Run kb_list through the server and report the id set the scope closure handed to the core. */
-  async function scopePassedToKnowledgeCore(result: ReturnType<typeof buildMcpServers>): Promise<readonly string[]> {
-    if (!result) throw new Error('buildMcpServers returned no servers')
-    mockListOrOutlineKnowledge.mockReset().mockResolvedValue({ bases: [] })
-    const instance = (
-      result['cherry-tools'] as unknown as {
-        instance: {
-          server: { _requestHandlers: Map<string, (req: unknown, extra: unknown) => Promise<unknown>> }
-        }
-      }
-    ).instance
-    const callHandler = instance.server._requestHandlers.get('tools/call')
-    if (!callHandler) throw new Error('tools/call handler not registered')
-    await callHandler({ method: 'tools/call', params: { name: 'kb_list', arguments: {} } }, {})
-    expect(mockListOrOutlineKnowledge).toHaveBeenCalledTimes(1)
-    return mockListOrOutlineKnowledge.mock.calls[0][1]
-  }
-
-  // Tool *visibility* cannot catch a swapped `resolveKnowledgeBaseScope(selected, configured)` here —
-  // both orders leave the scope non-empty, so the tools show up either way while the trust boundary
-  // silently inverts. These two pin the resolved id set instead.
-  it('narrows a bound Agent to the frozen composer selection', async () => {
-    const boundAgent = { id: 'agent-1', mcps: [], knowledgeBaseIds: ['kb-a', 'kb-b'] } as unknown as AgentEntity
-    mockGetAgent.mockReturnValue(boundAgent)
-
-    const scope = await scopePassedToKnowledgeCore(
-      buildMcpServers(session, boundAgent, WITHOUT_HOST_TOOLS, undefined, undefined, undefined, ['kb-a'])
-    )
-
-    expect(scope).toEqual(['kb-a'])
-  })
-
-  it('keeps the Agent binding when the frozen composer selection falls outside it', async () => {
-    const boundAgent = { id: 'agent-1', mcps: [], knowledgeBaseIds: ['kb-bound'] } as unknown as AgentEntity
-    mockGetAgent.mockReturnValue(boundAgent)
-
-    const scope = await scopePassedToKnowledgeCore(
-      buildMcpServers(session, boundAgent, WITHOUT_HOST_TOOLS, undefined, undefined, undefined, ['kb-selected'])
-    )
-
-    expect(scope).toEqual(['kb-bound'])
-    expect(scope).not.toContain('kb-selected')
-  })
-
-  it('fails closed when the Agent backing a frozen composer selection is deleted', async () => {
-    mockGetAgent.mockReturnValueOnce(agent).mockReturnValueOnce(undefined)
-    const servers = buildMcpServers(session, agent, WITHOUT_HOST_TOOLS, undefined, undefined, undefined, [
-      'kb-selected'
-    ])
-
-    expect(await cherryToolNames(servers)).toContain('kb_search')
-    expect(await cherryToolNames(servers)).not.toContain('kb_search')
-  })
-
-  it('re-reads knowledge bindings for an already-created cherry-tools server', async () => {
-    const boundAgent = { id: 'agent-1', mcps: [], knowledgeBaseIds: ['kb_a'] } as unknown as AgentEntity
-    mockGetAgent.mockReturnValueOnce(boundAgent).mockReturnValueOnce({ ...boundAgent, knowledgeBaseIds: [] })
-    const servers = buildMcpServers(session, boundAgent, WITHOUT_HOST_TOOLS)
-
-    expect(await cherryToolNames(servers)).toContain('kb_read')
-    expect(await cherryToolNames(servers)).not.toContain('kb_read')
+    expect(names).toEqual(expect.arrayContaining(['cli_list', 'cli_search', 'cli_install']))
+    expect(names).not.toContain('kb_search')
   })
 
   it('injects assistant file tools only for Cherry Assistant sessions', () => {

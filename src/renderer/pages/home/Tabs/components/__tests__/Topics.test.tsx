@@ -313,10 +313,6 @@ vi.mock('@renderer/components/popups/PromptPopup', () => ({
   default: { show: vi.fn() }
 }))
 
-vi.mock('@renderer/components/SaveToKnowledgePopup', () => ({
-  default: { showForTopic: vi.fn() }
-}))
-
 vi.mock('@renderer/services/ExportService', () => ({
   exportMarkdownToJoplin: vi.fn(),
   exportMarkdownToSiyuan: vi.fn(),
@@ -1585,7 +1581,6 @@ describe('Topics', () => {
       'Clear messages',
       '',
       'Save to notes',
-      'Save to knowledge base',
       'ExportExport as ImageExport as MarkdownExport as Markdown with ReasoningExport as WordExport to NotionExport to YuqueExport to ObsidianExport to JoplinExport to Siyuan',
       'CopyCopy as ImageCopy as MarkdownCopy as Plain Text',
       '',

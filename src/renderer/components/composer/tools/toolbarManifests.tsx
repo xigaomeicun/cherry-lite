@@ -1,5 +1,5 @@
 import type { TFunction } from 'i18next'
-import { FileSearch, Globe, Image, Mic, Paperclip, Pointer, Zap } from 'lucide-react'
+import { Globe, Image, Mic, Paperclip, Pointer, Zap } from 'lucide-react'
 
 import { type ComposerToolScope, type ToolComposerToolbarContribution, TopicType } from './types'
 
@@ -58,17 +58,6 @@ export const WEB_SEARCH_TOOLBAR_MANIFEST: ComposerToolbarManifestDefinition = {
   visibleInScopes: [TopicType.Chat]
 }
 
-export const KNOWLEDGE_BASE_TOOLBAR_MANIFEST: ComposerToolbarManifestDefinition = {
-  toolbar: {
-    id: 'knowledge-base',
-    kind: 'panel',
-    order: 40,
-    icon: <FileSearch />
-  },
-  label: (t) => t('chat.input.knowledge_base'),
-  visibleInScopes: [TopicType.Chat, TopicType.Session]
-}
-
 export const QUICK_PHRASES_TOOLBAR_MANIFEST: ComposerToolbarManifestDefinition = {
   toolbar: {
     id: 'quick-phrases',
@@ -95,7 +84,6 @@ const COMPOSER_TOOLBAR_MANIFESTS: ComposerToolbarManifestDefinition[] = [
   ATTACHMENT_TOOLBAR_MANIFEST,
   GENERATE_IMAGE_TOOLBAR_MANIFEST,
   WEB_SEARCH_TOOLBAR_MANIFEST,
-  KNOWLEDGE_BASE_TOOLBAR_MANIFEST,
   DICTATION_TOOLBAR_MANIFEST,
   QUICK_PHRASES_TOOLBAR_MANIFEST,
   PERMISSION_MODE_TOOLBAR_MANIFEST

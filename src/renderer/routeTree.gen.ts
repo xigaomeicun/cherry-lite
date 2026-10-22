@@ -16,7 +16,6 @@ import { Route as AppBrowserRouteImport } from './routes/app/browser'
 import { Route as AppChatRouteImport } from './routes/app/chat'
 import { Route as AppFilePreviewRouteImport } from './routes/app/file-preview'
 import { Route as AppFilesRouteImport } from './routes/app/files'
-import { Route as AppKnowledgeRouteImport } from './routes/app/knowledge'
 import { Route as AppLaunchpadRouteImport } from './routes/app/launchpad'
 import { Route as AppNotesRouteImport } from './routes/app/notes'
 import { Route as AppReleaseNotesRouteImport } from './routes/app/release-notes'
@@ -97,11 +96,6 @@ const AppFilePreviewRoute = AppFilePreviewRouteImport.update({
 const AppFilesRoute = AppFilesRouteImport.update({
   id: '/files',
   path: '/files',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppKnowledgeRoute = AppKnowledgeRouteImport.update({
-  id: '/knowledge',
-  path: '/knowledge',
   getParentRoute: () => AppRoute,
 } as any)
 const AppLaunchpadRoute = AppLaunchpadRouteImport.update({
@@ -348,7 +342,6 @@ export interface FileRoutesByFullPath {
   '/app/chat': typeof AppChatRoute
   '/app/file-preview': typeof AppFilePreviewRoute
   '/app/files': typeof AppFilesRoute
-  '/app/knowledge': typeof AppKnowledgeRoute
   '/app/launchpad': typeof AppLaunchpadRoute
   '/app/notes': typeof AppNotesRoute
   '/app/release-notes': typeof AppReleaseNotesRoute
@@ -403,7 +396,6 @@ export interface FileRoutesByTo {
   '/app/chat': typeof AppChatRoute
   '/app/file-preview': typeof AppFilePreviewRoute
   '/app/files': typeof AppFilesRoute
-  '/app/knowledge': typeof AppKnowledgeRoute
   '/app/launchpad': typeof AppLaunchpadRoute
   '/app/notes': typeof AppNotesRoute
   '/app/release-notes': typeof AppReleaseNotesRoute
@@ -457,7 +449,6 @@ export interface FileRoutesById {
   '/app/chat': typeof AppChatRoute
   '/app/file-preview': typeof AppFilePreviewRoute
   '/app/files': typeof AppFilesRoute
-  '/app/knowledge': typeof AppKnowledgeRoute
   '/app/launchpad': typeof AppLaunchpadRoute
   '/app/notes': typeof AppNotesRoute
   '/app/release-notes': typeof AppReleaseNotesRoute
@@ -515,7 +506,6 @@ export interface FileRouteTypes {
     | '/app/chat'
     | '/app/file-preview'
     | '/app/files'
-    | '/app/knowledge'
     | '/app/launchpad'
     | '/app/notes'
     | '/app/release-notes'
@@ -570,7 +560,6 @@ export interface FileRouteTypes {
     | '/app/chat'
     | '/app/file-preview'
     | '/app/files'
-    | '/app/knowledge'
     | '/app/launchpad'
     | '/app/notes'
     | '/app/release-notes'
@@ -623,7 +612,6 @@ export interface FileRouteTypes {
     | '/app/chat'
     | '/app/file-preview'
     | '/app/files'
-    | '/app/knowledge'
     | '/app/launchpad'
     | '/app/notes'
     | '/app/release-notes'
@@ -726,13 +714,6 @@ declare module '@tanstack/react-router' {
       path: '/files'
       fullPath: '/app/files'
       preLoaderRoute: typeof AppFilesRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/app/knowledge': {
-      id: '/app/knowledge'
-      path: '/knowledge'
-      fullPath: '/app/knowledge'
-      preLoaderRoute: typeof AppKnowledgeRouteImport
       parentRoute: typeof AppRoute
     }
     '/app/launchpad': {
@@ -1066,7 +1047,6 @@ interface AppRouteChildren {
   AppChatRoute: typeof AppChatRoute
   AppFilePreviewRoute: typeof AppFilePreviewRoute
   AppFilesRoute: typeof AppFilesRoute
-  AppKnowledgeRoute: typeof AppKnowledgeRoute
   AppLaunchpadRoute: typeof AppLaunchpadRoute
   AppNotesRoute: typeof AppNotesRoute
   AppReleaseNotesRoute: typeof AppReleaseNotesRoute
@@ -1081,7 +1061,6 @@ const AppRouteChildren: AppRouteChildren = {
   AppChatRoute: AppChatRoute,
   AppFilePreviewRoute: AppFilePreviewRoute,
   AppFilesRoute: AppFilesRoute,
-  AppKnowledgeRoute: AppKnowledgeRoute,
   AppLaunchpadRoute: AppLaunchpadRoute,
   AppNotesRoute: AppNotesRoute,
   AppReleaseNotesRoute: AppReleaseNotesRoute,

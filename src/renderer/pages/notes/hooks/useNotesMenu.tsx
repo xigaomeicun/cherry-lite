@@ -6,7 +6,7 @@ import { ipcApi } from '@renderer/ipc'
 import { popup } from '@renderer/services/popup'
 import { toast } from '@renderer/services/toast'
 import type { NotesTreeNode } from '@renderer/types/note'
-import { Edit3, FilePlus, FileSearch, Folder, FolderOpen, Sparkles, Star, StarOff, UploadIcon } from 'lucide-react'
+import { Edit3, FilePlus, Folder, FolderOpen, Sparkles, Star, StarOff, UploadIcon } from 'lucide-react'
 import { useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -47,23 +47,6 @@ export const useNotesMenu = ({
     siyuan: 'data.export.menus.siyuan',
     yuque: 'data.export.menus.yuque'
   })
-
-  const handleExportKnowledge = useCallback(
-    async (note: NotesTreeNode) => {
-      try {
-        const { default: SaveToKnowledgePopup } = await import('@renderer/components/SaveToKnowledgePopup')
-        const result = await SaveToKnowledgePopup.showForNote(note)
-
-        if (result?.success) {
-          toast.success(t('notes.export_success', { count: result.savedCount }))
-        }
-      } catch (error) {
-        toast.error(t('notes.export_failed'))
-        logger.error(`Failed to export note to knowledge base: ${error}`)
-      }
-    },
-    [t]
-  )
 
   const handleImageAction = useCallback(
     async (node: NotesTreeNode, platform: 'copyImage' | 'exportImage') => {
@@ -182,22 +165,13 @@ export const useNotesMenu = ({
       )
 
       if (!isFolder) {
-        items.push(
-          {
-            type: 'item',
-            id: 'notes.toggle-star',
-            label: node.isStarred ? t('notes.unstar') : t('notes.star'),
-            icon: node.isStarred ? <StarOff size={14} /> : <Star size={14} />,
-            onSelect: () => onToggleStar(node.id)
-          },
-          {
-            type: 'item',
-            id: 'notes.export-knowledge',
-            label: t('notes.export_knowledge'),
-            icon: <FileSearch size={14} />,
-            onSelect: () => void handleExportKnowledge(node)
-          }
-        )
+        items.push({
+          type: 'item',
+          id: 'notes.toggle-star',
+          label: node.isStarred ? t('notes.unstar') : t('notes.star'),
+          icon: node.isStarred ? <StarOff size={14} /> : <Star size={14} />,
+          onSelect: () => onToggleStar(node.id)
+        })
 
         const exportChildren: CommandContextMenuExtraItem[] = []
         const addExport = (
@@ -275,7 +249,6 @@ export const useNotesMenu = ({
       t,
       handleStartEdit,
       onToggleStar,
-      handleExportKnowledge,
       handleImageAction,
       handleObsidianExport,
       handleDeleteNodeWrapper,

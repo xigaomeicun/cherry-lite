@@ -8,7 +8,6 @@ import type { TopicTabPosition } from '@shared/data/preference/preferenceTypes'
 import type { TFunction } from 'i18next'
 import {
   Copy,
-  Database,
   ExternalLink,
   FileText,
   Hash,
@@ -55,7 +54,6 @@ export interface SessionActionContext {
   onExportYuque?: () => void | Promise<void>
   onOpenInNewTab?: () => void
   onOpenInNewWindow?: () => void
-  onSaveToKnowledge?: () => void | Promise<void>
   onSaveToNotes?: () => void | Promise<void>
   onSetPanePosition?: (position: TopicTabPosition) => void | Promise<void>
   onTogglePin?: () => void
@@ -150,12 +148,6 @@ sessionActionRegistry.registerCommand({
     enabled: !!onSaveToNotes
   }),
   run: ({ onSaveToNotes }) => onSaveToNotes?.()
-})
-
-sessionActionRegistry.registerCommand({
-  id: 'session.save-knowledge',
-  availability: ({ onSaveToKnowledge }) => ({ visible: !!onSaveToKnowledge, enabled: !!onSaveToKnowledge }),
-  run: ({ onSaveToKnowledge }) => onSaveToKnowledge?.()
 })
 
 sessionActionRegistry.registerCommand({
@@ -369,16 +361,6 @@ sessionActionRegistry.registerAction({
   icon: () => <NotebookPen size={14} />,
   group: 'share',
   order: 50,
-  surface: 'menu'
-})
-
-sessionActionRegistry.registerAction({
-  id: 'session.save-knowledge',
-  commandId: 'session.save-knowledge',
-  label: ({ t }) => t('chat.save.topic.knowledge.menu_title'),
-  icon: () => <Database size={14} />,
-  group: 'share',
-  order: 60,
   surface: 'menu'
 })
 
