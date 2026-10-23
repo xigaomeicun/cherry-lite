@@ -17,10 +17,12 @@ vi.mock('@main/utils/appEdition', () => ({ getAppEdition: () => 'global' }))
 // from the persisted rows below — modelling an install seeded before the
 // registry gained that endpoint (#17096). `my-relay` models a later registry
 // id collision with an already-persisted fully custom provider.
-vi.mock('@cherrystudio/provider-registry/node', () => {
+vi.mock('@cherrystudio/provider-registry/node', async () => {
+  const { default: registry } = await import('../../../../../packages/provider-registry/data/providers.json')
   class RegistryLoader {
     loadProviders() {
       return [
+        ...registry.providers.filter(({ id }) => id === 'openai'),
         {
           id: 'cherryin',
           endpointConfigs: {
@@ -69,6 +71,22 @@ vi.mock('@cherrystudio/provider-registry/node', () => {
 
 describe('ProviderService read-time registry merge (#17096)', () => {
   const dbh = setupTestDatabase()
+
+  it('restores OpenAI summary permission for a seed-shaped row with no stored dialect', () => {
+    dbh.db
+      .insert(userProviderTable)
+      .values({
+        providerId: 'openai',
+        presetProviderId: 'openai',
+        name: 'OpenAI',
+        orderKey: 'a0'
+      })
+      .run()
+
+    const provider = providerService.getByProviderId('openai')
+
+    expect(provider.endpointConfigs?.[ENDPOINT_TYPE.OPENAI_RESPONSES]?.dialect?.reasoningSummary).toBe(true)
+  })
 
   it.each(['github', 'yi'])(
     'makes retired %s providers and copies unavailable without deleting data',

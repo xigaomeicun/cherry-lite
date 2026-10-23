@@ -169,7 +169,7 @@ vi.mock('./piMcpExtension', () => ({
 vi.mock('./modelInjection', () => ({
   resolvePiProviderInjectionForSession: mocks.resolveInjection,
   usesPiGateway: mocks.usesPiGateway,
-  materializePiProviderStream: async (injection: any) => ({
+  materializePiProviderStream: async (injection: { providerConfig: unknown; suppressReasoningSummary: boolean }) => ({
     providerConfig: injection.providerConfig,
     streamSimple: mocks.providerStreamSimple
   })
@@ -397,6 +397,7 @@ beforeEach(() => {
   mocks.resolveInjection.mockReturnValue({
     providerName: 'p',
     api: 'anthropic-messages',
+    suppressReasoningSummary: false,
     providerConfig: { name: 'P', baseUrl: 'https://x', apiKey: 'placeholder', api: 'anthropic-messages', models: [] },
     apiKey: 'real-key',
     modelId: 'm',
