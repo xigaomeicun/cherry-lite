@@ -29,7 +29,10 @@ const GATEWAY_GOOGLE_IMAGE_PROVIDER = 'gateway.google.image' as const
  */
 export function isGatewayGeminiImageModel(modelId: string): boolean {
   const normalized = modelId.replace(/^google\//i, '').toLowerCase()
-  return normalized.startsWith('gemini-') && normalized.includes('image')
+  return (
+    (normalized.startsWith('gemini-') && normalized.includes('image')) ||
+    /^(?:gemini-)?nano-banana(?:-|$)/.test(normalized)
+  )
 }
 
 /**
