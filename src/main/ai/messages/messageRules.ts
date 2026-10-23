@@ -165,13 +165,48 @@ export function dropUnansweredApprovals<T extends UIMessage>(messages: T[]): T[]
   })
 }
 
+/** Replay input that is not a JSON object reaches providers as tool_use.input; Anthropic rejects it: "Input should be an object" (#22503).
+ * Drop the whole part (call, result and approval) from replay; the stored/UI part stays untouched.
+ */
+function dropNonObjectToolInputs(messages: UIMessage[]): UIMessage[] {
+  let out: UIMessage[] | undefined
+  messages.forEach((message, messageIndex) => {
+    if (message.role !== 'assistant') return
+    let parts: UIMessage['parts'] | undefined
+    message.parts.forEach((part, partIndex) => {
+      if (
+        isToolUIPart(part) &&
+        (part.state === 'output-error' ||
+          part.state === 'output-available' ||
+          part.state === 'output-denied' ||
+          part.state === 'approval-responded')
+      ) {
+        const input =
+          part.state === 'output-error' ? (part.input ?? ('rawInput' in part ? part.rawInput : undefined)) : part.input
+        const isObject = input !== null && typeof input === 'object' && !Array.isArray(input)
+        if (!isObject) {
+          parts ??= message.parts.slice(0, partIndex)
+          return
+        }
+      }
+      parts?.push(part)
+    })
+    if (parts) {
+      out ??= [...messages]
+      out[messageIndex] = { ...message, parts }
+    }
+  })
+  return out ?? messages
+}
+
 /**
  * The message-shaping pipeline `Agent.stream` runs on its conversion input
  * (`originalMessages` stays un-shaped upstream, so none of this leaks to the UI):
  *
  * render persisted tool-output envelopes back into their <persisted-output> markers →
  * make legacy v1 tool names wire-legal → strip media the model can't accept → drop tool
- * calls parked on an unanswered approval → restore inferable legacy step boundaries →
+ * calls parked on an unanswered approval → drop tool parts with non-object replay inputs →
+ * restore inferable legacy step boundaries →
  * convert, dropping incomplete tool calls that would otherwise dangle without a result →
  * gate media inside tool-result outputs by `toolResultCaps` (wire-aware, see
  * `resolveToolResultMediaCapabilities`; defaults to `caps`) → merge adjacent same-role turns
@@ -185,7 +220,7 @@ export async function toModelMessages(
 ): Promise<ModelMessage[]> {
   const rendered = sanitizeDynamicToolNames(renderPersistedToolOutputs(messages), tools)
   const shaped = restoreLegacyToolStepBoundaries(
-    dropUnansweredApprovals(stripUnsupportedMedia(rendered, caps ?? ALL_MEDIA))
+    dropNonObjectToolInputs(dropUnansweredApprovals(stripUnsupportedMedia(rendered, caps ?? ALL_MEDIA)))
   )
   const model = await convertToModelMessages(shaped, { ignoreIncompleteToolCalls: true, tools })
   const gated = routeToolResultMedia(model, caps ?? ALL_MEDIA, toolResultCaps ?? caps ?? ALL_MEDIA)
