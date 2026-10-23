@@ -1,5 +1,6 @@
 import { usePreference } from '@data/hooks/usePreference'
 import { useModelMutations, useModels } from '@renderer/hooks/useModel'
+import { isModelCompletelyFailed } from '@renderer/pages/settings/ProviderSettings/utils/healthCheck'
 import type { Model, UniqueModelId } from '@shared/data/types/model'
 import { parseUniqueModelId } from '@shared/data/types/model'
 import { useCallback, useDeferredValue, useEffect, useMemo, useState } from 'react'
@@ -10,8 +11,9 @@ import {
   countModelsInGroups,
   groupModelEntries,
   type ModelListCapabilityCounts,
-  type ModelListCapabilityFilter
+  type ModelListFilter
 } from './modelListDerivedState'
+import { useModelListHealthRun } from './modelListHealthContext'
 
 export interface ModelListGroupItem {
   model: Model
@@ -28,9 +30,10 @@ export interface ProviderModelListHeaderSurface {
   hasNoModels: boolean
   searchText: string
   setSearchText: (text: string) => void
-  selectedTypeFilter: ModelListCapabilityFilter
-  setSelectedTypeFilter: (filter: ModelListCapabilityFilter) => void
+  selectedFilter: ModelListFilter
+  setSelectedFilter: (filter: ModelListFilter) => void
   typeCounts: ModelListCapabilityCounts
+  failedModelCount: number
 }
 
 export interface ProviderModelListSectionsSurface {
@@ -94,7 +97,7 @@ export function useProviderModelList({ providerId, disabled = false }: UseProvid
   const [translateModelId] = usePreference('feature.translate.model_id')
   const [searchInputText, setSearchInputText] = useState('')
   const searchText = useDeferredValue(searchInputText)
-  const [selectedTypeFilter, setSelectedTypeFilter] = useState<ModelListCapabilityFilter>('all')
+  const [selectedFilter, setSelectedFilter] = useState<ModelListFilter>('all')
   const [editingModel, setEditingModel] = useState<Model | null>(null)
   const [optimisticDeletedByModelId, setOptimisticDeletedByModelId] = useState<Record<string, true>>({})
   const [pendingModelIdMap, setPendingModelIdMap] = useState<Record<string, true>>({})
@@ -113,16 +116,28 @@ export function useProviderModelList({ providerId, disabled = false }: UseProvid
     [models, optimisticDeletedByModelId]
   )
 
+  const modelStatuses = useModelListHealthRun().completedModelStatuses
+  const fullyFailedModelIds = useMemo(
+    () => new Set(modelStatuses.filter(isModelCompletelyFailed).map((status) => status.model.id)),
+    [modelStatuses]
+  )
+
   const derivedState = useMemo(
     () =>
       calculateModelListDerivedState({
         models: optimisticModels,
         searchText,
-        selectedCapabilityFilter: selectedTypeFilter,
-        modelStatuses: []
+        selectedFilter,
+        failedModelIds: fullyFailedModelIds
       }),
-    [optimisticModels, searchText, selectedTypeFilter]
+    [fullyFailedModelIds, optimisticModels, searchText, selectedFilter]
   )
+
+  useEffect(() => {
+    if (selectedFilter === 'failed' && derivedState.failedModelCount === 0) {
+      setSelectedFilter('all')
+    }
+  }, [derivedState.failedModelCount, selectedFilter])
 
   useEffect(() => {
     const validModelIds = new Set(models.map((model) => model.id))
@@ -275,9 +290,10 @@ export function useProviderModelList({ providerId, disabled = false }: UseProvid
     hasNoModels: derivedState.hasNoModels,
     searchText: searchInputText,
     setSearchText: setSearchInputText,
-    selectedTypeFilter,
-    setSelectedTypeFilter,
-    typeCounts: derivedState.capabilityModelCounts
+    selectedFilter,
+    setSelectedFilter,
+    typeCounts: derivedState.capabilityModelCounts,
+    failedModelCount: derivedState.failedModelCount
   }
 
   const sections: ProviderModelListSectionsSurface = {

@@ -91,6 +91,7 @@ export function useHealthCheck(providerId: string, credentialsState: ModelCheckC
   const { apiHost, anthropicApiHost } = useProviderEndpoints(provider)
   const { credentialChangeVersion, prepareCredentials } = credentialsState
   const [isChecking, setIsChecking] = useState(false)
+  const [completedModelStatuses, setCompletedModelStatuses] = useState<ModelWithStatus[]>([])
   const isCheckingRef = useRef(false)
   const modelsRef = useRef(models)
   const statusesRef = useRef<ModelWithStatus[]>([])
@@ -172,6 +173,7 @@ export function useHealthCheck(providerId: string, credentialsState: ModelCheckC
         })
         finalStatuses = reconcileModelStatuses(finalStatuses, modelsRef.current)
         publishStatuses(finalStatuses)
+        setCompletedModelStatuses(finalStatuses)
         toast.success(summarizeHealthResults(finalStatuses, provider?.name))
       } catch (error) {
         if (runIdRef.current !== runId || controller.signal.aborted) return
@@ -225,11 +227,13 @@ export function useHealthCheck(providerId: string, credentialsState: ModelCheckC
           .map((index) => runModels[index])
           .filter((model): model is Model => !!model)
         publishStatuses(initialStatuses)
+        setCompletedModelStatuses([])
 
         if (checkableModels.length === 0) {
           abortControllerRef.current = null
           isCheckingRef.current = false
           setIsChecking(false)
+          setCompletedModelStatuses(initialStatuses)
           toast.success(summarizeHealthResults(initialStatuses, provider.name))
           return true
         }
@@ -272,6 +276,7 @@ export function useHealthCheck(providerId: string, credentialsState: ModelCheckC
   // its results; the cleanup also covers unmount.
   useEffect(() => {
     publishStatuses([])
+    setCompletedModelStatuses([])
     return () => {
       abortInFlightCheck()
       publishStatuses([])
@@ -281,11 +286,15 @@ export function useHealthCheck(providerId: string, credentialsState: ModelCheckC
   useEffect(() => {
     if (isChecking) return
     const nextStatuses = reconcileModelStatuses(statusesRef.current, models)
-    if (nextStatuses !== statusesRef.current) publishStatuses(nextStatuses)
+    if (nextStatuses !== statusesRef.current) {
+      publishStatuses(nextStatuses)
+      setCompletedModelStatuses(nextStatuses)
+    }
   }, [isChecking, models, publishStatuses])
 
   return {
     isChecking,
+    completedModelStatuses,
     startHealthCheck
   }
 }

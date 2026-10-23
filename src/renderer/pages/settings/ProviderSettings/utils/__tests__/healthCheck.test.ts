@@ -111,6 +111,13 @@ describe('summarizeHealthResults', () => {
         keyResults: [failedKey]
       },
       {
+        kind: 'checking',
+        model: { ...model, id: 'openai::checking' },
+        status: HealthStatus.NOT_CHECKED,
+        checking: true,
+        keyResults: []
+      },
+      {
         kind: 'skipped',
         model: { ...model, id: 'openai::image' },
         status: HealthStatus.NOT_CHECKED,

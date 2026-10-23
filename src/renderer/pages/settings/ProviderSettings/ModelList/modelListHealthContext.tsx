@@ -27,6 +27,7 @@ interface ModelListHealthRunContextValue {
   isHealthChecking: boolean
   isSingleModelChecking: boolean
   isModelChecking: boolean
+  completedModelStatuses: readonly ModelWithStatus[]
   singleModelResult: ModelWithStatus | null
   savingKeyId: string | null
   openModelCheck: () => void
@@ -115,6 +116,7 @@ export function ModelListHealthProvider({ providerId, children }: { providerId: 
       isHealthChecking,
       isSingleModelChecking,
       isModelChecking,
+      completedModelStatuses: all.completedModelStatuses,
       singleModelResult: single.singleModelResult,
       savingKeyId,
       openModelCheck,
@@ -128,6 +130,7 @@ export function ModelListHealthProvider({ providerId, children }: { providerId: 
       credentials.apiKeyEntries,
       credentials.canSelectApiKey,
       credentials.requiresApiKey,
+      all.completedModelStatuses,
       isHealthChecking,
       closeModelCheck,
       isModelChecking,
