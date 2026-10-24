@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest'
 import { inferReasoningControls } from '../patterns/reasoning-heuristics'
 import { isServerToolModelEligible } from '../patterns/serverToolModelEligibility'
 import { RegistryLoader } from '../registry-loader'
+import { buildParamsSchema } from '../utils/buildParamsSchema'
 
 const dataDir = join(fileURLToPath(import.meta.url), '..', '..', '..', 'data')
 const loader = new RegistryLoader({

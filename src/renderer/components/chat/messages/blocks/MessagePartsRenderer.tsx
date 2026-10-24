@@ -1487,10 +1487,7 @@ const MessagePartsRendererContent = React.memo(function MessagePartsRendererCont
   messageParts,
   priorCitationParts
 }: MessagePartsRendererContentProps) {
-  const { subagentListTitle, userMessageDefaultExpanded } = useMessageRenderConfig()
-  const { openAgentToolFlow, isAgentToolFlowActive, openFile, previewFile, previewInputFile } = useMessageListActions()
-  const hoistNonImageFiles = !!hoistAttachments && !previewInputFile && !!(previewFile || openFile)
-  const { t } = useTranslation()
+  const { userMessageDefaultExpanded } = useMessageRenderConfig()
   const subscribeDisclosures = React.useCallback(
     (listener: () => void) => subscribeCachedMessageUiState(message.id, listener),
     [message.id]

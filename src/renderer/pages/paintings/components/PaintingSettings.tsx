@@ -1,4 +1,3 @@
-import { InfoTooltip } from '@cherrystudio/ui'
 import { InfoTooltip, InputNumber } from '@cherrystudio/ui'
 import type { FC } from 'react'
 import { useMemo } from 'react'
