@@ -157,6 +157,7 @@ async function buildSubmitInput(
     mask,
     modelDescriptor: input.modelDescriptor,
     providerParams: input.providerParams,
+    requestTimeoutMs: input.requestTimeoutMs,
     signal
   }
 }

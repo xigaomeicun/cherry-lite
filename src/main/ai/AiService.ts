@@ -300,6 +300,8 @@ export interface AiImageRequest extends AiRequest {
    * `splitParamValues`.
    */
   paramValues: ParamValues
+  /** Per-attempt provider submit timeout (ms); omitted uses the transport default. */
+  requestTimeoutMs?: number
   /**
    * Cleanup policy stamped on the generated **output** FileEntries. AiService is
    * infrastructure — the calling business feature decides the policy
@@ -1089,6 +1091,7 @@ export class AiService extends BaseService {
         ...(inputFileIds && { inputFileIds }),
         ...(maskFileId && { maskFileId }),
         ...(modelDescriptor && { modelDescriptor }),
+        ...(request.requestTimeoutMs && { requestTimeoutMs: request.requestTimeoutMs }),
         ...(source && { source }),
         providerParams,
         cleanupPolicy: request.cleanupPolicy

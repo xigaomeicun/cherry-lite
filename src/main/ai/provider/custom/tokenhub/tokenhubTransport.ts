@@ -1,8 +1,13 @@
 import type { FetchFunction } from '@ai-sdk/provider-utils'
 import { t } from '@main/i18n'
 import { createPaintingGenerateError, PaintingGenerateError } from '@shared/ai/paintingGenerateError'
+import { Agent } from 'undici'
 
-import type { ImageGenerationSubmitInput, ImageGenerationTransport } from '../imageGenerationModel'
+import {
+  DEFAULT_IMAGE_REQUEST_TIMEOUT_MS,
+  type ImageGenerationSubmitInput,
+  type ImageGenerationTransport
+} from '../imageGenerationModel'
 import { readErrorMessage } from '../readErrorMessage'
 import { createAbortError, fileToDataUrl, isTerminalHttpStatus, waitWithSignal } from '../transportUtils'
 
@@ -72,6 +77,14 @@ export interface TokenhubProviderParams {
   /** vidu `resolution` (`1080p` / `2K` / `4K`). */
   resolution?: string
 }
+
+// undici abandons response headers after 300s, below a sync image model's submit budget;
+// an injected fetch has no such bound, so this only backs the global-fetch fallback.
+const REQUEST_DISPATCHER_TIMEOUT_MS = 15 * 60 * 1000
+const longRunningDispatcher = new Agent({
+  headersTimeout: REQUEST_DISPATCHER_TIMEOUT_MS,
+  bodyTimeout: REQUEST_DISPATCHER_TIMEOUT_MS
+})
 
 export interface TokenhubTransportSettings {
   apiKey: string
@@ -164,6 +177,7 @@ class TokenhubTransport implements ImageGenerationTransport {
           'POST',
           buildHunyuanBody(input, bag),
           {
+            timeout: input.requestTimeoutMs ?? DEFAULT_IMAGE_REQUEST_TIMEOUT_MS,
             signal: input.signal
           }
         )
@@ -175,6 +189,7 @@ class TokenhubTransport implements ImageGenerationTransport {
           'POST',
           buildSeedreamBody(input, bag),
           {
+            timeout: input.requestTimeoutMs ?? DEFAULT_IMAGE_REQUEST_TIMEOUT_MS,
             signal: input.signal
           }
         )
@@ -186,6 +201,7 @@ class TokenhubTransport implements ImageGenerationTransport {
           'POST',
           buildViduBody(input, bag),
           {
+            timeout: input.requestTimeoutMs ?? DEFAULT_IMAGE_REQUEST_TIMEOUT_MS,
             signal: input.signal
           }
         )
@@ -263,7 +279,7 @@ class TokenhubTransport implements ImageGenerationTransport {
     body: Record<string, unknown> | undefined,
     options: { timeout?: number; signal?: AbortSignal }
   ): Promise<T> {
-    const timeout = options.timeout ?? 120000
+    const timeout = options.timeout ?? DEFAULT_IMAGE_REQUEST_TIMEOUT_MS
     const externalSignal = options.signal
     const controller = new AbortController()
     let externallyAborted = false
@@ -291,7 +307,8 @@ class TokenhubTransport implements ImageGenerationTransport {
           ...(method === 'POST' && { 'Content-Type': 'application/json' })
         },
         ...(method === 'POST' && body !== undefined && { body: JSON.stringify(body) }),
-        signal: controller.signal
+        signal: controller.signal,
+        ...(this.customFetch ? {} : { dispatcher: longRunningDispatcher })
       })
       if (!response.ok) {
         if (response.status === 401) throw createPaintingGenerateError('REQ_ERROR_TOKEN')
