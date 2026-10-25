@@ -12,6 +12,7 @@ import { REDACTED } from '@shared/utils/redaction'
 import { Mutex } from 'async-mutex'
 import { v4 as uuidv4 } from 'uuid'
 
+import { mapGatewayBindError } from './bindError'
 import type { ApiGateway } from './server'
 
 const logger = loggerService.withContext('ApiGatewayService')
@@ -89,8 +90,13 @@ export class ApiGatewayService extends BaseService implements Activatable {
       const { ApiGateway } = await import('./server')
       const { port } = this.getCurrentConfig()
       // Keep the shared listener stable; lanGuard gates remote access without interrupting local streams.
-      this.apiGateway = new ApiGateway({ host: '0.0.0.0', port })
-      await this.apiGateway.start()
+      const endpoint = { host: '0.0.0.0', port }
+      this.apiGateway = new ApiGateway(endpoint)
+      await this.apiGateway.start().catch((error: unknown) => {
+        const mapped = mapGatewayBindError(error, endpoint, 'public')
+        if (mapped !== error) logger.error('Public API gateway listen failed', error as Error)
+        throw mapped
+      })
       this.publishRunningState(true)
       logger.info('API Gateway activated')
     } catch (error) {
