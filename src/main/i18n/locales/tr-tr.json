@@ -161,6 +161,10 @@
   "settings.mcp.oauth.callback.message": "Bu sayfayı kapatıp Cherry Studio'ya dönebilirsiniz",
   "settings.mcp.oauth.callback.title": "Kimlik Doğrulama Başarılı",
   "settings.title": "Ayarlar",
+  "skill.import.directory_missing_skill_md": "Seçilen klasörde SKILL.md bulunamadı. Doğrudan SKILL.md içeren klasörü seçin.",
+  "skill.import.directory_not_found": "Seçilen klasör kullanılamıyor. Mevcut, erişilebilir ve doğrudan SKILL.md içeren bir klasör seçin.",
+  "skill.import.invalid_zip_file": "Bir .zip dosyası seçin. Bir beceri ZIP arşivi, kök dizininde veya bir alt dizinde SKILL.md içermelidir.",
+  "skill.import.zip_missing_skill_md": "Yüklenebilir bir beceri bulunamadı. Bir beceri ZIP arşivi, kök dizininde veya bir alt dizinde SKILL.md içermelidir.",
   "tray.quit": "Çıkış",
   "tray.show_quick_assistant": "Hızlı Asistan",
   "tray.show_window": "Pencereyi Göster"

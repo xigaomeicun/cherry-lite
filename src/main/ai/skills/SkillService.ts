@@ -1,4 +1,3 @@
-import { Mutex } from 'async-mutex'
 import { createHash } from 'node:crypto'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
@@ -31,8 +30,10 @@ import {
   isSkillDirectoryContentHash,
   parseSkillSourceUrl
 } from '@shared/utils/skillMarketplace'
+import { Mutex } from 'async-mutex'
 
 import { extractZip, resolveSkillDirectory, validateZipFile } from './skillArchive'
+import { SkillImportError } from './SkillImportError'
 import { SkillInstaller } from './SkillInstaller'
 import { createTempDir, normalizeFolderKey, safeRemoveDirectory, sanitizeFolderName } from './skillPaths'
 import { fetchRemoteSkill } from './skillRemoteSource'
@@ -248,7 +249,7 @@ export class SkillService {
     logger.info('Installing skill from directory', { directoryPath })
 
     if (!(await directoryExists(directoryPath))) {
-      throw new Error(`Directory not found: ${directoryPath}`)
+      throw new SkillImportError('DIRECTORY_NOT_FOUND', `Directory not found: ${directoryPath}`)
     }
 
     const canonicalPath = await fs.promises.realpath(directoryPath)

@@ -161,6 +161,10 @@
   "settings.mcp.oauth.callback.message": "Poți închide această pagină și te poți întoarce la Cherry Studio",
   "settings.mcp.oauth.callback.title": "Autentificare reușită",
   "settings.title": "Setări",
+  "skill.import.directory_missing_skill_md": "SKILL.md nu a fost găsit în folderul selectat. Selectați folderul care conține direct SKILL.md.",
+  "skill.import.directory_not_found": "Folderul selectat nu este disponibil. Selectați un folder existent și accesibil care conține direct SKILL.md.",
+  "skill.import.invalid_zip_file": "Selectați un fișier .zip. O arhivă ZIP de abilitate trebuie să conțină SKILL.md la rădăcină sau într-un subfolder.",
+  "skill.import.zip_missing_skill_md": "Nu a fost găsită nicio abilitate care poate fi instalată. O arhivă ZIP de abilitate trebuie să conțină SKILL.md la rădăcină sau într-un subfolder.",
   "tray.quit": "Ieșire",
   "tray.show_quick_assistant": "Asistent rapid",
   "tray.show_window": "Afișează fereastra"

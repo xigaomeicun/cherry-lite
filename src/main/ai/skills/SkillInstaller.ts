@@ -1,4 +1,3 @@
-import * as fs from 'fs'
 import { createHash } from 'node:crypto'
 import * as path from 'node:path'
 
@@ -7,6 +6,9 @@ import { copyDirectoryRecursive, deleteDirectoryRecursive } from '@main/utils/fi
 import { pathExists } from '@main/utils/legacyFile'
 import { findSkillMdPath } from '@main/utils/markdownParser'
 import { SKILL_DIRECTORY_CONTENT_HASH_PREFIX } from '@shared/utils/skillMarketplace'
+import * as fs from 'fs'
+
+import { SkillImportError } from './SkillImportError'
 
 const logger = loggerService.withContext('SkillInstaller')
 
@@ -194,7 +196,7 @@ export class SkillInstaller {
   ): Promise<string> {
     const skillMdPath = await findSkillMdPath(skillDir)
     if (!skillMdPath) {
-      throw new Error(`SKILL.md not found in ${skillDir}`)
+      throw new SkillImportError('SKILL_DIRECTORY_NOT_FOUND', `SKILL.md not found in ${skillDir}`)
     }
 
     const hash = createHash('sha256')

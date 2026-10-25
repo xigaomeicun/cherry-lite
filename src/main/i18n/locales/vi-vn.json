@@ -161,6 +161,10 @@
   "settings.mcp.oauth.callback.message": "Bạn có thể đóng trang này và quay lại Cherry Studio",
   "settings.mcp.oauth.callback.title": "Xác thực thành công",
   "settings.title": "Cài đặt",
+  "skill.import.directory_missing_skill_md": "Không tìm thấy SKILL.md trong thư mục đã chọn. Hãy chọn thư mục chứa trực tiếp SKILL.md.",
+  "skill.import.directory_not_found": "Không thể sử dụng thư mục đã chọn. Hãy chọn một thư mục tồn tại, có thể truy cập và chứa trực tiếp SKILL.md.",
+  "skill.import.invalid_zip_file": "Hãy chọn tệp .zip. Tệp ZIP của kỹ năng phải chứa SKILL.md ở thư mục gốc hoặc trong một thư mục con.",
+  "skill.import.zip_missing_skill_md": "Không tìm thấy kỹ năng có thể cài đặt. Tệp ZIP của kỹ năng phải chứa SKILL.md ở thư mục gốc hoặc trong một thư mục con.",
   "tray.quit": "Thoát",
   "tray.show_quick_assistant": "Trợ lý nhanh",
   "tray.show_window": "Hiển thị cửa sổ"

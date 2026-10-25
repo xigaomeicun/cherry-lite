@@ -161,6 +161,10 @@
   "settings.mcp.oauth.callback.message": "このページを閉じてCherry Studioに戻ることができます",
   "settings.mcp.oauth.callback.title": "認証成功",
   "settings.title": "設定",
+  "skill.import.directory_missing_skill_md": "選択したフォルダーに SKILL.md が見つかりませんでした。SKILL.md が直接含まれているフォルダーを選択してください。",
+  "skill.import.directory_not_found": "選択したフォルダーは利用できません。実在し、アクセス可能で、SKILL.md が直接含まれているフォルダーを選択してください。",
+  "skill.import.invalid_zip_file": ".zip ファイルを選択してください。スキルの ZIP アーカイブには、ルートまたはサブディレクトリに SKILL.md が含まれている必要があります。",
+  "skill.import.zip_missing_skill_md": "インストール可能なスキルが見つかりませんでした。スキルの ZIP アーカイブには、ルートまたはサブディレクトリに SKILL.md が含まれている必要があります。",
   "tray.quit": "終了",
   "tray.show_quick_assistant": "クイックアシスタント",
   "tray.show_window": "ウィンドウを表示"

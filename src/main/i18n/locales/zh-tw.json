@@ -161,6 +161,10 @@
   "settings.mcp.oauth.callback.message": "關閉此頁面後即可回到 Cherry Studio",
   "settings.mcp.oauth.callback.title": "認證成功",
   "settings.title": "設定",
+  "skill.import.directory_missing_skill_md": "在所選資料夾中找不到 SKILL.md。請選擇直接包含 SKILL.md 的資料夾。",
+  "skill.import.directory_not_found": "無法使用所選資料夾。請選擇存在、可存取且直接包含 SKILL.md 的資料夾。",
+  "skill.import.invalid_zip_file": "請選擇 .zip 檔案。技能 ZIP 壓縮檔必須在根目錄或某個子目錄中包含 SKILL.md。",
+  "skill.import.zip_missing_skill_md": "找不到可安裝的技能。技能 ZIP 壓縮檔必須在根目錄或某個子目錄中包含 SKILL.md。",
   "tray.quit": "結束",
   "tray.show_quick_assistant": "快速助理",
   "tray.show_window": "顯示視窗"

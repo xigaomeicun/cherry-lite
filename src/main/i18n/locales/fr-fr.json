@@ -161,6 +161,10 @@
   "settings.mcp.oauth.callback.message": "Vous pouvez fermer cette page et retourner à Cherry Studio",
   "settings.mcp.oauth.callback.title": "Authentification Réussie",
   "settings.title": "Paramètres",
+  "skill.import.directory_missing_skill_md": "SKILL.md est introuvable dans le dossier sélectionné. Sélectionnez le dossier qui contient directement SKILL.md.",
+  "skill.import.directory_not_found": "Le dossier sélectionné est indisponible. Sélectionnez un dossier existant et accessible qui contient directement SKILL.md.",
+  "skill.import.invalid_zip_file": "Sélectionnez un fichier .zip. Une archive ZIP de compétence doit contenir SKILL.md à sa racine ou dans un sous-dossier.",
+  "skill.import.zip_missing_skill_md": "Aucune compétence installable n’a été trouvée. Une archive ZIP de compétence doit contenir SKILL.md à sa racine ou dans un sous-dossier.",
   "tray.quit": "Quitter",
   "tray.show_quick_assistant": "Assistant Rapide",
   "tray.show_window": "Afficher la fenêtre"
