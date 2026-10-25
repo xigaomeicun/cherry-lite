@@ -1499,6 +1499,10 @@ describe('CherryAutonomyTools', () => {
           required_fields: ['client_id', 'client_secret', 'robot_code'],
           optional_fields: ['allowed_chat_ids', 'allowed_user_ids', 'card_template_id']
         })
+        expect(parsed.supported_channel_types.find((type: any) => type.type === 'feishu')).toMatchObject({
+          required_fields: ['app_id', 'app_secret', 'encrypt_key', 'verification_token', 'domain'],
+          optional_fields: ['allowed_chat_ids', 'mention_only']
+        })
         expect(parsed.soul_enabled).toBeUndefined()
         expect(parsed.heartbeat_enabled).toBe(true)
       })
@@ -1655,7 +1659,8 @@ describe('CherryAutonomyTools', () => {
               encrypt_key: 'old-encrypt-key',
               verification_token: 'old-verification-token',
               allowed_chat_ids: ['chat-1'],
-              domain: 'lark'
+              domain: 'lark',
+              mention_only: false
             }
           },
           'config'
@@ -1670,7 +1675,8 @@ describe('CherryAutonomyTools', () => {
               encrypt_key: '',
               verification_token: '',
               allowed_chat_ids: ['chat-1'],
-              domain: 'lark'
+              domain: 'lark',
+              mention_only: false
             }
           })
         )
@@ -1716,7 +1722,12 @@ describe('CherryAutonomyTools', () => {
       })
 
       it('should reuse one unverified Feishu channel without losing the new setup options', async () => {
-        const existingChannel = { ...feishuChannel, id: 'ch_existing', isActive: false }
+        const existingChannel = {
+          ...feishuChannel,
+          id: 'ch_existing',
+          isActive: false,
+          config: { ...feishuChannel.config, mention_only: false }
+        }
         const updatedChannel = {
           ...existingChannel,
           name: 'Updated Feishu',
@@ -1767,7 +1778,8 @@ describe('CherryAutonomyTools', () => {
             encrypt_key: '',
             verification_token: '',
             allowed_chat_ids: ['chat-1'],
-            domain: 'lark'
+            domain: 'lark',
+            mention_only: false
           },
           isActive: true
         })

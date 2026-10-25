@@ -50,6 +50,7 @@ export type FeishuChannelConfig = {
   verification_token: string
   allowed_chat_ids: string[]
   domain: FeishuDomain
+  mention_only?: boolean
 }
 
 // ------------------ Type guards ------------------
