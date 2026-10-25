@@ -162,6 +162,12 @@ describe('WordFilePreview', () => {
     expect(mocks.loggerError).toHaveBeenCalledWith(`Failed to load DOCX preview: ${filePath}`, error)
   })
 
+  it('enables text selection on the preview container', async () => {
+    render(<WordFilePreview filePath={filePath} fileName="report.docx" metadata={{ size: 1024 }} refreshKey={0} />)
+    const content = await screen.findByTestId('docx-preview-content')
+    expect(content).toHaveClass('selectable')
+  })
+
   it('reloads the file when refreshKey changes', async () => {
     const view = render(
       <WordFilePreview filePath={filePath} fileName="report.docx" metadata={{ size: 1024 }} refreshKey={0} />

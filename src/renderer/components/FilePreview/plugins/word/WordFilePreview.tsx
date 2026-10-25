@@ -250,7 +250,7 @@ export default function WordFilePreview({ filePath, fileName, metadata, refreshK
               data-testid="docx-preview-content"
               data-zoom={zoom}
               style={contentStyle}
-              className="mx-auto w-fit min-w-0 [&_.docx-preview-wrapper]:mx-auto [&_.docx-preview]:box-border [&_.docx-preview]:max-w-full [&_section]:overflow-hidden [&_section]:rounded-sm [&_section]:shadow-md"
+              className="selectable mx-auto w-fit min-w-0 [&_.docx-preview-wrapper]:mx-auto [&_.docx-preview]:box-border [&_.docx-preview]:max-w-full [&_section]:overflow-hidden [&_section]:rounded-sm [&_section]:shadow-md"
             />
           </div>
           {loading ? (
