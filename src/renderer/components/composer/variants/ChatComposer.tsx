@@ -4,6 +4,10 @@ import { ContextUsageMeter, ContextUsageSummary } from '@renderer/components/cha
 import { MessageEditingProvider, useMessageEditing } from '@renderer/components/chat/editing/MessageEditingContext'
 import { useChatLayoutMode } from '@renderer/components/chat/layout/ChatLayoutModeContext'
 import {
+  hasSignedReasoningMetadata,
+  replaceReasoningPartText
+} from '@renderer/components/chat/messages/blocks/reasoningEditing'
+import {
   ConversationTopBarPortal,
   useConversationTopBarPortalLayout
 } from '@renderer/components/chat/shell/ConversationTopBarPortal'
@@ -571,6 +575,23 @@ const ChatComposerInner = ({
   const { editingMessage, cancelEditing, stopEditing } = useMessageEditing()
   const editingMessageForCurrentTopic = topicId && editingMessage?.message.topicId === topicId ? editingMessage : null
   const staleEditingMessage = editingMessage && !editingMessageForCurrentTopic
+  // Assistant edits expose the unsigned reasoning above the main text; signed
+  // reasoning cannot be replayed after a change, so it stays read-only. A
+  // message with several reasoning parts keeps the plain anchor behaviour.
+  const editingReasoning = useMemo(() => {
+    const snapshot = editingMessageForCurrentTopic
+    if (!snapshot || snapshot.message.role !== 'assistant') return undefined
+    const reasoningIndexes = snapshot.parts.flatMap((part, index) => (part.type === 'reasoning' ? [index] : []))
+    if (reasoningIndexes.length !== 1) return undefined
+    const index = reasoningIndexes[0]
+    const part = snapshot.parts[index]
+    if (part.type !== 'reasoning' || hasSignedReasoningMetadata(part)) return undefined
+    return { index, text: part.text ?? '' }
+  }, [editingMessageForCurrentTopic])
+  const [reasoningDraft, setReasoningDraft] = useState('')
+  useEffect(() => {
+    setReasoningDraft(editingReasoning?.text ?? '')
+  }, [editingMessageForCurrentTopic?.editingSessionId, editingReasoning?.index, editingReasoning?.text])
   const { isPending, status: streamStatus, lastCompletedAt } = useTopicStreamStatus(streamScopeKey)
   const [isSending, setIsSending] = useState(false)
   const [isDirectSending, setIsDirectSending] = useState(false)
@@ -1660,9 +1681,19 @@ const ChatComposerInner = ({
         const editedParts = await buildEditedMessageParts(draft)
         if (!editedParts) return
 
-        const savedParts = isAssistantReply
-          ? replaceComposerEditableMessageParts(editingMessageForCurrentTopic.parts, editedParts)
-          : editedParts
+        // Compare and persist the raw text: trimming would rewrite Markdown
+        // indentation (code blocks, lists). Trimming only guards emptiness.
+        const reasoningValue = reasoningDraft
+        const reasoningChanged = !!editingReasoning && reasoningValue !== editingReasoning.text
+        if (isAssistantReply && reasoningChanged && !reasoningValue.trim()) {
+          toast.error(t('message.reasoning.empty'))
+          return
+        }
+        const baseParts =
+          reasoningChanged && editingReasoning
+            ? replaceReasoningPartText(editingMessageForCurrentTopic.parts, editingReasoning.index, reasoningValue)
+            : editingMessageForCurrentTopic.parts
+        const savedParts = isAssistantReply ? replaceComposerEditableMessageParts(baseParts, editedParts) : editedParts
         if (isAssistantReply || !resend) {
           await chatWrite.editMessage(editingMessageForCurrentTopic.message.id, savedParts)
         } else {
@@ -1685,6 +1716,7 @@ const ChatComposerInner = ({
               }
           await chatWrite.forkAndResend(editingMessageForCurrentTopic.message.id, savedParts, editedTurnOptions)
         }
+        if (reasoningChanged) toast.success(t('message.reasoning.saved'))
         if (editingMessageForCurrentTopicRef.current?.editingSessionId === editingSessionId) {
           restoreSavedDraft()
           stopEditing()
@@ -1707,8 +1739,10 @@ const ChatComposerInner = ({
       chatWrite,
       editingMessageForCurrentTopic,
       editingMessageForCurrentTopicRef,
+      editingReasoning,
       fastMode,
       isMentionedModelSelectorLocked,
+      reasoningDraft,
       reasoningEffort,
       serviceTier,
       restoreSavedDraft,
@@ -1937,6 +1971,18 @@ const ChatComposerInner = ({
                   highlightKey: editingMessageForCurrentTopic.editingSessionId,
                   onLocate: handleLocateEditingMessage,
                   onCancel: handleCancelEditing,
+                  reasoning: editingReasoning
+                    ? {
+                        value: reasoningDraft,
+                        onChange: setReasoningDraft,
+                        disabled: isSavingEdit,
+                        label: t('chat.input.editing_part.reasoning'),
+                        actionLabel: t('message.reasoning.edit'),
+                        title: t('message.reasoning.edit_title'),
+                        placeholder: t('message.reasoning.edit_placeholder'),
+                        hint: t('message.reasoning.edit_hint')
+                      }
+                    : undefined,
                   // Assistant edits already save in place on send; only user edits need a save-only path.
                   onSave:
                     editingMessageForCurrentTopic.message.role === 'assistant' ? undefined : handleSaveEditedMessage
