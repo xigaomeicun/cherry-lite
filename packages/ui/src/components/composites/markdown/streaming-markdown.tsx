@@ -66,7 +66,12 @@ export function StreamingMarkdown({
       extraRemarkPlugins={remarkPlugins}
       animated={resolvedAnimated}
       disallowedElements={disallowedElements}
-      className={className}
+      className={[
+        className,
+        (!resolvedAnimated || (resolvedAnimated.animation ?? 'fadeIn') === 'fadeIn') && 'markdown-fade-in'
+      ]
+        .filter(Boolean)
+        .join(' ')}
       footnoteLabel={footnoteLabel}
       preserveFileLinkHrefs={preserveFileLinkHrefs}>
       {children}
