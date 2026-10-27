@@ -171,13 +171,13 @@ describe('SettingsPage', () => {
     expect(navigateMock).toHaveBeenCalledWith({ to: '/settings/prompts' })
   })
 
-  it('merges quick access into efficiency with screenshot last', () => {
+  it('merges quick access into efficiency with shortcut last', () => {
     render(<SettingsPage />)
 
     expect(screen.getByText('效率')).toBeInTheDocument()
     expect(screen.queryByText('快捷入口')).not.toBeInTheDocument()
 
-    const efficiencyItems = ['频道', '定时任务', '快捷键', '截图'].map((name) => screen.getByRole('button', { name }))
+    const efficiencyItems = ['频道', '定时任务', '快捷键'].map((name) => screen.getByRole('button', { name }))
     const menuItems = screen.getAllByTestId('menu-item')
     const efficiencyStart = menuItems.indexOf(efficiencyItems[0])
 

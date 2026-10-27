@@ -7,7 +7,6 @@ import {
   CalendarClock,
   Cloud,
   Command,
-  Crop,
   FileBox,
   Globe,
   HardDrive,
@@ -131,12 +130,6 @@ export const settingsMenu: readonly SettingsMenuEntry[] = [
     route: '/settings/shortcut',
     titleKey: 'settings.shortcuts.title',
     icon: createElement(Command),
-    groupKey: 'settings.menuGroups.automation'
-  },
-  {
-    route: '/settings/screenshot',
-    titleKey: 'settings.screenshot.title',
-    icon: createElement(Crop),
     groupKey: 'settings.menuGroups.automation'
   },
   {
