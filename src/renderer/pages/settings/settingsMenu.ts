@@ -12,15 +12,12 @@ import {
   Globe,
   HardDrive,
   Info,
-  MonitorSmartphone,
   Package,
   Palette,
-  PictureInPicture2,
   Radio,
   Search,
   Settings2,
   Terminal,
-  TextCursorInput,
   ToolCase,
   Zap
 } from 'lucide-react'
@@ -52,12 +49,6 @@ export const settingsMenu: readonly SettingsMenuEntry[] = [
     icon: createElement(FileBox)
   },
   { route: '/settings/api-gateway', titleKey: 'apiGateway.title', icon: createElement(GatewayIcon) },
-  {
-    route: '/settings/device-connections',
-    titleKey: 'deviceConnections.title',
-    icon: createElement(MonitorSmartphone),
-    groupKey: 'settings.menuGroups.automation'
-  },
   {
     route: '/settings/mcp',
     titleKey: 'agent.settings.toolsMcp.mcp.tab',
@@ -140,18 +131,6 @@ export const settingsMenu: readonly SettingsMenuEntry[] = [
     route: '/settings/shortcut',
     titleKey: 'settings.shortcuts.title',
     icon: createElement(Command),
-    groupKey: 'settings.menuGroups.automation'
-  },
-  {
-    route: '/settings/quick-assistant',
-    titleKey: 'settings.quickAssistant.title',
-    icon: createElement(PictureInPicture2),
-    groupKey: 'settings.menuGroups.automation'
-  },
-  {
-    route: '/settings/selection-assistant',
-    titleKey: 'selection.name',
-    icon: createElement(TextCursorInput),
     groupKey: 'settings.menuGroups.automation'
   },
   {
