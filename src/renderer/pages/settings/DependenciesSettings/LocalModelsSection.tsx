@@ -5,7 +5,7 @@ import { useLocalModel } from '@renderer/hooks/useLocalModel'
 import { ipcApi } from '@renderer/ipc'
 import { cn } from '@renderer/utils/style'
 import type { LocalModelBundleId, LocalModelCapability, LocalModelStatus } from '@shared/data/presets/localModel'
-import { Boxes, Download, RefreshCw, Trash2, X } from 'lucide-react'
+import { Download, RefreshCw, Trash2, X } from 'lucide-react'
 import type { FC, ReactNode } from 'react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -29,13 +29,7 @@ type CardNotice = keyof typeof CARD_NOTICE_KEYS
  */
 const MODEL_CARDS: Partial<
   Record<LocalModelBundleId, { icon: ReactNode; nameKey: string; sources: readonly string[] }>
-> = {
-  'qwen3-embedding-0.6b': {
-    icon: <Boxes className="size-5" />,
-    nameKey: 'settings.dependencies.localModels.embedding.name',
-    sources: ['onnx-community/Qwen3-Embedding-0.6B-ONNX']
-  }
-}
+> = {}
 
 /**
  * Settings-specific notice state layered over the shared local-model lifecycle.
@@ -261,13 +255,13 @@ const LocalModelsSection: FC = () => {
           }}>
           {t('settings.dependencies.localModels.unsupported')}
         </div>
-      ) : (
+      ) : models.length > 0 ? (
         <div role="list" className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {models.map((model) => (
             <ModelCard key={model.id} id={model.id} onStatusChange={handleStatusChange} />
           ))}
         </div>
-      )}
+      ) : null}
     </div>
   )
 }

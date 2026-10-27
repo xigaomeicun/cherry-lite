@@ -7,7 +7,7 @@ import {
 import { MockCacheUtils } from '@test-mocks/renderer/CacheService'
 import { MockUsePreferenceUtils } from '@test-mocks/renderer/usePreference'
 import { mockRendererLoggerService } from '@test-mocks/RendererLoggerService'
-import { act, render, screen, waitFor, within } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -93,16 +93,12 @@ describe('LocalModelsSection', () => {
     MockUsePreferenceUtils.resetMocks()
   })
 
-  it('links model sources without mixing system speech resources into local models', async () => {
+  it('does not render the local embedding card when embedding cards are removed', async () => {
     mockRoutes(() => ({ supported: false }))
     render(<LocalModelsSection />)
-    expect(await screen.findByRole('link', { name: 'onnx-community/Qwen3-Embedding-0.6B-ONNX' })).toHaveAttribute(
-      'href',
-      'https://huggingface.co/onnx-community/Qwen3-Embedding-0.6B-ONNX'
-    )
-    expect(screen.getAllByRole('link')).toHaveLength(1)
-    expect(mockRequest.mock.calls.every(([route]) => route.startsWith('local_model.'))).toBe(true)
-    expect(screen.queryByText('settings.voice.resources.system')).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'onnx-community/Qwen3-Embedding-0.6B-ONNX' })).not.toBeInTheDocument()
+    expect(screen.queryAllByRole('listitem')).toHaveLength(0)
+    expect(screen.getByText('settings.dependencies.localModels.title')).toBeInTheDocument()
   })
 
   it('shows a supported acceleration switch and persists the user choice', async () => {
@@ -154,166 +150,5 @@ describe('LocalModelsSection', () => {
     expect(
       screen.queryByRole('checkbox', { name: /settings\.dependencies\.localModels\.acceleration\.label/ })
     ).not.toBeInTheDocument()
-  })
-
-  it('renders live percent, and cancelling neither fails nor shows a failure notice', async () => {
-    const user = userEvent.setup()
-    let resolveDownload: ((result: { result: 'cancelled' }) => void) | undefined
-    mockRoutes((route, input) => {
-      if (route === 'local_model.download' && input?.id === EMBEDDING) {
-        return new Promise<{ result: 'cancelled' }>((resolve) => (resolveDownload = resolve))
-      }
-      if (route === 'local_model.cancel' && input?.id === EMBEDDING) {
-        resolveDownload?.({ result: 'cancelled' })
-      }
-      return Promise.resolve()
-    })
-    publishLocalModelStatus(EMBEDDING, { status: 'not_downloaded', percent: 0 })
-
-    render(<LocalModelsSection />)
-    await screen.findAllByRole('listitem')
-
-    await user.click(within(embeddingCard()).getByText('settings.dependencies.localModels.download'))
-    act(() => publishLocalModelStatus(EMBEDDING, { status: 'downloading', percent: 0 }))
-    await waitFor(() =>
-      expect(within(embeddingCard()).getByText('settings.dependencies.localModels.cancel')).toBeInTheDocument()
-    )
-
-    act(() => publishLocalModelStatus(EMBEDDING, { status: 'downloading', percent: 45 }))
-    expect(within(embeddingCard()).getByText('45%')).toBeInTheDocument()
-
-    await user.click(within(embeddingCard()).getByText('settings.dependencies.localModels.cancel'))
-    await waitFor(() => expect(mockRequest).toHaveBeenCalledWith('local_model.cancel', { id: EMBEDDING }))
-    act(() => publishLocalModelStatus(EMBEDDING, { status: 'not_downloaded', percent: 0 }))
-
-    await waitFor(() =>
-      expect(within(embeddingCard()).getByText('settings.dependencies.localModels.download')).toBeInTheDocument()
-    )
-    expect(screen.queryByText('settings.dependencies.localModels.notice.downloadFailed')).not.toBeInTheDocument()
-  })
-
-  it('surfaces a failure notice when the download genuinely fails', async () => {
-    const user = userEvent.setup()
-    mockRoutes((route, input) => {
-      if (route === 'local_model.download' && input?.id === EMBEDDING) return Promise.reject(new Error('boom'))
-      return Promise.resolve()
-    })
-    publishLocalModelStatus(EMBEDDING, { status: 'not_downloaded', percent: 0 })
-
-    render(<LocalModelsSection />)
-    await screen.findAllByRole('listitem')
-
-    await user.click(within(embeddingCard()).getByText('settings.dependencies.localModels.download'))
-
-    // No cancel in play → the failure is real and must be shown.
-    await waitFor(() =>
-      expect(
-        within(embeddingCard()).getByText('settings.dependencies.localModels.notice.downloadFailed')
-      ).toBeInTheDocument()
-    )
-  })
-
-  it('shows a shared failure as retryable when reopening settings', async () => {
-    const user = userEvent.setup()
-    mockRoutes((route) => {
-      if (route === 'local_model.download') return Promise.resolve({ result: 'ready' })
-      return Promise.resolve()
-    })
-    publishLocalModelStatus(EMBEDDING, { status: 'error', percent: 0, errorCode: 'download_failed' })
-
-    render(<LocalModelsSection />)
-
-    await waitFor(() =>
-      expect(
-        within(embeddingCard()).getByText('settings.dependencies.localModels.notice.downloadFailed')
-      ).toBeInTheDocument()
-    )
-    await user.click(within(embeddingCard()).getByText('common.retry'))
-
-    await waitFor(() => expect(mockRequest).toHaveBeenCalledWith('local_model.download', { id: EMBEDDING }))
-    expect(mockRequest).not.toHaveBeenCalledWith('local_model.remove', { id: EMBEDDING })
-  })
-
-  it('replaces a stale incomplete-cache notice when the retry itself fails in transport', async () => {
-    const user = userEvent.setup()
-    mockRoutes((route) => {
-      if (route === 'local_model.download') return Promise.reject(new Error('ipc transport failed'))
-      return Promise.resolve()
-    })
-    publishLocalModelStatus(EMBEDDING, { status: 'error', percent: 0, errorCode: 'incomplete_cache' })
-
-    render(<LocalModelsSection />)
-    await waitFor(() =>
-      expect(
-        within(embeddingCard()).getByText('settings.dependencies.localModels.notice.incompleteCache')
-      ).toBeInTheDocument()
-    )
-
-    await user.click(within(embeddingCard()).getByText('common.retry'))
-
-    // The failed retry is a download/transport failure — the repair wording must not
-    // survive it via an errorCode left behind by the earlier status probe.
-    await waitFor(() =>
-      expect(
-        within(embeddingCard()).getByText('settings.dependencies.localModels.notice.downloadFailed')
-      ).toBeInTheDocument()
-    )
-    expect(
-      within(embeddingCard()).queryByText('settings.dependencies.localModels.notice.incompleteCache')
-    ).not.toBeInTheDocument()
-  })
-
-  it('words an incomplete-cache error as repair-by-redownload, not a connection problem', async () => {
-    mockRoutes(() => Promise.resolve())
-    publishLocalModelStatus(EMBEDDING, { status: 'error', percent: 0, errorCode: 'incomplete_cache' })
-
-    render(<LocalModelsSection />)
-
-    await waitFor(() =>
-      expect(
-        within(embeddingCard()).getByText('settings.dependencies.localModels.notice.incompleteCache')
-      ).toBeInTheDocument()
-    )
-    // The generic connection wording would be wrong on both counts here.
-    expect(screen.queryByText('settings.dependencies.localModels.notice.downloadFailed')).not.toBeInTheDocument()
-    expect(within(embeddingCard()).getByText('common.retry')).toBeInTheDocument()
-  })
-
-  it('shows an explicit unsupported state once the embedding card reports unsupported (e.g. Intel Mac)', async () => {
-    mockRoutes(() => Promise.resolve())
-    publishLocalModelStatus(EMBEDDING, { status: 'unsupported', percent: 0 })
-    publishLocalModelStatus(OCR, { status: 'unsupported', percent: 0 })
-
-    render(<LocalModelsSection />)
-
-    // The cards give way to one explanation, rather than each offering a download
-    // that could only fail.
-    await waitFor(() => expect(screen.getByRole('status')).toBeInTheDocument())
-    expect(screen.queryAllByRole('listitem')).toHaveLength(0)
-    expect(screen.getByText('settings.dependencies.localModels.title')).toBeInTheDocument()
-  })
-
-  it('renders only the embedding card even when the registry lists voice and OCR bundles', async () => {
-    mockRequest.mockImplementation(async (route) => {
-      if (route === 'local_model.list')
-        return {
-          models: [
-            ...LISTED_MODELS.models,
-            { id: 'funasr-nano-int8', capability: 'asr' },
-            { id: 'qwen3-asr-1.7b-8bit', capability: 'asr' },
-            { id: 'kokoro-multi-lang-v1.1', capability: 'tts' },
-            { id: 'qwen3-tts-0.6b-customvoice-8bit', capability: 'tts' }
-          ]
-        }
-      return undefined
-    })
-    publishLocalModelStatus(EMBEDDING, { status: 'ready', percent: 100 })
-    render(<LocalModelsSection />)
-    await waitFor(() => expect(screen.getAllByRole('listitem')).toHaveLength(1))
-    expect(screen.getByText('settings.dependencies.localModels.embedding.name')).toBeInTheDocument()
-    expect(screen.getByText('settings.dependencies.localModels.status.ready')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'settings.dependencies.localModels.remove' })).toBeInTheDocument()
-    expect(screen.queryByText('settings.voice.model.funasr')).not.toBeInTheDocument()
-    expect(screen.queryByText('settings.dependencies.localModels.ocr.name')).not.toBeInTheDocument()
   })
 })
