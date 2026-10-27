@@ -1,9 +1,3 @@
-import { cacheService } from '@data/CacheService'
-import {
-  LOCAL_MODEL_STATUS_CACHE_KEY,
-  type LocalModelBundleId,
-  type LocalModelStatusSnapshot
-} from '@shared/data/presets/localModel'
 import { MockCacheUtils } from '@test-mocks/renderer/CacheService'
 import { MockUsePreferenceUtils } from '@test-mocks/renderer/usePreference'
 import { mockRendererLoggerService } from '@test-mocks/RendererLoggerService'
@@ -21,11 +15,6 @@ vi.unmock('@data/hooks/useCache')
 vi.mock('@renderer/ipc', () => ({
   ipcApi: { request: (...args: unknown[]) => mockRequest(...args) }
 }))
-
-function publishLocalModelStatus(id: LocalModelBundleId, snapshot: LocalModelStatusSnapshot): void {
-  const snapshots = cacheService.getSharedSnapshot(LOCAL_MODEL_STATUS_CACHE_KEY) ?? {}
-  cacheService.setShared(LOCAL_MODEL_STATUS_CACHE_KEY, { ...snapshots, [id]: snapshot })
-}
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key })
@@ -82,9 +71,6 @@ function mockRoutes(handler: (route: string, input?: { id: string }) => unknown)
     route === 'local_model.list' ? Promise.resolve(LISTED_MODELS) : Promise.resolve(handler(route, input))
   )
 }
-
-/** Only the embedding card is rendered on this page. */
-const embeddingCard = () => screen.getAllByRole('listitem')[0]
 
 describe('LocalModelsSection', () => {
   beforeEach(() => {
