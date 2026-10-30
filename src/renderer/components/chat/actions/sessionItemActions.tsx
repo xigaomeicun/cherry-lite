@@ -71,14 +71,11 @@ const sessionActionRegistry = createActionRegistry<SessionActionContext>()
 const hasExportOption = ({
   exportMenuOptions,
   onExportImage,
-  onExportJoplin,
   onExportMarkdown,
   onExportMarkdownReason,
   onExportNotion,
   onExportObsidian,
-  onExportSiyuan,
-  onExportWord,
-  onExportYuque
+  onExportWord
 }: SessionActionContext) =>
   (exportMenuOptions?.image && !!onExportImage) ||
   (exportMenuOptions?.markdown && !!onExportMarkdown) ||
