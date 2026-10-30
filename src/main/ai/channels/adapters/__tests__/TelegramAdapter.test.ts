@@ -535,7 +535,10 @@ describe('TelegramAdapter', () => {
     await adapter.connect()
     await adapter.sendMessage('123', 'Hello')
 
-    expect(mockBot.api.sendMessage).toHaveBeenCalledWith('123', 'Hello', { parse_mode: 'HTML' })
+    expect(mockBot.api.sendMessage).toHaveBeenCalledWith('123', 'Hello', {
+      parse_mode: 'HTML',
+      link_preview_options: { is_disabled: true }
+    })
   })
 
   it('sendMessage() converts markdown to Telegram HTML via library', async () => {
@@ -545,7 +548,7 @@ describe('TelegramAdapter', () => {
 
     const call = mockBot.api.sendMessage.mock.calls[0]
     expect(call[0]).toBe('123')
-    expect(call[2]).toEqual({ parse_mode: 'HTML' })
+    expect(call[2]).toEqual({ parse_mode: 'HTML', link_preview_options: { is_disabled: true } })
     expect(call[1]).toContain('<b>')
     expect(call[1]).not.toBe('**bold price**')
   })
@@ -561,6 +564,7 @@ describe('TelegramAdapter', () => {
     expect(mockBot.api.sendMessage).toHaveBeenCalledTimes(2)
     // Second call should be plain text fallback
     expect(mockBot.api.sendMessage.mock.calls[1][1]).toBe('Hello')
+    expect(mockBot.api.sendMessage.mock.calls[1][2]).toMatchObject({ link_preview_options: { is_disabled: true } })
   })
 
   it('sendMessage() chunks long messages', async () => {
@@ -758,10 +762,12 @@ describe('TelegramAdapter', () => {
 
     expect(mockBot.api.sendMessage).toHaveBeenCalledTimes(2)
     expect(mockBot.api.sendMessage).toHaveBeenNthCalledWith(1, '123', expect.stringContaining('<b>bold</b>'), {
-      parse_mode: 'HTML'
+      parse_mode: 'HTML',
+      link_preview_options: { is_disabled: true }
     })
     expect(mockBot.api.sendMessage).toHaveBeenNthCalledWith(2, '123', expect.stringContaining('<b>bold</b>'), {
-      parse_mode: 'HTML'
+      parse_mode: 'HTML',
+      link_preview_options: { is_disabled: true }
     })
   })
 
@@ -782,9 +788,12 @@ describe('TelegramAdapter', () => {
 
     expect(mockBot.api.sendMessage).toHaveBeenCalledTimes(2)
     expect(mockBot.api.sendMessage).toHaveBeenNthCalledWith(1, '123', expect.stringContaining('<b>bold</b>'), {
-      parse_mode: 'HTML'
+      parse_mode: 'HTML',
+      link_preview_options: { is_disabled: true }
     })
-    expect(mockBot.api.sendMessage).toHaveBeenNthCalledWith(2, '123', 'Hello **bold**', {})
+    expect(mockBot.api.sendMessage).toHaveBeenNthCalledWith(2, '123', 'Hello **bold**', {
+      link_preview_options: { is_disabled: true }
+    })
   })
 
   it('reboot command handler emits command events', async () => {

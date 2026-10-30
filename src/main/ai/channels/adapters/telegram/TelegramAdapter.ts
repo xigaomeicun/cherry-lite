@@ -23,6 +23,8 @@ import { planTelegramSend } from './markdownTg'
 import { TelegramToolBubbleController } from './TelegramToolBubble'
 
 const TELEGRAM_MAX_LENGTH = 4096
+/** 链接保持可点，但不展开预览卡片（卡片会把推送顶部变成整页预览）。 */
+const NO_LINK_PREVIEW = { link_preview_options: { is_disabled: true } } as const
 /** Bot API soft limit for sendPhoto; larger images fall back to sendDocument. */
 const TELEGRAM_PHOTO_MAX_BYTES = 10 * 1024 * 1024
 /** MIME types Telegram accepts as photos (GIF → document / animation). */
@@ -641,7 +643,11 @@ class TelegramAdapter extends ChannelAdapter {
             ? { reply_parameters: { message_id: opts.replyToMessageId } }
             : {}
         const markupParams = i === plainChunks.length - 1 && opts?.replyMarkup ? { reply_markup: opts.replyMarkup } : {}
-        const sent = await this.bot.api.sendMessage(chatId, plain, { ...replyParams, ...markupParams })
+        const sent = await this.bot.api.sendMessage(chatId, plain, {
+          ...NO_LINK_PREVIEW,
+          ...replyParams,
+          ...markupParams
+        })
         if (i === plainChunks.length - 1 && sent?.message_id !== undefined) opts?.onSent?.(sent.message_id)
       }
       return
@@ -671,6 +677,7 @@ class TelegramAdapter extends ChannelAdapter {
         try {
           await this.bot.api.sendMessage(chatId, chunk, {
             parse_mode: 'HTML',
+            ...NO_LINK_PREVIEW,
             ...replyParams,
             ...markupParams
           })
@@ -708,7 +715,7 @@ class TelegramAdapter extends ChannelAdapter {
         // 只降级本段：整篇重发会让已成功发出的段落重复
         const plainChunks = splitMessage(chunks[i].plain, TELEGRAM_MAX_LENGTH)
         for (const plain of plainChunks) {
-          await this.bot.api.sendMessage(chatId, plain, replyParams)
+          await this.bot.api.sendMessage(chatId, plain, { ...NO_LINK_PREVIEW, ...replyParams })
         }
       }
 
