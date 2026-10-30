@@ -20,10 +20,7 @@ const ExportMenuOptions: FC = () => {
     markdown: 'data.export.menus.markdown',
     markdown_reason: 'data.export.menus.markdown_reason',
     notion: 'data.export.menus.notion',
-    yuque: 'data.export.menus.yuque',
-    joplin: 'data.export.menus.joplin',
     obsidian: 'data.export.menus.obsidian',
-    siyuan: 'data.export.menus.siyuan',
     docx: 'data.export.menus.docx',
     plain_text: 'data.export.menus.plain_text'
   })
@@ -85,34 +82,10 @@ const ExportMenuOptions: FC = () => {
       <SettingDivider />
 
       <SettingRow>
-        <SettingRowTitle>{t('settings.data.export_menu.yuque')}</SettingRowTitle>
-        <Switch checked={exportMenuOptions.yuque} onCheckedChange={(checked) => handleToggleOption('yuque', checked)} />
-      </SettingRow>
-      <SettingDivider />
-
-      <SettingRow>
         <SettingRowTitle>{t('settings.data.export_menu.obsidian')}</SettingRowTitle>
         <Switch
           checked={exportMenuOptions.obsidian}
           onCheckedChange={(checked) => handleToggleOption('obsidian', checked)}
-        />
-      </SettingRow>
-      <SettingDivider />
-
-      <SettingRow>
-        <SettingRowTitle>{t('settings.data.export_menu.joplin')}</SettingRowTitle>
-        <Switch
-          checked={exportMenuOptions.joplin}
-          onCheckedChange={(checked) => handleToggleOption('joplin', checked)}
-        />
-      </SettingRow>
-      <SettingDivider />
-
-      <SettingRow>
-        <SettingRowTitle>{t('settings.data.export_menu.siyuan')}</SettingRowTitle>
-        <Switch
-          checked={exportMenuOptions.siyuan}
-          onCheckedChange={(checked) => handleToggleOption('siyuan', checked)}
         />
       </SettingRow>
       <SettingDivider />

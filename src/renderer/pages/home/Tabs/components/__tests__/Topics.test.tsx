@@ -1581,7 +1581,7 @@ describe('Topics', () => {
       'Clear messages',
       '',
       'Save to notes',
-      'ExportExport as ImageExport as MarkdownExport as Markdown with ReasoningExport as WordExport to NotionExport to YuqueExport to ObsidianExport to JoplinExport to Siyuan',
+      'ExportExport as ImageExport as MarkdownExport as Markdown with ReasoningExport as WordExport to NotionExport to Obsidian',
       'CopyCopy as ImageCopy as MarkdownCopy as Plain Text',
       '',
       'Delete'

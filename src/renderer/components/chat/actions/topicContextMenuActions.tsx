@@ -109,10 +109,7 @@ const hasExportOption = ({ exportMenuOptions }: TopicActionContext) =>
   exportMenuOptions.markdown_reason ||
   exportMenuOptions.docx ||
   exportMenuOptions.notion ||
-  exportMenuOptions.yuque ||
-  exportMenuOptions.obsidian ||
-  exportMenuOptions.joplin ||
-  exportMenuOptions.siyuan
+  exportMenuOptions.obsidian
 
 topicActionRegistry.registerCommand({
   id: 'topic.auto-rename',
@@ -201,23 +198,8 @@ topicActionRegistry.registerCommand({
 })
 
 topicActionRegistry.registerCommand({
-  id: 'topic.export.yuque',
-  run: ({ onExportYuque, topic }) => onExportYuque(topic)
-})
-
-topicActionRegistry.registerCommand({
   id: 'topic.export.obsidian',
   run: ({ onExportObsidian, topic }) => onExportObsidian(topic)
-})
-
-topicActionRegistry.registerCommand({
-  id: 'topic.export.joplin',
-  run: ({ onExportJoplin, topic }) => onExportJoplin(topic)
-})
-
-topicActionRegistry.registerCommand({
-  id: 'topic.export.siyuan',
-  run: ({ onExportSiyuan, topic }) => onExportSiyuan(topic)
 })
 
 topicActionRegistry.registerCommand({
@@ -414,36 +396,12 @@ topicActionRegistry.registerAction({
       availability: ({ exportMenuOptions }) => ({ visible: exportMenuOptions.notion })
     },
     {
-      id: 'topic.export.yuque',
-      commandId: 'topic.export.yuque',
-      label: ({ t }) => t('chat.topics.export.yuque'),
-      order: 60,
-      surface: 'menu',
-      availability: ({ exportMenuOptions }) => ({ visible: exportMenuOptions.yuque })
-    },
-    {
       id: 'topic.export.obsidian',
       commandId: 'topic.export.obsidian',
       label: ({ t }) => t('chat.topics.export.obsidian'),
       order: 70,
       surface: 'menu',
       availability: ({ exportMenuOptions }) => ({ visible: exportMenuOptions.obsidian })
-    },
-    {
-      id: 'topic.export.joplin',
-      commandId: 'topic.export.joplin',
-      label: ({ t }) => t('chat.topics.export.joplin'),
-      order: 80,
-      surface: 'menu',
-      availability: ({ exportMenuOptions }) => ({ visible: exportMenuOptions.joplin })
-    },
-    {
-      id: 'topic.export.siyuan',
-      commandId: 'topic.export.siyuan',
-      label: ({ t }) => t('chat.topics.export.siyuan'),
-      order: 90,
-      surface: 'menu',
-      availability: ({ exportMenuOptions }) => ({ visible: exportMenuOptions.siyuan })
     }
   ]
 })

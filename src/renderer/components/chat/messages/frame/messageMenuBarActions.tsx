@@ -619,36 +619,12 @@ registerAction({
       availability: ({ actions, menuConfig }) => menuConfig.exportMenuOptions.notion && !!actions.exportToNotion
     },
     {
-      id: 'export.yuque',
-      commandId: 'message.exportYuque',
-      label: ({ t }) => t('chat.topics.export.yuque'),
-      group: 'external',
-      order: 60,
-      availability: ({ actions, menuConfig }) => menuConfig.exportMenuOptions.yuque && !!actions.exportToYuque
-    },
-    {
       id: 'export.obsidian',
       commandId: 'message.exportObsidian',
       label: ({ t }) => t('chat.topics.export.obsidian'),
       group: 'external',
       order: 70,
       availability: ({ actions, menuConfig }) => menuConfig.exportMenuOptions.obsidian && !!actions.exportToObsidian
-    },
-    {
-      id: 'export.joplin',
-      commandId: 'message.exportJoplin',
-      label: ({ t }) => t('chat.topics.export.joplin'),
-      group: 'external',
-      order: 80,
-      availability: ({ actions, menuConfig }) => menuConfig.exportMenuOptions.joplin && !!actions.exportToJoplin
-    },
-    {
-      id: 'export.siyuan',
-      commandId: 'message.exportSiyuan',
-      label: ({ t }) => t('chat.topics.export.siyuan'),
-      group: 'external',
-      order: 90,
-      availability: ({ actions, menuConfig }) => menuConfig.exportMenuOptions.siyuan && !!actions.exportToSiyuan
     },
     {
       id: 'export.copy-plain-text',

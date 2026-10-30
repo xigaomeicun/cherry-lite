@@ -814,10 +814,7 @@ describe('messageMenuBarActions', () => {
       'export.markdown-reason',
       'export.word',
       'export.notion',
-      'export.yuque',
       'export.obsidian',
-      'export.joplin',
-      'export.siyuan',
       'export.copy-plain-text',
       'export.copy-image'
     ])

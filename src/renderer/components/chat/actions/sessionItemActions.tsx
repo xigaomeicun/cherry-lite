@@ -85,10 +85,7 @@ const hasExportOption = ({
   (exportMenuOptions?.markdown_reason && !!onExportMarkdownReason) ||
   (exportMenuOptions?.docx && !!onExportWord) ||
   (exportMenuOptions?.notion && !!onExportNotion) ||
-  (exportMenuOptions?.yuque && !!onExportYuque) ||
-  (exportMenuOptions?.obsidian && !!onExportObsidian) ||
-  (exportMenuOptions?.joplin && !!onExportJoplin) ||
-  (exportMenuOptions?.siyuan && !!onExportSiyuan)
+  (exportMenuOptions?.obsidian && !!onExportObsidian)
 
 const hasCopyOption = ({
   exportMenuOptions,
@@ -196,39 +193,12 @@ sessionActionRegistry.registerCommand({
 })
 
 sessionActionRegistry.registerCommand({
-  id: 'session.export.yuque',
-  availability: ({ exportMenuOptions, onExportYuque }) => ({
-    visible: !!exportMenuOptions?.yuque && !!onExportYuque,
-    enabled: !!exportMenuOptions?.yuque && !!onExportYuque
-  }),
-  run: ({ onExportYuque }) => onExportYuque?.()
-})
-
-sessionActionRegistry.registerCommand({
   id: 'session.export.obsidian',
   availability: ({ exportMenuOptions, onExportObsidian }) => ({
     visible: !!exportMenuOptions?.obsidian && !!onExportObsidian,
     enabled: !!exportMenuOptions?.obsidian && !!onExportObsidian
   }),
   run: ({ onExportObsidian }) => onExportObsidian?.()
-})
-
-sessionActionRegistry.registerCommand({
-  id: 'session.export.joplin',
-  availability: ({ exportMenuOptions, onExportJoplin }) => ({
-    visible: !!exportMenuOptions?.joplin && !!onExportJoplin,
-    enabled: !!exportMenuOptions?.joplin && !!onExportJoplin
-  }),
-  run: ({ onExportJoplin }) => onExportJoplin?.()
-})
-
-sessionActionRegistry.registerCommand({
-  id: 'session.export.siyuan',
-  availability: ({ exportMenuOptions, onExportSiyuan }) => ({
-    visible: !!exportMenuOptions?.siyuan && !!onExportSiyuan,
-    enabled: !!exportMenuOptions?.siyuan && !!onExportSiyuan
-  }),
-  run: ({ onExportSiyuan }) => onExportSiyuan?.()
 })
 
 sessionActionRegistry.registerCommand({
@@ -409,31 +379,10 @@ sessionActionRegistry.registerAction({
       surface: 'menu'
     },
     {
-      id: 'session.export.yuque',
-      commandId: 'session.export.yuque',
-      label: ({ t }) => t('chat.topics.export.yuque'),
-      order: 60,
-      surface: 'menu'
-    },
-    {
       id: 'session.export.obsidian',
       commandId: 'session.export.obsidian',
       label: ({ t }) => t('chat.topics.export.obsidian'),
       order: 70,
-      surface: 'menu'
-    },
-    {
-      id: 'session.export.joplin',
-      commandId: 'session.export.joplin',
-      label: ({ t }) => t('chat.topics.export.joplin'),
-      order: 80,
-      surface: 'menu'
-    },
-    {
-      id: 'session.export.siyuan',
-      commandId: 'session.export.siyuan',
-      label: ({ t }) => t('chat.topics.export.siyuan'),
-      order: 90,
       surface: 'menu'
     }
   ]
