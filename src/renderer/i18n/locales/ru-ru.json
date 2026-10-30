@@ -4907,7 +4907,6 @@
   "settings.notification.assistant": "Уведомления о завершении диалога",
   "settings.notification.backup": "Резервное сообщение",
   "settings.notification.knowledge_embed": "Сообщение базы знаний",
-  "settings.notification.mini_app": "Уведомления мини-приложений (все приложения)",
   "settings.notification.title": "Уведомления",
   "settings.notification.update": "Обновление приложения",
   "settings.openai.title": "Настройки OpenAI",

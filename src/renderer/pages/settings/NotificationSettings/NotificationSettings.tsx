@@ -21,8 +21,7 @@ const NotificationSettings: FC = () => {
     completion_sound: 'app.notification.completion_sound.enabled',
     approval_sound: 'app.notification.approval_sound.enabled',
     backup: 'app.notification.backup.enabled',
-    update: 'app.notification.update.enabled',
-    'mini-app': 'app.notification.mini_app.enabled'
+    update: 'app.notification.update.enabled'
   })
 
   const handleNotificationChange = (type: string, value: boolean) => {
@@ -93,15 +92,6 @@ const NotificationSettings: FC = () => {
             aria-label={t('settings.notification.update')}
             checked={notificationSettings.update}
             onCheckedChange={(v) => handleNotificationChange('update', v)}
-          />
-        </SettingRow>
-        <SettingDivider />
-        <SettingRow id="setting-notifications-mini-app-notification" className="scroll-mt-6">
-          <SettingRowTitle>{t('settings.notification.mini_app')}</SettingRowTitle>
-          <Switch
-            aria-label={t('settings.notification.mini_app')}
-            checked={notificationSettings['mini-app']}
-            onCheckedChange={(v) => handleNotificationChange('mini-app', v)}
           />
         </SettingRow>
       </SettingGroup>

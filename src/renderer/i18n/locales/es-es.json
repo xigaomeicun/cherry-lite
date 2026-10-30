@@ -4907,7 +4907,6 @@
   "settings.notification.assistant": "Notificaciones de finalización de conversaciones",
   "settings.notification.backup": "Copia de seguridad",
   "settings.notification.knowledge_embed": "Base de conocimiento",
-  "settings.notification.mini_app": "Notificaciones de miniaplicaciones (todas)",
   "settings.notification.title": "Notificaciones",
   "settings.notification.update": "Actualización de la aplicación",
   "settings.openai.title": "Configuración de OpenAI",
