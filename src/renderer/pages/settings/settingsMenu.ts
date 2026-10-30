@@ -79,6 +79,24 @@ export const settingsMenu: readonly SettingsMenuEntry[] = [
     groupKey: 'settings.menuGroups.capabilities'
   },
   {
+    route: '/settings/channels',
+    titleKey: 'settings.channels.title',
+    icon: createElement(Radio),
+    groupKey: 'settings.menuGroups.capabilities'
+  },
+  {
+    route: '/settings/scheduled-tasks',
+    titleKey: 'settings.scheduledTasks.title',
+    icon: createElement(CalendarClock),
+    groupKey: 'settings.menuGroups.capabilities'
+  },
+  {
+    route: '/settings/shortcut',
+    titleKey: 'settings.shortcuts.title',
+    icon: createElement(Command),
+    groupKey: 'settings.menuGroups.capabilities'
+  },
+  {
     route: '/settings/general',
     titleKey: 'settings.general.common.title',
     icon: createElement(Settings2),
@@ -113,24 +131,6 @@ export const settingsMenu: readonly SettingsMenuEntry[] = [
     titleKey: 'settings.usage.title',
     icon: createElement(Activity),
     groupKey: 'settings.menuGroups.personal'
-  },
-  {
-    route: '/settings/channels',
-    titleKey: 'settings.channels.title',
-    icon: createElement(Radio),
-    groupKey: 'settings.menuGroups.automation'
-  },
-  {
-    route: '/settings/scheduled-tasks',
-    titleKey: 'settings.scheduledTasks.title',
-    icon: createElement(CalendarClock),
-    groupKey: 'settings.menuGroups.automation'
-  },
-  {
-    route: '/settings/shortcut',
-    titleKey: 'settings.shortcuts.title',
-    icon: createElement(Command),
-    groupKey: 'settings.menuGroups.automation'
   },
   {
     route: '/settings/dependencies',

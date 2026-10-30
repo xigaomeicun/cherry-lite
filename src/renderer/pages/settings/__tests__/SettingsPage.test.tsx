@@ -70,7 +70,6 @@ vi.mock('react-i18next', () => ({
         'settings.dependencies.title': '环境依赖',
         'settings.dependencies.localModels.title': '本地模型',
         'settings.general.common.title': zhCN['settings.general.common.title'],
-        'settings.menuGroups.automation': '效率',
         'settings.menuGroups.capabilities': '工具',
         'settings.menuGroups.personal': '偏好',
         'settings.menuGroups.quickAccess': '快捷入口',
@@ -171,17 +170,19 @@ describe('SettingsPage', () => {
     expect(navigateMock).toHaveBeenCalledWith({ to: '/settings/prompts' })
   })
 
-  it('merges quick access into efficiency with shortcut last', () => {
+  it('lists channels, scheduled tasks and shortcuts at the end of the tools group, with no efficiency group', () => {
     render(<SettingsPage />)
 
-    expect(screen.getByText('效率')).toBeInTheDocument()
+    expect(screen.queryByText('效率')).not.toBeInTheDocument()
     expect(screen.queryByText('快捷入口')).not.toBeInTheDocument()
 
-    const efficiencyItems = ['频道', '定时任务', '快捷键'].map((name) => screen.getByRole('button', { name }))
+    const websearchItem = screen.getByText('settings.tool.websearch.title').closest('button')
+    const toolItems = ['频道', '定时任务', '快捷键'].map((name) => screen.getByRole('button', { name }))
     const menuItems = screen.getAllByTestId('menu-item')
-    const efficiencyStart = menuItems.indexOf(efficiencyItems[0])
+    const start = menuItems.indexOf(toolItems[0])
 
-    expect(menuItems.slice(efficiencyStart, efficiencyStart + efficiencyItems.length)).toEqual(efficiencyItems)
-    expect(efficiencyItems.at(-1)?.nextElementSibling).toHaveAttribute('data-testid', 'menu-divider')
+    expect(websearchItem?.nextElementSibling).toBe(toolItems[0])
+    expect(menuItems.slice(start, start + toolItems.length)).toEqual(toolItems)
+    expect(toolItems.at(-1)?.nextElementSibling).toHaveAttribute('data-testid', 'menu-divider')
   })
 })
