@@ -157,6 +157,11 @@ vi.mock('electron', () => {
       on: vi.fn(),
       removeListener: vi.fn()
     },
+    // RemoteAccessService subscribes to system resume to refresh its advertisement.
+    powerMonitor: {
+      on: vi.fn(),
+      removeListener: vi.fn()
+    },
     screen: {
       getPrimaryDisplay: vi.fn(),
       getAllDisplays: vi.fn()
