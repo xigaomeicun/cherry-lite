@@ -635,9 +635,12 @@ export class BinaryManager extends BaseService {
       // and an out-of-band executable now satisfies the tool. Unknown/broken
       // application still needs the failure row to explain why Retry made no
       // change, even if system/bundled availability keeps execution possible.
+      // External availability satisfies only untargeted failures; targeted
+      // failures must remain visible so Retry repeats the requested version.
       const staleFailedInstall =
         operation?.status === 'failed' &&
         operation.action === 'install' &&
+        operation.targetVersion === undefined &&
         (!derivedTool.application || derivedTool.application.status === 'absent') &&
         (availability.source === 'system' || availability.source === 'bundled')
       snapshots[name] = {
@@ -1593,8 +1596,9 @@ export class BinaryManager extends BaseService {
    * recipe was already persisted by Custom Add). An unknown name, a foreign
    * conflict, or an unreadable backend reject without mutating; an already-applied
    * tool is a no-op (or a one-shot version update when a target is given); an
-   * externally satisfied tool (bundled/system) is a logged no-op so a race
-   * converges. A backend failure records a failed operation and rejects.
+   * external copy is a logged no-op without a target or with an exact bundled
+   * semver match. Unmet/unprovable targets and backend failures record a failed
+   * operation and reject.
    */
   installByName(request: BinaryInstallByNameRequest): Promise<void> {
     const { name, targetVersion } = request
@@ -1641,41 +1645,48 @@ export class BinaryManager extends BaseService {
   private async installByNameImpl(name: string, targetVersion: string | undefined): Promise<void> {
     const outcome = await this.mutationMutex.runExclusive(
       async (): Promise<{ kind: 'done' } | { kind: 'reject' | 'failed'; error: string }> => {
-        const definition = this.resolveDefinition(name)
-        if (!definition) return { kind: 'reject', error: `Unknown tool: ${name}` }
-
-        // The system probe reads the cached login-shell env, which can predate a
-        // CLI the user installed mid-session; deciding from that stale PATH would
-        // lay down a managed shadow copy over a now-present system binary.
-        // Re-capture before deriving the facts this decision runs on (the fetch
-        // falls back to process.env on failure and never rejects).
-        await refreshShellEnv()
-        const snapshot = (await this.getToolSnapshots([name]))[name]
-        const status = snapshot.application?.status
-        const source = snapshot.availability.source
-
-        // conflict/unknown: the exact recipe is not proven absent, and installing
-        // over a foreign shim or an unreadable backend could shadow an existing
-        // tool — reject without mutating.
-        if (status === 'conflict')
-          return { kind: 'failed', error: `Tool ${name} resolves to a conflicting installation` }
-        if (status === 'unknown') {
-          const reason = snapshot.application?.status === 'unknown' ? snapshot.application.reason : 'query_failed'
-          return { kind: 'failed', error: `Cannot determine ${name} state: ${reason}` }
-        }
-        // applied: nothing to do unless a one-shot target update is requested.
-        if (status === 'applied' && !targetVersion) return { kind: 'done' }
-        // absent + an external copy: a race already satisfied it — never lay down a
-        // managed shadow copy over a bundled/system binary.
-        if (status === 'absent' && (source === 'bundled' || source === 'system')) {
-          logger.info('Skipping managed install; tool already available from an external source', { name, source })
-          return { kind: 'done' }
-        }
-
-        // absent+none, broken, or applied+target → apply the exact recipe. The
-        // returned concrete pin is intentionally ignored: name-only installs never
-        // write Preference.
         try {
+          const definition = this.resolveDefinition(name)
+          if (!definition) return { kind: 'reject', error: `Unknown tool: ${name}` }
+
+          // Refresh PATH so a mid-session system install is not shadowed by a managed copy.
+          await refreshShellEnv()
+          const snapshot = (await this.getToolSnapshots([name]))[name]
+          const status = snapshot.application?.status
+          const availability = snapshot.availability
+          const source = availability.source
+
+          // Unproven ownership must not authorize installing over an existing tool.
+          if (status === 'conflict')
+            return { kind: 'failed', error: `Tool ${name} resolves to a conflicting installation` }
+          if (status === 'unknown') {
+            const reason = snapshot.application?.status === 'unknown' ? snapshot.application.reason : 'query_failed'
+            return { kind: 'failed', error: `Cannot determine ${name} state: ${reason}` }
+          }
+          if (status === 'applied' && !targetVersion) return { kind: 'done' }
+          // External copies must satisfy explicit targets without creating a managed shadow.
+          if (status === 'absent' && (source === 'bundled' || source === 'system')) {
+            if (targetVersion) {
+              if (source === 'system') {
+                return {
+                  kind: 'failed',
+                  error: `Cannot satisfy ${name}@${targetVersion}: source=system; installed version cannot be verified. Cherry Studio cannot update or replace this system installation. Manage it outside Cherry Studio, or omit the version target (requestedVersion in cli_install) to use the available executable.`
+                }
+              }
+              const version = availability.version
+              const requested = semverValid(targetVersion)
+              if (requested === null || !version || requested !== semverValid(version)) {
+                return {
+                  kind: 'failed',
+                  error: `Cannot satisfy ${name}@${targetVersion}: source=bundled; bundled version=${version ?? 'unknown (version marker missing or empty)'}. The requested version could not be verified as an exact semantic-version match. Omit the version target (requestedVersion in cli_install) to use the bundled copy, or update/reinstall Cherry Studio; bundled tools cannot be updated independently.`
+                }
+              }
+            }
+            logger.info('Skipping managed install; tool already available from an external source', { name, source })
+            return { kind: 'done' }
+          }
+
+          // Name-only installs never persist the resolved version into Preference.
           const definitions = await this.appliedRuntimeDefinitions(this.getCustomDefinitions())
           // Invalidate before invoking mise: a failed command may still have made a
           // partial backend change, which must also stale any in-flight latest batch.
@@ -1693,9 +1704,8 @@ export class BinaryManager extends BaseService {
       return
     }
     if (outcome.kind === 'failed') {
-      // Retain the update target so a Retry repeats the same targeted install; a
-      // name-only retry of a failed update would hit the applied no-op and falsely
-      // clear the failure without repeating the update.
+      // Retain the target so Retry cannot silently clear an unmet version
+      // through an applied or external name-only no-op.
       this.setOperation(name, {
         status: 'failed',
         action: 'install',
