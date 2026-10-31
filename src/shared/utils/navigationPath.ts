@@ -65,7 +65,6 @@ const KNOWN_NAVIGATION_ROUTES = [
   '/settings/usage',
   '/settings/mcp/servers',
   '/settings/mcp/builtin',
-  '/settings/mcp/marketplaces',
   '/settings/mcp/npx-search',
   '/settings/mcp/mcp-install',
   '/settings/mcp/settings',

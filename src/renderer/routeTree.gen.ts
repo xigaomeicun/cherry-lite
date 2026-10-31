@@ -53,7 +53,6 @@ import { Route as AppPaintingsSplatRouteImport } from './routes/app/paintings/$'
 import { Route as SettingsMcpIndexRouteImport } from './routes/settings/mcp.index'
 import { Route as SettingsMcpSplatRouteImport } from './routes/settings/mcp/$'
 import { Route as SettingsMcpBuiltinRouteImport } from './routes/settings/mcp/builtin'
-import { Route as SettingsMcpMarketplacesRouteImport } from './routes/settings/mcp/marketplaces'
 import { Route as SettingsMcpMcpInstallRouteImport } from './routes/settings/mcp/mcp-install'
 import { Route as SettingsMcpNpxSearchRouteImport } from './routes/settings/mcp/npx-search'
 import { Route as SettingsMcpServersRouteImport } from './routes/settings/mcp/servers'
@@ -285,11 +284,6 @@ const SettingsMcpBuiltinRoute = SettingsMcpBuiltinRouteImport.update({
   path: '/builtin',
   getParentRoute: () => SettingsMcpRoute,
 } as any)
-const SettingsMcpMarketplacesRoute = SettingsMcpMarketplacesRouteImport.update({
-  id: '/marketplaces',
-  path: '/marketplaces',
-  getParentRoute: () => SettingsMcpRoute,
-} as any)
 const SettingsMcpMcpInstallRoute = SettingsMcpMcpInstallRouteImport.update({
   id: '/mcp-install',
   path: '/mcp-install',
@@ -377,7 +371,6 @@ export interface FileRoutesByFullPath {
   '/app/paintings/$': typeof AppPaintingsSplatRoute
   '/settings/mcp/$': typeof SettingsMcpSplatRoute
   '/settings/mcp/builtin': typeof SettingsMcpBuiltinRoute
-  '/settings/mcp/marketplaces': typeof SettingsMcpMarketplacesRoute
   '/settings/mcp/mcp-install': typeof SettingsMcpMcpInstallRoute
   '/settings/mcp/npx-search': typeof SettingsMcpNpxSearchRoute
   '/settings/mcp/servers': typeof SettingsMcpServersRoute
@@ -428,7 +421,6 @@ export interface FileRoutesByTo {
   '/app/paintings/$': typeof AppPaintingsSplatRoute
   '/settings/mcp/$': typeof SettingsMcpSplatRoute
   '/settings/mcp/builtin': typeof SettingsMcpBuiltinRoute
-  '/settings/mcp/marketplaces': typeof SettingsMcpMarketplacesRoute
   '/settings/mcp/mcp-install': typeof SettingsMcpMcpInstallRoute
   '/settings/mcp/npx-search': typeof SettingsMcpNpxSearchRoute
   '/settings/mcp/servers': typeof SettingsMcpServersRoute
@@ -484,7 +476,6 @@ export interface FileRoutesById {
   '/app/paintings/$': typeof AppPaintingsSplatRoute
   '/settings/mcp/$': typeof SettingsMcpSplatRoute
   '/settings/mcp/builtin': typeof SettingsMcpBuiltinRoute
-  '/settings/mcp/marketplaces': typeof SettingsMcpMarketplacesRoute
   '/settings/mcp/mcp-install': typeof SettingsMcpMcpInstallRoute
   '/settings/mcp/npx-search': typeof SettingsMcpNpxSearchRoute
   '/settings/mcp/servers': typeof SettingsMcpServersRoute
@@ -541,7 +532,6 @@ export interface FileRouteTypes {
     | '/app/paintings/$'
     | '/settings/mcp/$'
     | '/settings/mcp/builtin'
-    | '/settings/mcp/marketplaces'
     | '/settings/mcp/mcp-install'
     | '/settings/mcp/npx-search'
     | '/settings/mcp/servers'
@@ -592,7 +582,6 @@ export interface FileRouteTypes {
     | '/app/paintings/$'
     | '/settings/mcp/$'
     | '/settings/mcp/builtin'
-    | '/settings/mcp/marketplaces'
     | '/settings/mcp/mcp-install'
     | '/settings/mcp/npx-search'
     | '/settings/mcp/servers'
@@ -647,7 +636,6 @@ export interface FileRouteTypes {
     | '/app/paintings/$'
     | '/settings/mcp/$'
     | '/settings/mcp/builtin'
-    | '/settings/mcp/marketplaces'
     | '/settings/mcp/mcp-install'
     | '/settings/mcp/npx-search'
     | '/settings/mcp/servers'
@@ -975,13 +963,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SettingsMcpBuiltinRouteImport
       parentRoute: typeof SettingsMcpRoute
     }
-    '/settings/mcp/marketplaces': {
-      id: '/settings/mcp/marketplaces'
-      path: '/marketplaces'
-      fullPath: '/settings/mcp/marketplaces'
-      preLoaderRoute: typeof SettingsMcpMarketplacesRouteImport
-      parentRoute: typeof SettingsMcpRoute
-    }
     '/settings/mcp/mcp-install': {
       id: '/settings/mcp/mcp-install'
       path: '/mcp-install'
@@ -1074,7 +1055,6 @@ const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
 interface SettingsMcpRouteChildren {
   SettingsMcpSplatRoute: typeof SettingsMcpSplatRoute
   SettingsMcpBuiltinRoute: typeof SettingsMcpBuiltinRoute
-  SettingsMcpMarketplacesRoute: typeof SettingsMcpMarketplacesRoute
   SettingsMcpMcpInstallRoute: typeof SettingsMcpMcpInstallRoute
   SettingsMcpNpxSearchRoute: typeof SettingsMcpNpxSearchRoute
   SettingsMcpServersRoute: typeof SettingsMcpServersRoute
@@ -1085,7 +1065,6 @@ interface SettingsMcpRouteChildren {
 const SettingsMcpRouteChildren: SettingsMcpRouteChildren = {
   SettingsMcpSplatRoute: SettingsMcpSplatRoute,
   SettingsMcpBuiltinRoute: SettingsMcpBuiltinRoute,
-  SettingsMcpMarketplacesRoute: SettingsMcpMarketplacesRoute,
   SettingsMcpMcpInstallRoute: SettingsMcpMcpInstallRoute,
   SettingsMcpNpxSearchRoute: SettingsMcpNpxSearchRoute,
   SettingsMcpServersRoute: SettingsMcpServersRoute,

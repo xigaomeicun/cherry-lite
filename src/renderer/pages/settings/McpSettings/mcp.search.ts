@@ -17,10 +17,5 @@ export const entries: SettingsSearchEntry[] = [
     anchorId: 'tab-builtin',
     titleKey: 'settings.mcp.builtinServers',
     route: '/settings/mcp/builtin'
-  },
-  {
-    anchorId: 'tab-marketplaces',
-    titleKey: 'settings.mcp.marketplaces',
-    route: '/settings/mcp/marketplaces'
   }
 ]

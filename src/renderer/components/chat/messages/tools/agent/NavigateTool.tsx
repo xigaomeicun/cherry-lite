@@ -44,7 +44,6 @@ const ROUTE_LABELS: Record<string, { icon: string; labelKey: string }> = {
   // MCP sub-pages
   '/settings/mcp/servers': { icon: '📋', labelKey: 'settings.mcp.title' },
   '/settings/mcp/builtin': { icon: '📦', labelKey: 'settings.mcp.builtinServers' },
-  '/settings/mcp/marketplaces': { icon: '🛒', labelKey: 'settings.mcp.marketplaces' },
   '/settings/mcp/npx-search': { icon: '🔍', labelKey: 'settings.mcp.searchNpx' },
   '/settings/mcp/mcp-install': { icon: '📥', labelKey: 'settings.mcp.install' },
   '/settings/mcp/settings': { icon: '⚙️', labelKey: 'settings.mcp.system' }

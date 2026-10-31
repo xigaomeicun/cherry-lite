@@ -10,7 +10,7 @@ import {
   settingsSubmenuSectionTitleClassName
 } from '@renderer/pages/settings/settingsStyles'
 import { Outlet, useLocation, useNavigate } from '@tanstack/react-router'
-import { FolderCog, Server, ShoppingBag } from 'lucide-react'
+import { FolderCog, Server } from 'lucide-react'
 import type { FC } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -27,7 +27,6 @@ const McpSettings: FC = () => {
 
     // 精确匹配路径
     if (path === '/settings/mcp/builtin') return 'builtin'
-    if (path === '/settings/mcp/marketplaces') return 'marketplaces'
 
     // 检查是否是服务商页面 - 精确匹配
     for (const provider of providers) {
@@ -66,15 +65,6 @@ const McpSettings: FC = () => {
                 active={activeView === 'builtin'}
                 onClick={() => navigate({ to: '/settings/mcp/builtin' })}
                 icon={<Server size={18} />}
-                className={settingsSubmenuItemClassName}
-                labelClassName={settingsSubmenuItemLabelClassName}
-              />
-              <MenuItem
-                id="setting-mcp-marketplaces-tab-marketplaces"
-                label={t('settings.mcp.marketplaces', 'Marketplaces')}
-                active={activeView === 'marketplaces'}
-                onClick={() => navigate({ to: '/settings/mcp/marketplaces' })}
-                icon={<ShoppingBag size={18} />}
                 className={settingsSubmenuItemClassName}
                 labelClassName={settingsSubmenuItemLabelClassName}
               />
