@@ -191,7 +191,7 @@ export function buildPiProviderInjection(
     ? formatApiHost(resolvedEndpoint.baseUrl, false)
     : projectPiGatewayBaseUrl(provider, api, formatPiBaseUrl(resolvedEndpoint.baseUrl, api))
   const modelId = getRawModelId(model)
-  const modelConfig = buildPiModelConfig(provider, model, modelId, api, resolvedEndpoint.endpointType)
+  const modelConfig = buildPiModelConfig(provider, model, modelId, api, resolvedEndpoint.endpointType, baseUrl)
 
   const providerConfig: PiProviderInjection['providerConfig'] = {
     name: provider.name,
@@ -262,9 +262,10 @@ export function buildPiGatewayInjection(
     : undefined
   const api = mapEndpointToPiApi(resolvedEndpoint.endpointType, adapterFamily)
   if (!api) throw new PiUnsupportedProviderError(provider.id)
+  const baseUrl = formatPiBaseUrl(gateway.baseUrl, api)
 
   const modelId = formatGatewayModelId(provider.id, getRawModelId(model))
-  const modelConfig = buildPiModelConfig(provider, model, modelId, api, resolvedEndpoint.endpointType)
+  const modelConfig = buildPiModelConfig(provider, model, modelId, api, resolvedEndpoint.endpointType, baseUrl)
   const headers = Object.keys(gateway.usageHeaders).length ? gateway.usageHeaders : undefined
 
   return {
@@ -273,7 +274,7 @@ export function buildPiGatewayInjection(
     suppressReasoningSummary: false,
     providerConfig: {
       name: provider.name,
-      baseUrl: formatPiBaseUrl(gateway.baseUrl, api),
+      baseUrl,
       apiKey: PI_PLACEHOLDER_API_KEY,
       api,
       ...(headers ? { headers } : {}),
@@ -440,12 +441,19 @@ function buildThinkingLevelMap(model: Model): PiChatModelConfig['thinkingLevelMa
   return map
 }
 
+function targetsGoogleGenerativeLanguage(baseUrl: string): boolean {
+  const url = URL.parse(baseUrl)
+  if (!url || (url.protocol !== 'http:' && url.protocol !== 'https:')) return false
+  return url.hostname.toLowerCase().replace(/\.$/, '') === 'generativelanguage.googleapis.com'
+}
+
 function buildPiModelConfig(
   provider: Provider,
   model: Model,
   id: string,
   api: PiApi,
-  endpointType: EndpointType | undefined
+  endpointType: EndpointType | undefined,
+  baseUrl: string
 ): PiChatModelConfig {
   const input: ('text' | 'image')[] = ['text']
   const supportsImage =
@@ -460,6 +468,7 @@ function buildPiModelConfig(
       ? projectPiReasoningCompat(providerRegistryService.resolveReasoningProfile(provider, model, endpointType))
       : {}
   const compat = {
+    ...(api === 'openai-completions' && targetsGoogleGenerativeLanguage(baseUrl) ? { supportsStore: false } : {}),
     // Cherry's endpoint capability overrides pi's URL-based developer-role inference.
     ...(api === 'openai-completions' || api === 'openai-responses'
       ? { supportsDeveloperRole: resolveEndpointDialect(provider, endpointType).developerRole }
