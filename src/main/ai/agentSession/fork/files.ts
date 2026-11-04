@@ -15,6 +15,25 @@ export async function forkFileIdentity(file: string): Promise<string> {
   return [stat.dev, stat.ino].join(':')
 }
 
+/**
+ * Whether a recorded `dev:ino` identity still names the directory at its fixed, owned path.
+ *
+ * macOS assigns APFS volumes a new `st_dev` across reboots/remounts while inodes stay stable, so a
+ * strict string compare made every fork staged before a reboot unprovable forever (re-warning on
+ * each boot). Callers only use this for paths already pinned to the owned location
+ * (`<forks>/<operationId>` or the session's own system workspace), so a matching non-zero inode on
+ * a real directory is still proof of ownership; a recreated directory gets a different inode.
+ */
+export function sameDirectoryIdentity(
+  recorded: string | undefined,
+  current: { dev: bigint; ino: bigint; isDirectory(): boolean }
+): boolean {
+  if (!recorded || !current.isDirectory() || current.ino === 0n) return false
+  if (recorded === [current.dev, current.ino].join(':')) return true
+  const [, recordedIno] = recorded.split(':')
+  return recordedIno !== undefined && /^[1-9][0-9]*$/.test(recordedIno) && BigInt(recordedIno) === current.ino
+}
+
 /** Publish exclusively, including when an external Claude config lives on another volume. */
 export async function publishForkArtifact(
   source: string,

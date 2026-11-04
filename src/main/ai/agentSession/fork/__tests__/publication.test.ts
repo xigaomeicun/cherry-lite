@@ -1,11 +1,7 @@
 import { randomUUID } from 'node:crypto'
-import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-
-import { setupTestDatabase } from '@test-helpers/db'
-import { eq } from 'drizzle-orm'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { application } from '@application'
 import { agentTable } from '@data/db/schemas/agent'
@@ -18,6 +14,9 @@ import { agentSessionService } from '@data/services/AgentSessionService'
 import type { RuntimeForkInput, RuntimeForkResult } from '@main/ai/runtime/fork'
 import { runtimeDriverRegistry } from '@main/ai/runtime/registry'
 import * as fileUtils from '@main/utils/file'
+import { setupTestDatabase } from '@test-helpers/db'
+import { eq } from 'drizzle-orm'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { AgentSessionForkOperations } from '../AgentSessionForkOperations'
 import { readForkResources, writeForkResources } from '../resources'
@@ -435,5 +434,49 @@ describe('Agent fork publication', () => {
     expect(await readForkResources()).toEqual([])
     // …and the file we could not prove we own is untouched.
     expect(await readFile(target, 'utf8')).toBe('the live session kept writing')
+  })
+  it('still proves ownership of its staging after the volume device number changes', async () => {
+    // macOS renumbers APFS `st_dev` across reboots while inodes stay stable; a strict dev:ino
+    // compare kept every pre-reboot staging directory forever and re-warned on each boot.
+    const operationId = randomUUID()
+    const artifactDirectory = path.join(forkRoot, operationId)
+    await mkdir(artifactDirectory, { recursive: true })
+    const { forkFileIdentity } = await import('../files')
+    const [, ino] = (await forkFileIdentity(artifactDirectory)).split(':')
+    await writeFile(path.join(artifactDirectory, 'partial.jsonl'), 'staged before reboot')
+    await writeForkResources({
+      version: 1 as const,
+      operationId,
+      targetSessionId: randomUUID(),
+      createdAt: Date.now(),
+      artifactDirectory,
+      artifactIdentity: `999999:${ino}`,
+      published: []
+    })
+    await new AgentSessionForkOperations().recover()
+    expect(await readdir(forkRoot)).toEqual([])
+  })
+
+  it('retains a staging directory whose inode no longer matches, and reports it only once', async () => {
+    const operationId = randomUUID()
+    const artifactDirectory = path.join(forkRoot, operationId)
+    await mkdir(artifactDirectory, { recursive: true })
+    await writeFile(path.join(artifactDirectory, 'someone-else.jsonl'), 'not ours')
+    await writeForkResources({
+      version: 1 as const,
+      operationId,
+      targetSessionId: randomUUID(),
+      createdAt: Date.now(),
+      artifactDirectory,
+      artifactIdentity: '999999:1',
+      published: []
+    })
+    const operations = new AgentSessionForkOperations()
+    await operations.recover()
+    expect(await readFile(path.join(artifactDirectory, 'someone-else.jsonl'), 'utf8')).toBe('not ours')
+    expect((await readForkResources())[0]?.cleanupPendingReported).toBe(true)
+    await new AgentSessionForkOperations().recover()
+    expect(await readFile(path.join(artifactDirectory, 'someone-else.jsonl'), 'utf8')).toBe('not ours')
+    expect(await readForkResources()).toHaveLength(1)
   })
 })
