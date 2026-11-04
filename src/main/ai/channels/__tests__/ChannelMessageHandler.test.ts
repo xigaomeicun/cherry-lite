@@ -294,6 +294,67 @@ describe('ChannelMessageHandler', () => {
     ])
   })
 
+  it('keeps waiting across a steer roll (isTopicDone=false) and settles on the final done', async () => {
+    const adapter = createMockAdapter()
+    vi.mocked(agentSessionService.create).mockReturnValueOnce({
+      id: 'session-steer-roll',
+      agentId: 'agent-1',
+      workspace: { path: '/tmp/test-workspace' }
+    } as any)
+    let settled = false
+    mockStartAgentSessionRun.mockImplementationOnce(async ({ listeners }: any) => {
+      setTimeout(async () => {
+        for (const l of listeners) {
+          l.onChunk({ type: 'text-delta', delta: 'A1' })
+          await l.onDone({ status: 'success', isTopicDone: false })
+        }
+      }, 1)
+      setTimeout(async () => {
+        for (const l of listeners) {
+          l.onChunk({ type: 'text-delta', delta: 'A2' })
+          await l.onDone({ status: 'success', isTopicDone: true })
+        }
+      }, 50)
+      return { mode: 'started' }
+    })
+    const pending = channelMessageHandler
+      .handleIncoming(adapter, { chatId: 'chat-1', userId: 'user-1', userName: 'User', text: 'hello' })
+      .then(() => {
+        settled = true
+      })
+    await vi.advanceTimersByTimeAsync(1010)
+    expect(settled).toBe(false)
+    await vi.advanceTimersByTimeAsync(100)
+    await pending
+    expect(settled).toBe(true)
+    expect(adapter.sendMessage.mock.calls.map((c: unknown[]) => c[1])).toEqual(['A1', 'A2'])
+  })
+
+  it('settles via onError when the A2 continuation fails after a steer roll', async () => {
+    const adapter = createMockAdapter()
+    vi.mocked(agentSessionService.create).mockReturnValueOnce({
+      id: 'session-steer-err',
+      agentId: 'agent-1',
+      workspace: { path: '/tmp/test-workspace' }
+    } as any)
+    mockStartAgentSessionRun.mockImplementationOnce(async ({ listeners }: any) => {
+      setTimeout(async () => {
+        for (const l of listeners) await l.onDone({ status: 'success', isTopicDone: false })
+        for (const l of listeners) void l.onError({ error: { message: 'continuation failed' }, isTopicDone: true })
+      }, 1)
+      return { mode: 'started' }
+    })
+    const pending = channelMessageHandler.handleIncoming(adapter, {
+      chatId: 'chat-1',
+      userId: 'user-1',
+      userName: 'User',
+      text: 'hello'
+    })
+    await vi.advanceTimersByTimeAsync(1010)
+    await pending
+    expect(adapter.sendMessage.mock.calls.at(-1)?.[1]).toBe(t('common.channel_error', { error: 'continuation failed' }))
+  })
+
   it('settles a busy channel message and leaves the chat queue usable', async () => {
     const adapter = createMockAdapter()
     const session = {

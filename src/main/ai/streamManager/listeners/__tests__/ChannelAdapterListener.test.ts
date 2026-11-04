@@ -422,3 +422,62 @@ describe('ChannelAdapterListener', () => {
     })
   })
 })
+
+describe('ChannelAdapterListener steer roll (isTopicDone=false)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('delivers A1a as its own message, keeps listening, and delivers A2 on the final done', async () => {
+    const adapter = makeAdapter({ onStreamComplete: vi.fn().mockResolvedValue(false) })
+    const listener = new ChannelAdapterListener(adapter, 'chat-1')
+
+    listener.onChunk(delta('before steer'))
+    await listener.onDone({ status: 'success', isTopicDone: false } as StreamDoneResult)
+    expect(adapter.sendMessage).toHaveBeenCalledTimes(1)
+    expect(vi.mocked(adapter.sendMessage).mock.calls[0][1]).toBe('before steer')
+    expect(adapter.dismissToolProgress).toHaveBeenCalledTimes(1)
+
+    listener.onChunk(delta('after steer'))
+    expect(vi.mocked(adapter.onTextUpdate).mock.calls.at(-1)?.[1]).toBe('after steer')
+    await listener.onDone({ status: 'success', isTopicDone: true } as StreamDoneResult)
+    expect(adapter.sendMessage).toHaveBeenCalledTimes(2)
+    expect(vi.mocked(adapter.sendMessage).mock.calls[1][1]).toBe('after steer')
+
+    // Settled now: later chunks are ignored.
+    listener.onChunk(delta('late'))
+    await listener.onDone({ status: 'success', isTopicDone: true } as StreamDoneResult)
+    expect(adapter.sendMessage).toHaveBeenCalledTimes(2)
+  })
+
+  it('an empty A1a only closes the draft and does not send a message', async () => {
+    const adapter = makeAdapter({ onStreamComplete: vi.fn().mockResolvedValue(false) })
+    const listener = new ChannelAdapterListener(adapter, 'chat-1')
+
+    await listener.onDone({ status: 'success', isTopicDone: false } as StreamDoneResult)
+    expect(adapter.onStreamComplete).toHaveBeenCalledWith('chat-1', '', undefined, { status: 'success' })
+    expect(adapter.sendMessage).not.toHaveBeenCalled()
+  })
+
+  it('A2 pause after a roll still settles with the stopped suffix', async () => {
+    const adapter = makeAdapter({ onStreamComplete: vi.fn().mockResolvedValue(false) })
+    const listener = new ChannelAdapterListener(adapter, 'chat-1')
+
+    listener.onChunk(delta('a1'))
+    await listener.onDone({ status: 'success', isTopicDone: false } as StreamDoneResult)
+    listener.onChunk(delta('a2'))
+    await listener.onPaused({ status: 'paused', isTopicDone: true } as StreamPausedResult)
+    expect(vi.mocked(adapter.sendMessage).mock.calls.at(-1)?.[1]).toContain('a2')
+    expect(vi.mocked(adapter.sendMessage).mock.calls.at(-1)?.[1]).not.toContain('a1')
+  })
+
+  it('a done without isTopicDone keeps the single-turn behaviour', async () => {
+    const adapter = makeAdapter({ onStreamComplete: vi.fn().mockResolvedValue(false) })
+    const listener = new ChannelAdapterListener(adapter, 'chat-1')
+    listener.onChunk(delta('only'))
+    await listener.onDone({ status: 'success' } as StreamDoneResult)
+    listener.onChunk(delta('ignored'))
+    await listener.onDone({ status: 'success' } as StreamDoneResult)
+    expect(adapter.sendMessage).toHaveBeenCalledTimes(1)
+  })
+})

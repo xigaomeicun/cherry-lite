@@ -1539,7 +1539,10 @@ export class ChannelMessageHandler {
         // `text-delta`'s field is `delta`, not `text` (AI SDK `UIMessageChunk`).
         if (chunk.type === 'text-delta') accumulatedText += chunk.delta
       },
-      onDone() {
+      onDone(result) {
+        // A steer roll (A1a closed, A2 continuation coming) broadcasts done with isTopicDone=false and
+        // carries this listener to A2 — keep waiting; the topic's final done/paused/error settles us.
+        if (result.isTopicDone === false) return
         resolveExecution(accumulatedText.trim())
       },
       onPaused() {

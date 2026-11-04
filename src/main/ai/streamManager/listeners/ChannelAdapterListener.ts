@@ -3,6 +3,8 @@ import {
   agentAssetsWorkspaceRoot,
   askUserPending,
   type ChannelAdapter,
+  CursorToolLineParser,
+  describeCursorToolLine,
   escHtml,
   extractOutboundLocalImages,
   hasOutboundImageDelivered,
@@ -13,7 +15,6 @@ import {
   type SendMessageOptions,
   toolPermSent
 } from '@main/ai/channels'
-import { CursorToolLineParser, describeCursorToolLine } from '@main/ai/channels/adapters/telegram/cursorToolLines'
 import { toolApprovalRegistry } from '@main/ai/toolApproval/ToolApprovalRegistry'
 import { t } from '@main/i18n'
 import type { UniqueModelId } from '@shared/data/types/model'
@@ -373,6 +374,10 @@ export class ChannelAdapterListener implements StreamListener {
   }
 
   async onDone(result: StreamDoneResult): Promise<void> {
+    if (result.isTopicDone === false && !this.settled) {
+      await this.flushSegment()
+      return
+    }
     this.resetCursorToolState()
     await this.adapter.dismissToolProgress?.(this.platformChatId, this.responseOptions)?.catch(() => {})
     await this.finish(result.status)
@@ -383,6 +388,28 @@ export class ChannelAdapterListener implements StreamListener {
     this.resetCursorToolState()
     await this.adapter.dismissToolProgress?.(this.platformChatId, this.responseOptions)?.catch(() => {})
     await this.finish('paused')
+  }
+
+  /**
+   * Mid-topic done (agent steer roll: A1a closed, the A2 continuation reuses this listener). Deliver the
+   * pre-steer text as its own message and keep listening so A2 streams as a new message. Snapshot and
+   * clear the buffer synchronously so A2 deltas arriving during the awaits start a fresh segment.
+   */
+  private async flushSegment(): Promise<void> {
+    const raw = this.accumulatedText
+    this.accumulatedText = ''
+    this.resetCursorToolState()
+    await this.adapter.dismissToolProgress?.(this.platformChatId, this.responseOptions)?.catch(() => {})
+    const text = sanitizeChannelOutput(raw).text.trim()
+    try {
+      await this.finalizeDelivery(text ? await this.prepareOutboundDelivery(text) : '')
+    } catch (err) {
+      logger.error('Failed to deliver steer segment to channel', {
+        channelId: this.adapter.channelId,
+        chatId: this.platformChatId,
+        err
+      })
+    }
   }
 
   private async finish(status: 'success' | 'paused'): Promise<void> {

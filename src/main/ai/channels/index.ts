@@ -1,3 +1,4 @@
+export { CursorToolLineParser, describeCursorToolLine } from './adapters/telegram/cursorToolLines'
 export type {
   ChannelAdapterConfig,
   ChannelCallbackQueryEvent,
