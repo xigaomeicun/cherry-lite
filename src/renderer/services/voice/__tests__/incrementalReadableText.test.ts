@@ -1,5 +1,6 @@
-import type { SpeechTextEvent } from '@shared/ai/voice'
 import { describe, expect, it } from 'vitest'
+
+import type { SpeechTextEvent } from '@shared/ai/voice'
 
 import { IncrementalReadableText } from '../incrementalReadableText'
 import { SpeechTextInput } from '../SpeechTextInput'

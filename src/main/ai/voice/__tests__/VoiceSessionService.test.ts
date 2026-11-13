@@ -1,26 +1,10 @@
 import { randomUUID } from 'node:crypto'
 import { EventEmitter } from 'node:events'
-import { mkdir, mkdtemp, readdir, readFile, rm, rmdir, stat, unlink, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, readdir, rm, rmdir, stat, unlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 
-import { application } from '@application'
-import { fileEntryTable } from '@data/db/schemas/file'
-import { fileEntryService } from '@data/services/FileEntryService'
-import { BaseService } from '@main/core/lifecycle'
-import { WindowType } from '@main/core/window/types'
-import { MediaKind, MediaProtocolService } from '@main/services/mediaProtocol'
-import {
-  APPLE_ASR_MODEL_ID,
-  APPLE_TTS_MODEL_ID,
-  FUNASR_MODEL_ID,
-  QWEN3_ASR_MODEL_ID,
-  QWEN3_TTS_MODEL_ID,
-  TranscriptionLanguageSource,
-  WINDOWS_ASR_MODEL_ID,
-  WINDOWS_TTS_MODEL_ID
-} from '@shared/ai/localVoice'
 import { setupTestDatabase } from '@test-helpers/db'
 import { defaultServiceInstances } from '@test-mocks/main/application'
 import { MockMainDbServiceUtils } from '@test-mocks/main/DbService'
@@ -29,9 +13,30 @@ import { eq } from 'drizzle-orm'
 import { session, shell, systemPreferences } from 'electron'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { application } from '@application'
+import { fileEntryTable } from '@data/db/schemas/file'
+import { fileEntryService } from '@data/services/FileEntryService'
+import { BaseService } from '@main/core/lifecycle'
+import { WindowType } from '@main/core/window/types'
+import { MediaProtocolService, MediaKind } from '@main/services/mediaProtocol'
+import {
+  TranscriptionLanguageSource,
+  APPLE_ASR_MODEL_ID,
+  APPLE_TTS_MODEL_ID,
+  FUNASR_MODEL_ID,
+  WINDOWS_ASR_MODEL_ID,
+  WINDOWS_TTS_MODEL_ID,
+  QWEN3_TTS_MODEL_ID,
+  QWEN3_ASR_MODEL_ID
+} from '@shared/ai/localVoice'
+
 import type * as LocalAdapters from '../localAdapters'
 import { VoiceCleanupError, VoiceRuntimeError } from '../VoiceRuntimeError'
-import { type VoiceOwner, VoiceSessionService } from '../VoiceSessionService'
+import { VoiceSessionService, type VoiceOwner } from '../VoiceSessionService'
+
+// Captured before the describe's beforeEach stubs process as darwin: the real
+// host decides whether the filesystem enforces POSIX permission modes.
+const HOST_PLATFORM = process.platform
 
 const native = vi.hoisted(() => ({
   status: vi.fn(),
@@ -1578,7 +1583,9 @@ describe('VoiceSessionService file and admission contract', () => {
     await service._doInit()
 
     expect(await readdir(directory)).toEqual([])
-    expect((await stat(directory)).mode & 0o777).toBe(0o700)
+    if (HOST_PLATFORM !== 'win32') {
+      expect((await stat(directory)).mode & 0o777).toBe(0o700)
+    }
     expect(await readFile(sibling)).toEqual(wav())
     expect((await speech()).result.output).toMatchObject({ kind: 'audio', mimeType: 'audio/wav' })
   })
@@ -2208,13 +2215,31 @@ describe('VoiceSessionService file and admission contract', () => {
     ])
   })
 
+  it.each(['timeout', 'model_load_failed'] as const)(
+    'logs the %s failure with its operation identity',
+    async (reason) => {
+      const speech = { sessionId: randomUUID(), requestId: randomUUID(), text: 'private-text', voice: 'exact' }
+      native.speech.mockRejectedValueOnce(new VoiceRuntimeError(reason))
+
+      await expect(service.speech(a, speech)).rejects.toMatchObject({ reason })
+      expect(mockMainLoggerService.warn).toHaveBeenCalledWith(
+        'Voice operation failed',
+        expect.objectContaining({
+          sessionId: speech.sessionId,
+          requestId: speech.requestId,
+          operation: 'speech',
+          reason
+        })
+      )
+    }
+  )
+
   it('never logs source text, transcript, bytes or physical paths on success and failure', async () => {
     const input = await recording()
     await service.transcribe(a, input)
     const speech = { sessionId: randomUUID(), requestId: randomUUID(), text: 'private-text', voice: 'exact' }
     native.speech.mockRejectedValueOnce(new Error('private-text private-transcript ' + root))
     await expect(service.speech(a, speech)).rejects.toMatchObject({ reason: 'operation_failed' })
-    mockMainLoggerService.warn.mockClear()
     const terminal = await recording()
     vi.spyOn(files, 'deleteRetainedTemporaryEntry').mockRejectedValueOnce(
       Object.assign(new Error('private-text private-transcript ' + root), { code: 'EPERM', path: root, content: webm })

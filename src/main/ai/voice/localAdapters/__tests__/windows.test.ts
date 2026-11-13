@@ -1,16 +1,17 @@
-import { mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { application } from '@application'
 import { SystemSpeechError } from '@cherrystudio/system-speech/contracts'
 import { UtilityProcessError } from '@main/core/utilityProcess/UtilityProcessError'
 import { WINDOWS_ASR_MODEL_ID, WINDOWS_TTS_MODEL_ID } from '@shared/ai/localVoice'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { getLocalVoiceStatus, listLocalAsrLocales, listLocalVoices } from '../../localAdapters'
 import { createAppleSpeechModel } from '../apple'
-import { createWindowsSpeechModel, createWindowsTranscriptionModel } from '../windows'
+import { createWindowsTranscriptionModel, createWindowsSpeechModel } from '../windows'
 
 const mocks = vi.hoisted(() => ({ nativeRequest: vi.fn(), decode: vi.fn() }))
 vi.mock('@cherrystudio/system-speech/native', () => ({

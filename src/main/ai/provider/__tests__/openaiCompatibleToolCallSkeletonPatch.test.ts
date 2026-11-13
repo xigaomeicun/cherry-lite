@@ -1,6 +1,6 @@
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
 import type { LanguageModelV3StreamPart } from '@ai-sdk/provider'
-import { streamText, type TextStreamPart, tool, type ToolSet } from 'ai'
+import { streamText, tool, type TextStreamPart, type ToolSet } from 'ai'
 import { describe, expect, it } from 'vitest'
 import * as z from 'zod'
 

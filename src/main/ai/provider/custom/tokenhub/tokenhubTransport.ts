@@ -1,4 +1,6 @@
 import type { FetchFunction } from '@ai-sdk/provider-utils'
+import { Agent } from 'undici'
+
 import { t } from '@main/i18n'
 import { createPaintingGenerateError, PaintingGenerateError } from '@shared/ai/paintingGenerateError'
 import { Agent } from 'undici'

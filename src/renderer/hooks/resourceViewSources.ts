@@ -1,9 +1,10 @@
+import { createContext, use, useCallback } from 'react'
+
 import { dataApiService } from '@data/DataApiService'
 import { ipcApi } from '@renderer/ipc'
 import type { Topic as RendererTopic } from '@renderer/types/topic'
 import type { AgentSessionWorkspaceSource } from '@shared/data/api/schemas/agentWorkspaces'
 import type { Topic as ApiTopic } from '@shared/data/types/topic'
-import { createContext, use, useCallback } from 'react'
 
 import { useSessions } from './agent/useSession'
 import { mapApiTopicToRendererTopic, useTopics } from './useTopic'
@@ -14,7 +15,9 @@ import { mapApiTopicToRendererTopic, useTopics } from './useTopic'
  * The raw hooks are mounted once by ResourceViewSourceProvider. Route pages read
  * the provider's progressive cold-start data, then its last complete snapshot
  * during background refreshes. This keeps first-page content responsive without
- * letting multiple kept-alive tabs start competing load-all chains.
+ * letting multiple kept-alive tabs start competing load-all chains. Event handlers
+ * that need the list when they fire use `readSessionListItems`, which reads the
+ * SWR cache directly and can be ahead of that snapshot during a refresh.
  */
 
 /** Full agent-session page size — kept in one place so the rail and right panel never drift. */
@@ -122,7 +125,10 @@ export type AgentSessionsSource = Pick<
   | 'isValidating'
   | 'reload'
   | 'deleteSession'
+  | 'deleteSessionWithOutcome'
   | 'deleteSessions'
+  | 'readSessionListItems'
+  | 'restoreSession'
   | 'reorderSession'
   | 'togglePin'
   | 'isFullyLoaded'

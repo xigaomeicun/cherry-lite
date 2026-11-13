@@ -1,14 +1,13 @@
 import * as z from 'zod'
 
-import { remoteCapabilitiesSchema } from '@cherrystudio/remote-protocol'
+import { directEndpointSchema, remoteCapabilitiesSchema } from '@cherrystudio/remote-protocol'
 import type { ApiGatewayStatusResult, ApiGatewayStopResult } from '@shared/types/apiGateway'
 
 import { defineRoute } from '../define'
 
 /**
- * API Gateway IPC schemas — start/stop/restart the local API gateway. Stop additionally reports
- * whether shutdown completed or is deferred by a lease. Handlers turn service throws into
- * `{ success: false, error }`; running state and config remain on their data-layer channels.
+ * Start/stop/restart retain their legacy status results; pairing uses the standard IpcApi error channel.
+ * Running state and config remain on their data-layer channels.
  */
 const statusResultSchema: z.ZodType<ApiGatewayStatusResult> = z.union([
   z.object({ success: z.literal(true) }),
@@ -16,7 +15,7 @@ const statusResultSchema: z.ZodType<ApiGatewayStatusResult> = z.union([
 ])
 
 const stopResultSchema: z.ZodType<ApiGatewayStopResult> = z.union([
-  z.object({ success: z.literal(true), outcome: z.enum(['stopped', 'deferred']) }),
+  z.object({ success: z.literal(true), outcome: z.literal('stopped') }),
   z.object({ success: z.literal(false), error: z.string() })
 ])
 
@@ -28,12 +27,15 @@ export const apiGatewayRequestSchemas = {
   'api_gateway.remote.create_invitation': defineRoute({
     input: z.void(),
     output: z.object({
+      advertisedEndpoint: directEndpointSchema.nullable(),
+      endpoints: z.array(directEndpointSchema).max(32),
       invitationId: z.string(),
       invitationSecret: z.string(),
       desktopIdentity: z.string(),
       protocolVersions: z.array(z.number()),
       expiresAt: z.string(),
-      addresses: z.array(z.string()),
+      addresses: z.array(z.string()).max(32),
+      addressOptions: z.array(z.object({ address: z.string(), interfaceName: z.string() })),
       port: z.number(),
       hostname: z.string()
     })
@@ -59,8 +61,5 @@ export const apiGatewayRequestSchemas = {
 
 // ── Event: main→renderer pushes (pure types, never parsed) ──
 export type ApiGatewayEventSchemas = {
-  // An agent session could not connect because its model must be bridged through the gateway,
-  // which the user keeps disabled. Broadcast; the owning session's UI filters by `sessionId`.
-  'api_gateway.required': { sessionId: string }
   'api_gateway.remote.pairing_changed': void
 }

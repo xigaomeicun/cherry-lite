@@ -1,13 +1,13 @@
 import '@testing-library/jest-dom/vitest'
+import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { useImperativeHandle } from 'react'
+import type { RefObject } from 'react'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { DiagnosticUploadPanelHandle } from '@renderer/components/feedback/DiagnosticUploadPanel'
 import type { DoctorController } from '@renderer/hooks/doctor'
 import { buildDoctorViewModel } from '@renderer/utils/doctor'
-import { render, screen } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
-import type { RefObject } from 'react'
-import { useImperativeHandle } from 'react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.unmock('@cherrystudio/ui')
 
@@ -29,6 +29,11 @@ vi.mock('@renderer/components/feedback/DiagnosticUploadPanel', () => ({
     useImperativeHandle(ref, () => ({ requestClose: mocks.requestReportClose }), [])
     return <div>Report panel boundary</div>
   }
+}))
+
+vi.mock('@renderer/components/feedback/DiagnosticHistoryDialog', () => ({
+  DiagnosticHistoryDialog: ({ open }: { open: boolean }) =>
+    open ? <div role="dialog" aria-label="Diagnostic history" /> : null
 }))
 
 vi.mock('react-i18next', () => ({
@@ -53,7 +58,8 @@ function createController(overrides: ControllerOverrides = {}) {
       downloadProgress: 0,
       available: false,
       ignore: false,
-      manualCheck: false
+      manualCheck: false,
+      lastErrorKey: null
     },
     cancel: vi.fn<DoctorController['cancel']>(),
     canChangePanel: true,
@@ -68,6 +74,7 @@ function createController(overrides: ControllerOverrides = {}) {
     openPath: vi.fn<DoctorController['openPath']>(),
     requestEvidence: vi.fn<DoctorController['requestEvidence']>(),
     run: vi.fn<DoctorController['run']>(),
+    scope: 'global',
     session: {
       activePanel: 'report',
       descriptionDraft: '',
@@ -120,6 +127,15 @@ describe('DoctorDialog', () => {
     expect(mocks.requestReportClose).toHaveBeenCalledOnce()
     expect(mocks.controller.setPanel).toHaveBeenCalledWith('checks')
     expect(resolve).not.toHaveBeenCalled()
+  })
+
+  it('opens diagnostic history from the report title', async () => {
+    const user = userEvent.setup()
+    render(<DoctorDialog initialPanel="report" open resolve={vi.fn()} />)
+
+    await user.click(screen.getByRole('button', { name: 'settings.about.feedback.history.title' }))
+
+    expect(screen.getByRole('dialog', { name: 'Diagnostic history', hidden: true })).toBeInTheDocument()
   })
 
   it('blocks button, overlay, and Escape dismissal while an operation is active', async () => {

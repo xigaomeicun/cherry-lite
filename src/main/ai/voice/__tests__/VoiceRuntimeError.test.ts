@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { voiceIpcError, VoiceRuntimeError } from '../VoiceRuntimeError'
+import { VoiceRuntimeError, voiceIpcError } from '../VoiceRuntimeError'
 
 describe('voice error boundary', () => {
   it('drops unknown messages, causes, transcripts, paths and provider responses', () => {

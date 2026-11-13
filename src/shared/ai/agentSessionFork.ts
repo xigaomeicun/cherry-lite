@@ -1,6 +1,5 @@
 export const AGENT_SESSION_FORK_FAILURE_REASONS = [
   'legacy_history',
-  'omitted_history',
   'not_turn_boundary',
   'history_missing',
   'history_corrupt',
@@ -11,8 +10,7 @@ export const AGENT_SESSION_FORK_FAILURE_REASONS = [
   'source_missing',
   'source_changed',
   'cancelled',
-  'operation_failed',
-  'fork_timed_out'
+  'operation_failed'
 ] as const
 
 export type AgentSessionForkFailureReason = (typeof AGENT_SESSION_FORK_FAILURE_REASONS)[number]

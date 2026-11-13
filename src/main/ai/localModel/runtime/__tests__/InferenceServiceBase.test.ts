@@ -44,7 +44,7 @@ import {
 import { defineUtilityProcess } from '@main/core/utilityProcess/defineUtilityProcess'
 import { SERVICE_NAME_PREFIX } from '@main/core/utilityProcess/protocol/constants'
 import type { UtilityProcessHandlers } from '@main/core/utilityProcess/runtime/serveUtilityProcess'
-import type { UtilityProcessStreamFrame, UtilityProcessStreamMethod } from '@main/core/utilityProcess/types'
+import type { UtilityProcessStreamMethod, UtilityProcessStreamFrame } from '@main/core/utilityProcess/types'
 import { UtilityProcessManager } from '@main/core/utilityProcess/UtilityProcessManager'
 import type { LocalModelBundleId } from '@shared/data/presets/localModel'
 

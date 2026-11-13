@@ -1,9 +1,10 @@
-import { cacheService } from '@data/CacheService'
-import type { DoctorReport, DoctorSubjectRef } from '@shared/types/doctor'
-import { doctorScopeKey, doctorStateCacheKey } from '@shared/utils/doctor'
 import { MockCacheUtils } from '@test-mocks/renderer/CacheService'
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+import { cacheService } from '@data/CacheService'
+import type { DoctorReport, DoctorSubjectRef } from '@shared/types/doctor'
+import { doctorScopeKey, doctorStateCacheKey } from '@shared/utils/doctor'
 
 vi.unmock('@data/hooks/useCache')
 

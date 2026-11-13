@@ -1,5 +1,6 @@
-import { APPLE_ASR_MODEL_ID, FUNASR_MODEL_ID, TranscriptionLanguageSource } from '@shared/ai/localVoice'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, type Mock, vi } from 'vitest'
+
+import { APPLE_ASR_MODEL_ID, FUNASR_MODEL_ID, TranscriptionLanguageSource } from '@shared/ai/localVoice'
 
 import { DictationService } from '../DictationService'
 import type { ResolvedTranscriptionPreferences, VoiceCommandEvent } from '../VoiceService'

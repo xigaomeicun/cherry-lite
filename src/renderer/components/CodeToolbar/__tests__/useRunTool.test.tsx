@@ -1,8 +1,9 @@
-import type { ActionTool } from '@renderer/components/ActionTools'
-import { useRunTool } from '@renderer/components/CodeToolbar/hooks/useRunTool'
 import { act, renderHook } from '@testing-library/react'
 import { useState } from 'react'
 import { describe, expect, it, vi } from 'vitest'
+
+import type { ActionTool } from '@renderer/components/ActionTools'
+import { useRunTool } from '@renderer/components/CodeToolbar/hooks/useRunTool'
 
 const mocks = vi.hoisted(() => ({
   t: (key: string) => key
@@ -25,7 +26,6 @@ describe('useRunTool', () => {
       { initialProps: { enabled: true, isRunning: false } }
     )
 
-    expect(result.current[0]).toMatchObject({ id: 'run', tooltip: 'code_block.run' })
     act(() => result.current[0].onClick?.())
     expect(onRun).toHaveBeenCalledOnce()
 

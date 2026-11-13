@@ -2,11 +2,12 @@
 import { createGoogleGenerativeAI } from '@ai-sdk/google'
 import { createOpenAI } from '@ai-sdk/openai'
 import type { JSONSchema7, LanguageModelV3CallOptions } from '@ai-sdk/provider'
+import type { LanguageModelMiddleware } from 'ai'
+import { generateText, tool, wrapLanguageModel } from 'ai'
+import { describe, expect, it } from 'vitest'
+
 import { createMcpInputSchema } from '@main/ai/tools/adapters/aiSdk/mcpSchema'
 import { ENDPOINT_TYPE, type EndpointType } from '@shared/data/types/model'
-import type { LanguageModelMiddleware } from 'ai'
-import { generateText, jsonSchema, tool, wrapLanguageModel } from 'ai'
-import { describe, expect, it } from 'vitest'
 
 import { toolSchemaCompatibilityFeature } from '../toolSchemaCompatibility'
 
@@ -127,12 +128,11 @@ describe('parameterless function-tool schemas', () => {
     const transformed = (await transform(params, { endpointType })).tools?.[0]
     if (transformed?.type !== 'function') throw new Error('expected a transformed function tool')
 
-    // (cherry-lite) local Gemini path does not strip additionalProperties via GEMINI_UNSUPPORTED
-    expect(transformed.inputSchema).toEqual({
-      type: 'object',
-      additionalProperties: false,
-      properties: {}
-    })
+    expect(transformed.inputSchema).toEqual(
+      endpointType === ENDPOINT_TYPE.GOOGLE_GENERATE_CONTENT
+        ? { type: 'object', properties: {} }
+        : { type: 'object', additionalProperties: false, properties: {} }
+    )
   })
 
   it('keeps local MCP validation closed or open according to additionalProperties', async () => {
@@ -199,7 +199,7 @@ describe('parameterless function-tool schemas', () => {
       generateText({
         model,
         prompt: 'hello',
-        tools: { lookup: tool({ description: 'lookup', inputSchema: jsonSchema(inputSchema) }) }
+        tools: { lookup: tool({ description: 'lookup', inputSchema: createMcpInputSchema(inputSchema) }) }
       })
     ).rejects.toBeDefined()
 

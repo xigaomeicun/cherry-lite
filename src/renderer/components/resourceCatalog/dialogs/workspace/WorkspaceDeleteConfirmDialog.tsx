@@ -1,3 +1,8 @@
+import type { LucideIcon } from 'lucide-react'
+import { BotMessageSquare, CalendarClock, FolderOpen, Loader2, MousePointerClick, TriangleAlert } from 'lucide-react'
+import { useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
+
 import {
   Button,
   Dialog,
@@ -14,15 +19,12 @@ import { ipcApi } from '@renderer/ipc'
 import { toast } from '@renderer/services/toast'
 import { formatErrorMessageWithPrefix } from '@renderer/utils/error'
 import type { AgentWorkspaceEntity, AgentWorkspaceReferenceItem } from '@shared/data/api/schemas/agentWorkspaces'
-import type { LucideIcon } from 'lucide-react'
-import { BotMessageSquare, CalendarClock, FolderOpen, Loader2, MousePointerClick, TriangleAlert } from 'lucide-react'
-import { useRef, useState } from 'react'
-import { useTranslation } from 'react-i18next'
 
 const logger = loggerService.withContext('WorkspaceDeleteConfirmDialog')
 
 interface WorkspaceDeleteConfirmDialogProps {
   workspace: AgentWorkspaceEntity
+  open?: boolean
   onDeleted: (workspaceId: string) => void | Promise<void>
   onClose: () => void
 }
@@ -74,7 +76,12 @@ function ImpactSection({ title, countLabel, emptyLabel, items, total, icon: Icon
   )
 }
 
-export function WorkspaceDeleteConfirmDialog({ workspace, onDeleted, onClose }: WorkspaceDeleteConfirmDialogProps) {
+export function WorkspaceDeleteConfirmDialog({
+  workspace,
+  open = true,
+  onDeleted,
+  onClose
+}: WorkspaceDeleteConfirmDialogProps) {
   const { t } = useTranslation()
   const [isPending, setIsPending] = useState(false)
   const isPendingRef = useRef(false)
@@ -213,7 +220,7 @@ export function WorkspaceDeleteConfirmDialog({ workspace, onDeleted, onClose }: 
 
   return (
     <Dialog
-      open
+      open={open}
       onOpenChange={(open) => {
         if (!open && !isPendingRef.current) onClose()
       }}>

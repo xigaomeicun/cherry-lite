@@ -1,3 +1,6 @@
+import { lazy, type ReactElement, Suspense, useCallback, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
+
 import { loggerService } from '@logger'
 import {
   ResourceCreateWizard,
@@ -12,8 +15,6 @@ import type { ResourceEditDialogTarget } from '@renderer/types/resourceCatalog'
 import { buildCreateAssistantDto } from '@renderer/utils/resourceCatalog'
 import type { Assistant } from '@shared/data/types/assistant'
 import { isNonChatModel } from '@shared/utils/model'
-import { lazy, type ReactElement, Suspense, useCallback, useMemo, useState } from 'react'
-import { useTranslation } from 'react-i18next'
 
 import {
   ResourceSelectorShell,
@@ -137,6 +138,7 @@ export function AssistantSelector(props: AssistantSelectorProps) {
         id: assistant.id,
         name: assistant.name,
         emoji: assistant.emoji,
+        avatarSrc: assistant.avatarSrc,
         description: assistant.description,
         groupId: assistant.groupId ?? undefined,
         groupName: assistant.groupId ? groupById.get(assistant.groupId)?.name : undefined

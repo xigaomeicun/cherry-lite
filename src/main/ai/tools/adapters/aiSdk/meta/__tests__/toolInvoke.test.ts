@@ -4,7 +4,7 @@ import * as z from 'zod'
 
 import { ToolRegistry } from '../../registry'
 import type { ToolEntry } from '../../types'
-import { createToolInvokeTool, TOOL_INVOKE_TOOL_NAME } from '../toolInvoke'
+import { createToolInvokeTool } from '../toolInvoke'
 
 const innerExecute = vi.fn()
 const innerToModelOutput = vi.fn()
@@ -16,7 +16,7 @@ function makeRegistry(): ToolRegistry {
     description: 'inner',
     inputSchema: jsonSchema({ type: 'object' }),
     execute: innerExecute
-  } as Tool
+  }
   const entry: ToolEntry = {
     name: 'mcp__s1__t',
     namespace: 'mcp:s1',
@@ -42,7 +42,7 @@ function makeRegistryWithToModelOutput(): ToolRegistry {
       inputSchema: jsonSchema({ type: 'object' }),
       execute: innerExecute,
       toModelOutput: innerToModelOutput
-    } as Tool
+    }
   })
   return reg
 }
@@ -63,14 +63,10 @@ async function callInvoke(tool: Tool, args: { name: string; params?: unknown }) 
     toolCallId: 'outer-1',
     messages: [],
     experimental_context: { requestId: 'req-1', abortSignal: new AbortController().signal }
-  } as Parameters<NonNullable<Tool['execute']>>[1])
+  })
 }
 
 describe('tool_invoke meta-tool', () => {
-  it('TOOL_INVOKE_TOOL_NAME is the agreed wire-name', () => {
-    expect(TOOL_INVOKE_TOOL_NAME).toBe('tool_invoke')
-  })
-
   it('forwards params to the inner tool execute', async () => {
     innerExecute.mockReset().mockResolvedValue({ ok: true })
     const reg = makeRegistry()
@@ -88,15 +84,6 @@ describe('tool_invoke meta-tool', () => {
     const tool = createToolInvokeTool(reg, allowAll('mcp__s1__t'), inspected('mcp__s1__t'))
     await callInvoke(tool, { name: 'mcp__s1__t' })
     expect(innerExecute.mock.calls[0][0]).toEqual({})
-  })
-
-  it('nests the toolCallId so telemetry can rebuild the call tree', async () => {
-    innerExecute.mockReset().mockResolvedValue('ok')
-    const reg = makeRegistry()
-    const tool = createToolInvokeTool(reg, allowAll('mcp__s1__t'), inspected('mcp__s1__t'))
-    await callInvoke(tool, { name: 'mcp__s1__t', params: {} })
-    const passedOptions = innerExecute.mock.calls[0][1]
-    expect(passedOptions.toolCallId).toBe('outer-1::mcp__s1__t')
   })
 
   it('throws when target tool not registered', async () => {
@@ -132,7 +119,7 @@ describe('tool_invoke meta-tool', () => {
         inputSchema: jsonSchema({ type: 'object' }),
         needsApproval: async () => true,
         execute: innerExecute
-      } as Tool
+      }
     })
     const tool = createToolInvokeTool(reg, allowAll('mcp__s1__danger'), inspected('mcp__s1__danger'))
     await expect(callInvoke(tool, { name: 'mcp__s1__danger', params: {} })).rejects.toThrow(/requires user approval/)
@@ -301,12 +288,6 @@ describe('tool_invoke meta-tool', () => {
       })
       expect(out).toEqual({ type: 'json', value: { ok: 1 } })
       expect(innerToModelOutput).not.toHaveBeenCalled()
-    })
-
-    it('advertises a callable inputExample', () => {
-      const reg = makeRegistry()
-      const tool = createToolInvokeTool(reg, allowAll('mcp__s1__t'), inspected('mcp__s1__t'))
-      expect(tool.inputExamples?.[0]?.input).toMatchObject({ name: expect.any(String), params: expect.any(Object) })
     })
 
     it('serializes params as an open object — the wire schema must accept the inputExample', async () => {

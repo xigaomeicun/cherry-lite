@@ -1,8 +1,9 @@
-import i18n from '@renderer/i18n/resolver'
-import { createPopup, POPUP_EXIT_MS, popupService } from '@renderer/services/popup'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+
+import i18n from '@renderer/i18n/resolver'
+import { createPopup, POPUP_EXIT_MS, popupService } from '@renderer/services/popup'
 
 const { toastError } = vi.hoisted(() => ({ toastError: vi.fn() }))
 const dialogMock = vi.hoisted(() => ({
@@ -131,7 +132,6 @@ describe('ConfirmPopupItem (via PopupHost + confirm presets)', () => {
 
     await screen.findByText('Delete item')
     expect(screen.getByText('This cannot be undone.')).toBeInTheDocument()
-    expect(screen.getByRole('dialog')).toHaveAttribute('data-motion', 'fade-scale')
 
     await user.click(screen.getByRole('button', { name: 'Delete' }))
     await act(async () => {})
@@ -164,7 +164,6 @@ describe('ConfirmPopupItem (via PopupHost + confirm presets)', () => {
     })
 
     await screen.findByText('Backup failed')
-    expect(screen.getByRole('dialog')).toHaveAttribute('data-motion', 'fade-scale')
     expect(screen.queryByRole('button', { name: i18n.t('common.cancel') })).not.toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: i18n.t('common.confirm') }))

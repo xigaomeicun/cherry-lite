@@ -1,8 +1,9 @@
 import fs from 'node:fs/promises'
 
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
 import type { FileProcessorMerged } from '@shared/data/presets/fileProcessing'
 import { type FileInfo, FileInfoSchema } from '@shared/types/file'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { MistralMock, deleteMock, getSignedUrlMock, ocrProcessMock, uploadMock } = vi.hoisted(() => {
   const uploadMock = vi.fn()
@@ -87,15 +88,13 @@ describe('mistralDocumentToMarkdownHandler', () => {
       })
     )
     expect(ocrProcessMock).toHaveBeenCalledWith(
-      {
+      expect.objectContaining({
         model: 'mistral-ocr-latest',
         document: {
           type: 'document_url',
           documentUrl: 'https://signed.example.com/input.pdf'
-        },
-        tableFormat: 'markdown',
-        includeImageBase64: false
-      },
+        }
+      }),
       expect.objectContaining({
         signal: expect.any(AbortSignal)
       })

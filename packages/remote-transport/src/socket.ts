@@ -1,6 +1,7 @@
-import { remoteLimits } from '@cherrystudio/remote-protocol'
 import type { Logger } from '@libp2p/interface'
 import { AbstractMessageStream } from '@libp2p/utils'
+
+import { remoteLimits, uploadTransferLimits } from '@cherrystudio/remote-protocol'
 
 export interface RemoteSocket {
   binaryType: string
@@ -15,7 +16,7 @@ export interface RemoteSocket {
 }
 
 const drainPollMs = 50
-const lowWaterBytes = remoteLimits.queuedBytes / 2
+const lowWaterBytes = uploadTransferLimits.queuedBytes / 2
 
 export class RemoteSocketStream extends AbstractMessageStream {
   constructor(
@@ -27,8 +28,8 @@ export class RemoteSocketStream extends AbstractMessageStream {
       log,
       direction,
       maxMessageSize: remoteLimits.recordBytes,
-      maxReadBufferLength: remoteLimits.queuedBytes,
-      maxWriteBufferLength: remoteLimits.queuedBytes,
+      maxReadBufferLength: uploadTransferLimits.queuedBytes,
+      maxWriteBufferLength: uploadTransferLimits.queuedBytes,
       inactivityTimeout: remoteLimits.idleMs
     })
     socket.binaryType = 'arraybuffer'
@@ -61,7 +62,7 @@ export class RemoteSocketStream extends AbstractMessageStream {
 
   sendData(data: Parameters<AbstractMessageStream['sendData']>[0]) {
     if (this.socket.readyState !== 1) throw new Error('Remote socket unavailable')
-    if (this.socket.bufferedAmount + data.byteLength > remoteLimits.queuedBytes) {
+    if (this.socket.bufferedAmount + data.byteLength > uploadTransferLimits.queuedBytes) {
       this.watchDrain()
       return { sentBytes: 0, canSendMore: false }
     }

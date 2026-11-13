@@ -15,9 +15,13 @@ export const agentGlobalSkillTable = sqliteTable(
     namespace: text(),
     author: text(),
     version: text(),
-    tags: text({ mode: 'json' }).$type<string[]>().notNull().default(sql`'[]'`),
+    tags: text({ mode: 'json' })
+      .$type<string[]>()
+      .notNull()
+      .default(sql`'[]'`),
     contentHash: text().notNull(),
     isEnabled: integer({ mode: 'boolean' }).notNull().default(false),
+    mirrorEnabled: integer({ mode: 'boolean' }).notNull().default(true),
     ...createUpdateTimestamps
   },
   (t) => [

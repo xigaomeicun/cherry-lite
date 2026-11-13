@@ -6,17 +6,18 @@
   "endOfLine": "lf",
   "ignorePatterns": [
     "**/*.md",
+    "docs/website/**",
     ".claude/**",
     ".conductor/**",
     ".yarn/**",
     "build/**",
     "coverage/**",
     "dist/**",
+    "docs/dev/sources-index.json",
     "out/**",
     "resources/**",
     "storybook-static/**",
     "scripts/data-classify/**",
-    "v2-refactor-temp/**",
     "**/dist/**",
     "**/storybook-static/**",
     "**/vendor/**",
@@ -42,6 +43,21 @@
   "quoteProps": "as-needed",
   "semi": false,
   "singleQuote": true,
+  "sortImports": {
+    "internalPattern": [
+      "@application",
+      "@logger",
+      "@main/",
+      "@data/",
+      "@renderer/",
+      "@shared/",
+      "@types/",
+      "@cherrystudio/",
+      "@/",
+      "~/",
+      "#"
+    ]
+  },
   "sortPackageJson": {
     "sortScripts": true
   },

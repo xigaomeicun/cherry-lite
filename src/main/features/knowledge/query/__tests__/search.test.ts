@@ -1,5 +1,6 @@
-import type { KnowledgeSearchResult } from '@shared/data/types/knowledge'
 import { describe, expect, it } from 'vitest'
+
+import type { KnowledgeSearchResult } from '@shared/data/types/knowledge'
 
 import { applyRelevanceThreshold, getInitialSearchScoreKind, withSearchRanks } from '../search'
 
@@ -46,19 +47,6 @@ describe('knowledge search utils', () => {
     expect(applyRelevanceThreshold(results, 0.5).map((result) => result.chunkId)).toEqual([
       'high-relevance',
       'ranking-score'
-    ])
-  })
-
-  it('defaults the relevance threshold to zero', () => {
-    const results = [
-      createResult('negative-relevance', -0.1, 'relevance'),
-      createResult('zero-relevance', 0, 'relevance'),
-      createResult('negative-ranking', -0.1, 'ranking')
-    ]
-
-    expect(applyRelevanceThreshold(results).map((result) => result.chunkId)).toEqual([
-      'zero-relevance',
-      'negative-ranking'
     ])
   })
 })

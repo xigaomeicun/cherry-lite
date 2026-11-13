@@ -1,14 +1,23 @@
+import { lazy, Suspense, useEffect, useMemo } from 'react'
+
 import { usePreference } from '@data/hooks/usePreference'
 import { loggerService } from '@logger'
 import AppLogo from '@renderer/assets/images/logo.png'
+import {
+  CORE_SIDEBAR_SHORTCUT_PROVIDERS,
+  SidebarShortcutRegistry,
+  SidebarShortcutRegistryProvider
+} from '@renderer/components/app/sidebarShortcuts'
 import { CodeStyleProvider } from '@renderer/components/CodeStyleProvider'
 import { CommandContextKeyProvider, CommandProvider } from '@renderer/components/command'
 import { ConversationNotificationRuntime } from '@renderer/components/ConversationNotificationRuntime'
 import { DictationShortcutHost } from '@renderer/components/DictationShortcutHost'
 import { ErrorBoundary } from '@renderer/components/ErrorBoundary'
+import { FileEditSessionProvider } from '@renderer/components/FileEditSessionProvider'
 import { AppShell } from '@renderer/components/layout/AppShell'
 import { TabsProvider } from '@renderer/components/layout/TabsProvider'
 import { MandatoryGateProvider } from '@renderer/components/MandatoryGateProvider'
+import { McpInteractionHost } from '@renderer/components/McpInteractionHost'
 import { PopupHost } from '@renderer/components/PopupHost'
 import { ThemeProvider } from '@renderer/components/ThemeProvider'
 import ToastHost from '@renderer/components/ToastHost'
@@ -21,11 +30,12 @@ import { useStorageMonitorNotification } from '@renderer/hooks/useStorageMonitor
 import { useWindowRuntime } from '@renderer/hooks/useWindowRuntime'
 import { registerImageModeChooser } from '@renderer/services/imageExportModeChooser'
 import { getSidebarDefaultLandingUrl } from '@renderer/utils/sidebar'
+import { WindowFileEditRecovery } from '@renderer/windows/WindowFileEditRecovery'
 import type { Tab } from '@shared/data/cache/cacheValueTypes'
-import { lazy, Suspense, useEffect, useMemo } from 'react'
 
 import { useAppUpdateHandler } from './hooks/useAppUpdateHandler'
 import { useAutoBackupEvents } from './hooks/useAutoBackupEvents'
+import { useCherryCloudSubscriptionReminder } from './hooks/useCherryCloudSubscriptionReminder'
 import { useTopicNamingErrorNotification } from './hooks/useTopicNamingErrorNotification'
 import { PrivacyPolicyUpdateGate } from './privacy/PrivacyPolicyUpdateGate'
 
@@ -84,14 +94,16 @@ function MainWindowRuntime(): null {
   useAutoBackupEvents()
   useStorageMonitorNotification()
   useTopicNamingErrorNotification()
+  useCherryCloudSubscriptionReminder()
 
   return null
 }
 
 export function MainWindowContent(): React.ReactElement {
   const [providerSetupStatus] = usePreference('app.onboarding.provider_setup.status')
-  const [sidebarFavorites] = usePreference('ui.sidebar.favorites')
+  const [sidebarShortcuts] = usePreference('ui.sidebar_shortcut')
   const [defaultPaintingProvider] = usePreference('feature.paintings.default_provider')
+  const sidebarShortcutRegistry = useMemo(() => new SidebarShortcutRegistry(CORE_SIDEBAR_SHORTCUT_PROVIDERS), [])
   const privacyUpdateRequired = useIsPrivacyUpdateRequired()
   // Onboarding collects privacy consent itself, so the gate only owns the window afterwards.
   const privacyGateOpen = providerSetupStatus !== 'pending' && privacyUpdateRequired
@@ -100,32 +112,36 @@ export function MainWindowContent(): React.ReactElement {
     () => ({
       id: 'home',
       type: 'route',
-      url: getSidebarDefaultLandingUrl(sidebarFavorites, defaultPaintingProvider) || '/app/launchpad',
+      url: getSidebarDefaultLandingUrl(sidebarShortcuts, defaultPaintingProvider) || '/app/launchpad',
       title: '',
       lastAccessTime: Date.now(),
       isDormant: false
     }),
-    [defaultPaintingProvider, sidebarFavorites]
+    [defaultPaintingProvider, sidebarShortcuts]
   )
 
   return (
     <TabsProvider initialDefaultTab={initialDefaultTab}>
-      <MandatoryGateProvider open={privacyGateOpen}>
-        {providerSetupStatus === 'pending' ? (
-          <Suspense fallback={<BootFallback />}>
-            <OnboardingPage />
-          </Suspense>
-        ) : (
-          <AppShell />
-        )}
-        <MainWindowRuntime />
-        <ConversationNotificationRuntime />
-        <PopupHost />
-        <ToastHost />
-        <DictationShortcutHost />
-        <VoicePlaybackHost />
-        {providerSetupStatus === 'pending' ? null : <PrivacyPolicyUpdateGate />}
-      </MandatoryGateProvider>
+      <SidebarShortcutRegistryProvider registry={sidebarShortcutRegistry}>
+        <MandatoryGateProvider open={privacyGateOpen}>
+          {providerSetupStatus === 'pending' ? (
+            <Suspense fallback={<BootFallback />}>
+              <OnboardingPage />
+            </Suspense>
+          ) : (
+            <AppShell />
+          )}
+          <MainWindowRuntime />
+          <ConversationNotificationRuntime />
+          <McpInteractionHost />
+          <PopupHost />
+          <ToastHost />
+          <WindowFileEditRecovery />
+          <DictationShortcutHost />
+          <VoicePlaybackHost />
+          {providerSetupStatus === 'pending' ? null : <PrivacyPolicyUpdateGate />}
+        </MandatoryGateProvider>
+      </SidebarShortcutRegistryProvider>
     </TabsProvider>
   )
 }
@@ -139,11 +155,13 @@ function MainApp(): React.ReactElement {
     <ErrorBoundary fallbackComponent={WindowFatalFallback}>
       <ThemeProvider>
         <CodeStyleProvider>
-          <CommandContextKeyProvider>
-            <CommandProvider>
-              <MainWindowContent />
-            </CommandProvider>
-          </CommandContextKeyProvider>
+          <FileEditSessionProvider>
+            <CommandContextKeyProvider>
+              <CommandProvider>
+                <MainWindowContent />
+              </CommandProvider>
+            </CommandContextKeyProvider>
+          </FileEditSessionProvider>
         </CodeStyleProvider>
       </ThemeProvider>
     </ErrorBoundary>

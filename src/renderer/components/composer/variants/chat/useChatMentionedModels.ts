@@ -1,5 +1,6 @@
-import type { Model } from '@shared/data/types/model'
 import { useCallback, useEffect, useEffectEvent, useRef, useState } from 'react'
+
+import type { Model } from '@shared/data/types/model'
 
 interface UseMentionedModelSelectorParams {
   /** Whether the mentioned-model selector UI is in use (chat home / placement). */
@@ -97,7 +98,6 @@ export function useChatMentionedModels({
       Boolean(preserveExplicitSelectionOnRuntimeChange && isSameSelectorScope),
       runtimeModel
     )
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- `useEffectEvent` reads latest mentioned models; this effect is keyed by topic/assistant/model.
   }, [
     runtimeModel,
     runtimeModelPending,

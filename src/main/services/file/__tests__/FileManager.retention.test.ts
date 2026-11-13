@@ -2,16 +2,17 @@ import { access, mkdir, mkdtemp, rm, rmdir, unlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 
-import { application } from '@application'
-import { fileEntryTable } from '@data/db/schemas/file'
-import { fileEntryService } from '@data/services/FileEntryService'
-import { BaseService } from '@main/core/lifecycle'
 import { setupTestDatabase } from '@test-helpers/db'
 import { MockMainDbServiceUtils } from '@test-mocks/main/DbService'
 import { mockMainLoggerService } from '@test-mocks/MainLoggerService'
 import { eq } from 'drizzle-orm'
 import { v7 as uuidv7 } from 'uuid'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+import { application } from '@application'
+import { fileEntryTable } from '@data/db/schemas/file'
+import { fileEntryService } from '@data/services/FileEntryService'
+import { BaseService } from '@main/core/lifecycle'
 
 vi.mock('@application', async () => {
   const { mockApplicationFactory } = await import('@test-mocks/main/application')

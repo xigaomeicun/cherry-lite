@@ -4,6 +4,8 @@
  * moves out of the in-memory map and the persistent provider takes over.
  */
 
+import { v7 as uuidv7 } from 'uuid'
+
 import { assistantDataService } from '@data/services/AssistantService'
 import { loggerService } from '@logger'
 import { isAgentSessionTopic } from '@main/ai/agentSession/topic'
@@ -14,7 +16,6 @@ import { temporaryChatService } from '@main/data/services/TemporaryChatService'
 import { toContentRole } from '@shared/data/types/message'
 import { parseUniqueModelId, type UniqueModelId } from '@shared/data/types/model'
 import { getKnowledgeBaseIdsFromParts } from '@shared/data/types/uiParts'
-import { v7 as uuidv7 } from 'uuid'
 
 import type { AiStreamRequest } from '../../types'
 import { PersistenceListener } from '../listeners/PersistenceListener'
@@ -86,7 +87,13 @@ export class TemporaryChatContextProvider implements ChatContextProvider {
     // The assistant owns the model — snapshot it (model nested) onto the assistant reply.
     const assistant = assistantId ? assistantDataService.getById(assistantId) : undefined
     const messageSnapshot = assistant
-      ? { id: assistant.id, name: assistant.name, emoji: assistant.emoji, model: modelSnap }
+      ? {
+          id: assistant.id,
+          name: assistant.name,
+          emoji: assistant.emoji,
+          ...(assistant.avatarFileId ? { avatarFileId: assistant.avatarFileId } : {}),
+          model: modelSnap
+        }
       : undefined
 
     // Append user first so `history` (listMessages) includes it. User rows carry only `modelId`.
@@ -136,6 +143,7 @@ export class TemporaryChatContextProvider implements ChatContextProvider {
       ...(req.trigger === 'submit-message' && req.fastMode ? { fastMode: true } : {})
     }
 
+    temporaryChatService.retainAvatar(req.topicId, messageSnapshot?.avatarFileId)
     return {
       topicId: req.topicId,
       models: [{ modelId: model.id, request: streamRequest }],

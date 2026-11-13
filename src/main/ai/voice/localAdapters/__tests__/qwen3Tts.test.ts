@@ -2,9 +2,10 @@ import { mkdtemp, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
 import { application } from '@application'
 import { QWEN3_TTS_BUNDLE_ID, VoiceModelSupport } from '@shared/ai/localVoice'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { mlxVoiceSupport } from '../../voicePlatform'
 import { createQwen3SpeechModel } from '../qwen3Tts'

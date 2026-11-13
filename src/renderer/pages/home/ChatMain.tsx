@@ -1,3 +1,5 @@
+import type { FC } from 'react'
+
 import MessageList from '@renderer/components/chat/messages/MessageList'
 import { MessageListProvider } from '@renderer/components/chat/messages/MessageListProvider'
 import type {
@@ -8,7 +10,6 @@ import type {
 import type { Assistant } from '@renderer/types/assistant'
 import type { Topic } from '@renderer/types/topic'
 import type { CherryMessagePart, CherryUIMessage } from '@shared/data/types/message'
-import type { FC } from 'react'
 
 import { useHomeMessageListProviderValue } from './messages/homeMessageListAdapter'
 
@@ -25,6 +26,7 @@ interface ChatMainProps {
   hasOlder: boolean
   selectAllPagination?: MessageListSelectAllPagination
   openCitationsPanel?: MessageListActions['openCitationsPanel']
+  addGeneratedImageToComposer?: MessageListActions['addGeneratedImageToComposer']
   onStartBranchDraft?: MessageListActions['startMessageBranch']
 }
 
@@ -41,6 +43,7 @@ const ChatMain: FC<ChatMainProps> = ({
   hasOlder,
   selectAllPagination,
   openCitationsPanel,
+  addGeneratedImageToComposer,
   onStartBranchDraft
 }) => {
   const value = useHomeMessageListProviderValue({
@@ -56,6 +59,7 @@ const ChatMain: FC<ChatMainProps> = ({
     hasOlder,
     selectAllPagination,
     openCitationsPanel,
+    addGeneratedImageToComposer,
     onStartBranchDraft
   })
   return (

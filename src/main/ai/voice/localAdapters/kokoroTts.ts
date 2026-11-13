@@ -2,21 +2,22 @@ import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
 import type { SpeechModelV3 } from '@ai-sdk/provider'
+
 import { application } from '@application'
 import type { SpeechOptions } from '@cherrystudio/ai-core'
 import { UtilityProcessError } from '@main/core/utilityProcess/UtilityProcessError'
 import { regionService } from '@main/services/RegionService'
 import {
   DEFAULT_SPEECH_SPEED,
+  SHERPA_VOICE_SUPPORTED_PLATFORM_KEYS,
   KOKORO_TTS_BUNDLE_ID,
   KOKORO_TTS_MODEL_ID,
   LOCAL_VOICE_MODELS,
-  type LocalSpeechVoice,
   MAX_SPEECH_SPEED,
   MIN_SPEECH_SPEED,
-  SHERPA_VOICE_SUPPORTED_PLATFORM_KEYS,
   VoiceModelSupport,
-  VoiceResourceOperation
+  VoiceResourceOperation,
+  type LocalSpeechVoice
 } from '@shared/ai/localVoice'
 import { LOCAL_MODEL_STATUS_CACHE_KEY } from '@shared/data/presets/localModel'
 

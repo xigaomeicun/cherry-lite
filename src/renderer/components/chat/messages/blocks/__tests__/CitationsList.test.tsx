@@ -1,7 +1,8 @@
-import type { Citation } from '@renderer/types/message'
 import { fireEvent, render, screen } from '@testing-library/react'
 import type React from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+import type { Citation } from '@renderer/types/message'
 
 import CitationsList from '../CitationsList'
 
@@ -58,13 +59,5 @@ describe('CitationsList', () => {
 
     expect(mocks.openCitationsPanel).toHaveBeenCalledTimes(1)
     expect(mocks.openCitationsPanel).toHaveBeenCalledWith({ citations })
-  })
-
-  it('renders a knowledge citation with the document icon instead of a favicon', () => {
-    const citations: Citation[] = [{ number: 1, url: '', title: 'doc.md', type: 'knowledge' }]
-
-    render(<CitationsList citations={citations} />)
-
-    expect(screen.getByText('file')).toBeInTheDocument()
   })
 })

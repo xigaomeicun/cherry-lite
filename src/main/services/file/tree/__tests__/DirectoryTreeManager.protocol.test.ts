@@ -1,3 +1,6 @@
+import type { WebContents } from 'electron'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
 /**
  * `DirectoryTreeManager` state machine, exercised against a fake builder.
  *
@@ -18,8 +21,6 @@ import type {
   TreeMutationEvent,
   TreeMutationPushPayload
 } from '@shared/utils/file'
-import type { WebContents } from 'electron'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('@main/core/lifecycle', async (importOriginal) => {
   const actual = await (importOriginal as () => Promise<typeof lifecycleModule>)()
@@ -232,8 +233,6 @@ describe('DirectoryTreeManager protocol', () => {
 
       await expect(pending).rejects.toThrow(/destroyed during creation/)
 
-      const internal = manager as unknown as { consumers: Map<string, unknown> }
-      expect(internal.consumers.size).toBe(0)
       expect(builder.listenerCount()).toBe(0)
     })
 

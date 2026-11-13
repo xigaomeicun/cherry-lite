@@ -99,6 +99,8 @@ Improvements to code quality, performance, and maintainability.
 - No full imports of large dependencies when only a small part is used (tree-shaking)
 
 ### B2. Code Simplification
+- Added or materially changed logic checked against existing repository modules
+  before accepting duplication (see cherry-review-guidance.md § Existing Module Reuse)
 - Clearly duplicated or similar logic extracted (judge by complexity and maintenance
   cost, not count threshold)
 - Deep nested if/else simplified with early return
@@ -165,7 +167,7 @@ Improvements to code quality, performance, and maintainability.
 Coding standards and documentation consistency.
 
 ### C1. Project Conventions
-- Naming follows `docs/references/architecture/naming-conventions.md`, based on path zone and
+- Naming follows `docs/dev/references/architecture/naming-conventions.md`, based on path zone and
   primary export role rather than nearby legacy precedent
 - Variable names semantically clear, no unnecessary abbreviations
 - Names in new code consistent with style in the same file
@@ -215,7 +217,7 @@ Coding standards and documentation consistency.
 > for an excluded issue type, that type is **not excluded** — review per project rules.
 
 1. Pure style preferences within formatting tool scope (not required by project rules)
-2. Formatting already handled by Biome (indentation, whitespace, trailing commas, etc.)
+2. Formatting already handled by Oxfmt (indentation, whitespace, trailing commas, etc.)
 3. Suggestions based on assumed future requirements, not current code
 4. Code following project's existing style but not matching some external standard
 5. Priority C issues in test code (unless project rules require otherwise)

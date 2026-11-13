@@ -1,3 +1,8 @@
+import { Maximize2, Minimize2 } from 'lucide-react'
+import type { ComponentProps, ComponentType, MouseEvent, ReactNode } from 'react'
+import { Activity, createContext, use, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
+
 import { Tooltip, TooltipSurface } from '@cherrystudio/ui'
 import { ErrorBoundary } from '@renderer/components/ErrorBoundary'
 import { RightSidebarCollapseIcon } from '@renderer/components/icons/SidebarToggleIcons'
@@ -5,10 +10,6 @@ import NavbarIcon from '@renderer/components/NavbarIcon'
 import { useCommandHandler } from '@renderer/hooks/command'
 import { useIsActiveTab } from '@renderer/hooks/tab'
 import { cn } from '@renderer/utils/style'
-import { Maximize2, Minimize2 } from 'lucide-react'
-import type { ComponentProps, ComponentType, MouseEvent, ReactNode } from 'react'
-import { Activity, createContext, use, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { useTranslation } from 'react-i18next'
 
 import { getRightPaneWidthPolicy, type RightPaneWidthPolicy, type RightPaneWidthPreset } from '../../shell/paneLayout'
 import { PersistentRightPaneHost, type RightPaneLayoutMode } from '../../shell/RightPaneHost'
@@ -24,7 +25,7 @@ export interface RightPanelComponentProps<TScope> {
 
 export interface RightPanelInstance {
   id: string
-  /** Stable semantic identity. A change intentionally starts a fresh component instance. */
+  /** Stable semantic identity for both the component and its presentation intent. */
   instanceKey: string
   title: ReactNode
   readiness: RightPanelReadiness
@@ -204,7 +205,11 @@ export function RightPanelProvider<TScope>({
   const entries = useMemo(() => resolveRightPanelEntries(capabilities, scope), [capabilities, scope])
   const [open, setOpen] = useState(defaultOpen)
   const [maximized, setMaximized] = useState(false)
-  const [requestedPanelId, setRequestedPanelId] = useState(defaultPanelId)
+  const [requestedPanel, setRequestedPanel] = useState<{ id?: string; instanceKey?: string }>(() => {
+    const preferred = findEntry(entries, defaultPanelId)
+    const entry = preferred && preferred.readiness !== 'unavailable' ? preferred : getDefaultEntry(entries)
+    return { id: entry?.id, instanceKey: entry?.instanceKey }
+  })
   const [layoutAnimationPending, setLayoutAnimationPending] = useState(false)
   const [fullWidthActive, setFullWidthActive] = useState(false)
   const [paneResizing, setPaneResizing] = useState(false)
@@ -236,41 +241,27 @@ export function RightPanelProvider<TScope>({
     setOpen(defaultOpen)
     if (defaultOpen) {
       if (userIntent) setUserOpenSeq((seq) => seq + 1)
-      setRequestedPanelId(defaultPanelId)
+      setRequestedPanel({ id: defaultPanelId ?? getDefaultEntry(entries)?.id })
       setPdfLayoutPending(true)
     } else {
       setMaximized(false)
       setLayoutAnimationPending(false)
       setPdfLayoutPending(false)
     }
-  }, [defaultOpen, defaultPanelId, userOpenIntentSeq])
+  }, [defaultOpen, defaultPanelId, entries, userOpenIntentSeq])
 
-  const requestedEntry = findEntry(entries, requestedPanelId)
+  const requestedEntry = findEntry(entries, requestedPanel.id)
   const defaultEntry = getDefaultEntry(entries)
-  const fallbackEntry = entries.find((entry) => entry.readiness === 'ready')
-  const activeEntry =
-    requestedEntry?.readiness === 'ready'
-      ? requestedEntry
-      : requestedEntry?.readiness === 'pending'
-        ? undefined
-        : fallbackEntry
-  const pendingEntry =
-    requestedEntry?.readiness === 'pending'
-      ? requestedEntry
-      : !activeEntry && defaultEntry?.readiness === 'pending'
-        ? defaultEntry
-        : undefined
-  const reconciledEntry = activeEntry ?? pendingEntry
+  const selectionAvailable =
+    requestedEntry &&
+    requestedEntry.readiness !== 'unavailable' &&
+    (requestedPanel.instanceKey === undefined || requestedPanel.instanceKey === requestedEntry.instanceKey)
+  const activeEntry = selectionAvailable && requestedEntry.readiness === 'ready' ? requestedEntry : undefined
   const presentationOpen = present && open && Boolean(activeEntry)
   const presentationMaximized = presentationOpen && maximized
   // The pane keeps covering the centre until its phase ends, so the composer has to stay lifted
   // past the click that started the restore. `fullWidthActive` lands a commit late, hence the union.
   const composerElevated = presentationMaximized || fullWidthActive
-
-  useLayoutEffect(() => {
-    if (!reconciledEntry || reconciledEntry.id === requestedPanelId) return
-    setRequestedPanelId(reconciledEntry.id)
-  }, [reconciledEntry, requestedPanelId])
 
   useLayoutEffect(() => {
     setMountedInstances((current) => updateMountedInstances(current, entries, activeEntry, presentationOpen))
@@ -284,7 +275,7 @@ export function RightPanelProvider<TScope>({
   const requestOpen = useCallback((panelId: string, options?: RightPanelOpenOptions) => {
     const wasOpen = openRef.current
     openRef.current = true
-    setRequestedPanelId(panelId)
+    setRequestedPanel({ id: panelId })
     setOpen(true)
     if (!wasOpen) {
       setPdfLayoutPending(true)
@@ -308,6 +299,14 @@ export function RightPanelProvider<TScope>({
     setPdfLayoutPending(false)
     onOpenChangeRef.current?.(false)
   }, [])
+  useLayoutEffect(() => {
+    if (!selectionAvailable) {
+      close()
+    } else if (requestedPanel.instanceKey === undefined) {
+      // Dynamic panels can be created in the same batch as requestOpen.
+      setRequestedPanel({ id: requestedEntry.id, instanceKey: requestedEntry.instanceKey })
+    }
+  }, [close, requestedEntry, requestedPanel.instanceKey, selectionAvailable])
   const minimize = useCallback(() => {
     setLayoutAnimationPending(true)
     setPdfLayoutPending(false)
@@ -450,7 +449,7 @@ export function RightPanelHeaderControls({ canMaximize = false }: { canMaximize?
       <Tooltip content={maximizeLabel} delay={800}>
         <NavbarIcon
           tone="conversation"
-          className="[&_svg]:!size-3.5 shrink-0"
+          className="shrink-0 [&_svg]:!size-3.5"
           aria-label={maximizeLabel}
           aria-pressed={state.presentationMaximized}
           onClick={actions.toggleMaximized}>
@@ -462,10 +461,14 @@ export function RightPanelHeaderControls({ canMaximize = false }: { canMaximize?
   return (
     <div className="flex shrink-0 items-center gap-0.5 [-webkit-app-region:no-drag]">
       {maximizeButton}
-      {/* 摘除导致 (0,0) 幽灵气泡的 Tooltip 包装 */}
-      <NavbarIcon tone="conversation" aria-label={closeLabel} onClick={actions.close}>
-        <RightSidebarCollapseIcon />
-      </NavbarIcon>
+      {/* Closing hides the pane subtree via Activity (display:none), which zeroes the
+          trigger's rect; Radix then parks the still-exiting tooltip at the viewport
+          origin. Unmounting the tooltip as the panel closes removes that window. */}
+      <Tooltip content={closeLabel} delay={800} isDisabled={!state.presentationOpen}>
+        <NavbarIcon tone="conversation" aria-label={closeLabel} onClick={actions.close}>
+          <RightSidebarCollapseIcon />
+        </NavbarIcon>
+      </Tooltip>
     </div>
   )
 }
@@ -477,12 +480,12 @@ function RightPanelHeader({ canMaximize = false, title }: { canMaximize?: boolea
     <div
       data-testid="shell-tab-list"
       className={cn(
-        'flex h-(--navbar-height) shrink-0 items-center justify-between gap-2 border-border-subtle border-b px-2 [-webkit-app-region:no-drag]',
+        'flex h-(--navbar-height) shrink-0 items-center justify-between gap-2 border-b border-border-subtle px-2 [-webkit-app-region:no-drag]',
         state.presentationMaximized && 'bg-card'
       )}>
       <div
         data-testid="shell-tab-title"
-        className="min-w-0 flex-1 select-none truncate px-1 font-medium text-foreground text-sm">
+        className="min-w-0 flex-1 truncate px-1 text-sm font-medium text-foreground select-none">
         {title}
       </div>
       <RightPanelHeaderControls canMaximize={canMaximize} />
@@ -635,7 +638,7 @@ export function RightPanelShortcut({
     <NavbarIcon
       {...buttonProps}
       tone="conversation"
-      className={cn('[&_svg]:!size-3.5 shrink-0', className)}
+      className={cn('shrink-0 [&_svg]:!size-3.5', className)}
       active={active}
       disabled={disabled}
       aria-label={label}
@@ -649,7 +652,7 @@ export function RightPanelShortcut({
   if (tooltipContent === false) return button
 
   return (
-    <Tooltip content={tooltipContent} delay={800}>
+    <Tooltip content={tooltipContent} placement="bottom" delay={800}>
       {button}
     </Tooltip>
   )

@@ -85,5 +85,5 @@ export function createModelscopeProvider(settings: ModelscopeProviderSettings = 
   provider.imageModel = (modelId: string) =>
     createImageGenerationModel(modelId, { provider: MODELSCOPE_PROVIDER_NAME, transport })
 
-  return provider as ModelscopeProvider
+  return provider
 }

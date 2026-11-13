@@ -1,4 +1,3 @@
-import { remarkLatexMath } from '@renderer/utils/remarkLatexMath'
 import type { FormatCallback, SelectorDefinition } from 'html-to-text'
 import { htmlToText } from 'html-to-text'
 import type { PhrasingContent, RootContent } from 'mdast'
@@ -6,6 +5,8 @@ import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
 import remarkParse from 'remark-parse'
 import { unified } from 'unified'
+
+import { remarkLatexMath } from '@renderer/utils/remarkLatexMath'
 
 export const READABLE_TEXT_CONFIRMATION_THRESHOLD = 5_000
 export const SPEECH_ADAPTER_TEXT_LIMIT = 10_000

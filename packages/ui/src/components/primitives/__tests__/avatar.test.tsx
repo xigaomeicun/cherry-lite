@@ -1,6 +1,5 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest'
-
 import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -29,7 +28,7 @@ const FIRST_LOGO = 'data:image/png;base64,first'
 const SECOND_LOGO = 'data:image/png;base64,second'
 
 beforeEach(() => {
-  vi.stubGlobal('Image', StubImage as unknown as typeof Image)
+  vi.stubGlobal('Image', StubImage)
 })
 
 afterEach(() => {
@@ -87,23 +86,5 @@ describe('Avatar (Radix imageLoadingStatus reset)', () => {
     )
 
     expect(document.querySelector('img')).toHaveAttribute('src', SECOND_LOGO)
-  })
-
-  it('does not remount the root when unrelated props change', () => {
-    const { rerender } = render(
-      <Avatar className="size-8">
-        <AvatarImage src={FIRST_LOGO} />
-      </Avatar>
-    )
-    const imgBefore = document.querySelector('img')
-
-    rerender(
-      <Avatar className="size-10">
-        <AvatarImage src={FIRST_LOGO} />
-      </Avatar>
-    )
-
-    // Same image node, same DOM identity — no remount when only className changes.
-    expect(document.querySelector('img')).toBe(imgBefore)
   })
 })

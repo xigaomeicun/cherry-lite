@@ -1,17 +1,18 @@
 import http from 'node:http'
 import net from 'node:net'
 
-import type { Api, Model } from '@earendil-works/pi-ai'
 import { normalizeContext } from '@earendil-works/pi-ai'
+import type { Api, Model } from '@earendil-works/pi-ai'
 import {
   stream as streamGoogle,
   streamSimple as streamGoogleSimple
 } from '@earendil-works/pi-ai/api/google-generative-ai'
 import { streamSimple as streamOpenAICompletions } from '@earendil-works/pi-ai/api/openai-completions'
 import { streamSimple as streamOpenAIResponses } from '@earendil-works/pi-ai/api/openai-responses'
-import { NodeProxyController } from '@main/services/proxy/NodeProxyController'
 import { Agent, fetch as undiciFetch, getGlobalDispatcher, ProxyAgent, setGlobalDispatcher } from 'undici'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+
+import { NodeProxyController } from '@main/services/proxy/NodeProxyController'
 
 const servers: Array<http.Server | net.Server> = []
 let nodeProxyController: NodeProxyController | undefined

@@ -1,7 +1,8 @@
-import { cacheService } from '@data/CacheService'
 import { MockCacheUtils } from '@test-mocks/renderer/CacheService'
 import { act, renderHook } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+import { cacheService } from '@data/CacheService'
 
 const { useFollowupQueue } = await import('../useFollowupQueue')
 
@@ -391,8 +392,7 @@ describe('queued edit switching', () => {
     }
   )
 
-  // cherry-lite: deviates from upstream #21863 — the taken item is written back to its scope on switch.
-  it('returns the taken item to its scope on scope change, drops admissions and ignores old-scope success', async () => {
+  it('discards taken metadata on scope change and settles success in the originating scope', async () => {
     const {
       result,
       rerender,
@@ -426,48 +426,103 @@ describe('queued edit switching', () => {
       result.current.takeForEdit(d.id, capture)
     })
     expect(result.current.items, 'old success must not clear the new scope taken record').toEqual([c])
-    expect(cacheService.getCasual('followup-queue.s1'), 'taken B returns to its slot; accepted send removes A').toEqual(
-      [b]
-    )
+    expect(cacheService.getCasual('followup-queue.s1'), 'accepted send must leave no delivered source item').toEqual([])
     act(() => {
       rerender({ scopeKey: 's1', isFulfilled: false })
     })
     act(() => {
       expect(result.current.takeForEdit(a.id, capture), 'delivered source item must remain removed').toBeNull()
     })
-    expect(cacheService.getCasual('followup-queue.s2'), 'taken D returns to s2 on the switch back').toEqual([c, d])
-    expect(result.current.items, 'B survives the scope round-trip').toEqual([b])
+    expect(result.current.items, 'scope reload must not reinsert old taken B').toEqual([])
+  })
+})
+
+describe('editing a queued item from the composer', () => {
+  beforeEach(() => MockCacheUtils.resetMocks())
+
+  const seededQueue = (...items: ReturnType<typeof item>[]) => {
+    cacheService.setCasual('followup-queue.s1', items)
+    return renderHook(() =>
+      useFollowupQueue({ scopeKey: 's1', status: undefined, lastCompletedAt: null, onDrain: vi.fn() })
+    ).result
+  }
+  const composer = (text: string, overrides: Record<string, unknown> = {}) => ({
+    editingMessage: false,
+    getDraft: () => draft(text),
+    buildPayload: (current: { text: string }) => (current.text ? payload(current.text) : null),
+    hasFiles: false,
+    restore: vi.fn(),
+    ...overrides
   })
 
-  it('returns the taken item to its original slot in the cache on unmount', () => {
-    const {
-      result,
-      unmount,
-      entries: [a, b, c]
-    } = setup(['A', 'B', 'C'])
-    act(() => {
-      result.current.takeForEdit(b.id, capture)
-    })
-    expect(cacheService.getCasual('followup-queue.s1')).toEqual([a, c])
-    unmount()
-    expect(cacheService.getCasual('followup-queue.s1'), 'unmount must not lose the taken item').toEqual([a, b, c])
+  it('swaps the composer draft back into its queue slot, keeping that item chat target', () => {
+    const chatTarget = { mode: 'reserved-branch' } as any
+    const a = { ...item('a', 'A'), payload: { ...payload('A'), chatTarget } }
+    const result = seededQueue(a, item('b', 'B'))
+
+    act(() => result.current.editItem('a', composer('')))
+    act(() => result.current.editItem('b', composer('A edited')))
+
+    expect(result.current.items.map((entry) => entry.id)).toEqual(['a'])
+    expect(result.current.items[0].draft.text).toBe('A edited')
+    expect(result.current.items[0].payload).toEqual({ ...payload('A edited'), chatTarget })
   })
 
-  it('does not return a taken item that was released (sent) or removed before unmount', () => {
-    const {
-      result,
-      unmount,
-      entries: [a, b, c]
-    } = setup(['A', 'B', 'C'])
-    act(() => {
-      result.current.takeForEdit(b.id, capture)
-      result.current.releaseEdit()
-    })
-    act(() => {
-      result.current.takeForEdit(c.id, capture)
-      result.current.removeId(c.id)
-    })
-    unmount()
-    expect(cacheService.getCasual('followup-queue.s1')).toEqual([a])
+  it('puts the original item back when the composer draft was emptied', () => {
+    const a = item('a', 'A')
+    const result = seededQueue(a, item('b', 'B'))
+
+    act(() => result.current.editItem('a', composer('')))
+    act(() => result.current.editItem('b', composer('')))
+
+    expect(result.current.items).toEqual([a])
+  })
+
+  it('refuses the switch when a non-empty composer draft cannot become a payload', () => {
+    const result = seededQueue(item('a', 'A'), item('b', 'B'))
+    const refused = composer('unsendable', { buildPayload: () => null })
+
+    act(() => result.current.editItem('a', composer('')))
+    act(() => result.current.editItem('b', refused))
+
+    expect(refused.restore).not.toHaveBeenCalled()
+    expect(result.current.items.map((entry) => entry.id)).toEqual(['b'])
+  })
+
+  it('refuses the switch when an attachment-only composer draft cannot become a payload', () => {
+    const result = seededQueue(item('a', 'A'), item('b', 'B'))
+    const refused = composer('', { hasFiles: true })
+
+    act(() => result.current.editItem('a', composer('')))
+    act(() => result.current.editItem('b', refused))
+
+    expect(refused.restore).not.toHaveBeenCalled()
+    expect(result.current.items.map((entry) => entry.id)).toEqual(['b'])
+  })
+
+  it('consumes the item without swapping anything back while a message is being edited', () => {
+    const b = item('b', 'B')
+    const result = seededQueue(item('a', 'A'), b, item('c', 'C'))
+    const editingMessage = composer('message under edit', { editingMessage: true })
+
+    act(() => result.current.editItem('a', composer('')))
+    act(() => result.current.editItem('b', editingMessage))
+
+    expect(editingMessage.restore).toHaveBeenCalledWith(b)
+    expect(result.current.items.map((entry) => entry.id)).toEqual(['c'])
+
+    act(() => result.current.editItem('c', composer('next draft')))
+
+    expect(result.current.items, 'the draft taken before the message edit must not come back').toEqual([])
+  })
+
+  it('ignores an item that is no longer queued while a message is being edited', () => {
+    const result = seededQueue(item('a', 'A'))
+    const editingMessage = composer('', { editingMessage: true })
+
+    act(() => result.current.editItem('missing', editingMessage))
+
+    expect(editingMessage.restore).not.toHaveBeenCalled()
+    expect(result.current.items.map((entry) => entry.id)).toEqual(['a'])
   })
 })

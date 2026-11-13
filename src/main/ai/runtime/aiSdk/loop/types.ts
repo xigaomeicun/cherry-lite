@@ -1,6 +1,4 @@
 import type { ProviderOptions } from '@ai-sdk/provider-utils'
-import type { AiPlugin } from '@cherrystudio/ai-core'
-import type { StringKeys } from '@cherrystudio/ai-core/provider'
 import type {
   Experimental_DownloadFunction as DownloadFunction,
   ModelMessage,
@@ -13,8 +11,11 @@ import type {
   ToolSet
 } from 'ai'
 
+import type { AiPlugin } from '@cherrystudio/ai-core'
+import type { StringKeys } from '@cherrystudio/ai-core/provider'
+
 import type { MediaCapabilities } from '../../../messages/messageCapabilities'
-import type { AppProviderSettingsMap } from '../../../types'
+import type { AppProviderSettingsMap, ContextOwner } from '../../../types'
 import type { WrapLanguageModel } from '../retry/createRetryableWrap'
 
 type AppProviderKey = StringKeys<AppProviderSettingsMap>
@@ -103,6 +104,7 @@ export interface AgentOptions {
 // ── Params ──────────────────────────────────────────────────────────
 
 export interface AgentLoopParams<T extends AppProviderKey = AppProviderKey> {
+  contextOwner?: ContextOwner
   providerId: T
   providerSettings: AppProviderSettingsMap[T]
   modelId: string

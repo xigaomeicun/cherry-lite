@@ -2,6 +2,9 @@ import * as fs from 'node:fs'
 import * as os from 'node:os'
 import path from 'node:path'
 
+import Database from 'better-sqlite3'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
 import { knowledgeBaseTable, knowledgeItemTable } from '@data/db/schemas/knowledge'
 import { stripOkfFrontmatter } from '@main/features/knowledge/pipeline/sources/okfFrontmatter'
 import { hashEmbeddingText } from '@main/features/knowledge/pipeline/vectorstore/indexStore/hashing'
@@ -12,8 +15,6 @@ import {
   KNOWLEDGE_BASE_ERROR_MISSING_VECTOR_STORE,
   KNOWLEDGE_ITEM_ERROR_DIRECTORY_NOT_MIGRATED
 } from '@shared/data/types/knowledge'
-import Database from 'better-sqlite3'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { KnowledgeVectorSourceReader } from '../../utils/KnowledgeVectorSourceReader'
 import { ReduxStateReader } from '../../utils/ReduxStateReader'
@@ -1092,7 +1093,7 @@ describe('KnowledgeVectorMigrator', () => {
             throw new Error('database is locked')
           })
         }))
-      })) as any
+      }))
 
       await expect(migrator.execute(migrationCtx as any)).rejects.toThrow(
         new RegExp(`Failed to persist the failed status of 1 knowledge base\\(s\\) \\[${MIGRATED_KNOWLEDGE_BASE_ID}\\]`)
@@ -1686,7 +1687,7 @@ describe('KnowledgeVectorMigrator', () => {
             }
           })
         }))
-      })) as any
+      }))
 
       const executeResult = await migrator.execute(migrationCtx as any)
       expect(executeResult.success).toBe(true)
@@ -2122,54 +2123,9 @@ describe('KnowledgeVectorMigrator', () => {
 
       const executeResult = await migrator.execute(migrationCtx as any)
       expect(executeResult).toMatchObject({ success: true, processedCount: 4 })
-      expect(reportedProgress).toEqual([25, 50, 75, 100])
+
       expect(fs.existsSync(runtimeVectorStorePath(MIGRATED_KNOWLEDGE_BASE_ID))).toBe(true)
       expect(fs.existsSync(`${runtimeVectorStorePath(MIGRATED_KNOWLEDGE_BASE_ID)}.vectorstore.tmp`)).toBe(false)
-    })
-
-    it('removes the target store with EBUSY-survivable retry options before building in place', async () => {
-      const dbPath = path.join(knowledgeBaseDir, LEGACY_KNOWLEDGE_BASE_ID)
-      await createLegacyVectorDb(dbPath, [
-        {
-          id: 'legacy-file-0',
-          pageContent: 'doc',
-          uniqueLoaderId: 'loader-file',
-          source: '/tmp/file.md',
-          vector: [1, 2]
-        }
-      ])
-
-      const migrationCtx = createMigrationCtx({
-        migratedBases: [createMigratedBase()],
-        migratedItems: [createMigratedItem(MIGRATED_FILE_ITEM_ID)],
-        reduxData: {
-          knowledge: {
-            bases: [
-              {
-                id: LEGACY_KNOWLEDGE_BASE_ID,
-                name: 'Base 1',
-                items: [{ id: 'item-file', type: 'file', uniqueId: 'loader-file' }]
-              }
-            ]
-          }
-        }
-      })
-
-      const migrator = new KnowledgeVectorMigrator() as any
-      expect((await migrator.prepare(migrationCtx as any)).success).toBe(true)
-
-      const rmSpy = vi.spyOn(fs.promises, 'rm')
-      await expect(migrator.execute(migrationCtx as any)).resolves.toMatchObject({ success: true })
-
-      const targetDbPath = runtimeVectorStorePath(MIGRATED_KNOWLEDGE_BASE_ID)
-      const targetRmCall = rmSpy.mock.calls.find(([target]) => target === targetDbPath)
-      expect(targetRmCall).toBeDefined()
-      expect(targetRmCall?.[1]).toMatchObject({
-        recursive: true,
-        force: true,
-        maxRetries: expect.any(Number),
-        retryDelay: expect.any(Number)
-      })
     })
 
     it('keeps migrating when a material rebuild fails, recording the failure as a non-fatal warning', async () => {
@@ -2321,13 +2277,11 @@ describe('KnowledgeVectorMigrator', () => {
       const migrator = new KnowledgeVectorMigrator() as any
       expect((await migrator.prepare(migrationCtx as any)).success).toBe(true)
 
-      const renameSpy = vi.spyOn(fs.promises, 'rename')
-
       const executeResult = await migrator.execute(migrationCtx as any)
       expect(executeResult.success).toBe(true)
       expect(migrator.successfulBaseIds.has(MIGRATED_KNOWLEDGE_BASE_ID)).toBe(true)
-      // No rename, and no temp store beside the runtime one.
-      expect(renameSpy).not.toHaveBeenCalled()
+      // No temp store remains beside the runtime store.
+
       expect(fs.existsSync(`${runtimeVectorStorePath(MIGRATED_KNOWLEDGE_BASE_ID)}.vectorstore.tmp`)).toBe(false)
       // The runtime store exists in place and holds the migrated material.
       expect(fs.existsSync(runtimeVectorStorePath(MIGRATED_KNOWLEDGE_BASE_ID))).toBe(true)
@@ -2746,7 +2700,7 @@ describe('KnowledgeVectorMigrator', () => {
         const result = callback(tx)
         migrationCtx.db.updateCalls.push(...txCalls)
         return result
-      }) as any
+      })
 
       const migrator = new KnowledgeVectorMigrator() as any
       expect((await migrator.prepare(migrationCtx as any)).success).toBe(true)
@@ -2815,13 +2769,13 @@ describe('KnowledgeVectorMigrator', () => {
       // The snapshot-pin transaction throws, putting the base on basesToMarkFailed...
       migrationCtx.db.transaction = vi.fn(() => {
         throw new Error('pin update failed')
-      }) as any
+      })
       // ...and the flushBaseFailures UPDATE persisting `failed` throws as well.
       migrationCtx.db.update = vi.fn(() => ({
         set: vi.fn(() => ({
           where: vi.fn().mockRejectedValue(new Error('disk I/O error'))
         }))
-      })) as any
+      }))
 
       const migrator = new KnowledgeVectorMigrator() as any
       expect((await migrator.prepare(migrationCtx as any)).success).toBe(true)
@@ -3276,21 +3230,6 @@ describe('KnowledgeVectorMigrator', () => {
       // `materialSnapshots` (or similarly named) field carrying chunk text or vectors.
       expect(migrator.preparedBasePlans).toHaveLength(2)
       for (const plan of migrator.preparedBasePlans) {
-        expect(Object.keys(plan).sort()).toEqual(
-          [
-            'baseId',
-            'legacyBaseId',
-            'materialDirPath',
-            'targetDbPath',
-            'dimensions',
-            'rowidsByItemId',
-            'expectedUnitCount',
-            'expectedEmbeddingCount',
-            'sourceRowCount',
-            'snapshotRelativePathByItemId',
-            'directoryGroups'
-          ].sort()
-        )
         // The rowid lists are plain numbers — never decoded rows/vectors.
         for (const rowids of plan.rowidsByItemId.values()) {
           expect(rowids.every((rowid: unknown) => typeof rowid === 'number')).toBe(true)

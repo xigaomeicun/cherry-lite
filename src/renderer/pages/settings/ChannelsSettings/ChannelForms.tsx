@@ -1,3 +1,8 @@
+import { QRCodeSVG } from 'qrcode.react'
+import type { ReactNode } from 'react'
+import { type FC, useCallback, useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
+
 import {
   Dialog,
   DialogContent,
@@ -12,14 +17,10 @@ import {
   SelectValue,
   Switch
 } from '@cherrystudio/ui'
-import { PermissionModeSelectItem } from '@renderer/components/PermissionModeOption'
+import { FullAccessConfirmDialog, PermissionModeSelectItem } from '@renderer/components/PermissionModeOption'
 import { ipcApi, useIpcOn } from '@renderer/ipc'
-import type { FeishuChannelConfig, FeishuDomain, PermissionMode } from '@renderer/types/agent'
+import type { FeishuChannelConfig, FeishuDomain } from '@renderer/types/agent'
 import { permissionModeCards } from '@renderer/utils/agent'
-import { QRCodeSVG } from 'qrcode.react'
-import type { ReactNode } from 'react'
-import { type FC, useCallback, useEffect, useState } from 'react'
-import { useTranslation } from 'react-i18next'
 
 import type { ChannelData, ChannelUpdates } from './channelTypes'
 import { DingTalkForm } from './DingTalkForm'
@@ -65,16 +66,31 @@ type ChannelFieldsFormProps = ChannelFormProps & {
 const ChannelPermissionMode: FC<ChannelFormProps> = ({ channel, onConfigChange }) => {
   const { t } = useTranslation()
   const selectedCard = permissionModeCards.find((card) => card.mode === channel.permissionMode)
+  const [fullAccessPending, setFullAccessPending] = useState(false)
+
+  // Any newer mode (local or from another window) wins; confirming must never apply a stale dialog.
+  useEffect(() => {
+    setFullAccessPending(false)
+  }, [channel.permissionMode])
+
   return (
     <div className="flex flex-col gap-1">
       <Label className="text-xs">{t('agent.channels.security.permissionMode')}</Label>
       <Select
         value={channel.permissionMode ?? INHERIT_PERMISSION_MODE_VALUE}
-        onValueChange={(value) =>
+        onValueChange={(value) => {
+          // Radix's hidden native select can briefly emit an empty value while its dynamic options change.
+          if (!value) return
+          if (value === 'bypassPermissions') {
+            // Already Full Access: nothing to confirm.
+            if (channel.permissionMode !== 'bypassPermissions') setFullAccessPending(true)
+            return
+          }
+          setFullAccessPending(false)
           onConfigChange({
-            permissionMode: value === INHERIT_PERMISSION_MODE_VALUE ? null : (value as PermissionMode)
+            permissionMode: value === INHERIT_PERMISSION_MODE_VALUE ? null : value
           })
-        }>
+        }}>
         <SelectTrigger size="sm" className="w-full">
           {/* Own children so the trigger stays one line: the items below can be two. */}
           <SelectValue>
@@ -94,6 +110,14 @@ const ChannelPermissionMode: FC<ChannelFormProps> = ({ channel, onConfigChange }
           ))}
         </SelectContent>
       </Select>
+      <FullAccessConfirmDialog
+        open={fullAccessPending}
+        onOpenChange={setFullAccessPending}
+        onConfirm={() => onConfigChange({ permissionMode: 'bypassPermissions' })}
+        scopeName={channel.name.trim() || undefined}
+        scopeKind="channel"
+        t={t}
+      />
     </div>
   )
 }
@@ -177,11 +201,11 @@ const ChannelFieldsForm: FC<ChannelFieldsFormProps> = ({
             placeholder={chatIdsConfig.placeholder}
             className="h-8 text-sm"
           />
-          <span className="mt-1 block text-muted-foreground text-xs">{chatIdsConfig.hint}</span>
+          <span className="mt-1 block text-xs text-muted-foreground">{chatIdsConfig.hint}</span>
           {!chatIds.trim() && idsKey === 'allowed_chat_ids' && (
-            <span className="mt-1 block text-warning text-xs">{t('agent.channels.chatIdsAutoTrackHint')}</span>
+            <span className="mt-1 block text-xs text-warning">{t('agent.channels.chatIdsAutoTrackHint')}</span>
           )}
-          {chatIdsConfig.extraHint && <span className="mt-1 block text-info text-xs">{chatIdsConfig.extraHint}</span>}
+          {chatIdsConfig.extraHint && <span className="mt-1 block text-xs text-info">{chatIdsConfig.extraHint}</span>}
         </div>
       </div>
       <ChannelPermissionMode channel={channel} onConfigChange={onConfigChange} />
@@ -266,26 +290,26 @@ export const FeishuForm: FC<ChannelFormProps> = ({ channel, onConfigChange }) =>
     <div className="flex flex-col gap-3">
       {!hasCredentials && (
         <div className="flex items-center gap-2">
-          {status === 'pending' && <span className="text-info text-xs">{t('agent.channels.feishu.qrHint')}</span>}
+          {status === 'pending' && <span className="text-xs text-info">{t('agent.channels.feishu.qrHint')}</span>}
           {status === 'expired' && (
             <>
               <span className="inline-block h-2 w-2 rounded-full bg-error" />
-              <span className="text-error text-xs">{t('agent.channels.feishu.qrExpired')}</span>
+              <span className="text-xs text-error">{t('agent.channels.feishu.qrExpired')}</span>
             </>
           )}
           {status === 'error' && (
             <>
               <span className="inline-block h-2 w-2 rounded-full bg-error" />
-              <span className="text-error text-xs">{t('agent.channels.error')}</span>
+              <span className="text-xs text-error">{t('agent.channels.error')}</span>
             </>
           )}
-          {status === 'idle' && <span className="text-info text-xs">{t('agent.channels.feishu.loginHint')}</span>}
+          {status === 'idle' && <span className="text-xs text-info">{t('agent.channels.feishu.loginHint')}</span>}
         </div>
       )}
       {hasCredentials && (
         <div className="flex items-center gap-2">
           <span className="inline-block h-2 w-2 rounded-full bg-success" />
-          <span className="text-success text-xs">{t('agent.channels.feishu.connected')}</span>
+          <span className="text-xs text-success">{t('agent.channels.feishu.connected')}</span>
         </div>
       )}
       <ChannelFieldsForm
@@ -353,7 +377,7 @@ export const FeishuForm: FC<ChannelFormProps> = ({ channel, onConfigChange }) =>
           </DialogHeader>
           <div className="flex flex-col items-center gap-4 py-4">
             {qrUrl && <QRCodeSVG value={qrUrl} size={240} level="M" />}
-            <span className="text-center text-muted-foreground text-xs">{t('agent.channels.feishu.qrScanHint')}</span>
+            <span className="text-center text-xs text-muted-foreground">{t('agent.channels.feishu.qrScanHint')}</span>
           </div>
         </DialogContent>
       </Dialog>
@@ -478,34 +502,34 @@ export const WeChatForm: FC<ChannelFormProps & { onRemove?: () => void }> = ({ c
           {status === 'confirmed' && (
             <>
               <span className="inline-block h-2 w-2 rounded-full bg-success" />
-              <span className="text-success text-xs">{t('agent.channels.wechat.connected')}</span>
+              <span className="text-xs text-success">{t('agent.channels.wechat.connected')}</span>
             </>
           )}
           {status === 'disconnected' && (
             <>
               <span className="inline-block h-2 w-2 rounded-full bg-error" />
-              <span className="text-error text-xs">{t('agent.channels.wechat.disconnected')}</span>
+              <span className="text-xs text-error">{t('agent.channels.wechat.disconnected')}</span>
             </>
           )}
           {status === 'expired' && (
             <>
               <span className="inline-block h-2 w-2 rounded-full bg-error" />
-              <span className="text-error text-xs">{t('agent.channels.wechat.qrExpired')}</span>
+              <span className="text-xs text-error">{t('agent.channels.wechat.qrExpired')}</span>
             </>
           )}
           {status === 'error' && (
             <>
               <span className="inline-block h-2 w-2 rounded-full bg-error" />
-              <span className="text-error text-xs">{t('agent.channels.error')}</span>
+              <span className="text-xs text-error">{t('agent.channels.error')}</span>
             </>
           )}
           {(status === 'idle' || status === 'pending') && (
-            <span className="text-info text-xs">{t('agent.channels.wechat.loginHint')}</span>
+            <span className="text-xs text-info">{t('agent.channels.wechat.loginHint')}</span>
           )}
         </div>
         {loginUserId && status === 'confirmed' && (
-          <span className="text-foreground-tertiary text-xs">
-            User ID: <code className="select-all rounded bg-muted px-1">{loginUserId}</code>
+          <span className="text-xs text-foreground-tertiary">
+            User ID: <code className="rounded bg-muted px-1 select-all">{loginUserId}</code>
           </span>
         )}
       </div>
@@ -525,7 +549,7 @@ export const WeChatForm: FC<ChannelFormProps & { onRemove?: () => void }> = ({ c
           </DialogHeader>
           <div className="flex flex-col items-center gap-4 py-4">
             {qrUrl && <QRCodeSVG value={qrUrl} size={240} level="M" />}
-            <span className="text-center text-muted-foreground text-xs">{t('agent.channels.wechat.qrHint')}</span>
+            <span className="text-center text-xs text-muted-foreground">{t('agent.channels.wechat.qrHint')}</span>
           </div>
         </DialogContent>
       </Dialog>

@@ -4,26 +4,38 @@
 // helpers (the guard itself is private).
 import path from 'node:path'
 
-import type { PosixRelativeFilePath } from '@shared/utils/file'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+import type { PosixRelativeFilePath } from '@shared/utils/file'
 
 // Legitimately branded, not a type lie: `../escape.md` IS a relative POSIX path.
 // Containment is the knowledge layer's rule, so a traversal reaches these helpers
 // fully typed and the runtime guard is the only thing standing in its way.
 const UNSAFE_RELATIVE_PATH = '../escape.md' as PosixRelativeFilePath
 
-const { copyMock, writeMock, ensureDirMock, removeMock, removeDirMock, rmdirMock, lstatMock, errorMock, warnMock } =
-  vi.hoisted(() => ({
-    copyMock: vi.fn(),
-    writeMock: vi.fn(),
-    ensureDirMock: vi.fn(),
-    removeMock: vi.fn(),
-    removeDirMock: vi.fn(),
-    rmdirMock: vi.fn(),
-    lstatMock: vi.fn(),
-    errorMock: vi.fn(),
-    warnMock: vi.fn()
-  }))
+const {
+  copyMock,
+  prepareAtomicCopyMock,
+  writeMock,
+  ensureDirMock,
+  removeMock,
+  removeDirMock,
+  rmdirMock,
+  lstatMock,
+  errorMock,
+  warnMock
+} = vi.hoisted(() => ({
+  copyMock: vi.fn(),
+  prepareAtomicCopyMock: vi.fn(),
+  writeMock: vi.fn(),
+  ensureDirMock: vi.fn(),
+  removeMock: vi.fn(),
+  removeDirMock: vi.fn(),
+  rmdirMock: vi.fn(),
+  lstatMock: vi.fn(),
+  errorMock: vi.fn(),
+  warnMock: vi.fn()
+}))
 
 vi.mock('@application', async () => {
   const { mockApplicationFactory } = await import('@test-mocks/main/application')
@@ -42,6 +54,7 @@ vi.mock('node:fs/promises', () => ({
 
 vi.mock('@main/utils/file', () => ({
   copy: copyMock,
+  prepareAtomicCopy: prepareAtomicCopyMock,
   write: writeMock,
   ensureDir: ensureDirMock,
   remove: removeMock,
@@ -56,6 +69,7 @@ const {
   reserveImportedFileRelativePath,
   needsProcessedArtifactReservation,
   copyFileIntoKnowledgeBaseAt,
+  prepareFileCopyIntoKnowledgeBaseAt,
   writeFileIntoKnowledgeBaseAt,
   collectKnowledgeReservedRelativePaths,
   deleteKnowledgeItemFiles,
@@ -186,10 +200,8 @@ describe('pathStorage relative-path safety', () => {
     )
 
     it.each(['legacy.odt', 'deck.odp', 'sheet.ods'])(
-      'does not reserve for %s — an OpenDocument format the knowledge base does not process',
+      'does not reserve for %s — AnydocReader reads it directly, so no .md artifact is emitted',
       (relativePath) => {
-        // These are in the app-wide `documentExts` but intentionally NOT a knowledge
-        // processing/supported ext, so no `.md` artifact is ever emitted for them.
         expect(needsProcessedArtifactReservation('some-processor', relativePath)).toBe(false)
       }
     )
@@ -246,6 +258,39 @@ describe('pathStorage relative-path safety', () => {
     })
   })
 
+  describe('prepareFileCopyIntoKnowledgeBaseAt', () => {
+    beforeEach(() => {
+      vi.clearAllMocks()
+      lstatMock.mockRejectedValue(enoent())
+      ensureDirMock.mockResolvedValue(undefined)
+      prepareAtomicCopyMock.mockResolvedValue({ commit: vi.fn(), abort: vi.fn() })
+    })
+
+    it('rejects an unsafe target relative path before any filesystem write', async () => {
+      await expect(prepareFileCopyIntoKnowledgeBaseAt(BASE_ID, '/src/a.md', UNSAFE_RELATIVE_PATH)).rejects.toThrow(
+        'Invalid knowledge relative path'
+      )
+      expect(prepareAtomicCopyMock).not.toHaveBeenCalled()
+    })
+
+    it('refuses to stage a copy over an existing target', async () => {
+      lstatMock.mockResolvedValueOnce({})
+      await expect(
+        prepareFileCopyIntoKnowledgeBaseAt(BASE_ID, '/src/a.md', 'a.md' as PosixRelativeFilePath)
+      ).rejects.toThrow('Knowledge file already exists')
+      expect(prepareAtomicCopyMock).not.toHaveBeenCalled()
+    })
+
+    it('stages the copy beside the nested target, forwarding the abort signal', async () => {
+      const relativePath = 'docs/sub/a.md' as PosixRelativeFilePath
+      const signal = new AbortController().signal
+      await prepareFileCopyIntoKnowledgeBaseAt(BASE_ID, '/src/a.md', relativePath, signal)
+      const destPath = path.join(MATERIAL_DIR, relativePath)
+      expect(ensureDirMock).toHaveBeenCalledWith(path.dirname(destPath))
+      expect(prepareAtomicCopyMock).toHaveBeenCalledWith('/src/a.md', destPath, signal)
+    })
+  })
+
   describe('writeFileIntoKnowledgeBaseAt', () => {
     beforeEach(() => {
       vi.clearAllMocks()
@@ -297,8 +342,8 @@ describe('pathStorage relative-path safety', () => {
     it('ignores items with non-string or missing path fields', () => {
       const reserved = collectKnowledgeReservedRelativePaths([
         { type: 'url', data: { source: 'https://x', url: 'https://x' } },
-        { type: 'file', data: null as unknown as object },
-        { type: 'file', data: { relativePath: 42 } as unknown as object }
+        { type: 'file', data: null },
+        { type: 'file', data: { relativePath: 42 } }
       ])
 
       expect(reserved.size).toBe(0)

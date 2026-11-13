@@ -1,28 +1,68 @@
-import { useCommandHandler } from '@renderer/hooks/command'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
+
+import { isMarkdownFilePreview, useOpenFilePreviewTab } from '@renderer/components/FilePreview'
+import { useCommandHandler, useCommandRuntime } from '@renderer/hooks/command'
 import { useTabs } from '@renderer/hooks/tab'
+import { useLeadingWindowControlsOverlay } from '@renderer/hooks/useLeadingWindowControlsOverlay'
 import useMacTransparentWindow from '@renderer/hooks/useMacTransparentWindow'
 import { useNativeFullscreen } from '@renderer/hooks/useNativeFullscreen'
+import { useNumberShortcutHints } from '@renderer/hooks/useNumberShortcutHints'
 import { ipcApi } from '@renderer/ipc'
+import { TAB_NUMBER_COMMANDS } from '@renderer/utils/numberShortcuts'
 import { isMac } from '@renderer/utils/platform'
 import { getDefaultRouteTitle, isPageTitledRoute } from '@renderer/utils/routeTitle'
 import { cn } from '@renderer/utils/style'
 import { isSettingsPath } from '@shared/data/types/settingsPath'
+import { AbsoluteFilePathSchema } from '@shared/types/file'
 import { MIN_WINDOW_HEIGHT, SECOND_MIN_WINDOW_WIDTH } from '@shared/utils/window'
-import { useCallback, useEffect, useMemo, useRef } from 'react'
 
 import Sidebar from '../app/Sidebar'
 import { createRecentRouteEntryFromTab, recordGlobalSearchRecentEntry } from '../GlobalSearch/globalSearchGroups'
 import GlobalSearchPopup from '../GlobalSearch/GlobalSearchPopup'
+import MiniAppTabsPool from '../MiniApp/MiniAppTabsPool'
+import { NotificationCenterProvider } from '../NotificationCenter'
 import { ResourceViewSourceProvider } from '../ResourceViewSourceProvider'
 import { AppShellTabBar } from './AppShellTabBar'
 import { TabRouter } from './TabRouter'
 
 // Routes whose pages stay usable below the global minimum window width.
 const isCompactMinWidthRoute = (url?: string): boolean =>
-  !!url && (url.startsWith('/app/chat') || url.startsWith('/app/agents'))
+  !!url && (url.startsWith('/app/chat') || url.startsWith('/app/agents') || url.startsWith('/app/scheduled-tasks'))
 
-export const AppShell = () => {
+export const AppShell = () => (
+  <NotificationCenterProvider>
+    <AppShellContent />
+  </NotificationCenterProvider>
+)
+
+const AppShellContent = () => {
   const isMacTransparentWindow = useMacTransparentWindow()
+  const openFilePreviewTab = useOpenFilePreviewTab()
+
+  useEffect(() => {
+    const handleWindowDragOver = (event: DragEvent): void => {
+      if (!event.defaultPrevented && event.dataTransfer?.types.includes('Files')) event.preventDefault()
+    }
+    const handleWindowDrop = (event: DragEvent): void => {
+      const transfer = event.dataTransfer
+      if (event.defaultPrevented || !transfer || transfer.files.length !== 1) return
+      if (
+        Array.from(transfer.items ?? []).some((item) => item.kind === 'file' && item.webkitGetAsEntry?.()?.isDirectory)
+      )
+        return
+      const path = AbsoluteFilePathSchema.safeParse(window.api.file.getPathForFile(transfer.files[0]))
+      if (!path.success || !isMarkdownFilePreview(path.data)) return
+      event.preventDefault()
+      openFilePreviewTab(path.data)
+    }
+    window.addEventListener('dragover', handleWindowDragOver)
+    window.addEventListener('drop', handleWindowDrop)
+    return () => {
+      window.removeEventListener('dragover', handleWindowDragOver)
+      window.removeEventListener('drop', handleWindowDrop)
+    }
+  }, [openFilePreviewTab])
+  const tabsApi = useTabs()
   const {
     tabs,
     activeTabId,
@@ -35,7 +75,7 @@ export const AppShell = () => {
     unpinTab,
     detachTab,
     openTab
-  } = useTabs()
+  } = tabsApi
   const activeTab = useMemo(() => tabs.find((tab) => tab.id === activeTabId), [activeTabId, tabs])
   const canCycleTabs = tabs.length > 1 && !!activeTab
   const canCloseTab = !!activeTab
@@ -54,6 +94,7 @@ export const AppShell = () => {
     [activeTab, isSettingsTabActive, tabs]
   )
   const isFullscreen = useNativeFullscreen()
+  const hasLeadingWindowControls = useLeadingWindowControlsOverlay()
   const handleCloseTab = useCallback(
     (id: string) => {
       const tab = tabs.find((candidate) => candidate.id === id)
@@ -69,12 +110,9 @@ export const AppShell = () => {
   const handleDetachTab = useCallback(
     (id: string) => {
       const tab = tabs.find((candidate) => candidate.id === id)
-      detachTab(id)
-      if (isSettingsPath(tab?.url) && previousWorkspaceTabIdRef.current) {
-        setActiveTab(previousWorkspaceTabIdRef.current)
-      }
+      detachTab(id, isSettingsPath(tab?.url) ? previousWorkspaceTabIdRef.current : undefined)
     },
-    [detachTab, setActiveTab, tabs]
+    [detachTab, tabs]
   )
 
   const handleOpenGlobalSearch = useCallback(() => {
@@ -98,13 +136,42 @@ export const AppShell = () => {
 
   const handleCloseActiveTab = useCallback(() => {
     if (!activeTabId) return
+    if (isMac && tabs.length === 1) {
+      void ipcApi.request('window.close')
+      return
+    }
     handleCloseTab(activeTabId)
-  }, [activeTabId, handleCloseTab])
+  }, [activeTabId, handleCloseTab, tabs.length])
 
-  useCommandHandler('app.search', handleOpenGlobalSearch)
-  useCommandHandler('tab.close', handleCloseActiveTab, { enabled: canCloseTab })
-  useCommandHandler('tab.next', () => cycleTab('next'), { enabled: canCycleTabs })
-  useCommandHandler('tab.prev', () => cycleTab('prev'), { enabled: canCycleTabs })
+  const commandRuntime = useCommandRuntime()
+  const tabCommandHints = useNumberShortcutHints(TAB_NUMBER_COMMANDS)
+  const orderedTabs = useMemo(
+    () => [...tabs.filter((tab) => tab.isPinned), ...tabs.filter((tab) => !tab.isPinned)],
+    [tabs]
+  )
+  const tabShortcutHints = new Map(
+    orderedTabs
+      .slice(0, TAB_NUMBER_COMMANDS.length)
+      .map((tab, index) => [tab.id, tabCommandHints.get(TAB_NUMBER_COMMANDS[index])])
+  )
+  useEffect(() => {
+    const disposers = TAB_NUMBER_COMMANDS.map((command, index) => {
+      const tab = orderedTabs[index]
+      return commandRuntime.registerHandler(
+        command,
+        () => {
+          if (tab) setActiveTab(tab.id)
+        },
+        { enabled: !!tab, allowInKeyboardLayer: true }
+      )
+    })
+    return () => disposers.forEach((dispose) => dispose())
+  }, [commandRuntime, setActiveTab, orderedTabs])
+
+  useCommandHandler('app.search', handleOpenGlobalSearch, { allowInKeyboardLayer: true })
+  useCommandHandler('tab.close', handleCloseActiveTab, { enabled: canCloseTab, allowInKeyboardLayer: true })
+  useCommandHandler('tab.next', () => cycleTab('next'), { enabled: canCycleTabs, allowInKeyboardLayer: true })
+  useCommandHandler('tab.prev', () => cycleTab('prev'), { enabled: canCycleTabs, allowInKeyboardLayer: true })
 
   useEffect(() => {
     if (isSettingsTabActive) {
@@ -138,13 +205,7 @@ export const AppShell = () => {
     recordRouteVisit(activeTab)
   }, [activeTab, recordRouteVisit])
 
-  // Sync internal navigation back to tab state. For route-titled tabs we also
-  // refresh the title and clear the per-entity icon (it was supplied for a
-  // specific URL, e.g. a mini-app logo on /app/mini-app/<id>, and no longer
-  // applies once the user navigates elsewhere inside the tab). Chat / agent
-  // tabs are page-titled — their HomePage/AgentPage owns title + icon (topic /
-  // session name + assistant / agent emoji), so we only sync the url and leave
-  // title/icon alone, or navigating between topics would wipe them.
+  // Chat / agent tabs are page-titled (topic / session name + emoji), so navigation keeps them.
   const handleUrlChange = (tabId: string, url: string) => {
     const isPageTitled = isPageTitledRoute(url)
     const tab = tabs.find((candidate) => candidate.id === tabId)
@@ -167,6 +228,7 @@ export const AppShell = () => {
   const tabBar = (
     <AppShellTabBar
       tabs={tabBarTabs}
+      shortcutHints={tabShortcutHints}
       activeTabId={activeTabId}
       isFullscreen={isFullscreen}
       isFocusedTab={isSettingsTabActive}
@@ -182,26 +244,35 @@ export const AppShell = () => {
   )
 
   const contentArea = (
-    <div className={cn('flex min-h-0 min-w-0 flex-1 flex-col pb-2', isSettingsTabActive ? 'px-2' : 'pr-2')}>
-      <main
-        data-ui="app.content"
-        className="relative min-h-0 flex-1 overflow-hidden rounded-[12px] border-[0.5px] border-border bg-background">
-        {/* Route Tabs: Only render non-dormant tabs */}
-        <ResourceViewSourceProvider>
-          {tabs
-            .filter((t) => t.type === 'route' && !t.isDormant)
-            .map((tab) => (
-              <TabRouter
-                key={tab.id}
-                tab={tab}
-                isActive={tab.id === activeTabId}
-                onUrlChange={(url) => handleUrlChange(tab.id, url)}
-              />
-            ))}
-        </ResourceViewSourceProvider>
-      </main>
-    </div>
+    <>
+      <div className={cn('flex min-h-0 min-w-0 flex-1 flex-col pr-1.5 pb-1.5', isSettingsTabActive && 'pl-1.5')}>
+        <main
+          data-ui="app.content"
+          className="relative min-h-0 flex-1 overflow-hidden rounded-[12px] border-[0.5px] border-border bg-background">
+          {/* Route Tabs: Only render non-dormant tabs */}
+          <ResourceViewSourceProvider>
+            {tabs
+              .filter((t) => t.type === 'route' && !t.isDormant)
+              .map((tab) => (
+                <TabRouter
+                  key={tab.id}
+                  tab={tab}
+                  isActive={tab.id === activeTabId}
+                  onUrlChange={(url) => handleUrlChange(tab.id, url)}
+                />
+              ))}
+          </ResourceViewSourceProvider>
+
+          {/* MiniApp keep-alive WebView pool — global, shared across modes */}
+          <MiniAppTabsPool />
+        </main>
+      </div>
+    </>
   )
+
+  useEffect(() => {
+    if (isSettingsTabActive) document.documentElement.style.setProperty('--notification-left', '6px')
+  }, [isSettingsTabActive])
 
   const contentColumn = (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
@@ -210,9 +281,11 @@ export const AppShell = () => {
     </div>
   )
 
-  if (!isMac) {
+  // Leading Linux WCO controls take the top-left corner like macOS traffic lights do.
+  if (!isMac && !hasLeadingWindowControls) {
     return (
       <div
+        data-ui="app.shell"
         className={cn(
           'flex h-screen w-screen flex-row overflow-hidden text-foreground',
           isMacTransparentWindow ? 'bg-transparent' : 'bg-sidebar'
@@ -225,6 +298,7 @@ export const AppShell = () => {
 
   return (
     <div
+      data-ui="app.shell"
       className={cn(
         'relative flex h-screen w-screen flex-row overflow-hidden text-foreground',
         isMacTransparentWindow ? 'bg-transparent' : 'bg-sidebar'

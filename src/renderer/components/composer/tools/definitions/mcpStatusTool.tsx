@@ -1,6 +1,11 @@
+import type { TFunction } from 'i18next'
+import { Check, Globe2, Loader2, Settings2 } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+
 import { loggerService } from '@logger'
 import { ComposerPanelSymbol, prepareComposerQuickPanelSearch } from '@renderer/components/composer/quickPanel'
 import type { ComposerToolFooterAction, ComposerToolLauncher } from '@renderer/components/composer/toolLauncher'
+import { isMcpToolbarActive } from '@renderer/components/composer/tools/definitions/mcpToolbarState'
 import { defineTool, type ToolRenderContext, TopicType } from '@renderer/components/composer/tools/types'
 import { McpLogo } from '@renderer/components/icons/SvgIcon'
 import { type QuickPanelListItem, useQuickPanel } from '@renderer/components/QuickPanel'
@@ -17,9 +22,6 @@ import { formatErrorMessageWithPrefix } from '@renderer/utils/error'
 import type { McpRuntimeStatus } from '@shared/data/cache/cacheValueTypes'
 import { DEFAULT_MCP_MODE, type McpMode } from '@shared/data/types/assistant'
 import type { McpServer } from '@shared/data/types/mcpServer'
-import type { TFunction } from 'i18next'
-import { Check, Globe2, Loader2, Settings2 } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 export const MCP_STATUS_LAUNCHER_ID = 'mcp-status'
 
@@ -258,7 +260,8 @@ export function createMcpStatusLauncher(
   t: TFunction,
   mode?: McpMode,
   editable = false,
-  onOpen?: () => void
+  onOpen?: () => void,
+  active = false
 ): ComposerToolLauncher {
   const modeLabel = mode ? getMcpModeLabel(t, mode) : undefined
   const isDisabled = mode === 'disabled'
@@ -269,6 +272,7 @@ export function createMcpStatusLauncher(
     sources: ['root-panel'],
     order: 50,
     label: 'MCP',
+    active,
     // The panel stays reachable even when MCP is disabled — it surfaces the disabled state alongside
     // the "Configure MCP servers" footer, which is exactly the moment the user needs to open config.
     description:
@@ -299,7 +303,7 @@ export const McpStatusComposerRuntime = ({ context }: { context: McpStatusToolCo
   const dataEnabled = dataRequested && (scope === TopicType.Session || mode !== 'disabled')
   const { mcpServers, isLoading: isMcpServersLoading } = useMcpServers(undefined, { enabled: dataEnabled })
   const mcpStatuses = useMcpRuntimeStatusMap(mcpServers)
-  const { agent } = useAgent(dataEnabled && scope === TopicType.Session ? (session?.agentId ?? null) : null)
+  const { agent } = useAgent(scope === TopicType.Session ? (session?.agentId ?? null) : null)
   const { updateAssistant } = useAssistantMutationsById(assistant?.id ?? '')
   const { updateAgent } = useAgentMutationsById(session?.agentId ?? '')
   const [pendingServerId, setPendingServerId] = useState<string | null>(null)
@@ -388,9 +392,19 @@ export const McpStatusComposerRuntime = ({ context }: { context: McpStatusToolCo
     return currentAction ? [currentAction, buildMcpGlobalConfigFooterItem(t)] : [buildMcpGlobalConfigFooterItem(t)]
   }, [configTarget, t])
 
+  const toolbarActive = useMemo(
+    () =>
+      isMcpToolbarActive({
+        scope: scope === TopicType.Session ? TopicType.Session : TopicType.Chat,
+        assistant,
+        agent
+      }),
+    [agent, assistant, scope]
+  )
+
   const mcpStatusLauncher = useMemo(
-    () => createMcpStatusLauncher(items, t, mode, bindingPanelEditable, () => setDataRequested(true)),
-    [bindingPanelEditable, items, mode, t]
+    () => createMcpStatusLauncher(items, t, mode, bindingPanelEditable, () => setDataRequested(true), toolbarActive),
+    [bindingPanelEditable, items, mode, t, toolbarActive]
   )
 
   useEffect(

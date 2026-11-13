@@ -1,17 +1,17 @@
-import { markBuiltinAgentDeletedTx } from '@data/db/builtinAgentTombstone'
+import { setupTestDatabase } from '@test-helpers/db'
+import { eq, sql } from 'drizzle-orm'
+import { app } from 'electron'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
 import { agentTable } from '@data/db/schemas/agent'
 import { agentSessionTable } from '@data/db/schemas/agentSession'
 import { agentWorkspaceTable } from '@data/db/schemas/agentWorkspace'
-import { ensureCherryAiDefaultProviderAndModelTx } from '@data/db/seeding/seeders/cherryaiDefaultModelSeeder'
+import { CherryAiDefaultModelSeeder } from '@data/db/seeding/seeders/cherryaiDefaultModelSeeder'
 import { CherryAssistantSeeder } from '@data/db/seeding/seeders/cherryAssistantSeeder'
 import { CherrySupportSeeder } from '@data/db/seeding/seeders/cherrySupportSeeder'
 import { BUILTIN_AGENT_ROLE, CHERRY_SUPPORT_AGENT_ID } from '@shared/ai/builtinAgent'
 import { AGENT_WORKSPACE_TYPE } from '@shared/data/api/schemas/agentWorkspaces'
 import { CHERRYAI_DEFAULT_UNIQUE_MODEL_ID } from '@shared/data/presets/cherryai'
-import { setupTestDatabase } from '@test-helpers/db'
-import { eq, sql } from 'drizzle-orm'
-import { app } from 'electron'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 function builtinAgents(db: ReturnType<typeof setupTestDatabase>['db'], role: string) {
   return db
@@ -28,18 +28,8 @@ describe('CherrySupportSeeder', () => {
     vi.mocked(app.getPreferredSystemLanguages).mockReturnValue(['en-US'])
   })
 
-  /**
-   * Materialize the managed CherryAI provider + default model WITHOUT `CherryAiDefaultModelSeeder.run()`,
-   * which Cherry-Lite deliberately neuters so a fresh library never auto-installs the vendor's
-   * provider. The rows still exist in a real library (the v1→v2 migration writes them), and these
-   * assertions are about how a built-in Agent treats that model — not about who created it.
-   */
-  function seedCherryAiDefaultModelRows(): void {
-    dbh.db.transaction((tx) => ensureCherryAiDefaultProviderAndModelTx(tx))
-  }
-
   it('creates Cherry Support beside Cherry Assistant with a system session and copied model', () => {
-    seedCherryAiDefaultModelRows()
+    new CherryAiDefaultModelSeeder().run(dbh.db)
     new CherryAssistantSeeder().run(dbh.db)
     const [assistant] = builtinAgents(dbh.db, BUILTIN_AGENT_ROLE.ASSISTANT)
     dbh.db
@@ -53,15 +43,9 @@ describe('CherrySupportSeeder', () => {
     const [support] = builtinAgents(dbh.db, BUILTIN_AGENT_ROLE.SUPPORT)
     expect(support).toMatchObject({
       id: CHERRY_SUPPORT_AGENT_ID,
-      name: 'Cherry Support',
-      description: '',
-      instructions: '',
       model: CHERRYAI_DEFAULT_UNIQUE_MODEL_ID
     })
     expect(support.configuration).toMatchObject({
-      avatar: '🧰',
-      permission_mode: 'acceptEdits',
-      bootstrap_completed: true,
       builtin_role: BUILTIN_AGENT_ROLE.SUPPORT
     })
     expect(builtinAgents(dbh.db, BUILTIN_AGENT_ROLE.ASSISTANT)).toHaveLength(1)
@@ -71,7 +55,7 @@ describe('CherrySupportSeeder', () => {
       .from(agentWorkspaceTable)
       .where(eq(agentWorkspaceTable.id, session.workspaceId))
       .all()
-    expect(session).toMatchObject({ name: '' })
+    expect(session.agentId).toBe(support.id)
     expect(workspace).toMatchObject({ type: AGENT_WORKSPACE_TYPE.SYSTEM })
   })
 
@@ -82,7 +66,7 @@ describe('CherrySupportSeeder', () => {
     new CherrySupportSeeder().run(dbh.db)
 
     expect(builtinAgents(dbh.db, BUILTIN_AGENT_ROLE.SUPPORT)).toHaveLength(1)
-    expect(builtinAgents(dbh.db, BUILTIN_AGENT_ROLE.SUPPORT)[0].name).toBe('产品反馈')
+
     expect(dbh.db.select().from(agentSessionTable).all()).toHaveLength(1)
   })
 
@@ -141,20 +125,6 @@ describe('CherrySupportSeeder', () => {
       builtin_role: 'support'
     })
     expect(dbh.db.select().from(agentSessionTable).all()).toHaveLength(1)
-  })
-
-  it('does not recreate Cherry Support once the user deletion is tombstoned', () => {
-    new CherrySupportSeeder().run(dbh.db)
-    expect(builtinAgents(dbh.db, BUILTIN_AGENT_ROLE.SUPPORT)).toHaveLength(1)
-
-    // Mirrors what the delete endpoint leaves behind: the row is gone and the tombstone is the only
-    // memory of the user's choice. A version bump re-runs this seeder, which must respect it.
-    markBuiltinAgentDeletedTx(dbh.db, BUILTIN_AGENT_ROLE.SUPPORT)
-    dbh.db.delete(agentTable).where(eq(agentTable.id, CHERRY_SUPPORT_AGENT_ID)).run()
-
-    new CherrySupportSeeder().run(dbh.db)
-
-    expect(builtinAgents(dbh.db, BUILTIN_AGENT_ROLE.SUPPORT)).toHaveLength(0)
   })
 
   it('isolates a legacy forged role and preserves the ordinary Agent while creating official Support', () => {

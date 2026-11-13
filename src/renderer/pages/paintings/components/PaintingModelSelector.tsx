@@ -1,16 +1,18 @@
-import { Avatar, AvatarFallback, Button } from '@cherrystudio/ui'
-import { useIcon } from '@cherrystudio/ui/icons'
-import { cn } from '@cherrystudio/ui/lib/utils'
-import { getProviderDisplayName, ModelSelector, type ModelSelectorFilter } from '@renderer/components/ModelSelector'
-import { useModels } from '@renderer/hooks/useModel'
-import { useProviders } from '@renderer/hooks/useProvider'
-import { getModelLogoRef } from '@renderer/utils/model'
-import { createUniqueModelId, parseUniqueModelId } from '@shared/data/types/model'
 import { first } from 'es-toolkit/compat'
 import { ChevronDown } from 'lucide-react'
 import type { FC } from 'react'
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+
+import { Avatar, AvatarFallback, Button } from '@cherrystudio/ui'
+import { useIcon } from '@cherrystudio/ui/icons'
+import { cn } from '@cherrystudio/ui/lib/utils'
+import { CherryCloudModelSelector as ModelSelector } from '@renderer/components/cherryCloud/CherryCloudModelSelector'
+import { getProviderDisplayName, type ModelSelectorFilter } from '@renderer/components/ModelSelector'
+import { useModels } from '@renderer/hooks/useModel'
+import { useProviders } from '@renderer/hooks/useProvider'
+import { getModelLogoRef } from '@renderer/utils/model'
+import { createUniqueModelId, parseUniqueModelId } from '@shared/data/types/model'
 
 import type { PaintingData } from '../model/types/paintingData'
 import { supportsImageGenerationEndpoint } from '../model/utils/paintingModelOptions'
@@ -73,6 +75,7 @@ const PaintingModelSelector: FC<PaintingModelSelectorProps> = ({ className, pain
         </PaintingSectionTitle>
       )}
       <ModelSelector
+        showSubscriptionOffers={false}
         open={open}
         onOpenChange={setOpen}
         multiple={false}
@@ -93,7 +96,7 @@ const PaintingModelSelector: FC<PaintingModelSelectorProps> = ({ className, pain
             variant="secondary"
             size="sm"
             className={cn(
-              'h-auto w-full max-w-none justify-between gap-2 rounded-[8px] border border-border-subtle px-2.5 py-1.5 text-muted-foreground text-xs shadow-none hover:text-foreground',
+              'h-auto w-full max-w-none justify-between gap-2 rounded-[8px] border border-border-subtle px-2.5 py-1.5 text-xs text-muted-foreground shadow-none hover:text-foreground',
               className
             )}>
             <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">

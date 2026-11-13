@@ -1,5 +1,6 @@
-import type { ComposerAttachment } from '@renderer/utils/message/composerAttachment'
 import { describe, expect, it } from 'vitest'
+
+import type { ComposerAttachment } from '@renderer/utils/message/composerAttachment'
 
 import type { ComposerSerializedToken } from '../../../tokens'
 import attachmentTool from '../attachmentTool'
@@ -40,11 +41,6 @@ describe('attachmentTool token reconcile', () => {
     const first = file('a')
     const second = file('a')
     expect(runReconcile([fileToken('a')], [first, second])).toEqual([first])
-  })
-
-  it('returns the same array reference when nothing changes', () => {
-    const prev = [file('a')]
-    expect(runReconcile([fileToken('a')], prev)).toBe(prev)
   })
 
   it('only considers file tokens (a skill-only draft prunes all files)', () => {

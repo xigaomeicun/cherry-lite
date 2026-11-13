@@ -1,8 +1,9 @@
+import { setupTestDatabase } from '@test-helpers/db'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
 import { userProviderTable } from '@data/db/schemas/userProvider'
 import { ENDPOINT_TYPE } from '@shared/data/types/model'
 import { DOCTOR_CHECK_CATALOG, type DoctorCheckId } from '@shared/types/doctor'
-import { setupTestDatabase } from '@test-helpers/db'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { runDoctorChecks } from '../../engine'
 import type { DoctorContextBase, DoctorProbeOutcome } from '../../types'

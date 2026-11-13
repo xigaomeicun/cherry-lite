@@ -1,13 +1,14 @@
-import RefreshIcon from '@renderer/components/icons/RefreshIcon'
-import { useTimer } from '@renderer/hooks/useTimer'
-import { ipcApi } from '@renderer/ipc'
-import { toast } from '@renderer/services/toast'
-import { cn } from '@renderer/utils/style'
 import { CircleX, Copy, Loader2, Pause } from 'lucide-react'
 import type { FC, ReactNode } from 'react'
 import { useEffect, useRef, useState } from 'react'
 import { useHotkeys } from 'react-hotkeys-hook'
 import { useTranslation } from 'react-i18next'
+
+import RefreshIcon from '@renderer/components/icons/RefreshIcon'
+import { useTimer } from '@renderer/hooks/useTimer'
+import { ipcApi } from '@renderer/ipc'
+import { toast } from '@renderer/services/toast'
+import { cn } from '@renderer/utils/style'
 
 interface FooterProps {
   children?: ReactNode

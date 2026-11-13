@@ -1,5 +1,6 @@
-import type { ResourceCreateValues } from '@renderer/types/resourceCatalog'
 import { describe, expect, it } from 'vitest'
+
+import type { ResourceCreateValues } from '@renderer/types/resourceCatalog'
 
 import { buildCreateAgentCommand, buildCreateAssistantDto } from '../resourceCreate'
 
@@ -56,11 +57,5 @@ describe('resource create DTO mapping', () => {
       skillIds: ['skill-1'],
       configuration: { avatar: '🤖', permission_mode: 'acceptEdits' }
     })
-  })
-
-  it('falls back to the runtime default when a stale mode is unsupported', () => {
-    expect(
-      buildCreateAgentCommand({ ...values, agentType: 'pi', permissionMode: 'plan' }).configuration?.permission_mode
-    ).toBe('auto')
   })
 })

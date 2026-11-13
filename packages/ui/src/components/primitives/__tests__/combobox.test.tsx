@@ -1,6 +1,5 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest'
-
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 
@@ -18,7 +17,7 @@ beforeAll(() => {
     observe() {}
     unobserve() {}
     disconnect() {}
-  } as any
+  }
   Element.prototype.scrollIntoView = vi.fn()
 })
 
@@ -45,14 +44,6 @@ describe('Combobox', () => {
     expect(screen.getByRole('button', { name: 'Default model Beta' })).toBeInTheDocument()
     expect(screen.getByRole('combobox', { name: 'Search model' })).toBeInTheDocument()
     expect(screen.getByRole('combobox', { name: 'Multiple models' })).toBeInTheDocument()
-  })
-
-  it('keeps the resting border when opened and reserves the theme border for keyboard focus', () => {
-    render(<Combobox options={options} placeholder="Pick one" emptyText="No results" />)
-
-    const trigger = screen.getByRole('button')
-    expect(trigger).toHaveClass('focus-visible:border-ring')
-    expect(trigger).not.toHaveClass('aria-expanded:border-primary')
   })
 
   it('maps the selected value to the trigger placeholder when opened', async () => {

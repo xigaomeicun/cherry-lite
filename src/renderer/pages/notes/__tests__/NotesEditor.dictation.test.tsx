@@ -1,8 +1,4 @@
-import type { CodeEditorHandles } from '@cherrystudio/ui'
 import { EditorView } from '@codemirror/view'
-import type { RichEditorRef } from '@renderer/components/RichEditor/types'
-import type { CapturedVoiceTarget } from '@renderer/services/voice'
-import { dictationService, voiceTargetManager } from '@renderer/services/voice'
 import { MockUsePreferenceUtils } from '@test-mocks/renderer/usePreference'
 import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -10,9 +6,14 @@ import i18n from 'i18next'
 import { useState } from 'react'
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import type { CodeEditorHandles } from '@cherrystudio/ui'
+import type { RichEditorRef } from '@renderer/components/RichEditor/types'
+import { dictationService, voiceTargetManager } from '@renderer/services/voice'
+import type { CapturedVoiceTarget } from '@renderer/services/voice'
+
 vi.unmock('@cherrystudio/ui')
 vi.mock('@renderer/hooks/useCodeStyle', () => ({
-  useCodeStyle: () => ({ activeCmTheme: 'light', activeShikiTheme: 'one-light' }),
+  useCodeStyle: () => ({ activeCmTheme: 'light', activeCodeTheme: 'one-light' }),
   useCmTheme: () => 'light'
 }))
 

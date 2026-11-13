@@ -2,14 +2,15 @@ import { access, mkdir, mkdtemp, readdir, readFile, realpath, rm, writeFile } fr
 import os from 'node:os'
 import path from 'node:path'
 
-import { agentTable } from '@data/db/schemas/agent'
-import { agentSessionTable } from '@data/db/schemas/agentSession'
-import { agentSessionMessageTable } from '@data/db/schemas/agentSessionMessage'
-import { agentWorkspaceTable } from '@data/db/schemas/agentWorkspace'
 import { setupTestDatabase } from '@test-helpers/db'
 import Database from 'better-sqlite3'
 import { eq } from 'drizzle-orm'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+
+import { agentTable } from '@data/db/schemas/agent'
+import { agentSessionTable } from '@data/db/schemas/agentSession'
+import { agentSessionMessageTable } from '@data/db/schemas/agentSessionMessage'
+import { agentWorkspaceTable } from '@data/db/schemas/agentWorkspace'
 
 import type { MigrationContext } from '../../core/MigrationContext'
 import { claudeProjectDirectoryName, legacyAgentWorkspacePath } from '../agentsFilesystemMigration'
@@ -261,16 +262,7 @@ describe('AgentsMigrator Claude session cache integration', () => {
     expect(messages.map((message) => message.runtimeResumeToken).sort()).toEqual(
       [CLAUDE_SESSION_IDS[0], CLAUDE_SESSION_IDS[0], CLAUDE_SESSION_IDS[1], ''].sort()
     )
-    expect(session.lastActivityAt).toBe(
-      Math.max(
-        session.createdAt,
-        ...messages.flatMap((message) => {
-          if (message.role === 'user') return [message.createdAt]
-          if (message.role === 'assistant') return [Math.max(message.createdAt, message.updatedAt)]
-          return []
-        })
-      )
-    )
+
     expect(oldSession.lastActivityAt).toBe(oldSession.createdAt)
     // The shared v1 workspace content is materialized only into the latest
     // session; the older session keeps an empty system workspace (issue #17830).

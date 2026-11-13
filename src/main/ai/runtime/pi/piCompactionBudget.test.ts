@@ -1,3 +1,4 @@
+import { normalizeContext } from '@earendil-works/pi-ai'
 import type { AssistantMessage, Context, Model, Usage } from '@earendil-works/pi-ai'
 import { normalizeContext } from '@earendil-works/pi-ai'
 import { describe, expect, it } from 'vitest'

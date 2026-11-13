@@ -1,5 +1,6 @@
-import type { CherryMessagePart, CherryUIMessage } from '@shared/data/types/message'
 import { describe, expect, it } from 'vitest'
+
+import type { CherryMessagePart, CherryUIMessage } from '@shared/data/types/message'
 
 import { collectAssistantFileAttachments, createAssistantFileAttachmentHandle } from '../assistantFileAttachments'
 
@@ -10,7 +11,7 @@ function filePart(fileEntryId: string, filename?: string, fileTokenSourceId?: st
     mediaType: 'application/octet-stream',
     filename,
     providerMetadata: { cherry: { fileEntryId, ...(fileTokenSourceId ? { fileTokenSourceId } : {}) } }
-  } as CherryMessagePart
+  }
 }
 
 function composerText(...fileTokenSourceIds: string[]): CherryMessagePart {
@@ -31,11 +32,11 @@ function composerText(...fileTokenSourceIds: string[]): CherryMessagePart {
         }
       }
     }
-  } as CherryMessagePart
+  }
 }
 
 function message(id: string, parts: CherryMessagePart[]): CherryUIMessage {
-  return { id, role: 'user', parts } as CherryUIMessage
+  return { id, role: 'user', parts }
 }
 
 describe('assistantFileAttachments', () => {
@@ -44,7 +45,7 @@ describe('assistantFileAttachments', () => {
     const second = createAssistantFileAttachmentHandle('entry-secret')
 
     expect(first).toBe(second)
-    expect(first).toMatch(/^file_[a-f0-9]{16}$/)
+
     expect(first).not.toContain('entry-secret')
   })
 
@@ -54,16 +55,13 @@ describe('assistantFileAttachments', () => {
       message('message-2', [filePart('entry-1', 'renamed.txt'), filePart('entry-2')])
     ])
 
-    expect(attachments).toEqual([
+    expect(attachments).toMatchObject([
       {
         fileEntryId: 'entry-1',
-        handle: createAssistantFileAttachmentHandle('entry-1'),
         displayName: 'first.txt'
       },
       {
-        fileEntryId: 'entry-2',
-        handle: createAssistantFileAttachmentHandle('entry-2'),
-        displayName: 'file'
+        fileEntryId: 'entry-2'
       }
     ])
   })

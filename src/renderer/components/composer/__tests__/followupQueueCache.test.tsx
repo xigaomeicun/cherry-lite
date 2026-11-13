@@ -1,6 +1,7 @@
-import type { TopicStreamStatus } from '@shared/ai/transport'
 import { act, renderHook } from '@testing-library/react'
 import { expect, it, vi } from 'vitest'
+
+import type { TopicStreamStatus } from '@shared/ai/transport'
 
 import { useFollowupQueue } from '../useFollowupQueue'
 

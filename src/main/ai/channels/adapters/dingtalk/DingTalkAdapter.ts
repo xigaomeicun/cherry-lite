@@ -1,15 +1,16 @@
 import { randomUUID } from 'node:crypto'
 import { setMaxListeners } from 'node:events'
 
-import { t } from '@main/i18n'
-import type { FileAttachment, ImageAttachment } from '@main/utils/downloadAsBase64'
-import { fetchRemoteBytes } from '@main/utils/remoteFetch'
-import { sanitizeFilename } from '@shared/utils/file'
-import { DWClient, type DWClientDownStream, type RobotTextMessage, TOPIC_ROBOT } from 'dingtalk-stream'
+import { DWClient, TOPIC_ROBOT, type DWClientDownStream, type RobotTextMessage } from 'dingtalk-stream'
 import { fileTypeFromBuffer } from 'file-type'
 import { LRUCache } from 'lru-cache'
 import PQueue from 'p-queue'
 import * as z from 'zod'
+
+import { t } from '@main/i18n'
+import type { FileAttachment, ImageAttachment } from '@main/utils/downloadAsBase64'
+import { fetchRemoteBytes } from '@main/utils/remoteFetch'
+import { sanitizeFilename } from '@shared/utils/file'
 
 import {
   ChannelAdapter,
@@ -18,7 +19,6 @@ import {
   type ChannelStreamOutcome,
   type SendMessageOptions
 } from '../../ChannelAdapter'
-import { registerAdapterFactory } from '../../ChannelManager'
 import { FlushController } from '../../FlushController'
 import { DINGTALK_FILE_BYTES, DingTalkApi, type DingTalkWebhook } from './DingTalkApi'
 
@@ -467,12 +467,3 @@ export class DingTalkAdapter extends ChannelAdapter {
 export function createDingTalkAdapter(config: ChannelAdapterConfig<'dingtalk'>): DingTalkAdapter {
   return new DingTalkAdapter(config)
 }
-
-registerAdapterFactory('dingtalk', (channel, agentId) => {
-  return new DingTalkAdapter({
-    channelId: channel.id,
-    channelType: channel.type,
-    agentId,
-    channelConfig: channel.config
-  })
-})

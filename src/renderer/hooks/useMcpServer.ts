@@ -1,3 +1,5 @@
+import { useCallback, useMemo } from 'react'
+
 import { useInvalidateCache, useMutation, useQuery } from '@data/hooks/useDataApi'
 import { loggerService } from '@logger'
 import { ipcApi } from '@renderer/ipc'
@@ -5,13 +7,12 @@ import type { McpTool } from '@renderer/types/tool'
 import { resolveMcpSourceToolAccess } from '@shared/ai/tools/mcpSourcePolicy'
 import type { CreateMcpServerDto, ListMcpServersQuery } from '@shared/data/api/schemas/mcpServers'
 import type { McpServer } from '@shared/data/types/mcpServer'
-import { useCallback, useMemo } from 'react'
 
 /**
  * MCP servers list hook — data fetching with optional filters and create mutation.
  */
 export const useMcpServers = (query?: ListMcpServersQuery, options: { enabled?: boolean } = {}) => {
-  const { data, isLoading, mutate } = useQuery('/mcp-servers', { query, enabled: options.enabled })
+  const { data, isLoading, error, mutate } = useQuery('/mcp-servers', { query, enabled: options.enabled })
 
   const mcpServers = useMemo(() => data?.items ?? [], [data])
 
@@ -38,6 +39,7 @@ export const useMcpServers = (query?: ListMcpServersQuery, options: { enabled?: 
 
   return {
     mcpServers,
+    error,
     isLoading,
     addMcpServer,
     reorderMcpServers,

@@ -2,20 +2,24 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { applyMigrations } from '@data/db/applyMigrations'
-import { SeedRunner } from '@data/db/seeding/SeedRunner'
-import type { DbType, ISeeder } from '@data/db/types'
 import { MockMainDbServiceUtils } from '@test-mocks/main/DbService'
 import Database from 'better-sqlite3'
 import { drizzle } from 'drizzle-orm/better-sqlite3'
 import { afterAll, beforeAll, beforeEach } from 'vitest'
 
-import { resolveMigrationsPath } from './internal/migrationsPath'
+import { applyMigrations } from '@data/db/applyMigrations'
+import { registerKnowledgeFunctions } from '@data/db/knowledgeFunctions'
+import { SeedRunner } from '@data/db/seeding/SeedRunner'
+import type { DbType, ISeeder } from '@data/db/types'
+
+import { copyMigrationPrefix, resolveMigrationsPath } from './internal/migrationsPath'
 import { truncateAll } from './internal/truncate'
 
 export interface TestDatabaseOptions {
   /** Seeders to run after schema init. Default: none. */
   seeders?: ISeeder[]
+  /** Initialize from the real migration prefix strictly before this tag. */
+  beforeMigration?: string
 }
 
 export interface TestDatabaseHandle {
@@ -80,6 +84,7 @@ export function setupTestDatabase(options: TestDatabaseOptions = {}): TestDataba
     tempDir = mkdtempSync(join(tmpdir(), 'cs-test-db-'))
     const dbPath = join(tempDir, 'test.db')
     sqlite = new Database(dbPath)
+    registerKnowledgeFunctions(sqlite)
     db = drizzle({ client: sqlite, casing: 'snake_case' })
 
     // Per-connection PRAGMAs — better-sqlite3 keeps one connection, so set once.
@@ -87,7 +92,10 @@ export function setupTestDatabase(options: TestDatabaseOptions = {}): TestDataba
     sqlite.pragma('synchronous = NORMAL')
 
     // Same migration path as DbService.onInit(): migrations first, then custom SQL.
-    applyMigrations(db, resolveMigrationsPath())
+    const migrations = options.beforeMigration
+      ? copyMigrationPrefix(join(tempDir, 'migrations'), options.beforeMigration)
+      : resolveMigrationsPath()
+    applyMigrations(db, migrations)
 
     if (options.seeders?.length) {
       new SeedRunner(db).runAll(options.seeders)

@@ -1,3 +1,7 @@
+import { Edit3, FilePlus, FileSearch, Folder, FolderOpen, Sparkles, Star, StarOff, UploadIcon } from 'lucide-react'
+import { useCallback } from 'react'
+import { useTranslation } from 'react-i18next'
+
 import { useMultiplePreferences } from '@data/hooks/usePreference'
 import { loggerService } from '@logger'
 import type { CommandContextMenuExtraItem } from '@renderer/components/command'
@@ -5,10 +9,7 @@ import DeleteIcon from '@renderer/components/icons/DeleteIcon'
 import { ipcApi } from '@renderer/ipc'
 import { popup } from '@renderer/services/popup'
 import { toast } from '@renderer/services/toast'
-import type { NotesTreeNode } from '@renderer/types/note'
-import { Edit3, FilePlus, Folder, FolderOpen, Sparkles, Star, StarOff, UploadIcon } from 'lucide-react'
-import { useCallback } from 'react'
-import { useTranslation } from 'react-i18next'
+import type { NotesTreeNode, RenameNote } from '@renderer/types/note'
 
 const logger = loggerService.withContext('UseNotesMenu')
 
@@ -16,7 +17,7 @@ interface UseNotesMenuProps {
   renamingNodeIds: Set<string>
   onCreateNote: (name: string, targetFolderId?: string) => void
   onCreateFolder: (name: string, targetFolderId?: string) => void
-  onRenameNode: (nodeId: string, newName: string) => void
+  onRenameNode: RenameNote
   onToggleStar: (nodeId: string) => void
   onDeleteNode: (nodeId: string) => void
   onSelectNode: (node: NotesTreeNode) => void
@@ -47,6 +48,23 @@ export const useNotesMenu = ({
     siyuan: 'data.export.menus.siyuan',
     yuque: 'data.export.menus.yuque'
   })
+
+  const handleExportKnowledge = useCallback(
+    async (note: NotesTreeNode) => {
+      try {
+        const { default: SaveToKnowledgePopup } = await import('@renderer/components/SaveToKnowledgePopup')
+        const result = await SaveToKnowledgePopup.showForNote(note)
+
+        if (result?.success) {
+          toast.success(t('notes.export_success', { count: result.savedCount }))
+        }
+      } catch (error) {
+        toast.error(t('notes.export_failed'))
+        logger.error(`Failed to export note to knowledge base: ${error}`)
+      }
+    },
+    [t]
+  )
 
   const handleImageAction = useCallback(
     async (node: NotesTreeNode, platform: 'copyImage' | 'exportImage') => {
@@ -165,13 +183,22 @@ export const useNotesMenu = ({
       )
 
       if (!isFolder) {
-        items.push({
-          type: 'item',
-          id: 'notes.toggle-star',
-          label: node.isStarred ? t('notes.unstar') : t('notes.star'),
-          icon: node.isStarred ? <StarOff size={14} /> : <Star size={14} />,
-          onSelect: () => onToggleStar(node.id)
-        })
+        items.push(
+          {
+            type: 'item',
+            id: 'notes.toggle-star',
+            label: node.isStarred ? t('notes.unstar') : t('notes.star'),
+            icon: node.isStarred ? <StarOff size={14} /> : <Star size={14} />,
+            onSelect: () => onToggleStar(node.id)
+          },
+          {
+            type: 'item',
+            id: 'notes.export-knowledge',
+            label: t('notes.export_knowledge'),
+            icon: <FileSearch size={14} />,
+            onSelect: () => void handleExportKnowledge(node)
+          }
+        )
 
         const exportChildren: CommandContextMenuExtraItem[] = []
         const addExport = (
@@ -208,6 +235,7 @@ export const useNotesMenu = ({
         if (exportMenuOptions.markdown) addExport('notes.export.markdown', t('chat.topics.export.md.label'), 'markdown')
         if (exportMenuOptions.docx) addExport('notes.export.docx', t('chat.topics.export.word'), 'docx')
         if (exportMenuOptions.notion) addExport('notes.export.notion', t('chat.topics.export.notion'), 'notion')
+        if (exportMenuOptions.yuque) addExport('notes.export.yuque', t('chat.topics.export.yuque'), 'yuque')
         if (exportMenuOptions.obsidian) {
           exportChildren.push({
             type: 'item',
@@ -216,6 +244,8 @@ export const useNotesMenu = ({
             onSelect: () => void runExport(() => handleObsidianExport(node))
           })
         }
+        if (exportMenuOptions.joplin) addExport('notes.export.joplin', t('chat.topics.export.joplin'), 'joplin')
+        if (exportMenuOptions.siyuan) addExport('notes.export.siyuan', t('chat.topics.export.siyuan'), 'siyuan')
 
         if (exportChildren.length > 0) {
           items.push({
@@ -246,6 +276,7 @@ export const useNotesMenu = ({
       t,
       handleStartEdit,
       onToggleStar,
+      handleExportKnowledge,
       handleImageAction,
       handleObsidianExport,
       handleDeleteNodeWrapper,

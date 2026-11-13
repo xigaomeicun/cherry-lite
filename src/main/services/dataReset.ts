@@ -2,13 +2,14 @@ import { randomUUID } from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
 
+import { dialog, session } from 'electron'
+import * as z from 'zod'
+
 import { application } from '@application'
 import { loggerService } from '@logger'
 import { SHUTDOWN_TIMEOUT_MS } from '@main/core/lifecycle'
 // Preboot dialogs cannot use PreferenceService-backed translations.
 import { t } from '@main/i18n'
-import { dialog, session } from 'electron'
-import * as z from 'zod'
 
 const logger = loggerService.withContext('DataReset')
 
@@ -322,16 +323,12 @@ export function runDataReset(): void {
     try {
       writeMarker({ ...marker, attempts: attempts + 1, canonicalPath: actualCanonical })
     } catch (error) {
-      logger.error('Data reset halted: the attempt count could not be durably recorded — refusing to boot', {
+      // Without a durable attempt count the reset can never progress, and quitting would repeat
+      // forever on a disk that stays unwritable — abandon it and let the app start instead.
+      logger.error('Data reset abandoned: the attempt count could not be durably recorded', {
         error: String(error)
       })
-      showDataResetError(
-        'Data Reset Failed',
-        'Cherry Studio could not record the data reset state ' +
-          `in ${markerPath()}.\n\n` +
-          'Starting now could erase data you create later, so the app will quit instead.\n\n' +
-          'Please check disk space and file permissions, then start Cherry Studio again.'
-      )
+      abandonIncompleteReset()
       return
     }
 
@@ -459,8 +456,23 @@ function abandonIncompleteReset(): void {
 }
 
 function showDataResetError(title: string, message: string): void {
-  dialog.showErrorBox(title, message)
+  showPrebootNotice(title, message)
   application.forceExit(1)
+}
+
+/**
+ * Preboot runs before `app.whenReady()`, where `dialog.showErrorBox` throws. A throw here used to
+ * abort the whole boot path, so the pending marker was retried on every start and the app could
+ * never open. Log instead, and only show the dialog once Electron can render one.
+ */
+function showPrebootNotice(title: string, message: string): void {
+  logger.error(`[preboot] ${title}: ${message}`)
+  if (!application.isReady()) return
+  try {
+    dialog.showErrorBox(title, message)
+  } catch (error) {
+    logger.warn('Could not show the preboot dialog', { title, error: String(error) })
+  }
 }
 
 function shouldWipe(entry: string): boolean {
@@ -525,7 +537,7 @@ function showPathMismatchWarning(): void {
 }
 
 function showIncompleteResetWarning(): void {
-  dialog.showErrorBox(
+  showPrebootNotice(
     'Data Reset Incomplete',
     'Cherry Studio could not remove some of its data during the data reset.\n\n' +
       'The app will start with whatever remains. ' +

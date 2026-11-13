@@ -6,15 +6,18 @@
  * - Listing with optional filters (isActive, type)
  */
 
+import { and, asc, eq, inArray, type SQL, sql } from 'drizzle-orm'
+import { isEqual } from 'es-toolkit/compat'
+
 import { application } from '@application'
 import { mcpServerTable } from '@data/db/schemas/mcpServer'
 import { agentService } from '@data/services/AgentService'
 import { loggerService } from '@logger'
+import { defaultAppHeaders, mergeHeaders } from '@main/utils/http'
 import { DataApiErrorFactory } from '@shared/data/api/errors'
 import type { CreateMcpServerDto, ListMcpServersQuery, UpdateMcpServerDto } from '@shared/data/api/schemas/mcpServers'
 import type { McpServer } from '@shared/data/types/mcpServer'
 import { BuiltinMcpServerNames } from '@shared/utils/mcp'
-import { and, asc, eq, inArray, type SQL, sql } from 'drizzle-orm'
 
 import { nullsToUndefined, timestampToISO } from './utils/rowMappers'
 
@@ -70,13 +73,58 @@ export class McpServerService {
     const whereClause = conditions.length > 0 ? and(...conditions) : undefined
 
     const rows = this.db.select().from(mcpServerTable).where(whereClause).orderBy(asc(mcpServerTable.sortOrder)).all()
-    const [{ count }] = this.db.select({ count: sql<number>`count(*)` }).from(mcpServerTable).where(whereClause).all()
+    const [{ count }] = this.db
+      .select({ count: sql<number>`count(*)` })
+      .from(mcpServerTable)
+      .where(whereClause)
+      .all()
 
     return {
       items: rows.map(rowToMcpServer),
       total: count,
       page: 1
     }
+  }
+
+  findByConfig(
+    config: Pick<
+      CreateMcpServerDto,
+      'name' | 'type' | 'command' | 'args' | 'env' | 'baseUrl' | 'headers' | 'registryUrl' | 'dxtPath'
+    >
+  ): McpServer | undefined {
+    const type = config.type ?? (config.baseUrl ? 'sse' : 'stdio')
+    const pathValue = (env: Record<string, string> | undefined) =>
+      Object.entries(env ?? {})
+        .filter(([key]) => key.toLowerCase() === 'path')
+        .at(-1)?.[1]
+    return this.db
+      .select()
+      .from(mcpServerTable)
+      .where(eq(mcpServerTable.name, config.name))
+      .orderBy(asc(mcpServerTable.createdAt), asc(mcpServerTable.id))
+      .all()
+      .map(rowToMcpServer)
+      .find((server) => {
+        if (server.installSource === 'builtin' || server.type === 'inMemory') return false
+        if (
+          (server.type ?? (server.baseUrl ? 'sse' : 'stdio')) !== type ||
+          (server.baseUrl ?? '') !== (config.baseUrl ?? '')
+        )
+          return false
+        if (type !== 'stdio')
+          return isEqual(
+            mergeHeaders(defaultAppHeaders(), server.headers),
+            mergeHeaders(defaultAppHeaders(), config.headers)
+          )
+        return (
+          (server.command ?? '').trim() === (config.command ?? '').trim() &&
+          isEqual(server.args ?? [], config.args ?? []) &&
+          isEqual(server.env ?? {}, config.env ?? {}) &&
+          (process.platform !== 'win32' || pathValue(server.env) === pathValue(config.env)) &&
+          (server.registryUrl ?? '') === (config.registryUrl ?? '') &&
+          (server.dxtPath ?? '') === (config.dxtPath ?? '')
+        )
+      })
   }
 
   /**

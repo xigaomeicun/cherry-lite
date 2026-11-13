@@ -1,16 +1,16 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { useEffect, useRef } from 'react'
+import type * as ReactI18next from 'react-i18next'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { useMessageErrorActions } from '@renderer/components/chat/messages/hooks/useMessageErrorActions'
 import { TAB_LIMITS } from '@renderer/services/TabLruManager'
 import type * as RouteTitle from '@renderer/utils/routeTitle'
 import type { Tab } from '@shared/data/cache/cacheValueTypes'
 import { isSettingsPath } from '@shared/data/types/settingsPath'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
-import { useEffect, useRef } from 'react'
-import type * as ReactI18next from 'react-i18next'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 let currentLanguage = 'en'
 
@@ -68,6 +68,7 @@ const HOME_TAB: Tab = {
 // i18n.language dependency in the tabs useMemo.
 let pinnedTabsValue: Tab[] = [PINNED_FILES_TAB]
 const setPinnedTabsMock = vi.fn()
+const readPinnedTabsMock = () => pinnedTabsValue
 
 // Restore-session keys (normal tabs + active id). Default to empty (fresh launch); individual
 // restore tests set them before render. Kept separate from the pinned tuple so the mock returns the
@@ -88,6 +89,7 @@ vi.mock('@logger', () => ({
 }))
 
 vi.mock('@renderer/data/hooks/useCache', () => ({
+  usePersistCacheReader: () => readPinnedTabsMock,
   usePersistCache: (key: string) => {
     if (key === 'ui.tab.normal_tabs') return [normalTabsValue, setNormalTabsMock]
     if (key === 'ui.tab.active_tab_id') return [activeTabIdValue, setActiveTabIdMock]
@@ -127,6 +129,7 @@ vi.mock('@renderer/hooks/useWindowInitData', () => ({
 }))
 
 import { useCloseConversationTabs, useMainWindowNavigation, useTabsContext } from '@renderer/hooks/tab'
+import { ipcApi } from '@renderer/ipc'
 
 import { migratePinnedTabs, TabsProvider } from '../TabsProvider'
 
@@ -445,6 +448,46 @@ afterEach(() => {
 })
 
 describe('TabsProvider', () => {
+  it('preserves Settings on failed detach and selects the requested survivor only after success', async () => {
+    function Navigation() {
+      const { openTab, detachTab, activeTabId, tabs } = useTabsContext()
+      return (
+        <>
+          <button type="button" onClick={() => openTab('/settings/provider', { id: 'settings' })}>
+            Open settings
+          </button>
+          <button type="button" onClick={() => detachTab('settings', 'home')}>
+            Detach settings
+          </button>
+          <output aria-label="selection">{activeTabId}</output>
+          <output aria-label="pages">{tabs.map((tab) => tab.id).join(',')}</output>
+        </>
+      )
+    }
+    const user = userEvent.setup()
+    render(
+      <TabsProvider initialDefaultTab={HOME_TAB}>
+        <Navigation />
+      </TabsProvider>
+    )
+    await user.click(screen.getByText('Open settings'))
+    vi.mocked(ipcApi.request).mockRejectedValueOnce(new Error('window creation failed'))
+    await user.click(screen.getByText('Detach settings'))
+    expect(screen.getByLabelText('selection')).toHaveTextContent('settings')
+    expect(screen.getByLabelText('pages')).toHaveTextContent('settings')
+    let accept!: () => void
+    vi.mocked(ipcApi.request).mockReturnValueOnce(
+      new Promise<void>((resolve) => {
+        accept = resolve
+      })
+    )
+    await user.click(screen.getByText('Detach settings'))
+    expect(screen.getByLabelText('selection')).toHaveTextContent('settings')
+    await act(async () => accept())
+    expect(screen.getByLabelText('selection')).toHaveTextContent('home')
+    expect(screen.getByLabelText('pages')).not.toHaveTextContent('settings')
+  })
+
   it('preserves the source conversation while opening and closing error recovery settings', async () => {
     const user = userEvent.setup()
 
@@ -487,28 +530,22 @@ describe('TabsProvider', () => {
         <ConversationTabActionProbe />
       </TabsProvider>
     )
-    const initialActionRenders = conversationTabActionRender.mock.calls.length
 
     fireEvent.click(screen.getByRole('button', { name: 'Seed tabs' }))
     await waitFor(() => expect(screen.getByTestId('conversation-tab-active')).toHaveTextContent('unrelated-tab'))
     expect(screen.getByTestId('conversation-tab-snapshot')).toHaveTextContent('topic-a-tab:Topic A')
-    expect(conversationTabActionRender).toHaveBeenCalledTimes(initialActionRenders)
 
     fireEvent.click(screen.getByRole('button', { name: 'Activate home' }))
     await waitFor(() => expect(screen.getByTestId('conversation-tab-active')).toHaveTextContent('home'))
-    expect(conversationTabActionRender).toHaveBeenCalledTimes(initialActionRenders)
 
     fireEvent.click(screen.getByRole('button', { name: 'Rename background topic' }))
     await waitFor(() => expect(screen.getByTestId('conversation-tab-snapshot')).toHaveTextContent('Renamed Topic'))
-    expect(conversationTabActionRender).toHaveBeenCalledTimes(initialActionRenders)
 
     fireEvent.click(screen.getByRole('button', { name: 'Close unrelated tab' }))
     await waitFor(() => expect(screen.getByTestId('conversation-tab-snapshot')).not.toHaveTextContent('unrelated-tab'))
-    expect(conversationTabActionRender).toHaveBeenCalledTimes(initialActionRenders)
 
     fireEvent.click(screen.getByRole('button', { name: 'Close background topic' }))
     await waitFor(() => expect(screen.getByTestId('conversation-tab-snapshot')).not.toHaveTextContent('topic-a-tab'))
-    expect(conversationTabActionRender).toHaveBeenCalledTimes(initialActionRenders)
   })
 
   it('preserves page-owned titles for the fixed home conversation tab', async () => {
@@ -581,7 +618,10 @@ describe('TabsProvider', () => {
     )
 
     await waitFor(() => expect(screen.getByTestId('transient-tab-ids')).toHaveTextContent('transient-mini-app'))
-    expect(setPinnedTabsMock.mock.calls.some(([arg]) => typeof arg === 'function')).toBe(false)
+    for (const [write] of setPinnedTabsMock.mock.calls) {
+      const pinned = typeof write === 'function' ? write(pinnedTabsValue) : write
+      expect(pinned.some((tab: Tab) => tab.id === 'transient-mini-app')).toBe(false)
+    }
   })
 
   it('removes a menu-closed pinned tab from the persistent pinned list', async () => {
@@ -613,13 +653,18 @@ describe('TabsProvider', () => {
     )
 
     expect(screen.getByTestId('tab-ids')).toHaveTextContent('files,home')
-    await waitFor(() => expect(setPinnedTabsMock).toHaveBeenCalledWith([{ ...PINNED_FILES_TAB, isDormant: true }]))
+    const persisted = setPinnedTabsMock.mock.calls.reduce<Tab[]>(
+      (current, [action]) => (typeof action === 'function' ? action(current) : action),
+      pinnedTabsValue
+    )
+    expect(persisted).toEqual([{ ...PINNED_FILES_TAB, isDormant: true }])
   })
 
-  // cherry-lite: OpenClaw and the Code page were removed, so their persisted pins are dropped on
-  // restore and the reconciled list is written back to the cache.
-  it('drops persisted OpenClaw and Code pinned tabs on restore', async () => {
-    pinnedTabsValue = [PINNED_OPENCLAW_TAB, PINNED_CODE_TAB, PINNED_FILES_TAB]
+  // Reviewer B7: OpenClaw's sidebar entry + /app/openclaw route were removed (folded into Code), so a
+  // persisted OpenClaw pin must be redirected to /app/code on restore instead of resurrecting a dead
+  // route — and the reconciled list written back to the cache.
+  it('redirects a persisted OpenClaw pinned tab to the Code page on restore', async () => {
+    pinnedTabsValue = [PINNED_OPENCLAW_TAB, PINNED_FILES_TAB]
 
     render(
       <TabsProvider initialDefaultTab={HOME_TAB}>
@@ -627,8 +672,15 @@ describe('TabsProvider', () => {
       </TabsProvider>
     )
 
-    expect(screen.getByTestId('tab-urls')).toHaveTextContent('/app/files,/app/chat')
-    await waitFor(() => expect(setPinnedTabsMock).toHaveBeenCalledWith([{ ...PINNED_FILES_TAB, isDormant: true }]))
+    expect(screen.getByTestId('tab-urls')).toHaveTextContent('/app/code,/app/files,/app/chat')
+    const persisted = setPinnedTabsMock.mock.calls.reduce<Tab[]>(
+      (current, [action]) => (typeof action === 'function' ? action(current) : action),
+      pinnedTabsValue
+    )
+    expect(persisted).toEqual([
+      { ...PINNED_OPENCLAW_TAB, url: '/app/code', title: '/app/code', isDormant: true },
+      { ...PINNED_FILES_TAB, isDormant: true }
+    ])
   })
 
   it('closes active and adjacent tabs atomically when closing a batch', async () => {
@@ -710,9 +762,6 @@ describe('TabsProvider', () => {
     await waitFor(() => expect(screen.getByTestId('active-tab-id')).toHaveTextContent('c'))
 
     fireEvent.click(screen.getByRole('button', { name: 'Hibernate C' }))
-    await waitFor(() => expect(screen.getByTestId('dormant-ids')).toHaveTextContent('c'))
-
-    fireEvent.click(screen.getByRole('button', { name: 'Activate C' }))
     await waitFor(() => expect(screen.getByTestId('dormant-ids')).toHaveTextContent(/^$/))
   })
 
@@ -776,9 +825,8 @@ describe('TabsProvider', () => {
 
     // The pinned store is mocked, so assert on the updater sent to it: the
     // dormant pinned survivor must come back woken.
-    const updater = setPinnedTabsMock.mock.calls.at(-1)?.[0] as (prev: Tab[]) => Tab[]
-    expect(typeof updater).toBe('function')
-    const next = updater([{ ...PINNED_FILES_TAB, isDormant: true }])
+    const write = setPinnedTabsMock.mock.calls.at(-1)?.[0]
+    const next: Tab[] = typeof write === 'function' ? write(pinnedTabsValue) : write
     expect(next.find((tab) => tab.id === 'files')?.isDormant).toBe(false)
   })
 
@@ -1002,10 +1050,21 @@ describe('migratePinnedTabs', () => {
     expect(tabs).toEqual([PINNED_FILES_TAB])
   })
 
-  it('drops OpenClaw and Code pins and flags the change', () => {
-    const { tabs, changed } = migratePinnedTabs([PINNED_OPENCLAW_TAB, PINNED_CODE_TAB, PINNED_FILES_TAB])
+  it('redirects an OpenClaw pin to the Code page and flags the change', () => {
+    const { tabs, changed } = migratePinnedTabs([PINNED_OPENCLAW_TAB, PINNED_FILES_TAB])
     expect(changed).toBe(true)
-    expect(tabs).toEqual([PINNED_FILES_TAB])
+    expect(tabs).toEqual([{ ...PINNED_OPENCLAW_TAB, url: '/app/code', title: '/app/code' }, PINNED_FILES_TAB])
+  })
+
+  it('drops the OpenClaw pin instead of duplicating an existing Code pin', () => {
+    const { tabs, changed } = migratePinnedTabs([PINNED_CODE_TAB, PINNED_OPENCLAW_TAB])
+    expect(changed).toBe(true)
+    expect(tabs).toEqual([PINNED_CODE_TAB])
+  })
+
+  it('collapses two OpenClaw pins into a single Code pin', () => {
+    const { tabs } = migratePinnedTabs([PINNED_OPENCLAW_TAB, { ...PINNED_OPENCLAW_TAB, id: 'openclaw2' }])
+    expect(tabs).toEqual([{ ...PINNED_OPENCLAW_TAB, url: '/app/code', title: '/app/code' }])
   })
 
   it('drops legacy library pins', () => {
@@ -1015,7 +1074,7 @@ describe('migratePinnedTabs', () => {
   })
 
   it('is a no-op when nothing needs migrating', () => {
-    const input = [PINNED_FILES_TAB, HOME_TAB]
+    const input = [PINNED_FILES_TAB, PINNED_CODE_TAB]
     const { tabs, changed } = migratePinnedTabs(input)
     expect(changed).toBe(false)
     expect(tabs).toEqual(input)

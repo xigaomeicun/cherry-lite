@@ -1,7 +1,8 @@
-import { popup, POPUP_EXIT_MS, popupService } from '@renderer/services/popup'
 import { act, cleanup, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, expect, it, vi } from 'vitest'
+
+import { POPUP_EXIT_MS, popup, popupService } from '@renderer/services/popup'
 
 import { PopupHost } from '../index'
 

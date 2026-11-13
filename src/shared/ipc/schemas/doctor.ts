@@ -1,3 +1,5 @@
+import * as z from 'zod'
+
 import {
   DOCTOR_CHECK_IDS,
   type DoctorCancelResult,
@@ -9,7 +11,6 @@ import {
 } from '@shared/types/doctor'
 import type { DoctorConnectivityResult } from '@shared/types/doctorConnectivity'
 import { isDoctorFixRequest, isDoctorScopeKey } from '@shared/utils/doctor'
-import * as z from 'zod'
 
 import { defineRoute } from '../define'
 

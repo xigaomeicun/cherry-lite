@@ -1,13 +1,13 @@
 import {
   DEFAULT_SPEECH_SPEED,
-  type LocalSpeechModelId,
-  type LocalTranscriptionModelId,
-  type LocalVoiceModelDescriptor,
-  type LocalVoiceModelId,
   TranscriptionLanguageSource,
-  type VoiceModelLookup,
   VoiceModelSupport,
-  VoiceResourceOperation
+  VoiceResourceOperation,
+  type LocalSpeechModelId,
+  type LocalVoiceModelDescriptor,
+  type LocalTranscriptionModelId,
+  type LocalVoiceModelId,
+  type VoiceModelLookup
 } from '@shared/ai/localVoice'
 import type { InputFor, OutputFor } from '@shared/ipc/types'
 

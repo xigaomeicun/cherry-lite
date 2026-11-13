@@ -1,7 +1,8 @@
-import type { CatchUpPolicy, Trigger } from '@shared/data/api/schemas/jobs'
-import type { JobError } from '@shared/data/api/schemas/jobs'
 import { sql } from 'drizzle-orm'
 import { check, foreignKey, index, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core'
+
+import type { CatchUpPolicy, Trigger } from '@shared/data/api/schemas/jobs'
+import type { JobError } from '@shared/data/api/schemas/jobs'
 
 import { createUpdateTimestamps, uuidPrimaryKey, uuidPrimaryKeyOrdered } from './_columnHelpers'
 
@@ -83,6 +84,8 @@ export const jobTable = sqliteTable(
     cancelRequestedAt: integer(),
     metadata: text({ mode: 'json' }).$type<Record<string, unknown>>().notNull().default({}),
     timeoutMs: integer(),
+    // Per-job override of the handler's startup recovery; null follows the handler.
+    recovery: text().$type<'abandon' | 'retry'>(),
     ...createUpdateTimestamps
   },
   (t) => [

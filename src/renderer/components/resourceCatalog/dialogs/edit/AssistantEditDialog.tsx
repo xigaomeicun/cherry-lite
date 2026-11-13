@@ -1,3 +1,8 @@
+import { Sparkles, Trash2 } from 'lucide-react'
+import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react'
+import { useForm, type UseFormReturn } from 'react-hook-form'
+import { useTranslation } from 'react-i18next'
+
 import {
   Button,
   FormControl,
@@ -30,6 +35,7 @@ import { useAssistantMutationsById } from '@renderer/hooks/resourceCatalog'
 import { useCloseBeforeAction } from '@renderer/hooks/useCloseBeforeAction'
 import { useGroupMutations, useGroups } from '@renderer/hooks/useGroups'
 import { usePromptProcessor } from '@renderer/hooks/usePromptProcessor'
+import { openSettingsTab } from '@renderer/services/mainWindowNavigation'
 import { toast } from '@renderer/services/toast'
 import { MCP_MODE_OPTIONS, RESOURCE_PROMPT_POLISH_SYSTEM_PROMPT } from '@renderer/utils/resourceCatalog'
 import {
@@ -47,13 +53,9 @@ import {
 import type { Model, UniqueModelId } from '@shared/data/types/model'
 import { clampThresholdPercent } from '@shared/utils/contextSettings'
 import { isNonChatModel } from '@shared/utils/model'
-import { Sparkles, Trash2 } from 'lucide-react'
-import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react'
-import { useForm, type UseFormReturn } from 'react-hook-form'
-import { useTranslation } from 'react-i18next'
 
+import { AssistantAvatarPicker } from '../components/AssistantAvatarPicker'
 import {
-  AvatarField,
   CompactModelField,
   EDIT_DIALOG_PROMPT_MAX_HEIGHT,
   EDIT_DIALOG_PROMPT_MIN_HEIGHT,
@@ -63,6 +65,7 @@ import {
   EditDialogShell,
   type EditDialogTab,
   FieldLabelWithHelp,
+  KnowledgeBaseField,
   type ModelLabels,
   PromptVariablesPopover,
   setFormValues,
@@ -81,7 +84,6 @@ export type AssistantEditDialogProps = EditDialogBaseProps & {
 }
 
 type AssistantEditFormValues = {
-  avatar: string
   name: string
   description: string
   modelId: UniqueModelId | null
@@ -97,6 +99,7 @@ type AssistantEditFormValues = {
   maxToolCalls: number
   enableMaxToolCalls: boolean
   customParameters: AssistantFormState['customParameters']
+  enableBrowser: boolean
   mcpMode: AssistantFormState['mcpMode']
   contextOverrideEnabled: boolean
   contextCompressEnabled: boolean
@@ -110,19 +113,18 @@ type AssistantEditFormValues = {
 
 type CustomParameter = AssistantFormState['customParameters'][number]
 type CustomParameterType = CustomParameter['type']
-type AssistantToolTab = 'tools.mcp'
+type AssistantToolTab = 'tools.builtin' | 'tools.mcp' | 'tools.knowledge'
 
 const logger = loggerService.withContext('AssistantEditDialog')
 const UI_DEFAULT_MAX_TOKENS = 4096
 
 function isAssistantToolTab(value: string): value is AssistantToolTab {
-  return value === 'tools.mcp'
+  return value === 'tools.builtin' || value === 'tools.mcp' || value === 'tools.knowledge'
 }
 
 function defaultValuesForAssistant(resource: AssistantEditDialogResource): AssistantEditFormValues {
   const form = initialAssistantFormState(resource)
   return {
-    avatar: form.emoji,
     name: form.name,
     description: form.description,
     modelId: form.modelId ?? null,
@@ -138,6 +140,7 @@ function defaultValuesForAssistant(resource: AssistantEditDialogResource): Assis
     maxToolCalls: form.maxToolCalls,
     enableMaxToolCalls: form.enableMaxToolCalls,
     customParameters: form.customParameters.map((parameter) => ({ ...parameter })),
+    enableBrowser: form.enableBrowser,
     mcpMode: form.mcpMode,
     contextOverrideEnabled: form.contextOverrideEnabled,
     contextCompressEnabled: form.contextCompressEnabled,
@@ -162,7 +165,6 @@ function modelLabelsForAssistant(resource: AssistantEditDialogResource): ModelLa
 function buildAssistantFormState(baseline: AssistantFormState, values: AssistantEditFormValues): AssistantFormState {
   return {
     ...baseline,
-    emoji: values.avatar,
     name: values.name,
     description: values.description,
     modelId: values.modelId,
@@ -178,6 +180,7 @@ function buildAssistantFormState(baseline: AssistantFormState, values: Assistant
     maxToolCalls: values.maxToolCalls,
     enableMaxToolCalls: values.enableMaxToolCalls,
     customParameters: values.customParameters,
+    enableBrowser: values.enableBrowser,
     mcpMode: values.mcpMode,
     contextOverrideEnabled: values.contextOverrideEnabled,
     contextCompressEnabled: values.contextCompressEnabled,
@@ -222,10 +225,11 @@ function AssistantEditDialogContent({
 }: EditDialogBaseProps & { resource: AssistantEditDialogResource }) {
   const { t } = useTranslation()
   const [activeTab, setActiveTab] = useState(initialTab ?? 'basic')
-  const [emojiPickerOpen, setEmojiPickerOpen] = useState(false)
   const [createGroupDialogOpen, setCreateGroupDialogOpen] = useState(false)
   const [dialogContentElement, setDialogContentElement] = useState<HTMLDivElement | null>(null)
   const [modelLabels, setModelLabels] = useState<ModelLabels>(() => modelLabelsForAssistant(resource))
+  const [formBaseline, setFormBaseline] = useState(() => initialAssistantFormState(resource))
+  const formBaselineRef = useRef(formBaseline)
   const defaultValues = useMemo(() => defaultValuesForAssistant(resource), [resource])
   const form = useForm<AssistantEditFormValues>({ defaultValues })
   const values = form.watch()
@@ -233,9 +237,8 @@ function AssistantEditDialogContent({
   const { createGroup } = useGroupMutations('assistant')
   const { updateAssistant } = useAssistantMutationsById(resource.id)
   const saveIntent = useMemo(() => {
-    const baseline = initialAssistantFormState(resource)
-    return diffAssistantSaveIntent(buildAssistantFormState(baseline, values), baseline, resource)
-  }, [resource, values])
+    return diffAssistantSaveIntent(buildAssistantFormState(formBaseline, values), formBaseline, resource)
+  }, [formBaseline, resource, values])
   const tabs = useMemo<EditDialogTab[]>(
     () => [
       { id: 'basic', label: t('library.config.dialogs.edit.basic_tab') },
@@ -245,7 +248,11 @@ function AssistantEditDialogContent({
       {
         id: 'tools',
         label: t('library.config.dialogs.edit.tools_tab'),
-        children: [{ id: 'tools.mcp', label: t('library.config.agent.section.tools.tab.mcp') }]
+        children: [
+          { id: 'tools.builtin', label: t('settings.skills.tabs.builtin') },
+          { id: 'tools.knowledge', label: t('library.config.dialogs.edit.knowledge_tab') },
+          { id: 'tools.mcp', label: t('library.config.agent.section.tools.tab.mcp') }
+        ]
       }
     ],
     [t]
@@ -266,9 +273,10 @@ function AssistantEditDialogContent({
     if (!justOpened) return
 
     form.reset(defaultValues)
+    formBaselineRef.current = initialAssistantFormState(resource)
+    setFormBaseline(formBaselineRef.current)
     form.clearErrors()
     setActiveTab(initialTab ?? 'basic')
-    setEmojiPickerOpen(false)
     setCreateGroupDialogOpen(false)
     setModelLabels(modelLabelsForAssistant(resource))
     // A fresh open is a fresh editing session — a stale failure from a prior
@@ -283,10 +291,20 @@ function AssistantEditDialogContent({
   const changeKey = canPersist ? JSON.stringify(values) : null
   const saveFailedMessage = t('library.config.dialogs.edit.save_failed')
 
+  const getCurrentSaveIntent = () =>
+    diffAssistantSaveIntent(
+      buildAssistantFormState(formBaselineRef.current, form.getValues()),
+      formBaselineRef.current,
+      resource
+    )
+
   const persist = async () => {
-    const pending = saveIntent
-    if (!pending || !changeKey) return
-    const attemptedKey = changeKey
+    const submittedValues = structuredClone(form.getValues())
+    if (!submittedValues.name.trim()) return
+    const submittedFormState = buildAssistantFormState(formBaselineRef.current, submittedValues)
+    const pending = diffAssistantSaveIntent(submittedFormState, formBaselineRef.current, resource)
+    if (!pending) return
+    const attemptedKey = JSON.stringify(submittedValues)
 
     // A close-triggered flush does not cancel the already scheduled debounce.
     // Keep both paths from resending an unchanged payload that already failed.
@@ -302,40 +320,54 @@ function AssistantEditDialogContent({
       failedSaveKeyRef.current = attemptedKey
       form.setError('root', { message: saveFailedMessage })
       toast.error(saveFailedMessage)
+      return
     }
+
+    formBaselineRef.current = submittedFormState
+    setFormBaseline(submittedFormState)
   }
 
-  // Key the debounce on the form values (user input), not on saveIntent: the
-  // update mutation refreshes /assistants/* → resource refetches → saveIntent's
-  // baseline moves, but the values are unchanged, so this never re-fires from our
-  // own save (prevents a save→refetch→save loop).
-  const flush = useDebouncedAutoSave({
+  const { flush, getPendingSave } = useDebouncedAutoSave({
     enabled: open,
     changeKey,
     onSave: persist
   })
 
-  // On close with a pending edit, flush through the same serialized save queue and
-  // only close once it settles — so a failed final save stays visible instead of
-  // being silently dropped, and we never race a second concurrent save.
-  const handleOpenChange = (next: boolean) => {
-    if (next || !canPersist) {
+  // Keep failed saves visible and gate settings navigation on successful closure.
+  const handleOpenChange = async (next: boolean, allowDiscard = true): Promise<boolean> => {
+    if (next) {
       onOpenChange(next)
-      return
+      return true
     }
-    if (failedSaveKeyRef.current === changeKey) {
+    const valuesBeforeSave = JSON.stringify(form.getValues())
+    const pendingSave = getPendingSave()
+    if (pendingSave) await pendingSave
+    if (JSON.stringify(form.getValues()) !== valuesBeforeSave) return false
+
+    const currentValues = form.getValues()
+    const pending = getCurrentSaveIntent()
+    if (!pending || (!currentValues.name.trim() && allowDiscard)) {
+      onOpenChange(false)
+      return true
+    }
+    if (!currentValues.name.trim()) return false
+    if (failedSaveKeyRef.current === JSON.stringify(currentValues)) {
       toast.error(saveFailedMessage)
+      if (!allowDiscard || pendingSave) return false
       onOpenChange(false)
-      return
+      return true
     }
-    void (async () => {
-      await flush()
-      if (failedSaveKeyRef.current !== null) return
-      onOpenChange(false)
-    })()
+    await flush()
+    if (
+      failedSaveKeyRef.current !== null ||
+      JSON.stringify(form.getValues()) !== valuesBeforeSave ||
+      getCurrentSaveIntent()
+    )
+      return false
+    onOpenChange(false)
+    return true
   }
-  // Route the settings-navigate close through handleOpenChange so it flushes too.
-  const closeBeforeAction = useCloseBeforeAction(handleOpenChange)
+  const closeBeforeAction = useCloseBeforeAction((next) => handleOpenChange(next, false))
 
   const handleCreateGroup = async (name: string) => {
     try {
@@ -369,6 +401,8 @@ function AssistantEditDialogContent({
       <>
         <TabsContent value="basic" forceMount hidden={activeTab !== 'basic'} className="m-0">
           <AssistantBasicFields
+            resource={resource}
+            open={open}
             form={form}
             modelFilter={modelFilter}
             isModelDisabled={isModelDisabled}
@@ -378,8 +412,6 @@ function AssistantEditDialogContent({
             groups={groups}
             groupsLoading={isGroupsLoading}
             groupsError={groupsError}
-            emojiPickerOpen={emojiPickerOpen}
-            setEmojiPickerOpen={setEmojiPickerOpen}
             onCreateGroup={() => setCreateGroupDialogOpen(true)}
             onSettingsNavigate={closeBeforeAction}
           />
@@ -400,12 +432,36 @@ function AssistantEditDialogContent({
           <PromptBindingTab
             enabled={open && activeTab === 'prompts'}
             target={{ type: 'assistant', id: resource.id }}
+            onManageGlobal={() => closeBeforeAction(() => openSettingsTab('/settings/prompts'))}
             portalContainer={dialogContentElement}
           />
         </TabsContent>
         {isAssistantToolTab(activeTab) ? (
           <TabsContent value={activeTab} forceMount className="m-0">
-            <AssistantToolsFields form={form} portalContainer={dialogContentElement} />
+            {activeTab === 'tools.builtin' ? (
+              <FormField
+                control={form.control}
+                name="enableBrowser"
+                render={({ field }) => (
+                  <FormItem className="flex items-center justify-between gap-3">
+                    <span>{t('settings.browser.title')}</span>
+                    <FormControl>
+                      <Switch
+                        aria-label={t('settings.browser.title')}
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                      />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+            ) : activeTab === 'tools.mcp' ? (
+              <AssistantToolsFields form={form} portalContainer={dialogContentElement} />
+            ) : (
+              <div className="grid gap-4">
+                <KnowledgeBaseField form={form} portalContainer={dialogContentElement} />
+              </div>
+            )}
           </TabsContent>
         ) : null}
         <TabsContent value="advanced" forceMount hidden={activeTab !== 'advanced'} className="m-0">
@@ -429,6 +485,8 @@ function AssistantEditDialogContent({
 }
 
 function AssistantBasicFields({
+  resource,
+  open,
   form,
   modelFilter,
   isModelDisabled,
@@ -438,11 +496,11 @@ function AssistantBasicFields({
   groups,
   groupsLoading,
   groupsError,
-  emojiPickerOpen,
-  setEmojiPickerOpen,
   onCreateGroup,
   onSettingsNavigate
 }: {
+  resource: AssistantEditDialogResource
+  open: boolean
   form: UseFormReturn<AssistantEditFormValues>
   modelFilter: EditDialogBaseProps['modelFilter']
   isModelDisabled: EditDialogBaseProps['isModelDisabled']
@@ -452,8 +510,6 @@ function AssistantBasicFields({
   groups: ReturnType<typeof useGroups>['groups']
   groupsLoading: ReturnType<typeof useGroups>['isLoading']
   groupsError: ReturnType<typeof useGroups>['error']
-  emojiPickerOpen: boolean
-  setEmojiPickerOpen: (open: boolean) => void
   onCreateGroup: () => void
   onSettingsNavigate?: (navigate: () => void) => void
 }) {
@@ -471,15 +527,18 @@ function AssistantBasicFields({
 
   return (
     <div className="divide-y divide-border-subtle border-border-subtle border-b [&>*:first-child]:pt-0">
-      <AvatarField
-        form={form}
-        emojiPickerOpen={emojiPickerOpen}
-        setEmojiPickerOpen={setEmojiPickerOpen}
-        fallback="💬"
-        portalContainer={portalContainer}
-        size="sm"
-        layout="row"
-      />
+      <div className={editDialogFormRowClassName}>
+        <span className={editDialogFormRowLabelClassName}>{t('common.avatar')}</span>
+        <AssistantAvatarPicker
+          key={`${resource.id}:${open}`}
+          assistantId={resource.id}
+          emoji={resource.emoji}
+          avatarSrc={resource.avatarSrc}
+          ariaLabel={t('library.config.dialogs.create.avatar_aria')}
+          portalContainer={portalContainer}
+          size="sm"
+        />
+      </div>
       <TextInputField
         form={form}
         name="name"
@@ -547,6 +606,7 @@ function AssistantPromptField({
 }) {
   const { t } = useTranslation()
   const [resetPreviewKey, setResetPreviewKey] = useState(0)
+  const [polishing, setPolishing] = useState(false)
   const prompt = form.watch('prompt')
   const name = form.watch('name')
   const processedPrompt = usePromptProcessor({
@@ -570,6 +630,7 @@ function AssistantPromptField({
       emptyValueSystemPrompt={AGENT_PROMPT}
       existingValueSystemPrompt={RESOURCE_PROMPT_POLISH_SYSTEM_PROMPT}
       onChange={handlePromptActionChange}
+      onRunningChange={setPolishing}
     />
   )
 
@@ -595,6 +656,7 @@ function AssistantPromptField({
           fill
           minHeight={EDIT_DIALOG_PROMPT_MIN_HEIGHT}
           maxHeight={EDIT_DIALOG_PROMPT_MAX_HEIGHT}
+          disabled={polishing}
         />
       )}
     />
@@ -1180,7 +1242,7 @@ function CustomParametersField({
               portalContainer={portalContainer}
               onNameChange={(name) => updateField(index, { name })}
               onTypeChange={(type) => updateField(index, { type })}
-              onValueChange={(nextValue) => updateField(index, { value: nextValue } as Partial<CustomParameter>)}
+              onValueChange={(nextValue) => updateField(index, { value: nextValue })}
               onDelete={() => remove(index)}
             />
           ))}

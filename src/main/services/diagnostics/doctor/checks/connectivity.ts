@@ -1,9 +1,10 @@
+import { APICallError } from 'ai'
+
 import { application } from '@application'
 import { serializeError } from '@main/ai/utils/serializeError'
 import { createUniqueModelId, UniqueModelIdSchema } from '@shared/data/types/model'
 import { classifyErrorCategory, isErrorCategory } from '@shared/utils/errorCategory'
 import { redactUrlParams } from '@shared/utils/redaction'
-import { APICallError } from 'ai'
 
 import { defaultChatModelId } from '../subjectDefaults'
 import { defineDoctorCheck, type DoctorContext, type DoctorProbeOutcome } from '../types'

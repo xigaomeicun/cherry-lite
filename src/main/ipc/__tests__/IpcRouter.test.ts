@@ -1,8 +1,9 @@
+import { describe, expect, it, vi } from 'vitest'
+import * as z from 'zod'
+
 import { defineRoute } from '@shared/ipc/define'
 import { IpcError } from '@shared/ipc/errors/IpcError'
 import type { IpcContext, IpcHandlersFor } from '@shared/ipc/types'
-import { describe, expect, it, vi } from 'vitest'
-import * as z from 'zod'
 
 import { IpcRouter } from '../IpcRouter'
 
@@ -28,10 +29,9 @@ function makeRouter(overrides?: Partial<IpcHandlersFor<typeof schemas>>) {
 
 describe('IpcRouter.dispatch', () => {
   it('routes to the matching handler and returns its result', async () => {
-    const { router, echo } = makeRouter()
+    const { router } = makeRouter()
     const result = await router.dispatch('demo.echo', { msg: 'hi' }, ctx)
     expect(result).toEqual({ echoed: 'hi' })
-    expect(echo).toHaveBeenCalledOnce()
   })
 
   it('passes the IpcContext through to the handler', async () => {

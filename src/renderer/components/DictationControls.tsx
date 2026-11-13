@@ -1,10 +1,11 @@
-import { BarVisualizer, Button, NormalTooltip } from '@cherrystudio/ui'
-import { openSettingsTab } from '@renderer/services/mainWindowNavigation'
-import type { DictationErrorCategory, DictationPhase } from '@renderer/services/voice'
-import { dictationService, voiceTargetManager } from '@renderer/services/voice'
 import { Copy, CornerDownLeft, Mic, RotateCcw, Square, Trash2, X } from 'lucide-react'
 import { useSyncExternalStore } from 'react'
 import { useTranslation } from 'react-i18next'
+
+import { BarVisualizer, Button, NormalTooltip } from '@cherrystudio/ui'
+import { openSettingsTab } from '@renderer/services/mainWindowNavigation'
+import { dictationService, voiceTargetManager } from '@renderer/services/voice'
+import type { DictationErrorCategory, DictationPhase } from '@renderer/services/voice'
 
 const SETTINGS_RECOVERY_ERRORS = new Set<DictationErrorCategory>([
   'model_required',
@@ -96,6 +97,7 @@ export function DictationControls({
             type="button"
             variant="ghost"
             size="icon-sm"
+            className="text-muted-foreground"
             aria-label={t('chat.input.dictation.title')}
             disabled={disabled}
             onClick={start}>

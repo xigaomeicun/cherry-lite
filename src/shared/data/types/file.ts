@@ -110,10 +110,11 @@
  *   unmanaged `@main/utils/file/fs.remove(path)` separately.
  */
 
+import * as z from 'zod'
+
 import type { AbsoluteFilePath } from '@shared/types/file'
 import { AbsoluteFilePathSchema, SafeExtSchema } from '@shared/types/file'
 import { CanonicalFilePathSchema } from '@shared/utils/file'
-import * as z from 'zod'
 
 import { MessageIdSchema } from './message'
 
@@ -179,7 +180,7 @@ export type FileEntryOrigin = z.infer<typeof FileEntryOriginSchema>
 // ─── Cleanup Policy Enum ───
 
 /**
- * Cleanup intent stored as data — docs/references/file/file-entry-cleanup.md.
+ * Cleanup intent stored as data — docs/dev/references/file/file-entry-cleanup.md.
  * 'manual' entries are preserved at zero refs; 'delete_when_unreferenced'
  * entries may be reclaimed by FileManager's cleanup pass.
  */
@@ -323,7 +324,7 @@ export type ExternalFileEntry = z.infer<typeof ExternalEntrySchema>
  * Not persisted in DB. Queried at runtime via File IPC
  * `getDanglingState` / `batchGetDanglingStates` — DataApi never exposes dangling
  * because it requires FS IO (cold-path `fs.stat`) which violates the DataApi
- * SQL-only boundary. See [file-manager-architecture.md §11](../../../../docs/references/file/file-manager-architecture.md).
+ * SQL-only boundary. See [file-manager-architecture.md §11](../../../../docs/dev/references/file/file-manager-architecture.md).
  */
 export const DanglingStateSchema = z.enum(['present', 'missing', 'unknown'])
 export type DanglingState = z.infer<typeof DanglingStateSchema>
@@ -465,12 +466,12 @@ export const createRefSchema = <T extends BusinessRefShape>(shape: T): z.ZodObje
 
 export const chatMessageSourceType = 'chat_message' as const
 
-export const chatMessageRoles = ['attachment', 'tool_output'] as const
+export const chatMessageRoles = ['attachment', 'tool_output', 'author_avatar'] as const
 export const chatMessageRoleSchema = z.enum(chatMessageRoles)
 
 export const chatMessageRefFields = {
   sourceType: z.literal(chatMessageSourceType),
-  sourceId: MessageIdSchema,
+  sourceId: z.lazy(() => MessageIdSchema),
   role: chatMessageRoleSchema
 }
 
@@ -484,12 +485,12 @@ export const chatMessageFileRefSchema = createRefSchema(chatMessageRefFields)
 
 export const agentSessionMessageSourceType = 'agent_session_message' as const
 
-export const agentSessionMessageRoles = ['attachment'] as const
+export const agentSessionMessageRoles = ['attachment', 'author_avatar'] as const
 export const agentSessionMessageRoleSchema = z.enum(agentSessionMessageRoles)
 
 export const agentSessionMessageRefFields = {
   sourceType: z.literal(agentSessionMessageSourceType),
-  sourceId: MessageIdSchema,
+  sourceId: z.lazy(() => MessageIdSchema),
   role: agentSessionMessageRoleSchema
 }
 
@@ -615,6 +616,8 @@ function defineSingleFileRef<const T extends string>(sourceType: T) {
   return { sourceType, refFields, schema: z.object({ ...refCommonFields, ...refFields }) } as const
 }
 
+export const agentAvatarRef = defineSingleFileRef('agent_avatar')
+export const assistantAvatarRef = defineSingleFileRef('assistant_avatar')
 export const providerLogoRef = defineSingleFileRef('provider_logo')
 export const miniAppLogoRef = defineSingleFileRef('mini_app_logo')
 
@@ -663,6 +666,8 @@ export const allSourceTypes = [
   paintingSourceType,
   jobSourceType,
   translateHistorySourceType,
+  agentAvatarRef.sourceType,
+  assistantAvatarRef.sourceType,
   providerLogoRef.sourceType,
   miniAppLogoRef.sourceType,
   miniAppFileRef.sourceType
@@ -691,6 +696,8 @@ export const FileRefSchema = z.discriminatedUnion('sourceType', [
   paintingFileRefSchema,
   jobFileRefSchema,
   translateHistoryFileRefSchema,
+  agentAvatarRef.schema,
+  assistantAvatarRef.schema,
   providerLogoRef.schema,
   miniAppLogoRef.schema,
   miniAppFileRef.schema

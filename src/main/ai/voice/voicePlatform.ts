@@ -1,17 +1,18 @@
+import { shell, systemPreferences } from 'electron'
+
 import {
+  VoiceModelSupport,
   APPLE_ASR_MODEL_ID,
   APPLE_TTS_MODEL_ID,
   FUNASR_MODEL_ID,
   FUNASR_SUPPORTED_PLATFORM_KEYS,
   KOKORO_TTS_MODEL_ID,
-  type LocalSpeechModelId,
-  type LocalTranscriptionModelId,
   SHERPA_VOICE_SUPPORTED_PLATFORM_KEYS,
-  VoiceModelSupport,
+  WINDOWS_TTS_MODEL_ID,
   WINDOWS_ASR_MODEL_ID,
-  WINDOWS_TTS_MODEL_ID
+  type LocalSpeechModelId,
+  type LocalTranscriptionModelId
 } from '@shared/ai/localVoice'
-import { shell, systemPreferences } from 'electron'
 
 import { VoiceRuntimeError } from './VoiceRuntimeError'
 

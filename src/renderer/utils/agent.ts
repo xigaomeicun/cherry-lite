@@ -1,3 +1,5 @@
+import type { TFunction } from 'i18next'
+
 import type { PermissionModeCard } from '@renderer/types/agent'
 import { AGENT_RUNTIME_CAPABILITIES } from '@shared/ai/agentRuntimeCapabilities'
 import { BUILTIN_AGENT_ROLE } from '@shared/ai/builtinAgent'
@@ -5,7 +7,6 @@ import type { AgentPermissionMode } from '@shared/data/api/schemas/agents'
 import type { AgentConfiguration, AgentType } from '@shared/data/types/agent'
 import type { ModelSnapshot } from '@shared/data/types/message'
 import { isUniqueModelId, parseUniqueModelId } from '@shared/data/types/model'
-import type { TFunction } from 'i18next'
 
 export const DEFAULT_AGENT_AVATAR = '🤖'
 
@@ -13,8 +14,11 @@ export function getAgentAvatar(avatar?: unknown) {
   return typeof avatar === 'string' ? avatar.trim() || DEFAULT_AGENT_AVATAR : DEFAULT_AGENT_AVATAR
 }
 
-export function getAgentAvatarFromConfiguration(configuration?: Pick<AgentConfiguration, 'avatar'> | null) {
-  return getAgentAvatar(configuration?.avatar)
+export function getAgentAvatarFromConfiguration(
+  configuration?: Pick<AgentConfiguration, 'avatar'> | null,
+  avatarSrc?: string
+) {
+  return avatarSrc || getAgentAvatar(configuration?.avatar)
 }
 
 export function getAgentDescriptionForDisplay(
@@ -29,6 +33,9 @@ export function getAgentDescriptionForDisplay(
   }
   if (agent.configuration?.builtin_role === BUILTIN_AGENT_ROLE.SUPPORT) {
     return t('agent.builtin.cherry_support.description')
+  }
+  if (agent.configuration?.builtin_role === BUILTIN_AGENT_ROLE.DOCTOR) {
+    return t('agent.builtin.cherry_doctor.description')
   }
   return ''
 }
@@ -123,5 +130,7 @@ export function getPermissionModeCards(agentType: AgentType | string | undefined
   const modes = new Set<AgentPermissionMode>(AGENT_RUNTIME_CAPABILITIES[agentType as AgentType].permissionModes)
   return permissionModeCards
     .filter((card) => modes.has(card.mode))
-    .map((card) => (agentType === 'pi' ? { ...card, ...PI_CARD_OVERRIDES[card.mode] } : card))
+    .map((card) =>
+      agentType === 'pi' || agentType === 'pi-durable' ? { ...card, ...PI_CARD_OVERRIDES[card.mode] } : card
+    )
 }

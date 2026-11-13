@@ -1,12 +1,13 @@
+import { ChevronRight, GripVertical, Plus } from 'lucide-react'
+import { type ReactNode, useId } from 'react'
+import { useTranslation } from 'react-i18next'
+
 import { ReorderableList } from '@cherrystudio/ui'
 import { getProviderLabelKey } from '@renderer/i18n/label'
 import { ProviderAvatar } from '@renderer/pages/settings/ProviderSettings/components/ProviderAvatar'
 import { providerListClasses } from '@renderer/pages/settings/ProviderSettings/primitives/ProviderSettingsPrimitives'
 import { cn } from '@renderer/utils/style'
 import type { Provider } from '@shared/data/types/provider'
-import { ChevronRight, GripVertical, Plus } from 'lucide-react'
-import { type ReactNode, useId } from 'react'
-import { useTranslation } from 'react-i18next'
 
 import type { ProviderListContentItemState } from './ProviderListContent'
 
@@ -66,6 +67,7 @@ export default function ProviderListGroup({
         aria-controls={bodyId}
         data-testid={`provider-list-group-${presetProviderId}`}
         data-has-selected={containsSelected ? 'true' : 'false'}
+        data-dnd-row-control
         onClick={onToggle}
         className={cn(providerListClasses.groupHeader, headerHighlight && providerListClasses.groupHeaderHasSelected)}>
         <div className={providerListClasses.itemMain}>
@@ -105,11 +107,7 @@ export default function ProviderListGroup({
         </div>
       </button>
       {expanded && (
-        <div
-          id={bodyId}
-          className={providerListClasses.groupBody}
-          onPointerDown={(event) => event.stopPropagation()}
-          onKeyDown={(event) => event.stopPropagation()}>
+        <div id={bodyId} className={providerListClasses.groupBody} data-no-dnd>
           <ReorderableList
             items={items}
             visibleItems={members}

@@ -1,9 +1,10 @@
 import { createCipheriv } from 'node:crypto'
 
-import { t } from '@main/i18n'
-import { fetchRemoteBytes } from '@main/utils/remoteFetch'
 import type * as WeComSdk from '@wecom/aibot-node-sdk'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+import { t } from '@main/i18n'
+import { fetchRemoteBytes } from '@main/utils/remoteFetch'
 
 const sdk = vi.hoisted(() => ({ clients: [] as any[], authenticate: true }))
 vi.mock('@wecom/aibot-node-sdk', async (importOriginal) => {

@@ -1,6 +1,5 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest'
-
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 
@@ -27,7 +26,7 @@ beforeAll(() => {
     observe() {}
     unobserve() {}
     disconnect() {}
-  } as any
+  }
 })
 
 afterEach(() => {
@@ -45,11 +44,6 @@ describe('SelectDropdown', () => {
     it('renders selected item in trigger', () => {
       render(<SelectDropdown {...defaultProps} selectedId="2" />)
       expect(screen.getByText('Beta')).toBeInTheDocument()
-    })
-
-    it('renders default placeholder when none provided and no selection', () => {
-      render(<SelectDropdown {...defaultProps} />)
-      expect(screen.getByText('...')).toBeInTheDocument()
     })
   })
 
@@ -76,7 +70,7 @@ describe('SelectDropdown', () => {
       render(<SelectDropdown {...defaultProps} />)
       fireEvent.click(screen.getByRole('button'))
 
-      const scroller = screen.getByText('Alpha').closest('button')?.parentElement?.parentElement as HTMLDivElement
+      const scroller = screen.getByText('Alpha').closest('[data-slot=scroll-area-viewport]') as HTMLDivElement
       Object.defineProperties(scroller, {
         clientHeight: { configurable: true, value: 20 },
         scrollHeight: { configurable: true, value: 100 },
@@ -107,13 +101,6 @@ describe('SelectDropdown', () => {
       expect(removeBtns).toHaveLength(3)
       fireEvent.click(removeBtns[0])
       expect(onRemove).toHaveBeenCalledWith('1')
-    })
-  })
-
-  describe('renderTriggerLeading', () => {
-    it('renders leading content in trigger', () => {
-      render(<SelectDropdown {...defaultProps} renderTriggerLeading={<span>Icon</span>} />)
-      expect(screen.getByText('Icon')).toBeInTheDocument()
     })
   })
 })

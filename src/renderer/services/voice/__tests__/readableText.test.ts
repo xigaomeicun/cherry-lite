@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest'
 
 import {
-  chunkReadableText,
-  normalizeReadableText,
-  planReadableText,
   READABLE_TEXT_CHUNK_LIMIT,
   READABLE_TEXT_CONFIRMATION_THRESHOLD,
-  SPEECH_ADAPTER_TEXT_LIMIT
+  SPEECH_ADAPTER_TEXT_LIMIT,
+  chunkReadableText,
+  normalizeReadableText,
+  planReadableText
 } from '../readableText'
 
 const privateContainerCases = [

@@ -1,8 +1,9 @@
-import { useDataChange, useMutation } from '@data/hooks/useDataApi'
 import { act, renderHook as renderHookBase, waitFor } from '@testing-library/react'
 import { createElement, type PropsWithChildren } from 'react'
 import { SWRConfig } from 'swr'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+import { useDataChange, useMutation } from '@data/hooks/useDataApi'
 
 const invalidateMock = vi.hoisted(() => vi.fn())
 const skillMocks = vi.hoisted(() => ({ request: vi.fn() }))
@@ -33,6 +34,20 @@ function renderHook<T>(callback: () => T) {
 }
 
 describe('skillAdapter mutations', () => {
+  it('returns native mirror mutation data and preserves IPC errors without unwrapping', async () => {
+    const updated = { id: 'skill-1', mirrorEnabled: false }
+    skillMocks.request.mockResolvedValueOnce(updated)
+    const { result } = renderHook(() => useSkillMutationsById('skill-1'))
+    await act(async () => {
+      await expect(result.current.setMirrorEnabled(false)).resolves.toEqual(updated)
+    })
+    const error = Object.assign(new Error('export denied'), { code: 'PERMISSION_DENIED' })
+    skillMocks.request.mockRejectedValueOnce(error)
+    await act(async () => {
+      await expect(result.current.setMirrorEnabled(true)).rejects.toBe(error)
+    })
+  })
+
   beforeEach(() => {
     vi.clearAllMocks()
     invalidateMock.mockResolvedValue(undefined)

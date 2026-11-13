@@ -1,6 +1,7 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
 import { application } from '@application'
 import { BaseService } from '@main/core/lifecycle'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { MediaKind } from '../types'
 

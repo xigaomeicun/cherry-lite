@@ -5,6 +5,14 @@
     "es2022": true
   },
   "globals": {},
+  "jsPlugins": ["@shadcn/lint", "./scripts/lint/scroll-area.mjs"],
+  "settings": {
+    "shadcn": {
+      "ui": "@cherrystudio/ui",
+      "themeImports": ["^@cherrystudio/ui/styles/"],
+      "note": "See DESIGN.md and packages/ui/docs/design-token-system.md."
+    }
+  },
   "ignorePatterns": [
     "node_modules/**",
     "build/**",
@@ -18,13 +26,50 @@
     "src/main/services/nutstore/sso/lib/**",
     "src/renderer/ui/**",
     "packages/**/dist",
+    "native/system-speech/dist",
     "eslint.config.mjs",
-    "v2-refactor-temp/**"
+    "scripts/data-classify/**"
   ],
   "options": {
     "typeAware": true
   },
   "overrides": [
+    {
+      "files": [
+        "src/renderer/**/*.{ts,tsx}",
+        "packages/ui/src/**/*.{ts,tsx}",
+        "packages/file-preview/src/**/*.{ts,tsx}"
+      ],
+      "rules": {
+        "cherry-scroll-area/no-container-padding": "error",
+        "shadcn/no-raw-colors": ["off", { "allow": ["outline-dot", "outline-text"] }],
+        "shadcn/no-unknown-classes": [
+          "off",
+          {
+            "allow": [
+              "lucide-custom",
+              "selectable",
+              "message-content-container",
+              "message-thought-container",
+              "MessageFooter",
+              "message",
+              "message-user",
+              "message-assistant",
+              "in-popover",
+              "selected",
+              "multi-select-mode",
+              "drag",
+              "nodrag",
+              "clear-context-divider",
+              "source-view",
+              "mini-app-icon-frame",
+              "outline-dot",
+              "outline-text"
+            ]
+          }
+        ]
+      }
+    },
     {
       "env": {
         "node": true
@@ -46,6 +91,7 @@
         "src/renderer/**/*.{ts,tsx}",
         "packages/aiCore/**",
         "packages/extension-table-plus/**",
+        "packages/file-preview/src/**",
         "packages/ui/**"
       ]
     },
@@ -115,12 +161,12 @@
     "typescript/no-require-imports": "off",
     "typescript/no-this-alias": "error",
     "typescript/no-unnecessary-parameter-property-assignment": "error",
-    "typescript/no-unnecessary-type-assertion": "off", // TODO: error — tsgolint 7 backlog (1508 diagnostics / 488 files), tracked in #17746
+    "typescript/no-unnecessary-type-assertion": "error",
     "typescript/no-unnecessary-type-constraint": "error",
     "typescript/no-unsafe-declaration-merging": "error",
     "typescript/no-unsafe-function-type": "error",
     "typescript/no-unsafe-unary-minus": "error",
-    "typescript/no-useless-default-assignment": "off", // TODO: error — 1.76 default-warn; rule + 17 fixes split to a dedicated PR
+    "typescript/no-useless-default-assignment": "error",
     "typescript/no-useless-empty-export": "error",
     "typescript/no-wrapper-object-types": "error",
     "typescript/prefer-as-const": "error",

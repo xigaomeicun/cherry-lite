@@ -10,13 +10,14 @@ import {
   type AgentParams,
   type AgentResult,
   type CommandReceipt,
-  encodeAgentCommand,
-  questionInputSchema
+  type TaskMethod,
+  questionInputSchema,
+  encodeAgentCommand
 } from '@cherrystudio/remote-protocol/agent'
 import { RemoteRpcError, type RemoteRpcServer } from '@cherrystudio/remote-transport'
 import { AgentSessionDeliveryRoutingError } from '@data/services/AgentSessionMessageService'
 import { agentSessionService } from '@data/services/AgentSessionService'
-import { type RemoteCommandOutcome, remoteCommandService } from '@data/services/RemoteCommandService'
+import { remoteCommandService, type RemoteCommandOutcome } from '@data/services/RemoteCommandService'
 import { loggerService } from '@logger'
 import { buildAgentSessionTopicId } from '@main/ai/agentSession/topic'
 import { serializeError } from '@main/ai/utils/serializeError'
@@ -34,16 +35,19 @@ import {
   listSessions,
   listWorkspaces,
   readPersistedContent,
+  readPersistedFileContent,
   sha256,
   sliceContent,
   toSessionSummary
 } from './agentQueries'
 import type { AgentSubscriptions } from './agentSubscriptions'
+import { getTask, getTaskRun, listTasks, listTaskRuns, readTaskContent } from './agentTaskQueries'
+import type { UploadOwner } from './RemoteUploads'
 
 const logger = loggerService.withContext('RemoteAgentHandlers')
 
 export interface AgentAccess {
-  requireAgent(): { deviceId: string; grantId: string }
+  requireAgent(): UploadOwner
   /** Runs after the pending reply has been queued to the wire, so activation never leaks events ahead of its response. */
   afterReply(fn: () => void): void
 }
@@ -61,8 +65,18 @@ export function registerAgentMethods(
     handler: (params: AgentParams<M>, auth: Auth) => AgentResult<M> | Promise<AgentResult<M>>
   ) =>
     rpc.addMethod<AgentParams<M>, AgentResult<M>>(name, agentMethods[name] as never, (params) =>
-      handler(params, access.requireAgent())
+      Promise.resolve().then(() => handler(params, access.requireAgent()))
     )
+
+  const taskHandlers: { [M in TaskMethod]: (params: AgentParams<M>) => AgentResult<M> } = {
+    'agent.tasks.list': listTasks,
+    'agent.tasks.get': ({ taskId }) => ({ task: getTask(taskId) }),
+    'agent.tasks.runs.list': listTaskRuns,
+    'agent.tasks.runs.get': ({ taskId, runId }) => ({ run: getTaskRun(taskId, runId) }),
+    'agent.tasks.content.read': readTaskContent
+  }
+  const registerTask = <M extends TaskMethod>(name: M) => on(name, taskHandlers[name])
+  for (const name of Object.keys(taskHandlers) as TaskMethod[]) registerTask(name)
 
   const summaryOf = (sessionId: string) => {
     const summary = toSessionSummary(getSession(sessionId), hub.activeExecutionId(sessionId))
@@ -169,43 +183,75 @@ export function registerAgentMethods(
       agentSessionService.notifyReadModelChange([admission.receipt.sessionId], 'membership')
     return admission.receipt
   })
-  on('agent.messages.list', ({ sessionId, historyRevision, cursor, limit }) =>
-    listMessages(sessionId, historyRevision, cursor, limit)
+  on('agent.messages.list', ({ sessionId, historyRevision, cursor, limit, partsMode }) =>
+    listMessages(sessionId, historyRevision, cursor, limit, partsMode)
   )
   on('agent.parts.list', ({ sessionId, messageId, messageRevision, cursor, limit }) =>
     listParts(sessionId, messageId, messageRevision, cursor, limit)
   )
-  on('agent.content.read', ({ sessionId, contentId, revision, offset, maxBytes }) => {
+  on('agent.content.read', async ({ sessionId, contentId, revision, offset, maxBytes }) => {
     getSession(sessionId)
     const bytes =
       hub.journal(sessionId).pins.get(`${contentId}:${revision}`) ??
       subscriptions.readContent(sessionId, contentId, revision) ??
       readPersistedContent(sessionId, contentId, revision)
+    const file = !bytes?.length
+      ? await readPersistedFileContent({ sessionId, contentId, revision, offset, maxBytes })
+      : undefined
+    if (file) {
+      access.requireAgent()
+      return file
+    }
     if (!bytes) throw new RemoteRpcError('NOT_FOUND', 'Content not found')
     return { contentId, revision, ...sliceContent(bytes, offset, maxBytes) }
   })
+  const presence = application.get('AttachmentPresenceService')
+  const generation = presence.connection()
+  on('agent.attachments.present', (params, auth) => {
+    getSession(params.sessionId)
+    return presence.present(hub.uploads.scope(auth), auth, generation, params)
+  })
+  on('agent.uploads.prepare', (params, auth) => hub.uploads.prepare(auth, params))
+  on('agent.uploads.get', ({ uploadId }, auth) => hub.uploads.get(auth, uploadId))
+  on('agent.uploads.resume', (params, auth) => hub.uploads.resume(auth, params))
+  on('agent.uploads.complete', (params, auth) => hub.uploads.complete(auth, params))
+  on('agent.uploads.cancel', ({ uploadId }, auth) => {
+    return hub.uploads.cancel(auth, uploadId)
+  })
   on('agent.messages.send', (params, auth) => {
-    const summary = summaryOf(params.sessionId)
     return command(auth, 'agent.messages.send', params, params.sessionId, async () => {
-      const started = await hub.journal(params.sessionId).startRun(
-        params.text,
-        summary.agentId,
-        (tx, reservation) =>
-          remoteCommandService.reserveExecutionTx(tx, { ...auth, commandId: params.commandId }, reservation),
-        () => {
-          if (summaryOf(params.sessionId).idleRevision !== params.expectedIdleRevision)
-            throw new RemoteRpcError('CONFLICT', 'Session is not idle at the expected revision')
-        }
-      )
-      if (!started.started)
-        return {
-          status: 'rejected',
-          error:
-            started.reason === 'busy'
-              ? { reason: 'CONFLICT', message: 'Session is busy' }
-              : { reason: 'NOT_FOUND', message: 'Session is not available' }
-        }
-      return { status: 'applied', executionId: started.executionId }
+      if (params.attachmentDraft)
+        throw new RemoteRpcError('NOT_FOUND', 'Previous attachment draft is no longer available; prepare a new send')
+      const scope = hub.uploads.scope(auth)
+      presence.submitting(scope, params.selectionId, params.commandId)
+      try {
+        return await hub.uploads.withFiles(auth, params.attachments ?? [], async (attachments) => {
+          const started = await hub.journal(params.sessionId).startRun(
+            params.text,
+            summaryOf(params.sessionId).agentId,
+            (tx, reservation) => {
+              remoteCommandService.reserveExecutionTx(tx, { ...auth, commandId: params.commandId }, reservation)
+            },
+            () => {
+              access.requireAgent()
+              if (summaryOf(params.sessionId).idleRevision !== params.expectedIdleRevision)
+                throw new RemoteRpcError('CONFLICT', 'Session is not idle at the expected revision')
+            },
+            attachments
+          )
+          if (!started.started)
+            return {
+              status: 'rejected',
+              error:
+                started.reason === 'busy'
+                  ? { reason: 'CONFLICT', message: 'Session is busy' }
+                  : { reason: 'NOT_FOUND', message: 'Session is not available' }
+            }
+          return { status: 'applied', executionId: started.executionId }
+        })
+      } finally {
+        presence.submitting(scope, params.selectionId, params.commandId)
+      }
     })
   })
   on('agent.executions.cancel', (params, auth) => {

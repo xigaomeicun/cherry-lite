@@ -1,6 +1,7 @@
+import { describe, expect, it } from 'vitest'
+
 import type { DoctorAction, DoctorCheckResult, DoctorReport, DoctorState } from '@shared/types/doctor'
 import { DOCTOR_CHECK_CATALOG, DOCTOR_CHECK_IDS } from '@shared/types/doctor'
-import { describe, expect, it } from 'vitest'
 
 import { buildDoctorViewModel } from '../doctorViewModel'
 

@@ -1,16 +1,11 @@
 import { realpathSync } from 'node:fs'
-import { basename, dirname, isAbsolute, join, relative } from 'node:path'
+import { basename, dirname, join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import { application } from '@application'
 import type { IpcMainEvent, IpcMainInvokeEvent } from 'electron'
 
-/** Whether `childPath` is `parentDir` itself or nested inside it (no prefix-only matches). */
-function isPathInside(childPath: string, parentDir: string): boolean {
-  const rel = relative(parentDir, childPath)
-  // `..` escapes the parent; an absolute `rel` means they share no common root.
-  return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel))
-}
+import { application } from '@application'
+import { isOutsidePath } from '@main/utils/file'
 
 let cachedAppRoot: { input: string; realPath: string } | undefined
 
@@ -94,10 +89,10 @@ export function isAppRendererUrl(
       return false
     }
     const appRoot = resolveAppRoot(appRootDir)
-    if (isPathInside(filePath, appRoot)) return true
+    if (!isOutsidePath(relative(appRoot, filePath))) return true
 
     const resolvedFilePath = resolveRendererPath(filePath)
-    return resolvedFilePath !== undefined && isPathInside(resolvedFilePath, appRoot)
+    return resolvedFilePath !== undefined && !isOutsidePath(relative(appRoot, resolvedFilePath))
   }
 
   if (devServerUrl) {

@@ -1,15 +1,22 @@
+import type { TFunction } from 'i18next'
+
 import type { ActionAvailabilityInput } from '@renderer/components/chat/actions/actionTypes'
 import type { MessageListItem } from '@renderer/components/chat/messages/types'
 import type { AgentSessionForkFailureReason } from '@shared/ai/agentSessionFork'
-import type { TFunction } from 'i18next'
+import type { AgentSessionHistoryActions } from '@shared/data/api/schemas/agentSessionMessages'
 
-export function agentSessionForkAvailability(t: TFunction, message: MessageListItem): ActionAvailabilityInput {
+export function agentSessionForkAvailability(
+  t: TFunction,
+  message: MessageListItem,
+  actions?: AgentSessionHistoryActions
+): ActionAvailabilityInput {
   if (message.role !== 'assistant') return false
-  const enabled = message.status === 'success'
+  const failure = message.status !== 'success' ? 'not_turn_boundary' : actions ? actions.fork : 'unsupported_checkpoint'
+  const enabled = failure === null
   return {
     visible: true,
     enabled,
-    reason: enabled ? undefined : agentSessionForkReasonLabel(t, 'not_turn_boundary')
+    reason: failure ? agentSessionForkReasonLabel(t, failure) : undefined
   }
 }
 
@@ -20,8 +27,6 @@ export function agentSessionForkReasonLabel(t: TFunction, reason: AgentSessionFo
       return t('message.tools.cancelled')
     case 'legacy_history':
       return t('agent_session_fork.legacy_history')
-    case 'omitted_history':
-      return t('agent_session_fork.omitted_history')
     case 'not_turn_boundary':
       return t('agent_session_fork.not_turn_boundary')
     case 'history_missing':
@@ -40,7 +45,5 @@ export function agentSessionForkReasonLabel(t: TFunction, reason: AgentSessionFo
     case 'source_missing':
     case 'operation_failed':
       return t('agent_session_fork.operation_failed')
-    case 'fork_timed_out':
-      return t('agent_session_fork.fork_timed_out')
   }
 }

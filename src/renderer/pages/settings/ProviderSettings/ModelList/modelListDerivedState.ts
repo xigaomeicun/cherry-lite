@@ -1,3 +1,5 @@
+import { sortBy } from 'es-toolkit/compat'
+
 import type { Model } from '@shared/data/types/model'
 import { ENDPOINT_TYPE, parseUniqueModelId } from '@shared/data/types/model'
 import {
@@ -10,7 +12,6 @@ import {
   isRerankModel,
   isSpeechToTextModel
 } from '@shared/utils/model'
-import { sortBy } from 'es-toolkit/compat'
 
 import { normalizeModelGroupName } from './grouping'
 import { filterProviderSettingModelsByKeywords, getDuplicateProviderSettingModelNames } from './utils'

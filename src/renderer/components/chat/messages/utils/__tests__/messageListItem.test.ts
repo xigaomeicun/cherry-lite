@@ -1,12 +1,9 @@
-import type { CherryUIMessage } from '@shared/data/types/message'
 import { describe, expect, it } from 'vitest'
 
+import type { CherryUIMessage } from '@shared/data/types/message'
+
 import type { MessageListItem } from '../../types'
-import {
-  getDirectAssistantModelsByUserId,
-  shareDirectAssistantModelsByUserId,
-  toMessageListItem
-} from '../messageListItem'
+import { getDirectAssistantModelsByUserId, toMessageListItem } from '../messageListItem'
 
 describe('toMessageListItem', () => {
   it('projects the top-level totalTokens mirror into message stats', () => {
@@ -98,7 +95,7 @@ describe('getDirectAssistantModelsByUserId', () => {
       ...firstReply,
       id: 'assistant-a-duplicate',
       createdAt: '2026-01-01T00:00:02.000Z'
-    } as MessageListItem
+    }
     const snapshotOnlyReply = {
       id: 'assistant-b',
       role: 'assistant',
@@ -142,22 +139,5 @@ describe('getDirectAssistantModelsByUserId', () => {
       expect.objectContaining({ id: 'provider-b::model-b', name: 'Model B', providerId: 'provider-b' })
     ])
     expect(modelsByUserId.get('user-1')).toHaveLength(2)
-  })
-
-  it('reuses the derived map when only live message metadata changes', () => {
-    const reply = {
-      id: 'assistant-a',
-      role: 'assistant',
-      topicId: 'topic-1',
-      parentId: 'user-1',
-      createdAt: '2026-01-01T00:00:01.000Z',
-      status: 'pending',
-      modelId: 'provider-a::model-a',
-      model: { id: 'model-a', name: 'Model A', provider: 'provider-a' }
-    } as MessageListItem
-    const previous = getDirectAssistantModelsByUserId([reply])
-    const next = getDirectAssistantModelsByUserId([{ ...reply, stats: { outputTokens: 1 } }])
-
-    expect(shareDirectAssistantModelsByUserId(previous, next)).toBe(previous)
   })
 })

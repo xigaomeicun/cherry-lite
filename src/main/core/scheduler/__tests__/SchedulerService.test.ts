@@ -8,9 +8,10 @@
  * very short delays.
  */
 
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+
 import { BaseService } from '@main/core/lifecycle/BaseService'
 import { SchedulerService } from '@main/core/scheduler/SchedulerService'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 let scheduler: SchedulerService
 
@@ -175,13 +176,6 @@ describe('cron trigger', () => {
     // Manual trigger still works even after resume.
     await scheduler.triggerNow('c2')
     expect(fired).toBe(1)
-  })
-
-  it('pause/resume on interval is no-op (warn) — entry stays in map', () => {
-    scheduler.registerSchedule('p-int', { kind: 'interval', ms: 60_000 }, () => undefined)
-    scheduler.pause('p-int')
-    scheduler.resume('p-int')
-    expect(scheduler.has('p-int')).toBe(true)
   })
 
   it('pause/resume on unknown id is silent no-op', () => {

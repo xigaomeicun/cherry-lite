@@ -2,9 +2,10 @@ import fs from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
 import { application } from '@application'
 import { readRestoreJournal } from '@data/db/restore/restoreJournal'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { collectFailedRestoreTargets, removeFailedRestoreTarget } from '../failedRestore'
 

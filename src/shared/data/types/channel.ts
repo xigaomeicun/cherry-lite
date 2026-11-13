@@ -123,3 +123,9 @@ export type ChannelConfig = z.infer<typeof ChannelConfigSchema>
 
 export const CHANNEL_TYPES = ['telegram', 'feishu', 'qq', 'wechat', 'wecom', 'dingtalk', 'discord', 'slack'] as const
 export type ChannelType = (typeof CHANNEL_TYPES)[number]
+
+export interface ChannelStatus {
+  channelId: string
+  connected: boolean
+  error?: string
+}

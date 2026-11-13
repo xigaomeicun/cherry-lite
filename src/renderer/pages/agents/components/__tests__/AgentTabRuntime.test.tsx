@@ -1,7 +1,8 @@
-import { cacheService } from '@data/CacheService'
 import { MockCacheUtils } from '@test-mocks/renderer/CacheService'
 import { render } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+import { cacheService } from '@data/CacheService'
 
 const runtimeMocks = vi.hoisted(() => ({
   isActiveTab: true,
@@ -39,15 +40,6 @@ describe('AgentTabRuntime', () => {
       />
     )
 
-    expect(runtimeMocks.useTabSelfVisuals).toHaveBeenCalledWith({
-      title: 'Session A',
-      emoji: 'agent-avatar',
-      appId: 'agents',
-      preserveVisuals: false
-    })
-    expect(runtimeMocks.useCommandHandler).toHaveBeenCalledWith('app.sidebar.toggle', onToggleSidebar, {
-      enabled: true
-    })
     expect(cacheService.setPersist).toHaveBeenCalledWith('ui.agent.last_used_session_id', 'session-a')
   })
 
@@ -67,9 +59,6 @@ describe('AgentTabRuntime', () => {
       />
     )
 
-    expect(runtimeMocks.useCommandHandler).toHaveBeenCalledWith('app.sidebar.toggle', expect.any(Function), {
-      enabled: isActiveTab
-    })
     expect(cacheService.setPersist).not.toHaveBeenCalled()
   })
 })

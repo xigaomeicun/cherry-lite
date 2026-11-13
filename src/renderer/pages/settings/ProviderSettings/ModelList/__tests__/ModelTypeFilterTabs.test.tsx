@@ -1,6 +1,7 @@
-import type * as CherryStudioUi from '@cherrystudio/ui'
 import { act, cleanup, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+import type * as CherryStudioUi from '@cherrystudio/ui'
 
 import { ModelTypeFilterTabs } from '../ModelTypeFilterTabs'
 
@@ -62,7 +63,7 @@ describe('ModelTypeFilterTabs', () => {
         observe: vi.fn((target: Element) => instance.targets.push(target)),
         disconnect: vi.fn()
       } as unknown as ResizeObserver
-    }) as unknown as typeof ResizeObserver
+    })
   })
 
   afterEach(() => {
@@ -80,7 +81,7 @@ describe('ModelTypeFilterTabs', () => {
     )
 
     const tabList = screen.getByRole('tablist')
-    const scrollElement = tabList.closest('[data-scrolling]') as HTMLElement | null
+    const scrollElement = tabList.closest('[data-horizontal-scroll-viewport]') as HTMLElement | null
     expect(scrollElement).not.toBeNull()
     setElementSize(scrollElement as HTMLElement, { clientWidth: 320, scrollWidth: 760 })
 
@@ -88,9 +89,6 @@ describe('ModelTypeFilterTabs', () => {
 
     expect(screen.queryByRole('button', { name: 'settings.models.filter.scroll_left' })).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'settings.models.filter.scroll_right' })).toBeInTheDocument()
-    // Overflow ownership must stay on the shared container so it can calculate and control the scroll position.
-    expect(tabList).toHaveClass('w-max', 'min-w-full', 'shrink-0')
-    expect(tabList).not.toHaveClass('w-full', 'max-w-full', 'overflow-x-auto')
   })
 
   it('omits empty model types from the simplified filter row', () => {

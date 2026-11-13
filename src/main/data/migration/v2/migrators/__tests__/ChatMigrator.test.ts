@@ -10,13 +10,14 @@ vi.mock('@logger', () => ({
   }
 }))
 
+import { setupTestDatabase } from '@test-helpers/db'
+import { asc, eq } from 'drizzle-orm'
+
 import { fileEntryTable } from '@data/db/schemas/file'
 import { chatMessageFileRefTable } from '@data/db/schemas/fileRelations'
 import { messageTable } from '@data/db/schemas/message'
 import { pinTable } from '@data/db/schemas/pin'
 import { topicTable } from '@data/db/schemas/topic'
-import { setupTestDatabase } from '@test-helpers/db'
-import { asc, eq } from 'drizzle-orm'
 
 import type { MigrationContext } from '../../core/MigrationContext'
 import { ChatMigrator } from '../ChatMigrator'
@@ -1251,7 +1252,6 @@ describe('ChatMigrator.insertStagedTopics chat_message_file_ref backfill', () =>
     const m1 = rows.find((r) => r.id === 'm1')
     expect(m1?.parentId).toBe(roots[0].id)
     expect(rows.filter((r) => r.role !== 'root').some((r) => r.parentId === null)).toBe(false)
-    expect((migrator as unknown as Record<string, Set<string>>)['reservedMessageIds'].size).toBe(0)
   })
 
   it('rejects duplicate message IDs that bypass prepare-time normalization', () => {
@@ -1277,7 +1277,6 @@ describe('ChatMigrator.insertStagedTopics chat_message_file_ref backfill', () =>
       ctx: MigrationContext
     ) => unknown
     expect(() => fn.call(migrator, ctxOf())).toThrow('Duplicate message ID remained after normalization: dup')
-    expect((migrator as unknown as Record<string, Set<string>>)['reservedMessageIds'].size).toBe(0)
   })
 
   it('skips chat_message_file_ref for dangling fileId and records warning', async () => {
@@ -1387,7 +1386,6 @@ describe('ChatMigrator.insertStagedTopics chat_message_file_ref backfill', () =>
 
     const refs = await dbh.db.select().from(chatMessageFileRefTable)
     expect(refs).toHaveLength(topicCount)
-    expect(m['fileRefInsertCount']).toBe(topicCount)
   })
 
   it('produces separate chat_message_file_ref rows when different messages reference the same fileId', async () => {

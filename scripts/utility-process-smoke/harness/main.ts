@@ -16,7 +16,7 @@ import {
   type SmokeInitData,
   smokeTerminateProcess
 } from './smokeContract'
-import { checkDuplexStream, checkStreamCancel, checkStreamCrash, checkStreamStop, measureStreams } from './streamChecks'
+import { measureStreams, checkDuplexStream, checkStreamCancel, checkStreamCrash, checkStreamStop } from './streamChecks'
 
 const FOUR_MIB = 4 * 1024 * 1024
 const WATCHDOG_MS = 90_000

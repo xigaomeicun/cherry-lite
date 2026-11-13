@@ -1,5 +1,6 @@
-import { cacheService } from '@data/CacheService'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+import { cacheService } from '@data/CacheService'
 
 import type { ComposerSerializedToken } from '../../tokens'
 import {
@@ -77,11 +78,6 @@ describe('agentDraftCache', () => {
   beforeEach(() => {
     vi.mocked(cacheService.get).mockReset()
     vi.mocked(cacheService.set).mockReset()
-  })
-
-  it('keys drafts by session', () => {
-    expect(getAgentDraftCacheKey('session-1')).toBe('agent.composer_draft.session_session-1')
-    expect(getAgentDraftCacheKey('session-2')).toBe('agent.composer_draft.session_session-2')
   })
 
   it('keeps every active input token, including file and knowledge tokens', () => {

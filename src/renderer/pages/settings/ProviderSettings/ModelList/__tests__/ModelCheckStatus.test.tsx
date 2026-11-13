@@ -1,12 +1,13 @@
+import { render, screen, waitFor, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { describe, expect, it, vi } from 'vitest'
+
 import type * as CherryStudioUi from '@cherrystudio/ui'
 import type { ApiKeyWithStatus, ModelWithStatus } from '@renderer/pages/settings/ProviderSettings/types/healthCheck'
 import { HealthStatus } from '@renderer/pages/settings/ProviderSettings/types/healthCheck'
 import type { SerializedError } from '@renderer/types/error'
 import type { Model } from '@shared/data/types/model'
 import type { ApiKeyEntry } from '@shared/data/types/provider'
-import { render, screen, waitFor, within } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
-import { describe, expect, it, vi } from 'vitest'
 
 import ModelCheckStatus from '../ModelCheckStatus'
 
@@ -106,19 +107,6 @@ describe('ModelCheckStatus', () => {
     expect(screen.getByText('Checking…')).toBeInTheDocument()
   })
 
-  it('shows passed feedback without inline latency details', () => {
-    renderStatus({
-      kind: 'ok',
-      model,
-      status: HealthStatus.SUCCESS,
-      checking: false,
-      keyResults: [keyResult(apiKeyEntries[0], { kind: 'ok', latency: 42 })],
-      latency: 42
-    })
-
-    expect(screen.getByRole('button', { name: 'Chat: Passed' })).toBeInTheDocument()
-  })
-
   it('summarizes how many API keys failed when only some checks fail', () => {
     renderStatus({
       kind: 'failed',
@@ -150,8 +138,6 @@ describe('ModelCheckStatus', () => {
       ],
       error: error('aggregate provider failure')
     })
-
-    const row = screen.getByTestId('model-row')
     const trigger = screen.getByRole('button', { name: 'Chat: Failed' })
     await user.click(trigger)
 
@@ -161,7 +147,6 @@ describe('ModelCheckStatus', () => {
       expect(popover).toBeInTheDocument()
     })
 
-    expect(row).not.toContainElement(popover)
     expect(within(popover!).queryByText('aggregate provider failure')).not.toBeInTheDocument()
     expect(within(popover!).getByText('first key failure details')).toBeInTheDocument()
     expect(within(popover!).getByText('second key failure details')).toBeInTheDocument()

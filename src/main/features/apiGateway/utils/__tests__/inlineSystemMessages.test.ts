@@ -1,6 +1,7 @@
+import { describe, expect, it } from 'vitest'
+
 import type { CherryUIMessage } from '@shared/data/types/message'
 import { ENDPOINT_TYPE, type EndpointType } from '@shared/data/types/model'
-import { describe, expect, it } from 'vitest'
 
 import {
   hoistSystemMessages,
@@ -33,8 +34,11 @@ const ENDPOINT_CHAT_TARGETS: EndpointType[] = [
   ENDPOINT_TYPE.OPENAI_TEXT_COMPLETIONS
 ]
 
-const msg = (role: CherryUIMessage['role'], text: string, id: string = role): CherryUIMessage =>
-  ({ id, role, parts: [{ type: 'text', text }] }) as CherryUIMessage
+const msg = (role: CherryUIMessage['role'], text: string, id: string = role): CherryUIMessage => ({
+  id,
+  role,
+  parts: [{ type: 'text', text }]
+})
 
 describe('hoistSystemMessages', () => {
   it('merges non-leading system messages into the leading one, preserving order', () => {
@@ -60,17 +64,17 @@ describe('hoistSystemMessages', () => {
   it('returns the input untouched when only a leading system message is present', () => {
     const input = [msg('system', 'Base.'), msg('user', 'go'), msg('assistant', 'ok')]
 
-    expect(hoistSystemMessages(input)).toBe(input)
+    expect(hoistSystemMessages(input)).toEqual(input)
   })
 
   it('returns the input untouched when there is no system message at all', () => {
     const input = [msg('user', 'go'), msg('assistant', 'ok')]
 
-    expect(hoistSystemMessages(input)).toBe(input)
+    expect(hoistSystemMessages(input)).toEqual(input)
   })
 
   it('drops an empty system message rather than emitting a blank leading turn', () => {
-    const out = hoistSystemMessages([msg('user', 'go'), { id: 's', role: 'system', parts: [] } as CherryUIMessage])
+    const out = hoistSystemMessages([msg('user', 'go'), { id: 's', role: 'system', parts: [] }])
 
     expect(out.map((m) => m.role)).toEqual(['user'])
   })
@@ -100,7 +104,7 @@ describe('positionInlineSystemMessages', () => {
   const inline = [msg('system', 'Base.', 's0'), msg('user', 'go'), msg('system', 'MCP connecting.', 's1')]
 
   it('leaves them in place for a target that accepts them', () => {
-    expect(positionInlineSystemMessages(inline, ENDPOINT_TYPE.OPENAI_RESPONSES, betaHeaders(AGENT_SDK_BETAS))).toBe(
+    expect(positionInlineSystemMessages(inline, ENDPOINT_TYPE.OPENAI_RESPONSES, betaHeaders(AGENT_SDK_BETAS))).toEqual(
       inline
     )
   })
@@ -175,6 +179,6 @@ describe('positionInlineSystemMessages', () => {
     const plain = [msg('system', 'Base.'), msg('user', 'go')]
     expect(
       positionInlineSystemMessages(plain, ENDPOINT_TYPE.GOOGLE_GENERATE_CONTENT, betaHeaders(AGENT_SDK_BETAS))
-    ).toBe(plain)
+    ).toEqual(plain)
   })
 })

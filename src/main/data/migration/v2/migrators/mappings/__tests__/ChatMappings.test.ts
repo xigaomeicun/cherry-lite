@@ -1,4 +1,9 @@
 import type * as FsPromises from 'node:fs/promises'
+import { basename, dirname, resolve as resolvePath } from 'node:path'
+import { fileURLToPath, pathToFileURL } from 'node:url'
+
+import { setupTestDatabase } from '@test-helpers/db'
+import { describe, expect, it, vi } from 'vitest'
 
 import { fileEntryTable } from '@data/db/schemas/file'
 import type {
@@ -9,8 +14,6 @@ import type {
   TextUIPart
 } from '@shared/data/types/message'
 import { readCherryMeta } from '@shared/data/types/uiParts'
-import { setupTestDatabase } from '@test-helpers/db'
-import { describe, expect, it, vi } from 'vitest'
 
 // Use the repo-wide application mock; the default `getPath` already
 // returns deterministic `/mock/<key>/<filename>` paths.
@@ -49,7 +52,7 @@ import {
   transformMessage
 } from '../ChatMappings'
 
-const MIGRATION_FILES_DIR = '/mock/migration-userdata/Data/Files'
+const MIGRATION_FILES_DIR = resolvePath('/mock/migration-userdata/Data/Files')
 
 /** Helper: create a minimal OldMessage stub */
 function msg(id: string, role: 'user' | 'assistant' = 'assistant', extra: Partial<OldMessage> = {}): OldMessage {
@@ -286,7 +289,7 @@ function block(type: string, extra: Record<string, unknown> = {}): OldBlock {
     createdAt: '2025-01-01T00:00:00.000Z',
     status: 'success',
     ...extra
-  } as OldBlock
+  }
 }
 
 describe('transformBlocksToParts', () => {
@@ -574,17 +577,17 @@ describe('transformBlocksToParts', () => {
     expect(part.url).toBe('https://example.com/img.png')
   })
 
-  it('transforms image with file path to file:// URL', async () => {
+  it.each(['photo.jpg', 'photo #100%.jpg'])('transforms image path %s to a usable file URL', async (filename) => {
     const { parts } = await transformBlocksToParts([
       block('image', {
-        file: { id: 'abc-123', path: '/Users/test/files/photo.jpg', ext: '.jpg', origin_name: 'photo.jpg' }
+        file: { id: 'abc-123', path: resolvePath('/Users/test/files', filename), ext: '.jpg', origin_name: filename }
       })
     ])
 
     const part = parts[0] as FileUIPart
-    expect(part.url).toBe('file:///Users/test/files/photo.jpg')
+    expect(fileURLToPath(part.url)).toBe(resolvePath('/Users/test/files', filename))
     expect(part.mediaType).toBe('image/jpeg')
-    expect(part.filename).toBe('photo.jpg')
+    expect(part.filename).toBe(filename)
   })
 
   describe('base64 → file_entry promotion', () => {
@@ -611,7 +614,8 @@ describe('transformBlocksToParts', () => {
 
       expect(parts).toHaveLength(1)
       const part = parts[0] as FileUIPart
-      expect(part.url).toMatch(/^file:\/\/\/mock\/migration-userdata\/Data\/Files\/.+\.png$/)
+      expect(dirname(fileURLToPath(part.url))).toBe(MIGRATION_FILES_DIR)
+      expect(basename(fileURLToPath(part.url))).toMatch(/^[\w-]+\.png$/)
       expect(part.mediaType).toBe('image/png')
       const fileEntryId = readCherryMeta(part)?.fileEntryId
       expect(fileEntryId).toBeTruthy()
@@ -713,14 +717,19 @@ describe('transformBlocksToParts', () => {
   it('transforms file to FileUIPart with path and inferred mediaType', async () => {
     const { parts } = await transformBlocksToParts([
       block('file', {
-        file: { id: 'file-xyz', path: '/Users/test/files/doc.pdf', ext: '.pdf', origin_name: 'document.pdf' }
+        file: {
+          id: 'file-xyz',
+          path: resolvePath('/Users/test/files/doc.pdf'),
+          ext: '.pdf',
+          origin_name: 'document.pdf'
+        }
       })
     ])
 
     const part = parts[0] as FileUIPart
     expect(part.type).toBe('file')
     expect(part.mediaType).toBe('application/pdf')
-    expect(part.url).toBe('file:///Users/test/files/doc.pdf')
+    expect(part.url).toBe(pathToFileURL(resolvePath('/Users/test/files/doc.pdf')).href)
     expect(part.filename).toBe('document.pdf')
   })
 
@@ -955,7 +964,7 @@ describe('transformMessage', () => {
         updatedAt: '2025-02-03T00:00:00.000Z',
         metadata: { legacy: 'value' },
         error: { name: 'OldErr', message: 'old' }
-      } as OldMainTextBlockType
+      }
     ]
     const result = await transformMessage(msg('m1', 'assistant'), null, 0, blocks, 't1')
     const part = result.data.parts?.[0] as TextUIPart
@@ -970,7 +979,7 @@ describe('transformMessage', () => {
         results: [{ title: 'Ex', url: 'https://ex.com', content: 'snippet' }],
         source: 'websearch'
       }
-    } as OldCitationBlock
+    }
     const blocks: OldBlock[] = [mainTextBlock('b1', 'm1', 'cited [1]'), citationBlock]
     const result = await transformMessage(msg('m1', 'assistant'), null, 0, blocks, 't1')
     const textPart = result.data.parts?.find((p) => p.type === 'text') as TextUIPart
@@ -1005,16 +1014,15 @@ describe('normalizeStatus', () => {
 // ============================================================================
 
 describe('estimateLegacyRequestCount', () => {
-  const block = (type: string): OldBlock =>
-    ({
-      id: `block-${type}`,
-      messageId: 'message-1',
-      type,
-      createdAt: '2025-01-01T00:00:00.000Z',
-      status: 'success',
-      ...(type === 'tool' ? { toolId: `tool-${type}` } : {}),
-      ...(type === 'main_text' || type === 'thinking' ? { content: 'output' } : {})
-    }) as OldBlock
+  const block = (type: string): OldBlock => ({
+    id: `block-${type}`,
+    messageId: 'message-1',
+    type,
+    createdAt: '2025-01-01T00:00:00.000Z',
+    status: 'success',
+    ...(type === 'tool' ? { toolId: `tool-${type}` } : {}),
+    ...(type === 'main_text' || type === 'thinking' ? { content: 'output' } : {})
+  })
 
   it('uses one baseline request for text-only and empty historical messages', () => {
     expect(estimateLegacyRequestCount([])).toBe(1)
@@ -1135,7 +1143,7 @@ describe('extractCitationReferences', () => {
   it('extracts memory citations with fields mapped', async () => {
     const block: OldCitationBlock = {
       ...baseCitationBlock,
-      memories: [{ id: 'mem1', memory: 'user likes coffee', hash: 'abc', score: 0.9 } as any]
+      memories: [{ id: 'mem1', memory: 'user likes coffee', hash: 'abc', score: 0.9 }]
     }
     const refs = extractCitationReferences(block)
     expect(refs).toHaveLength(1)
@@ -1150,7 +1158,7 @@ describe('extractCitationReferences', () => {
       ...baseCitationBlock,
       response: { results: [{ title: 'T', url: 'https://x.com' }], source: 'bing' },
       knowledge: [{ id: 'k1', content: 'doc' } as any],
-      memories: [{ id: 'm1', memory: 'fact' } as any]
+      memories: [{ id: 'm1', memory: 'fact' }]
     }
     const refs = extractCitationReferences(block)
     expect(refs).toHaveLength(3)

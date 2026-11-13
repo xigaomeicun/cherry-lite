@@ -1,3 +1,7 @@
+import { CallToolResultSchema } from '@modelcontextprotocol/core'
+import type { DynamicToolUIPart, ProviderMetadata, ToolUIPart, UIDataTypes, UIMessagePart, UITools } from 'ai'
+import { getToolName, isToolUIPart } from 'ai'
+
 import type { McpToolResponse, McpToolResponseStatus, NormalToolResponse } from '@renderer/types/mcpTool'
 import type { BaseTool, McpTool } from '@renderer/types/tool'
 import { extractOutputMetadata, isToolType, type ToolMetadata, type ToolType } from '@renderer/utils/message/toolOutput'
@@ -5,8 +9,6 @@ import { AGENT_RUNTIME_CAPABILITIES } from '@shared/ai/agentRuntimeCapabilities'
 import { GENERATE_IMAGE_TOOL_NAME } from '@shared/ai/builtinTools'
 import { parseFunctionCallToolName } from '@shared/ai/tools/mcpToolName'
 import type { CherryMessagePart } from '@shared/data/types/message'
-import type { DynamicToolUIPart, ProviderMetadata, ToolUIPart, UIDataTypes, UIMessagePart, UITools } from 'ai'
-import { getToolName, isToolUIPart } from 'ai'
 
 import { isMetaToolName } from './meta/metaToolNames'
 import { AgentToolsType } from './shared/agentToolTypes'
@@ -16,11 +18,9 @@ export const APPROVAL_REQUESTED = 'approval-requested'
 export const APPROVAL_RESPONDED = 'approval-responded'
 export const CLAUDE_AGENT_TRANSPORT = AGENT_RUNTIME_CAPABILITIES['claude-code'].transport
 export const PI_AGENT_TRANSPORT = AGENT_RUNTIME_CAPABILITIES.pi.transport
-/** Retired DSH runtime tag: kept so transcripts persisted before the Pi migration still render. */
-const LEGACY_DSH_AGENT_TRANSPORT = 'dsh-agent'
 const CHERRY_AGENT_TRANSPORTS = new Set<string>([
   ...Object.values(AGENT_RUNTIME_CAPABILITIES).map((caps) => caps.transport),
-  LEGACY_DSH_AGENT_TRANSPORT
+  'dsh-agent'
 ])
 const PI_RUNTIME_BUILTIN_TOOL_NAMES = new Set<string>(
   AGENT_RUNTIME_CAPABILITIES.pi.builtinTools().map((tool) => tool.id)
@@ -63,13 +63,21 @@ export function getCanonicalToolName(part: CherryMessagePart): string | undefine
   const toolPart = part as unknown as ToolResponsePart
   const toolName = getToolName(toolPart).trim()
   if (!toolName) return undefined
+  if (
+    toolPart.callProviderMetadata?.cherry?.transport === PI_AGENT_TRANSPORT &&
+    toolName === 'edit' &&
+    isRecord(toolPart.input) &&
+    Array.isArray(toolPart.input.edits)
+  ) {
+    return AgentToolsType.MultiEdit
+  }
   return hasCherryTransport(toolPart.callProviderMetadata)
     ? (CHERRY_RUNTIME_TOOL_RENDER_NAMES.get(toolName) ?? toolName)
     : toolName
 }
 
 function normalizeToolName(part: ToolResponsePart): string {
-  return getCanonicalToolName(part as unknown as CherryMessagePart) ?? 'unknown'
+  return getCanonicalToolName(part) ?? 'unknown'
 }
 
 function mapPartStateToStatus(state: string | undefined, approved?: boolean): McpToolResponseStatus {
@@ -205,6 +213,27 @@ function normalizeErrorOutput(part: ToolResponsePart): unknown {
   return normalizeToolErrorResponse(part.errorText)
 }
 
+function normalizeToolInput(part: ToolResponsePart): unknown {
+  const input = part.input
+  if (part.callProviderMetadata?.cherry?.transport !== PI_AGENT_TRANSPORT || !isRecord(input)) return input
+  const name = getToolName(part)
+  if (name !== 'read' && name !== 'write' && name !== 'edit') return input
+  if (name === 'edit' && Array.isArray(input.edits)) {
+    return {
+      ...input,
+      file_path: input.path,
+      edits: input.edits.map((edit) =>
+        isRecord(edit) ? { ...edit, old_string: edit.oldText, new_string: edit.newText } : edit
+      )
+    }
+  }
+  return {
+    ...input,
+    file_path: input.path,
+    ...(name === 'edit' ? { old_string: input.oldText, new_string: input.newText } : {})
+  }
+}
+
 export function buildToolResponseFromPart(part: CherryMessagePart, fallbackId?: string): ToolResponseLike | null {
   if (!isToolUIPart(part as UIMessagePart<UIDataTypes, UITools>)) return null
 
@@ -219,7 +248,10 @@ export function buildToolResponseFromPart(part: CherryMessagePart, fallbackId?: 
           ...(typeof toolPart.approval.reason === 'string' ? { reason: toolPart.approval.reason } : {})
         }
       : undefined
-  const status = mapPartStateToStatus(toolPart.state, approval?.approved)
+  const status =
+    toolPart.state === 'output-available' && toolPart.preliminary
+      ? 'invoking'
+      : mapPartStateToStatus(toolPart.state, approval?.approved)
 
   const { response: rawResponse, metadata: outputMetadata } = extractOutputMetadata(toolPart.output)
   const cherryMetadata = extractCherryToolMetadata(toolPart)
@@ -232,13 +264,19 @@ export function buildToolResponseFromPart(part: CherryMessagePart, fallbackId?: 
     (status === 'streaming' || status === 'invoking') && typeof toolPart.input === 'string' ? toolPart.input : undefined
 
   if (toolType === 'mcp') {
+    const piResult = toolPart.state === 'output-error' ? toolPart.resultProviderMetadata?.pi?.result : toolPart.output
+    const mcpResult = CallToolResultSchema.safeParse(
+      toolPart.callProviderMetadata?.cherry?.transport === PI_AGENT_TRANSPORT && isRecord(piResult)
+        ? piResult.structuredContent
+        : undefined
+    )
     const tool = buildMcpToolDescriptor(toolName, metadata)
     const mcpResponse: McpToolResponse = {
       id: toolCallId,
       tool,
       arguments: toolPart.input as McpToolResponse['arguments'],
       status,
-      response,
+      response: mcpResult.success ? mcpResult.data : response,
       ...(approval ? { approval } : {}),
       toolCallId,
       ...(parentToolUseId ? { parentToolUseId } : {}),
@@ -251,7 +289,7 @@ export function buildToolResponseFromPart(part: CherryMessagePart, fallbackId?: 
   const normalResponse: NormalToolResponse = {
     id: toolCallId,
     tool,
-    arguments: toolPart.input as NormalToolResponse['arguments'],
+    arguments: normalizeToolInput(toolPart) as NormalToolResponse['arguments'],
     status,
     response,
     ...(approval ? { approval } : {}),

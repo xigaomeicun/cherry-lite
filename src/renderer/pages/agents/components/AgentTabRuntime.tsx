@@ -1,12 +1,15 @@
+import { useEffect } from 'react'
+
 import { cacheService } from '@data/CacheService'
 import type { AgentSessionSource } from '@renderer/hooks/agent/useSession'
 import { useCommandHandler } from '@renderer/hooks/command'
 import { useIsActiveTab, useTabSelfVisuals } from '@renderer/hooks/tab'
-import { useEffect } from 'react'
 
 type Props = {
   title: string
   emoji?: string | null
+  /** Image avatar URL; takes precedence over `emoji`. */
+  icon?: string
   preserveVisuals: boolean
   activeSessionId?: string | null
   activeSessionSource: AgentSessionSource
@@ -16,6 +19,7 @@ type Props = {
 export function AgentTabRuntime({
   title,
   emoji,
+  icon,
   preserveVisuals,
   activeSessionId,
   activeSessionSource,
@@ -26,7 +30,8 @@ export function AgentTabRuntime({
   useTabSelfVisuals({
     title,
     emoji,
-    appId: 'agents',
+    icon,
+    routePrefix: '/app/agents',
     preserveVisuals
   })
 

@@ -1,7 +1,9 @@
+import { resolve } from 'node:path'
+
 // Load the sibling so it self-registers in the data-service registry (prod loads it via its DataApi handler).
 import '@data/services/ProviderRegistryService'
-
-import { resolve } from 'node:path'
+import { setupTestDatabase } from '@test-helpers/db'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { application } from '@application'
 import { userProviderTable } from '@data/db/schemas/userProvider'
@@ -11,8 +13,6 @@ import { makeModel } from '@main/ai/__tests__/fixtures/model'
 import { providerToAiSdkConfig } from '@main/ai/provider/config'
 import { resolveAiSdkProviderId } from '@main/ai/provider/endpoint'
 import { ENDPOINT_TYPE } from '@shared/data/types/model'
-import { setupTestDatabase } from '@test-helpers/db'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('@main/utils/appEdition', () => ({ getAppEdition: () => 'global' }))
 

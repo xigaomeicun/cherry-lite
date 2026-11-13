@@ -1,9 +1,10 @@
 import fs from 'node:fs'
 
-import { LOCAL_MODEL_STATUS_CACHE_KEY, type LocalModelStatusSnapshot } from '@shared/data/presets/localModel'
 import { MockMainCacheServiceUtils } from '@test-mocks/main/CacheService'
 import { MockMainPreferenceServiceUtils } from '@test-mocks/main/PreferenceService'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+import { LOCAL_MODEL_STATUS_CACHE_KEY, type LocalModelStatusSnapshot } from '@shared/data/presets/localModel'
 
 import type { InstallState } from '../catalog/types'
 
@@ -125,6 +126,21 @@ describe('status snapshots', () => {
     expect(localModelService.refreshStatus(EMBEDDING)).toEqual({ status: 'ready' })
     expect(MockMainCacheServiceUtils.getSharedCacheValue(LOCAL_MODEL_STATUS_CACHE_KEY)).toEqual({
       [EMBEDDING]: { status: 'ready', percent: 100 }
+    })
+  })
+
+  it('publishes the missing-runtime hint with the installed model files', () => {
+    onDisk({ [OCR]: INSTALLED })
+    isArtifactReady.mockReturnValue(false)
+
+    expect(localModelService.refreshStatus(OCR)).toEqual({
+      status: 'not_downloaded',
+      hintCode: 'missing_shared_runtime'
+    })
+    expect(MockMainCacheServiceUtils.getSharedCacheValue(LOCAL_MODEL_STATUS_CACHE_KEY)?.[OCR]).toEqual({
+      status: 'not_downloaded',
+      percent: 0,
+      hintCode: 'missing_shared_runtime'
     })
   })
 

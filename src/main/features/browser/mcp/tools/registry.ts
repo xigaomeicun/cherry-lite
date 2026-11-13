@@ -1,4 +1,4 @@
-import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js'
+import type { CallToolResult } from '@modelcontextprotocol/server'
 
 import type { BrowserController } from '../browserController'
 import { handleDialog } from './dialog'
@@ -11,7 +11,7 @@ import { handleReset } from './reset'
 import { handleScreenshot } from './screenshot'
 import { handleSnapshot } from './snapshot'
 import { handleCloseTab, handleListTabs, handleSwitchTab } from './tabs'
-import { handleCallWebTool, handleListWebTools } from './webMcp'
+import { handleListWebTools, handleCallWebTool } from './webMcp'
 
 export const toolHandlers: Record<
   string,

@@ -1,10 +1,11 @@
+import { Check, Copy } from 'lucide-react'
+import type { ComponentProps, CSSProperties, FC, MouseEventHandler } from 'react'
+import { useTranslation } from 'react-i18next'
+
 import { Tooltip } from '@cherrystudio/ui'
 import { useTemporaryValue } from '@renderer/hooks/useTemporaryValue'
 import { toast } from '@renderer/services/toast'
 import { cn } from '@renderer/utils/style'
-import { Check, Copy } from 'lucide-react'
-import type { ComponentProps, CSSProperties, FC, MouseEventHandler } from 'react'
-import { useTranslation } from 'react-i18next'
 
 interface CopyButtonProps extends Omit<ComponentProps<'button'>, 'children'> {
   tooltip?: string
@@ -67,7 +68,7 @@ const CopyButton: FC<CopyButtonProps> = ({
     <button
       type={type}
       className={cn(
-        'group flex cursor-pointer flex-row items-center gap-1 text-[var(--copy-button-color)] transition-colors hover:text-[var(--copy-button-hover-color)] disabled:cursor-not-allowed',
+        'group flex cursor-pointer flex-row items-center gap-1 text-[var(--copy-button-color)] transition-colors hover:text-[var(--copy-button-hover-color)] focus-visible:text-[var(--copy-button-hover-color)] disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-40',
         className
       )}
       style={buttonStyle}
@@ -77,7 +78,7 @@ const CopyButton: FC<CopyButtonProps> = ({
       {copied ? (
         <Check size={size} className="copy-icon shrink-0 text-success transition-colors" />
       ) : (
-        <Copy size={size} className="copy-icon shrink-0 transition-colors" />
+        <Copy size={size} className="copy-icon shrink-0 text-current transition-colors" />
       )}
       {label && <span style={{ fontSize: size }}>{label}</span>}
     </button>

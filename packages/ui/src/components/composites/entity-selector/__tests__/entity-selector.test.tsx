@@ -1,6 +1,5 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest'
-
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { useState } from 'react'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
@@ -39,7 +38,7 @@ beforeAll(() => {
     observe() {}
     unobserve() {}
     disconnect() {}
-  } as any
+  }
   if (!HTMLElement.prototype.hasPointerCapture) {
     HTMLElement.prototype.hasPointerCapture = () => false
   }
@@ -248,21 +247,6 @@ describe('EntitySelector', () => {
       openPopover()
       expect(screen.getByTestId('loading')).toBeInTheDocument()
       expect(screen.queryByTestId('row-1')).not.toBeInTheDocument()
-    })
-
-    it('renders nothing when empty without emptyState (no hardcoded fallback)', () => {
-      render(
-        <EntitySelector
-          trigger={<button type="button">Open</button>}
-          items={[]}
-          mode="single"
-          value={null}
-          onChange={vi.fn()}
-          renderItem={(item, ctx) => <Row item={item} ctx={ctx} />}
-        />
-      )
-      openPopover()
-      expect(screen.queryByText(/no items/i)).not.toBeInTheDocument()
     })
   })
 

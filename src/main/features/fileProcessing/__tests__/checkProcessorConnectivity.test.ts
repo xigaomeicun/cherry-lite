@@ -1,15 +1,7 @@
-/**
- * Pins the probe's verdict table for `FileProcessingService.checkOpenMineruConnectivity`.
- *
- * The asymmetry is the whole design: 404 is the only status that means "not the
- * service we want", and everything else — including 503, which is how MinerU
- * reports a full request queue — has to stay reachable. Getting this backwards
- * greys out a working deployment, and the knowledge-base dropdown that consumes
- * it offers no way to retry.
- */
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
 import type * as LifecycleModule from '@main/core/lifecycle'
 import type { FileProcessorMerged } from '@shared/data/presets/fileProcessing'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { fetchMock, getFileProcessorConfigByIdMock } = vi.hoisted(() => ({
   fetchMock: vi.fn(),
@@ -26,7 +18,11 @@ vi.mock('@logger', () => ({
 
 vi.mock('@main/core/lifecycle', async (importOriginal) => {
   const actual = await importOriginal<typeof LifecycleModule>()
-  class MockBaseService {}
+  class MockBaseService {
+    protected registerDisposable<T>(disposable: T): T {
+      return disposable
+    }
+  }
   return { ...actual, BaseService: MockBaseService }
 })
 
@@ -37,12 +33,11 @@ vi.mock('../config/resolveProcessorConfig', () => ({
 
 import { FileProcessingService } from '../FileProcessingService'
 
-const configWithHost = (apiHost: string | undefined): FileProcessorMerged =>
-  ({
-    id: 'open-mineru',
-    type: 'api',
-    capabilities: [{ feature: 'document_to_markdown', inputs: ['document'], output: 'markdown', apiHost }]
-  }) as FileProcessorMerged
+const configWithHost = (apiHost: string | undefined): FileProcessorMerged => ({
+  id: 'open-mineru',
+  type: 'api',
+  capabilities: [{ feature: 'document_to_markdown', inputs: ['document'], output: 'markdown', apiHost }]
+})
 
 const probe = () => new FileProcessingService().checkOpenMineruConnectivity()
 

@@ -1,9 +1,0 @@
-# Deprecated upstream workflow neutralized for cherry-lite
-name: update-mergeable-prs
-on:
-  workflow_dispatch:
-jobs:
-  noop:
-    runs-on: ubuntu-latest
-    steps:
-      - run: echo "neutralized for cherry-lite"

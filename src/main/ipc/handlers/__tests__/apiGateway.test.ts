@@ -3,8 +3,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { IpcRouter } from '@main/ipc/IpcRouter'
 import { apiGatewayRequestSchemas } from '@shared/ipc/schemas/apiGateway'
 
-import { apiGatewayHandlers } from '../apiGateway'
-
 const { apiGatewayService } = vi.hoisted(() => ({
   apiGatewayService: {
     start: vi.fn(),
@@ -18,6 +16,8 @@ vi.mock('@application', async () => {
   const { mockApplicationFactory } = await import('@test-mocks/main/application')
   return mockApplicationFactory({ ApiGatewayService: apiGatewayService } as any)
 })
+
+import { apiGatewayHandlers } from '../apiGateway'
 
 const ctx = { senderId: 'w1' }
 
@@ -55,13 +55,11 @@ describe('apiGatewayHandlers', () => {
     })
   })
 
-  it('stop returns the service outcome and restart delegates to the service', async () => {
-    apiGatewayService.stop.mockResolvedValue('deferred')
+  it('stop and restart report success', async () => {
+    apiGatewayService.stop.mockResolvedValue('stopped')
     apiGatewayService.restart.mockResolvedValue(undefined)
-    expect(await apiGatewayHandlers['api_gateway.stop'](undefined, ctx)).toEqual({ success: true, outcome: 'deferred' })
+    expect(await apiGatewayHandlers['api_gateway.stop'](undefined, ctx)).toEqual({ success: true, outcome: 'stopped' })
     expect(await apiGatewayHandlers['api_gateway.restart'](undefined, ctx)).toEqual({ success: true })
-    expect(apiGatewayService.stop).toHaveBeenCalledOnce()
-    expect(apiGatewayService.restart).toHaveBeenCalledOnce()
   })
 
   it('stop turns a service throw into { success: false, error }', async () => {

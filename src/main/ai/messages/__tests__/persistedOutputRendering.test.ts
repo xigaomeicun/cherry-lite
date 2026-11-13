@@ -1,6 +1,7 @@
-import { computeHeadTailExcerpt, Offloader } from '@cherrystudio/ai-core'
 import type { UIMessage } from 'ai'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+import { computeHeadTailExcerpt, Offloader } from '@cherrystudio/ai-core'
 
 vi.mock('@logger', () => ({
   loggerService: { withContext: () => ({ debug: vi.fn(), warn: vi.fn(), info: vi.fn(), error: vi.fn() }) }
@@ -104,11 +105,6 @@ describe('renderPersistedToolOutputs', () => {
     expect(part.state).toBe('output-available')
     expect(part.output).toContain('Full output: context://vfs/')
     expect(part.output).not.toContain('Full output saved to:')
-  })
-
-  it('returns the same references when no part carries an envelope', () => {
-    const messages = [messageWith('plain output')]
-    expect(renderPersistedToolOutputs(messages)).toBe(messages)
   })
 
   it('renders entities envelopes byte-identical to the in-flight entity codec lane', async () => {

@@ -2,6 +2,7 @@ import { readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
 import type { SpeechModelV3, TranscriptionModelV3 } from '@ai-sdk/provider'
+
 import type { SpeechOptions, TranscriptionOptions } from '@cherrystudio/ai-core'
 import { SystemSpeechError } from '@cherrystudio/system-speech/contracts'
 import { loggerService } from '@logger'
@@ -18,7 +19,7 @@ import {
 import { SpeechInputKind, SpeechOutputKind } from '@shared/ai/voice'
 
 import type { SpeechOperation } from '../executionTypes'
-import type { SpeechModelDefinition, TranscriptionModelDefinition } from '../voiceModelTypes'
+import type { TranscriptionModelDefinition, SpeechModelDefinition } from '../voiceModelTypes'
 import type { LocalVoiceStatus } from '../voiceModelTypes'
 import { getVoiceEnvironment, type VoiceEnvironment } from '../voicePlatform'
 import { checkAbort, VoiceRuntimeError } from '../VoiceRuntimeError'

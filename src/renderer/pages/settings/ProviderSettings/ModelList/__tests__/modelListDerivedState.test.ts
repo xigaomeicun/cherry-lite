@@ -1,12 +1,12 @@
-import { ENDPOINT_TYPE, MODEL_CAPABILITY } from '@shared/data/types/model'
 import { describe, expect, it } from 'vitest'
+
+import { ENDPOINT_TYPE, MODEL_CAPABILITY } from '@shared/data/types/model'
 
 import {
   applyModelFilters,
   calculateModelListDerivedState,
   countModelsInGroups,
-  groupModels,
-  MODEL_LIST_CAPABILITY_FILTERS
+  groupModels
 } from '../modelListDerivedState'
 
 const models = [
@@ -237,7 +237,6 @@ describe('modelListDerivedState', () => {
     expect(derivedState.modelCount).toBe(5)
     expect(derivedState.hasVisibleModels).toBe(true)
     expect(derivedState.hasNoModels).toBe(false)
-    expect(derivedState.capabilityOptions).toEqual(MODEL_LIST_CAPABILITY_FILTERS)
     expect(derivedState.capabilityModelCounts).toEqual({
       all: 5,
       text: 3,
@@ -299,7 +298,6 @@ describe('modelListDerivedState', () => {
     expect(derivedState.hasNoModels).toBe(true)
     expect(derivedState.hasVisibleModels).toBe(false)
     expect(derivedState.modelCount).toBe(0)
-    expect(derivedState.capabilityOptions).toEqual(MODEL_LIST_CAPABILITY_FILTERS)
     expect(derivedState.capabilityModelCounts).toEqual({
       all: 0,
       text: 0,

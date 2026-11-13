@@ -1,3 +1,5 @@
+import PQueue from 'p-queue'
+
 import { application } from '@application'
 import { loggerService } from '@logger'
 import { BaseService, DependsOn } from '@main/core/lifecycle'
@@ -6,13 +8,12 @@ import type {
   UtilityProcessContract,
   UtilityProcessDefinition,
   UtilityProcessRequestOptions,
-  UtilityProcessStream,
   UtilityProcessStreamOptions,
-  UtilityProcessStreams
+  UtilityProcessStreams,
+  UtilityProcessStream
 } from '@main/core/utilityProcess/types'
-import { isUtilityProcessError, UtilityProcessError } from '@main/core/utilityProcess/UtilityProcessError'
+import { UtilityProcessError, isUtilityProcessError } from '@main/core/utilityProcess/UtilityProcessError'
 import type { LocalModelBundleId, LocalModelCapability } from '@shared/data/presets/localModel'
-import PQueue from 'p-queue'
 
 import { getModelBundle } from '../catalog/catalog'
 import { localModelStorageService } from '../installation/LocalModelStorageService'

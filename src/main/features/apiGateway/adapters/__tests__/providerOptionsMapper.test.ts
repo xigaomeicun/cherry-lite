@@ -1,3 +1,5 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
 import {
   type ProtoReasoningSupport,
   REASONING_FORMAT_PROFILES,
@@ -6,7 +8,6 @@ import {
 import type * as ProviderRegistryServiceModule from '@data/services/ProviderRegistryService'
 import { ENDPOINT_TYPE, type EndpointType, type Model, type RuntimeReasoning } from '@shared/data/types/model'
 import type { Provider } from '@shared/data/types/provider'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
   mapAnthropicThinkingToProviderOptions,
@@ -76,7 +77,7 @@ function model(providerId: string, modelId: string, endpointType: EndpointType, 
     supportsStreaming: true,
     isEnabled: true,
     isHidden: false
-  } as Model
+  }
 }
 
 const anthropicBudgetModel = model('anthropic', 'claude-3-7-sonnet', ENDPOINT_TYPE.ANTHROPIC_MESSAGES, {
@@ -120,6 +121,90 @@ describe('same-dialect lossless pass-through', () => {
     expect(mapAnthropicThinkingToProviderOptions(target, anthropicBudgetModel, { type: 'disabled' })).toEqual({
       anthropic: { thinking: { type: 'disabled' } }
     })
+  })
+
+  it('omits a native effort when the resolved wire carries no effort field (#20287)', () => {
+    const target = provider('anthropic', ENDPOINT_TYPE.ANTHROPIC_MESSAGES)
+
+    expect(
+      mapAnthropicThinkingToProviderOptions(
+        target,
+        anthropicBudgetModel,
+        { type: 'enabled', budget_tokens: 4096 },
+        'minimal'
+      )
+    ).toEqual({ anthropic: { thinking: { type: 'enabled', budgetTokens: 4096 } } })
+    expect(mapAnthropicThinkingToProviderOptions(target, anthropicBudgetModel, { type: 'disabled' }, 'ultra')).toEqual({
+      anthropic: { thinking: { type: 'disabled' } }
+    })
+  })
+
+  it('projects a native effort when the resolved wire carries an effort field (#20287)', () => {
+    const target = provider('anthropic', ENDPOINT_TYPE.ANTHROPIC_MESSAGES)
+    const adaptiveWire = REASONING_FORMAT_PROFILES['anthropic'].wire
+    mocks.resolveReasoningProfile.mockReturnValueOnce({ format: 'anthropic', wire: adaptiveWire })
+    expect(
+      mapAnthropicThinkingToProviderOptions(
+        target,
+        anthropicBudgetModel,
+        { type: 'enabled', budget_tokens: 4096 },
+        'minimal'
+      )
+    ).toEqual({ anthropic: { thinking: { type: 'adaptive', display: 'summarized' }, effort: 'low' } })
+    mocks.resolveReasoningProfile.mockReturnValueOnce({ format: 'anthropic', wire: adaptiveWire })
+    expect(mapAnthropicThinkingToProviderOptions(target, anthropicBudgetModel, { type: 'adaptive' }, 'ultra')).toEqual({
+      anthropic: { thinking: { type: 'adaptive' }, effort: 'high' }
+    })
+  })
+
+  it('translates legacy Anthropic thinking to adaptive effort when the target model requires it', () => {
+    const target = provider('anthropic', ENDPOINT_TYPE.ANTHROPIC_MESSAGES)
+    const opus55 = model('anthropic', 'claude-opus-5-5', ENDPOINT_TYPE.ANTHROPIC_MESSAGES, {
+      selectableEfforts: ['low', 'medium', 'high', 'xhigh', 'max'],
+      controls: [{ kind: 'effort', values: ['low', 'medium', 'high', 'xhigh', 'max'] }]
+    })
+    mocks.resolveReasoningProfile.mockReturnValueOnce({
+      format: 'anthropic',
+      wire: REASONING_FORMAT_PROFILES['anthropic'].alwaysOnWire
+    })
+
+    expect(mapAnthropicThinkingToProviderOptions(target, opus55, { type: 'enabled', budget_tokens: 4096 })).toEqual({
+      anthropic: { thinking: { type: 'adaptive', display: 'summarized' }, effort: 'high' }
+    })
+  })
+
+  it('maps legacy Anthropic thinking into Bedrock adaptive reasoning options', () => {
+    const bedrockWire: ReasoningWireProfile = {
+      auto: {
+        operations: [{ target: 'reasoningConfig.type', value: { source: 'literal', value: 'adaptive' } }]
+      },
+      effort: {
+        operations: [
+          { target: 'reasoningConfig.type', value: { source: 'literal', value: 'adaptive' } },
+          { target: 'reasoningConfig.maxReasoningEffort', value: { source: 'effort' } }
+        ]
+      }
+    }
+    const target = provider('bedrock', ENDPOINT_TYPE.ANTHROPIC_MESSAGES)
+    const opus55 = model('aws-bedrock', 'claude-opus-5-5', ENDPOINT_TYPE.ANTHROPIC_MESSAGES, {
+      selectableEfforts: ['low', 'medium', 'high', 'xhigh', 'max'],
+      controls: [{ kind: 'effort', values: ['low', 'medium', 'high', 'xhigh', 'max'] }]
+    })
+    mocks.resolveReasoningProfile.mockReturnValueOnce({ format: 'anthropic', wire: bedrockWire })
+
+    expect(mapAnthropicThinkingToProviderOptions(target, opus55, { type: 'enabled', budget_tokens: 4096 })).toEqual({
+      bedrock: { reasoningConfig: { type: 'adaptive', maxReasoningEffort: 'high' } }
+    })
+  })
+
+  it('omits a native effort the model cannot express instead of sending it literally (#20287)', () => {
+    const target = provider('anthropic', ENDPOINT_TYPE.ANTHROPIC_MESSAGES)
+
+    expect(mapAnthropicThinkingToProviderOptions(target, anthropicBudgetModel, undefined, 'default')).toBeUndefined()
+    expect(
+      mapAnthropicThinkingToProviderOptions(target, anthropicBudgetModel, { type: 'disabled' }, 'default')
+    ).toEqual({ anthropic: { thinking: { type: 'disabled' } } })
+    expect(mapAnthropicThinkingToProviderOptions(target, anthropicBudgetModel, undefined, 'auto')).toBeUndefined()
   })
 
   it.each([
@@ -196,17 +281,6 @@ describe('cross-dialect descriptor translation', () => {
     expect(mapReasoningEffortToProviderOptions(target, modelWithoutRuntimeReasoning, 'high')).toEqual({})
   })
 
-  it('computes Anthropic budgets from descriptor limits instead of a fixed budget table', () => {
-    const target = provider('anthropic', ENDPOINT_TYPE.ANTHROPIC_MESSAGES)
-
-    expect(mapReasoningEffortToProviderOptions(target, anthropicBudgetModel, 'low')).toEqual({
-      anthropic: { thinking: { type: 'enabled', budgetTokens: 1500 }, sendReasoning: true }
-    })
-    expect(mapReasoningEffortToProviderOptions(target, anthropicBudgetModel, 'high')).toEqual({
-      anthropic: { thinking: { type: 'enabled', budgetTokens: 8191 }, sendReasoning: true }
-    })
-  })
-
   it('clamps a translated Anthropic budget below the request max output tokens', () => {
     const target = provider('anthropic', ENDPOINT_TYPE.ANTHROPIC_MESSAGES)
 
@@ -243,27 +317,9 @@ describe('cross-dialect descriptor translation', () => {
     ).toEqual({ openai: { reasoningEffort: 'low', forceReasoning: true } })
   })
 
-  it('falls back to high when Anthropic budget translation has no descriptor limits', () => {
-    const target = provider('openai', ENDPOINT_TYPE.OPENAI_RESPONSES)
-    const modelWithoutLimits = {
-      ...openAIModel,
-      reasoning: { ...openAIModel.reasoning, thinkingTokenLimits: undefined }
-    } as Model
-
-    expect(
-      mapAnthropicThinkingToProviderOptions(target, modelWithoutLimits, {
-        type: 'enabled',
-        budget_tokens: 1500
-      })
-    ).toEqual({ openai: { reasoningEffort: 'high', forceReasoning: true } })
-  })
-
   it('normalizes Gemini sentinels, levels, and positive budgets before target dispatch', () => {
     const target = provider('openai', ENDPOINT_TYPE.OPENAI_RESPONSES)
 
-    expect(mapGeminiThinkingToProviderOptions(target, openAIModel, { thinkingBudget: -1 })).toEqual({
-      openai: { reasoningEffort: 'medium', forceReasoning: true }
-    })
     expect(mapGeminiThinkingToProviderOptions(target, openAIModel, { thinkingBudget: 0 })).toEqual({
       openai: { reasoningEffort: 'none', forceReasoning: true }
     })

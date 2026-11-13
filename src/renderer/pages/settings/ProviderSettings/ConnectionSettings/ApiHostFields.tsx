@@ -1,13 +1,14 @@
-import { Button, InputGroup, InputGroupAddon, InputGroupInput, Tooltip } from '@cherrystudio/ui'
-import { cn } from '@renderer/utils/style'
-import { Copy, RotateCcw, Settings } from 'lucide-react'
+import { Check, Copy, RotateCcw, Settings } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
+import { Button, InputGroup, InputGroupAddon, InputGroupInput, Tooltip } from '@cherrystudio/ui'
+import { cn } from '@renderer/utils/style'
+
+import { useCopyToClipboard } from '../hooks/useCopyToClipboard'
 import ProviderField from '../primitives/ProviderField'
 import ProviderSection from '../primitives/ProviderSection'
 import { fieldClasses } from '../primitives/ProviderSettingsPrimitives'
 import CherryInSettings from '../ProviderSpecific/CherryInSettings'
-import { copyApiKeyToClipboard } from './copyApiKeyToClipboard'
 
 function ApiHostEndpointButton({ onClick }: { onClick: () => void }) {
   const { t } = useTranslation()
@@ -40,7 +41,7 @@ export function AzureApiVersionField({
       className={className}
       title={t('settings.provider.api_version')}
       help={
-        <div className="pt-1 text-[12px] text-muted-foreground leading-[1.35]">
+        <div className="pt-1 text-[12px] leading-[1.35] text-muted-foreground">
           {t('settings.provider.azure.apiversion.tip')}
         </div>
       }>
@@ -83,10 +84,11 @@ export function ApiHostField({
   onOpenRequestConfig
 }: ApiHostFieldProps) {
   const { t } = useTranslation()
+  const [apiHostCopied, copyApiHost] = useCopyToClipboard()
   const trimmedApiHost = apiHost.trim()
   const help = isVertexAI ? (
     <div className="space-y-1 pt-1">
-      <div className="text-[12px] text-muted-foreground leading-[1.35]">
+      <div className="text-[12px] leading-[1.35] text-muted-foreground">
         {t('settings.provider.vertex_ai.api_host_help')}
       </div>
     </div>
@@ -139,12 +141,12 @@ export function ApiHostField({
                     type="button"
                     variant="ghost"
                     size="icon-sm"
-                    className="size-5 shrink-0 rounded-md p-0 text-muted-foreground opacity-0 shadow-none transition-opacity hover:bg-accent/50 hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100"
+                    className="size-5 shrink-0 rounded-md p-0 text-muted-foreground opacity-0 shadow-none transition-opacity group-hover:opacity-100 hover:bg-accent/50 hover:text-foreground focus-visible:opacity-100"
                     aria-label={t('common.copy')}
                     onClick={() => {
-                      void copyApiKeyToClipboard(trimmedApiHost, t)
+                      void copyApiHost(trimmedApiHost)
                     }}>
-                    <Copy className="size-2.5" />
+                    {apiHostCopied ? <Check className="size-2.5 text-success" /> : <Copy className="size-2.5" />}
                   </Button>
                 </Tooltip>
               </InputGroupAddon>
@@ -198,6 +200,7 @@ export function AnthropicApiHostField({
   onOpenRequestConfig
 }: AnthropicApiHostFieldProps) {
   const { t } = useTranslation()
+  const [anthropicApiHostCopied, copyAnthropicApiHost] = useCopyToClipboard()
   const trimmedAnthropicApiHost = anthropicApiHost.trim()
 
   return (
@@ -209,7 +212,7 @@ export function AnthropicApiHostField({
         </span>
       }
       help={
-        <div className="break-all pt-1 text-[12px] text-muted-foreground leading-[1.35]">
+        <div className="pt-1 text-[12px] leading-[1.35] break-all text-muted-foreground">
           {t('settings.provider.anthropic_api_host_preview', { url: anthropicHostPreview || '—' })}
         </div>
       }>
@@ -232,12 +235,12 @@ export function AnthropicApiHostField({
                   type="button"
                   variant="ghost"
                   size="icon-sm"
-                  className="size-5 shrink-0 rounded-md p-0 text-muted-foreground opacity-0 shadow-none transition-opacity hover:bg-accent/50 hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100"
+                  className="size-5 shrink-0 rounded-md p-0 text-muted-foreground opacity-0 shadow-none transition-opacity group-hover:opacity-100 hover:bg-accent/50 hover:text-foreground focus-visible:opacity-100"
                   aria-label={t('common.copy')}
                   onClick={() => {
-                    void copyApiKeyToClipboard(trimmedAnthropicApiHost, t)
+                    void copyAnthropicApiHost(trimmedAnthropicApiHost)
                   }}>
-                  <Copy className="size-2.5" />
+                  {anthropicApiHostCopied ? <Check className="size-2.5 text-success" /> : <Copy className="size-2.5" />}
                 </Button>
               </Tooltip>
             </InputGroupAddon>

@@ -20,6 +20,9 @@
  *   variant emits a single aggregated log line and a single SQL round trip.
  */
 
+import { and, asc, eq, inArray } from 'drizzle-orm'
+import { chunk } from 'es-toolkit'
+
 import { application } from '@application'
 import { notifyDataApiDataChange } from '@data/dataApiDataChange'
 import { type PinRow, pinTable } from '@data/db/schemas/pin'
@@ -32,12 +35,12 @@ import type { CreatePinDto } from '@shared/data/api/schemas/pins'
 import type { DataApiDataChangeEffect } from '@shared/data/api/types'
 import type { EntityType } from '@shared/data/types/entityType'
 import type { Pin } from '@shared/data/types/pin'
-import { and, asc, eq, inArray } from 'drizzle-orm'
 
 import { applyScopedMoves, insertWithOrderKey } from './utils/orderKey'
 import { timestampToISO } from './utils/rowMappers'
 
 const logger = loggerService.withContext('DataApi:PinService')
+const SQLITE_INARRAY_CHUNK = 500
 
 function rowToPin(row: PinRow): Pin {
   return {
@@ -246,9 +249,11 @@ export class PinService {
    */
   purgeForEntitiesTx(tx: Pick<DbType, 'delete'>, entityType: EntityType, entityIds: string[]): void {
     if (entityIds.length === 0) return
-    tx.delete(pinTable)
-      .where(and(eq(pinTable.entityType, entityType), inArray(pinTable.entityId, entityIds)))
-      .run()
+    for (const idChunk of chunk(entityIds, SQLITE_INARRAY_CHUNK)) {
+      tx.delete(pinTable)
+        .where(and(eq(pinTable.entityType, entityType), inArray(pinTable.entityId, idChunk)))
+        .run()
+    }
 
     logger.info('Purged pins for entities', { entityType, count: entityIds.length })
   }

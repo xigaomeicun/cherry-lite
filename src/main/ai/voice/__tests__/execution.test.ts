@@ -1,7 +1,8 @@
 import type { SpeechModelV3, TranscriptionModelV3 } from '@ai-sdk/provider'
-import { APPLE_ASR_MODEL_ID, APPLE_TTS_MODEL_ID, WINDOWS_ASR_MODEL_ID } from '@shared/ai/localVoice'
 import { mockMainLoggerService } from '@test-mocks/MainLoggerService'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+import { APPLE_ASR_MODEL_ID, APPLE_TTS_MODEL_ID, WINDOWS_ASR_MODEL_ID } from '@shared/ai/localVoice'
 
 const models = vi.hoisted(() => ({
   speech: undefined as SpeechModelV3 | undefined,
@@ -32,7 +33,7 @@ import { SpeechInputKind, SpeechOutputKind, TranscriptionInputKind, Transcriptio
 
 import { startSpeech, startTranscription } from '../execution'
 import type { SpeechRequest, TranscriptionRequest } from '../executionTypes'
-import { voiceIpcError, VoiceRuntimeError } from '../VoiceRuntimeError'
+import { VoiceRuntimeError, voiceIpcError } from '../VoiceRuntimeError'
 
 async function generateSpeech(modelId: LocalSpeechModelId, text: string, options: SpeechOptions, signal: AbortSignal) {
   const execution = startSpeech(

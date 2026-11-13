@@ -1,17 +1,18 @@
+import { describe, expect, it } from 'vitest'
+
 import {
   APPLE_ASR_MODEL_ID,
   APPLE_TTS_MODEL_ID,
   FUNASR_MODEL_ID,
   KOKORO_TTS_MODEL_ID,
+  WINDOWS_ASR_MODEL_ID,
+  WINDOWS_TTS_MODEL_ID,
   TranscriptionLanguageSource,
   VoiceModelSupport,
-  VoiceResourceOperation,
-  WINDOWS_ASR_MODEL_ID,
-  WINDOWS_TTS_MODEL_ID
+  VoiceResourceOperation
 } from '@shared/ai/localVoice'
 import { SpeechInputKind, SpeechOutputKind, TranscriptionInputKind, TranscriptionOutputKind } from '@shared/ai/voice'
 import { voiceRequestSchemas } from '@shared/ipc/schemas/voice'
-import { describe, expect, it } from 'vitest'
 
 import { describeVoiceModel, listVoiceModels, resolveTranscriptionRequest } from '../localAdapters'
 
@@ -45,8 +46,7 @@ describe('device-scoped voice catalog and request policy', () => {
       [WINDOWS_ASR_MODEL_ID, WINDOWS_TTS_MODEL_ID, FUNASR_MODEL_ID, KOKORO_TTS_MODEL_ID]
     ],
     [{ platform: 'linux', arch: 'x64' }, [FUNASR_MODEL_ID, KOKORO_TTS_MODEL_ID]],
-    // (cherry-lite) win32-arm64 Kokoro/FunASR enablement (#21779) is Windows-only and not ported
-    [{ platform: 'win32', arch: 'arm64' }, []],
+    [{ platform: 'win32', arch: 'arm64' }, [FUNASR_MODEL_ID, KOKORO_TTS_MODEL_ID]],
     [{ platform: 'darwin', arch: 'arm64', majorVersion: 12 }, [FUNASR_MODEL_ID, KOKORO_TTS_MODEL_ID]]
   ])('offers only runnable models on %j', (environment, expected) => {
     const catalog = listVoiceModels(environment)

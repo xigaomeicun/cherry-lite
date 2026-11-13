@@ -1,10 +1,12 @@
-import { loggerService } from '@logger'
-import type { PluginMetadata } from '@main/utils/plugin'
 import * as crypto from 'crypto'
 import * as fs from 'fs'
-import matter from 'gray-matter'
 import * as path from 'path'
+
+import matter from 'gray-matter'
 import { parse } from 'yaml'
+
+import { loggerService } from '@logger'
+import type { PluginMetadata } from '@main/utils/plugin'
 
 import { getDirectorySize } from './fileOperations'
 
@@ -194,7 +196,7 @@ export async function parsePluginMetadata(
         yaml: parseFrontmatterYaml
       }
     })
-    data = (parsed.data ?? {}) as Record<string, unknown>
+    data = parsed.data ?? {}
   } catch (error: any) {
     logger.warn('Failed to parse plugin frontmatter, attempting recovery', {
       filePath,
@@ -353,7 +355,7 @@ export async function parseSkillMetadata(
         yaml: parseFrontmatterYaml
       }
     })
-    data = (parsed.data ?? {}) as Record<string, unknown>
+    data = parsed.data ?? {}
   } catch (error: any) {
     logger.warn('Failed to parse SKILL.md frontmatter, attempting recovery', {
       skillMdPath,

@@ -1,9 +1,10 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
 import { IpcRouter } from '@main/ipc/IpcRouter'
 import { APPLE_ASR_MODEL_ID, TranscriptionLanguageSource } from '@shared/ai/localVoice'
 import type { InternalFileEntry } from '@shared/data/types/file'
 import { IpcError, IpcErrorCode } from '@shared/ipc/errors/IpcError'
 import { voiceRequestSchemas } from '@shared/ipc/schemas/voice'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { voiceHandlers } from '../voice'
 

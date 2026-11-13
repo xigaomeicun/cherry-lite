@@ -1,22 +1,22 @@
 import { loggerService } from '@logger'
 import { preferenceService } from '@renderer/data/PreferenceService'
-import type { SpeechPcmChunk, TranscriptRevision } from '@shared/ai/voice'
+import type { TranscriptRevision, SpeechPcmChunk } from '@shared/ai/voice'
 import { voiceErrorCodes, type VoiceErrorReason } from '@shared/ipc/errors/voice'
 
-import { type AudioSpectrum, createAudioSpectrum } from './audioSpectrum'
+import { createAudioSpectrum, type AudioSpectrum } from './audioSpectrum'
 import { microphoneErrorReason } from './microphoneDevices'
 import { PcmCapture } from './PcmCapture'
 import {
+  voiceService,
   type CreateRecordingInput,
   type ResolvedTranscriptionPreferences,
   type StartRecordingInput,
-  type StreamingTranscription,
   type TranscriptionInput,
   type VoiceCommandEvent,
   type VoiceOperation,
-  voiceService
+  type StreamingTranscription
 } from './VoiceService'
-import { type CapturedVoiceTarget, type VoiceTargetInsertResult, voiceTargetManager } from './VoiceTargetManager'
+import { voiceTargetManager, type CapturedVoiceTarget, type VoiceTargetInsertResult } from './VoiceTargetManager'
 
 const RECORDING_MIME_TYPE = 'audio/webm;codecs=opus'
 const MAX_RECORDING_DURATION_MS = 300_000
@@ -245,7 +245,7 @@ export class DictationService {
       stop: () =>
         this.currentRunToken !== runToken
           ? Promise.resolve()
-          : this.active?.runToken === runToken && this.active.recorder
+          : this.active?.runToken === runToken && (this.active.recorder || this.active.streaming)
             ? this.stop()
             : this.cancelRun(runToken),
       cancel: () => this.cancelRun(runToken)

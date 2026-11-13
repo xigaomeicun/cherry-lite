@@ -1,3 +1,7 @@
+import { Plus } from 'lucide-react'
+import React, { createContext, memo, use, useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
+import { useTranslation } from 'react-i18next'
+
 import { getAllTools, getToolsForScope } from '@renderer/components/composer/tools/builtinTools'
 import {
   ComposerToolDerivedStateProvider,
@@ -24,9 +28,6 @@ import type { Assistant } from '@renderer/types/assistant'
 import type { ComposerAttachment } from '@renderer/utils/message/composerAttachment'
 import type { KnowledgeBase } from '@shared/data/types/knowledge'
 import type { Model } from '@shared/data/types/model'
-import { Plus } from 'lucide-react'
-import React, { createContext, memo, use, useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
-import { useTranslation } from 'react-i18next'
 
 import type { ComposerUnifiedPanelControl } from './quickPanel'
 import type { ComposerSerializedToken } from './tokens'
@@ -431,10 +432,10 @@ export const ComposerToolMenu = ({ unifiedPanelControl }: ComposerToolMenuProps)
   return (
     <button
       type="button"
-      className="flex size-[30px] shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+      className="flex size-[30px] shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-accent hover:text-foreground dark:text-foreground"
       aria-label={t('settings.quickPanel.title')}
       onClick={() => unifiedPanelControl.open()}>
-      <Plus size={18} />
+      <Plus size={18} className="dark:text-current!" />
     </button>
   )
 }

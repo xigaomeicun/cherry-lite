@@ -1,3 +1,6 @@
+import type { FC } from 'react'
+import { useTranslation } from 'react-i18next'
+
 import { Button, InfoTooltip, Input, RowFlex } from '@cherrystudio/ui'
 import { usePreference } from '@data/hooks/usePreference'
 import { loggerService } from '@logger'
@@ -9,10 +12,8 @@ import {
   SettingTitle
 } from '@renderer/components/SettingsPrimitives'
 import { useTheme } from '@renderer/hooks/useTheme'
-import { ipcApi } from '@renderer/ipc'
 import { toast } from '@renderer/services/toast'
-import type { FC } from 'react'
-import { useTranslation } from 'react-i18next'
+import { openExternalWebsite } from '@renderer/services/website'
 
 const logger = loggerService.withContext('SiyuanSettings')
 
@@ -22,7 +23,7 @@ const SiyuanSettings: FC = () => {
   const [siyuanBoxId, setSiyuanBoxId] = usePreference('data.integration.siyuan.box_id')
   const [siyuanRootPath, setSiyuanRootPath] = usePreference('data.integration.siyuan.root_path')
 
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const { theme } = useTheme()
 
   const handleApiUrlChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -42,7 +43,11 @@ const SiyuanSettings: FC = () => {
   }
 
   const handleSiyuanHelpClick = () => {
-    void ipcApi.request('system.shell.open_website', 'https://docs.cherry-ai.com/advanced-basic/siyuan')
+    void openExternalWebsite(
+      i18n.language.startsWith('zh')
+        ? 'https://cherryai.com.cn/docs/zh-cn/pre-basic/data-settings/siyuan/'
+        : 'https://cherryai.com/docs/en/pre-basic/data-settings/'
+    )
   }
 
   const handleCheckConnection = async () => {
@@ -84,7 +89,7 @@ const SiyuanSettings: FC = () => {
       <SettingDivider />
       <SettingRow id="setting-data-siyuan-api-url" className="scroll-mt-6">
         <SettingRowTitle>{t('settings.data.siyuan.api_url')}</SettingRowTitle>
-        <RowFlex className="w-78.75 min-w-0 max-w-full items-center gap-1.25">
+        <RowFlex className="w-78.75 max-w-full min-w-0 items-center gap-1.25">
           <Input
             type="text"
             value={siyuanApiUrl || ''}
@@ -104,7 +109,7 @@ const SiyuanSettings: FC = () => {
             onClick={handleSiyuanHelpClick}
           />
         </SettingRowTitle>
-        <RowFlex className="w-78.75 min-w-0 max-w-full items-center gap-1.25">
+        <RowFlex className="w-78.75 max-w-full min-w-0 items-center gap-1.25">
           <RowFlex className="w-full min-w-0 items-center gap-1.25">
             <Input
               type="password"
@@ -123,7 +128,7 @@ const SiyuanSettings: FC = () => {
       <SettingDivider />
       <SettingRow>
         <SettingRowTitle>{t('settings.data.siyuan.box_id')}</SettingRowTitle>
-        <RowFlex className="w-78.75 min-w-0 max-w-full items-center gap-1.25">
+        <RowFlex className="w-78.75 max-w-full min-w-0 items-center gap-1.25">
           <Input
             type="text"
             value={siyuanBoxId || ''}
@@ -135,7 +140,7 @@ const SiyuanSettings: FC = () => {
       <SettingDivider />
       <SettingRow>
         <SettingRowTitle>{t('settings.data.siyuan.root_path')}</SettingRowTitle>
-        <RowFlex className="w-78.75 min-w-0 max-w-full items-center gap-1.25">
+        <RowFlex className="w-78.75 max-w-full min-w-0 items-center gap-1.25">
           <Input
             type="text"
             value={siyuanRootPath || ''}

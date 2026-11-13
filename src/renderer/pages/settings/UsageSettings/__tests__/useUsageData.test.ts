@@ -1,7 +1,8 @@
-import type { AiUsageRecordStatsResponse, AiUsageRecordTimelineResponse } from '@shared/data/api/schemas/aiUsageRecords'
 import { MockUseDataApiUtils, mockUseQuery } from '@test-mocks/renderer/useDataApi'
 import { renderHook } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+import type { AiUsageRecordStatsResponse, AiUsageRecordTimelineResponse } from '@shared/data/api/schemas/aiUsageRecords'
 
 import { EMPTY_STATS_METRICS } from '../usageAnalytics'
 import { useUsageData } from '../useUsageData'
@@ -48,5 +49,28 @@ describe('useUsageData', () => {
     expect(result.current.overviewLoading).toBe(false)
     expect(result.current.exploreStatsLoading).toBe(false)
     expect(result.current.exploreTimelineLoading).toBe(false)
+  })
+  it.each([false, true])('distinguishes failed aggregate requests from cached data (cached: %s)', (cached) => {
+    const error = new Error('Stats unavailable')
+    mockUseQuery.mockImplementation((path: string) => ({
+      data: path === '/ai-usage-records/timeline' ? timelineData : cached ? statsData : undefined,
+      isLoading: false,
+      isRefreshing: false,
+      error,
+      refetch: vi.fn().mockResolvedValue(undefined),
+      mutate: vi.fn().mockResolvedValue(undefined)
+    }))
+    const { result } = renderHook(() =>
+      useUsageData({
+        windowRange: range,
+        previousWindowRange: range,
+        groupBy: 'provider',
+        chartMetric: 'tokens',
+        rollup: 'total',
+        topCount: 10
+      })
+    )
+    expect(result.current.exploreStatsError).toBe(cached ? undefined : error)
+    expect(result.current.exploreStatsLoading).toBe(false)
   })
 })

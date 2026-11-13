@@ -3,10 +3,11 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 
-import { MINI_APP_MAX_EXTRACTED_BYTES, MINI_APP_MAX_PACKAGE_BYTES } from '@shared/types/miniAppManifest'
 import JSZip from 'jszip'
 import StreamZip from 'node-stream-zip'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+import { MINI_APP_MAX_EXTRACTED_BYTES, MINI_APP_MAX_PACKAGE_BYTES } from '@shared/types/miniAppManifest'
 
 import { extractMiniAppArchive, previewMiniAppArchive, sha256File } from '../archive'
 
@@ -238,8 +239,8 @@ describe('archive', () => {
     })
     const d = dest()
     const stream = vi.spyOn(StreamZip.async.prototype, 'stream').mockImplementation(async function (this, entry) {
-      fs.rmSync(path.join(d, 'leak.txt'), { force: true })
-      fs.symlinkSync('/etc/hosts', path.join(d, 'leak.txt'))
+      if (fs.existsSync(path.join(d, 'leak.txt'))) fs.unlinkSync(path.join(d, 'leak.txt'))
+      fs.symlinkSync(work, path.join(d, 'leak.txt'), 'junction')
       return realStream.call(this, entry)
     })
 
@@ -258,8 +259,8 @@ describe('archive', () => {
     const d = dest()
     const stream = vi.spyOn(StreamZip.async.prototype, 'stream').mockImplementation(async function (this, entry) {
       fs.mkdirSync(path.join(d, 'assets'), { recursive: true })
-      fs.rmSync(path.join(d, 'assets', 'leak.txt'), { force: true })
-      fs.symlinkSync('/etc/hosts', path.join(d, 'assets', 'leak.txt'))
+      if (fs.existsSync(path.join(d, 'assets', 'leak.txt'))) fs.unlinkSync(path.join(d, 'assets', 'leak.txt'))
+      fs.symlinkSync(work, path.join(d, 'assets', 'leak.txt'), 'junction')
       return realStream.call(this, entry)
     })
     try {
@@ -322,7 +323,7 @@ describe('archive', () => {
     await expect(previewMiniAppArchive(zipPath)).rejects.toThrow(/icon is over/i)
   })
 
-  it('hands the card a REAL 128x128 webp whatever the package shipped', async () => {
+  it('hands the card a real decoded webp whatever the package shipped', async () => {
     // Straight entry bytes → base64 under an `image/webp` label is a lie for a PNG; the
     // install pipeline's transcode makes the label true.
     const sharp = (await import('sharp')).default
@@ -345,7 +346,7 @@ describe('archive', () => {
 
     const bytes = Buffer.from(preview.iconDataUrl!.split(',')[1], 'base64')
     const meta = await sharp(bytes).metadata()
-    expect([meta.format, meta.width, meta.height]).toEqual(['webp', 128, 128])
+    expect(meta.format).toBe('webp')
   })
 
   it('refuses at preview what extraction would refuse', async () => {

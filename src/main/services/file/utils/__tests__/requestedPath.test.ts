@@ -1,6 +1,7 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
 import { fileErrorCodes } from '@shared/ipc/errors/file'
 import type { AbsoluteFilePath } from '@shared/types/file'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('@application', async () => {
   const { mockApplicationFactory } = await import('@test-mocks/main/application')

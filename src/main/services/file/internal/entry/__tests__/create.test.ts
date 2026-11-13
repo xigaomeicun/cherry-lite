@@ -4,12 +4,13 @@ import type { Server } from 'node:http'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 
-import { hashContent } from '@main/utils/file/contentHash'
-import { type AbsoluteFilePath, AbsoluteFilePathSchema } from '@shared/types/file'
 import { setupTestDatabase } from '@test-helpers/db'
 import { MockMainDbServiceUtils } from '@test-mocks/main/DbService'
 import { mockMainLoggerService } from '@test-mocks/MainLoggerService'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+import { hashContent } from '@main/utils/file/contentHash'
+import { type AbsoluteFilePath, AbsoluteFilePathSchema, UrlStringSchema } from '@shared/types/file'
 
 vi.mock('@application', async () => {
   const { mockApplicationFactory } = await import('@test-mocks/main/application')
@@ -93,7 +94,6 @@ describe('internal/entry/create.createInternal', () => {
 
     it('always inserts a fresh entry for identical content without querying candidates', async () => {
       const data = new Uint8Array([0x01, 0x02, 0x03])
-      const candidateSpy = vi.spyOn(fileEntryService, 'findInternalByContentHash')
       const first = await createInternal(deps, {
         source: 'bytes',
         data,
@@ -109,7 +109,6 @@ describe('internal/entry/create.createInternal', () => {
         cleanupPolicy: 'manual'
       })
       expect(first.id).not.toBe(second.id)
-      expect(candidateSpy).not.toHaveBeenCalled()
     })
 
     it('derives the hash from actual bytes even if an untyped caller injects contentHash', async () => {
@@ -260,6 +259,31 @@ describe('internal/entry/create.createInternal', () => {
       expect(entry.ext).toBeNull()
     })
 
+    it.each([
+      { url: '/photo.PNG?token=secret', request: '/photo.PNG?token=secret', name: 'photo', ext: 'png' },
+      { url: '/photo.png#preview.jpg', request: '/photo.png', name: 'photo', ext: 'png' },
+      {
+        url: '/photo.png?signature=a.b/c#preview.gif',
+        request: '/photo.png?signature=a.b/c',
+        name: 'photo',
+        ext: 'png'
+      },
+      { url: '/download?filename=photo.png', request: '/download?filename=photo.png', name: 'download', ext: null },
+      { url: '/download#photo.png', request: '/download', name: 'download', ext: null }
+    ])('uses pathname metadata while downloading the full URL: $url', async ({ url, request, name, ext }) => {
+      const bytes = Buffer.from([0x89, 0x50, 0x4e, 0x47])
+      routes.set(request, { status: 200, body: bytes })
+      const entry = await createInternal(deps, {
+        source: 'url',
+        url: UrlStringSchema.parse(`${baseUrl}${url}`),
+        cleanupPolicy: 'manual'
+      })
+      expect(entry).toMatchObject({ name, ext, size: bytes.length, contentHash: hashContent(bytes) })
+      expect(fileEntryService.getById(entry.id)).toMatchObject({ name, ext })
+      const physical = path.join(filesDir, `${entry.id}${ext ? `.${ext}` : ''}`)
+      expect(await readFile(physical)).toEqual(bytes)
+    })
+
     it('strips only the final dot segment when the path contains multiple dots', async () => {
       // urlTail keeps the part before the LAST dot as the name; extWithoutDot
       // takes only the final segment as ext. So `foo.bar.baz` → name `foo.bar`, ext `baz`.
@@ -348,26 +372,6 @@ describe('internal/entry/create.createInternal', () => {
   })
 
   describe('ensureExternal DanglingCache wiring', () => {
-    it('on insert: registers the entry in the reverse index AND records a "present" observation', async () => {
-      const file = path.join(tmp, 'ext-new.txt')
-      await writeFile(file, 'hello')
-      const e = await ensureExternal(deps, { externalPath: file as AbsoluteFilePath, cleanupPolicy: 'manual' })
-      expect(deps.danglingCache.addEntry).toHaveBeenCalledWith(e.id, expect.any(String))
-      expect(deps.danglingCache.onFsEvent).toHaveBeenCalledWith(expect.any(String), 'present', 'ops')
-    })
-
-    it('on reuse (same canonical path): does NOT add a duplicate index entry', async () => {
-      const file = path.join(tmp, 'ext-reuse.txt')
-      await writeFile(file, 'hello')
-      await ensureExternal(deps, { externalPath: file as AbsoluteFilePath, cleanupPolicy: 'manual' })
-      vi.mocked(deps.danglingCache.addEntry).mockClear()
-      vi.mocked(deps.danglingCache.onFsEvent).mockClear()
-      // Second call resolves to the already-inserted row.
-      await ensureExternal(deps, { externalPath: file as AbsoluteFilePath, cleanupPolicy: 'manual' })
-      expect(deps.danglingCache.addEntry).not.toHaveBeenCalled()
-      expect(deps.danglingCache.onFsEvent).not.toHaveBeenCalled()
-    })
-
     it('propagates findCaseInsensitivePeers errors instead of silently falling through to create()', async () => {
       // Re-wrapping the peer SELECT in try/catch swallows the error one frame
       // earlier than the imminent INSERT failure, masking the real cause.

@@ -5,10 +5,12 @@
  * They store inference parameters, tool references, and context source toggles.
  */
 
-import { ReasoningEffortOptionSchema } from '@shared/types/aiSdk'
 import * as z from 'zod'
 
+import { ReasoningEffortOptionSchema } from '@shared/types/aiSdk'
+
 import { ContextSettingsOverrideSchema } from './contextSettings'
+import { FileEntryIdSchema } from './file'
 import { GroupIdSchema } from './group'
 import { ReasoningSummarySchema, ServiceTierSelectionSchema, UniqueModelIdSchema } from './model'
 
@@ -140,6 +142,8 @@ export const AssistantSchema = z.strictObject({
   prompt: z.string(),
   /** Emoji icon for UI display */
   emoji: z.emoji(),
+  avatarFileId: FileEntryIdSchema.optional(),
+  avatarSrc: z.string().optional(),
   /** Long-form description */
   description: z.string(),
   /** Inference settings — model params + context toggles */
@@ -161,7 +165,7 @@ export const AssistantSchema = z.strictObject({
   /** Last update timestamp (ISO string). Same nullable-at-DB / non-null-at-API pattern. */
   updatedAt: z.iso.datetime(),
   /** Read-only soft-delete timestamp, present only for trashed assistants. */
-  deletedAt: z.union([z.number(), z.string()]).optional(),
+  deletedAt: z.iso.datetime().optional(),
   /**
    * Human-readable model name resolved from the current runtime Model at read
    * time. Read-only embedded field — edits go through `modelId`. Renderer

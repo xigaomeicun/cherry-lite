@@ -1,5 +1,6 @@
-import { cn } from '@renderer/utils/style'
 import type { HTMLAttributes } from 'react'
+
+import { cn } from '@renderer/utils/style'
 
 export function ConversationNavigationPane({ children, className, ...props }: HTMLAttributes<HTMLDivElement>) {
   return (

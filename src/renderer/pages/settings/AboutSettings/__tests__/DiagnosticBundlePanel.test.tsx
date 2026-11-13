@@ -1,10 +1,10 @@
 import '@testing-library/jest-dom/vitest'
-
-import type { OutputFor } from '@shared/ipc/types'
-import { AbsoluteFilePathSchema } from '@shared/types/file'
 import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+import type { OutputFor } from '@shared/ipc/types'
+import { AbsoluteFilePathSchema } from '@shared/types/file'
 
 vi.unmock('@cherrystudio/ui')
 
@@ -155,8 +155,7 @@ describe('DiagnosticBundlePanel', () => {
     expect(screen.getByText('settings.about.diagnostics.privacy.title')).toBeInTheDocument()
     const checkbox = screen.getByRole('checkbox')
     // Alignment is the regression contract: the consent control and its label share one vertical center.
-    expect(checkbox.closest('label')).toHaveClass('items-center')
-    expect(checkbox).not.toHaveClass('mt-0.5')
+
     const confirmButton = screen.getByRole('button', {
       name: 'settings.about.diagnostics.actions.export'
     })

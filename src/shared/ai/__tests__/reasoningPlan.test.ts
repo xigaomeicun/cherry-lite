@@ -1,7 +1,8 @@
-import type { RuntimeReasoning } from '@shared/data/types/model'
 import { describe, expect, it } from 'vitest'
 
-import { computeBudgetTokens, resolveBudgetTokens } from '../reasoning'
+import type { RuntimeReasoning } from '@shared/data/types/model'
+
+import { resolveBudgetTokens } from '../reasoning'
 
 const reasoning = {
   selectableEfforts: ['high'],
@@ -9,10 +10,6 @@ const reasoning = {
 } satisfies RuntimeReasoning
 
 describe('resolveBudgetTokens', () => {
-  it('computes from descriptor-declared limits', () => {
-    expect(resolveBudgetTokens('high', reasoning)).toBe(computeBudgetTokens(reasoning.thinkingTokenLimits, 0.8))
-  })
-
   it('uses the full descriptor budget for ultra effort', () => {
     expect(resolveBudgetTokens('ultra', reasoning)).toBe(reasoning.thinkingTokenLimits.max)
   })

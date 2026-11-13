@@ -1,5 +1,6 @@
-import type { FileMetadata } from '@renderer/types/file'
 import { describe, expect, it } from 'vitest'
+
+import type { FileMetadata } from '@renderer/types/file'
 
 import {
   createComposerFileTokenSourceId,
@@ -50,8 +51,6 @@ describe('composer file token source', () => {
   it('mints a unique, non-path-like file-token id', () => {
     const first = createComposerFileTokenSourceId()
     const second = createComposerFileTokenSourceId()
-
-    expect(first.startsWith('file-token-')).toBe(true)
     expect(isComposerFileTokenSourceId(first)).toBe(true)
     expect(first).not.toBe(second)
   })

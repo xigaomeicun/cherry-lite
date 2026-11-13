@@ -14,9 +14,29 @@
  *   and cache invalidation are orchestrated by FileManager — this service
  *   is strictly query/insert/update/delete.
  *
- * See [architecture.md](../../../docs/references/file/architecture.md) for the
+ * See [architecture.md](../../../docs/dev/references/file/architecture.md) for the
  * module-level layering rules.
  */
+
+import {
+  and,
+  asc,
+  count,
+  eq,
+  gt,
+  inArray,
+  isNotNull,
+  isNull,
+  lt,
+  notInArray,
+  or,
+  type SQL,
+  sql,
+  type SQLWrapper
+} from 'drizzle-orm'
+import { v7 as uuidv7 } from 'uuid'
+import * as z from 'zod'
+import { ZodError } from 'zod'
 
 import { application } from '@application'
 import { fileEntryTable } from '@data/db/schemas/file'
@@ -43,25 +63,6 @@ import {
 } from '@shared/data/types/file'
 import type { FileType } from '@shared/types/file'
 import { type CanonicalFilePath, fileTypeMap } from '@shared/utils/file'
-import {
-  and,
-  asc,
-  count,
-  eq,
-  gt,
-  inArray,
-  isNotNull,
-  isNull,
-  lt,
-  notInArray,
-  or,
-  type SQL,
-  sql,
-  type SQLWrapper
-} from 'drizzle-orm'
-import { v7 as uuidv7 } from 'uuid'
-import * as z from 'zod'
-import { ZodError } from 'zod'
 
 import { asNumericKey, asStringKey, decodeListCursor, encodeCursor, keysetOrdering } from './utils/keysetCursor'
 
@@ -128,6 +129,7 @@ export interface FindEntriesQuery {
 export type ListFilesSortBy = 'name' | 'createdAt' | 'updatedAt' | 'size' | 'ext'
 
 export interface ListCursorQuery {
+  readonly ids?: readonly FileEntryId[]
   readonly origin?: FileEntryOrigin
   readonly inTrash?: boolean
   readonly fileType?: FileType
@@ -293,6 +295,9 @@ export interface FileEntryService {
   /** Remove the row (CASCADE drops dependent persistent file refs). No-op if already gone. */
   delete(id: FileEntryId): void
 
+  /** Hard-delete trashed entries older than the retention cutoff. */
+  purgeExpiredTx(tx: DbOrTx, cutoffMs: number, limit: number): FileEntryId[]
+
   /** Tx-scoped variant of `delete` for composing write flows. */
   deleteTx(tx: DbOrTx, id: FileEntryId): void
 }
@@ -317,7 +322,7 @@ type FileEntryRow = typeof fileEntryTable.$inferSelect
  * ms-epoch for timestamps, so the helpers' translations would actively
  * misshape the row. The dispatch-then-parse pattern here is the
  * discriminated-union counterpart and is documented in
- * `docs/references/data/data-api-in-main.md` (§"When `nullsToUndefined +
+ * `docs/dev/references/data/data-api-in-main.md` (§"When `nullsToUndefined +
  * spread` is NOT a fit") as an accepted alternative.
  */
 function rowToFileEntry(row: FileEntryRow): FileEntry {
@@ -646,6 +651,9 @@ class FileEntryServiceImpl implements FileEntryService {
 
   listCursor(query: ListCursorQuery = {}): FileEntryListResponse {
     const filterConditions: SQL[] = []
+    if (query.ids) {
+      filterConditions.push(inArray(fileEntryTable.id, query.ids))
+    }
     if (query.origin) {
       filterConditions.push(eq(fileEntryTable.origin, query.origin))
     }
@@ -870,6 +878,29 @@ class FileEntryServiceImpl implements FileEntryService {
 
   deleteTx(tx: DbOrTx, id: FileEntryId): void {
     tx.delete(fileEntryTable).where(eq(fileEntryTable.id, id)).run()
+  }
+
+  purgeExpiredTx(tx: DbOrTx, cutoffMs: number, limit: number): FileEntryId[] {
+    const rows = tx
+      .select({ id: fileEntryTable.id })
+      .from(fileEntryTable)
+      .where(
+        and(
+          isNotNull(fileEntryTable.deletedAt),
+          lt(fileEntryTable.deletedAt, cutoffMs),
+          // A trashed file can still back a live painting or message — the ref rows
+          // FK-cascade, so purging here would strip the image out from under it.
+          // It stays in the trash until the last holder is gone.
+          ...persistentRefAbsenceConditions()
+        )
+      )
+      .limit(limit)
+      .all()
+    const ids = rows.map((row) => row.id)
+    if (ids.length === 0) return ids
+
+    tx.delete(fileEntryTable).where(inArray(fileEntryTable.id, ids)).run()
+    return ids
   }
 }
 

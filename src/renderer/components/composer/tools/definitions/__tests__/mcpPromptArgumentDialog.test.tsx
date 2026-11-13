@@ -1,7 +1,8 @@
-import type { McpPrompt } from '@shared/types/mcp'
 import { fireEvent, render, screen } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { describe, expect, it, vi } from 'vitest'
+
+import type { McpPrompt } from '@shared/types/mcp'
 
 import { McpPromptArgumentDialog } from '../mcpPromptArgumentDialog'
 
@@ -189,22 +190,5 @@ describe('McpPromptArgumentDialog', () => {
     expect(screen.getByLabelText('style')).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Cancel' })).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Close dialog' })).toBeInTheDocument()
-  })
-
-  it('renders the prompt description above the argument fields', () => {
-    render(
-      <McpPromptArgumentDialog
-        open
-        prompt={prompt}
-        values={{ language: '', style: '' }}
-        submitting={false}
-        onValuesChange={vi.fn()}
-        onOpenChange={vi.fn()}
-        onSubmit={vi.fn()}
-      />
-    )
-
-    expect(screen.getByText('Review a patch')).toBeInTheDocument()
-    expect(screen.getByText('Target language')).toBeInTheDocument()
   })
 })

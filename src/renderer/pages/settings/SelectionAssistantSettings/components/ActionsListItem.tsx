@@ -1,44 +1,53 @@
-import { Button } from '@cherrystudio/ui'
-import type { DraggableProvided } from '@hello-pangea/dnd'
-import { cn } from '@renderer/utils/style'
-import type { SelectionActionItem } from '@shared/data/preference/preferenceTypes'
 import { Pencil, Settings2, Trash } from 'lucide-react'
 import { DynamicIcon } from 'lucide-react/dynamic'
 import type React from 'react'
 import { memo } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { Button } from '@cherrystudio/ui'
+import { SELECTION_AGENT_ISSUE_LABEL_KEYS } from '@renderer/utils/selectionAction'
+import { cn } from '@renderer/utils/style'
+import { SELECTION_BUILTIN_ACTION_ID, type SelectionAction } from '@shared/types/selection'
+
+import type { SelectionActionAgentInfo } from '../hooks/useSettingsActionsList'
+
 interface ActionItemProps {
-  item: SelectionActionItem
-  provided: DraggableProvided
-  listType: 'enabled' | 'disabled'
+  item: SelectionAction
   isLastEnabledItem: boolean
-  onEdit: (item: SelectionActionItem) => void
+  onEdit: (item: SelectionAction) => void
   onDelete: (id: string) => void
   getSearchEngineInfo: (engine: string) => { icon: any; name: string } | null
+  getAgentInfo: (item: SelectionAction) => SelectionActionAgentInfo | null
 }
 
 const ActionsListItem = memo(
-  ({ item, provided, listType, isLastEnabledItem, onEdit, onDelete, getSearchEngineInfo }: ActionItemProps) => {
+  ({ item, isLastEnabledItem, onEdit, onDelete, getSearchEngineInfo, getAgentInfo }: ActionItemProps) => {
     const { t } = useTranslation()
-    const isEnabled = listType === 'enabled'
+    const isEnabled = item.enabled
+    const agentInfo = getAgentInfo(item)
 
     return (
-      <Item
-        ref={provided.innerRef}
-        {...provided.draggableProps}
-        {...(isLastEnabledItem ? {} : provided.dragHandleProps)}
-        disabled={!isEnabled}
-        className={isLastEnabledItem ? 'non-draggable' : ''}>
+      <Item disabled={!isEnabled} className={isLastEnabledItem ? 'non-draggable' : ''}>
         <ItemLeft>
           <ItemIcon disabled={!isEnabled}>
             <DynamicIcon name={item.icon as any} size={16} fallback={() => <div style={{ width: 16, height: 16 }} />} />
           </ItemIcon>
           <ItemName disabled={!isEnabled}>{item.isBuiltIn ? t(item.name) : item.name}</ItemName>
-          {item.id === 'search' && item.searchEngine && (
+          {item.isBuiltIn && item.id === SELECTION_BUILTIN_ACTION_ID.SEARCH && item.searchEngine && (
             <ItemDescription>
               {getSearchEngineInfo(item.searchEngine)?.icon}
               <span>{getSearchEngineInfo(item.searchEngine)?.name}</span>
+            </ItemDescription>
+          )}
+          {agentInfo?.agent && (
+            <ItemDescription>
+              <span aria-hidden="true">{agentInfo.agent.emoji}</span>
+              <span className="truncate">{agentInfo.agent.name}</span>
+            </ItemDescription>
+          )}
+          {agentInfo?.issue && (
+            <ItemDescription className="bg-warning-subtle text-warning-subtle-foreground">
+              {t(SELECTION_AGENT_ISSUE_LABEL_KEYS[agentInfo.issue])}
             </ItemDescription>
           )}
         </ItemLeft>
@@ -50,8 +59,8 @@ const ActionsListItem = memo(
 )
 
 interface ActionOperationsProps {
-  item: SelectionActionItem
-  onEdit: (item: SelectionActionItem) => void
+  item: SelectionAction
+  onEdit: (item: SelectionAction) => void
   onDelete: (id: string) => void
 }
 
@@ -69,7 +78,7 @@ const ActionOperations = memo(({ item, onEdit, onDelete }: ActionOperationsProps
     )
   }
 
-  if (item.isBuiltIn && item.id === 'search') {
+  if (item.id === SELECTION_BUILTIN_ACTION_ID.SEARCH || item.id === SELECTION_BUILTIN_ACTION_ID.ASK_AGENT) {
     return (
       <UserActionOpSection>
         <Button variant="ghost" size="icon-sm" onClick={() => onEdit(item)}>
@@ -82,16 +91,10 @@ const ActionOperations = memo(({ item, onEdit, onDelete }: ActionOperationsProps
   return null
 })
 
-const Item = ({
-  ref,
-  className,
-  disabled,
-  ...props
-}: React.ComponentPropsWithoutRef<'div'> & { disabled: boolean; ref?: React.Ref<HTMLElement> }) => (
+const Item = ({ className, disabled, ...props }: React.ComponentPropsWithoutRef<'div'> & { disabled: boolean }) => (
   <div
-    ref={ref as React.Ref<HTMLDivElement>}
     className={cn(
-      'group/action-item mb-2 flex min-h-11 cursor-move items-center justify-between rounded-md border border-border-subtle bg-transparent px-4 py-2 transition-colors last:mb-0 hover:border-border hover:bg-muted/50',
+      'group/action-item flex min-h-11 cursor-move items-center justify-between rounded-md border border-border-subtle bg-transparent px-4 py-2 transition-colors hover:border-border hover:bg-muted/50',
       disabled && 'opacity-70 hover:bg-muted/30',
       className === 'non-draggable' && 'relative cursor-default border-border bg-muted/50 hover:bg-muted/50',
       className
@@ -129,7 +132,7 @@ const ItemIcon = ({ className, disabled, ...props }: React.ComponentPropsWithout
 const ItemDescription = ({ className, ...props }: React.ComponentPropsWithoutRef<'div'>) => (
   <div
     className={cn(
-      'ml-4 flex h-5 shrink-0 items-center gap-1 rounded-sm bg-muted/50 px-1.5 text-muted-foreground text-xs leading-none',
+      'ml-4 flex h-5 shrink-0 items-center gap-1 rounded-sm bg-muted/50 px-1.5 text-xs leading-none text-muted-foreground',
       className
     )}
     {...props}
@@ -139,7 +142,7 @@ const ItemDescription = ({ className, ...props }: React.ComponentPropsWithoutRef
 const UserActionOpSection = ({ className, ...props }: React.ComponentPropsWithoutRef<'div'>) => (
   <div
     className={cn(
-      'flex flex-row items-center gap-2 [&_.btn-icon-delete:hover]:text-destructive [&_.btn-icon-delete]:text-muted-foreground [&_.btn-icon-edit:hover]:text-foreground [&_.btn-icon-edit]:text-muted-foreground',
+      'flex flex-row items-center gap-2 [&_.btn-icon-delete]:text-muted-foreground [&_.btn-icon-delete:hover]:text-destructive [&_.btn-icon-edit]:text-muted-foreground [&_.btn-icon-edit:hover]:text-foreground',
       className
     )}
     {...props}

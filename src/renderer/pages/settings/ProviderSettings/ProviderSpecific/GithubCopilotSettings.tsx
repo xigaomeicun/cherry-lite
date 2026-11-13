@@ -1,13 +1,16 @@
-import { Button, Input, Slider, Tooltip } from '@cherrystudio/ui'
-import { loggerService } from '@logger'
-import { useProvider } from '@renderer/hooks/useProvider'
-import { toast } from '@renderer/services/toast'
-import { cn } from '@renderer/utils/style'
-import { CheckCircle2, CircleAlert, Copy } from 'lucide-react'
+import { Check, CheckCircle2, CircleAlert, Copy } from 'lucide-react'
 import type { FC } from 'react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { Button, Input, Slider, Tooltip } from '@cherrystudio/ui'
+import { loggerService } from '@logger'
+import { useProvider } from '@renderer/hooks/useProvider'
+import { toast } from '@renderer/services/toast'
+import { openExternalWebsite } from '@renderer/services/website'
+import { cn } from '@renderer/utils/style'
+
+import { useCopyToClipboard } from '../hooks/useCopyToClipboard'
 import { ProviderSettingsSubtitle } from '../primitives/ProviderSettingsPrimitives'
 
 const logger = loggerService.withContext('GithubCopilotSettings')
@@ -36,6 +39,7 @@ const GithubCopilotSettings: FC<GithubCopilotSettingsProps> = ({ providerId }) =
   const [loading, setLoading] = useState<boolean>(false)
   const [verificationPageOpened, setVerificationPageOpened] = useState<boolean>(false)
   const [currentStep, setCurrentStep] = useState<number>(0)
+  const [userCodeCopied, copyUserCode] = useCopyToClipboard()
 
   const providerRateLimit = provider?.settings?.rateLimit ?? 10
   const rateLimitRef = useRef(providerRateLimit)
@@ -160,19 +164,9 @@ const GithubCopilotSettings: FC<GithubCopilotSettingsProps> = ({ providerId }) =
     }
   }, [t, provider?.apiKeys, provider?.settings, deleteApiKey, updateProvider])
 
-  const handleCopyUserCode = useCallback(async () => {
-    try {
-      await navigator.clipboard.writeText(userCode)
-      toast.success(t('common.copied'))
-    } catch (error) {
-      logger.error('Failed to copy to clipboard:', error as Error)
-      toast.error(t('common.copy_failed'))
-    }
-  }, [userCode, t])
-
   const handleOpenVerificationPage = useCallback(() => {
     if (verificationUri) {
-      window.open(verificationUri, '_blank')
+      void openExternalWebsite(verificationUri)
       setVerificationPageOpened(true)
       setCurrentStep(2)
     }
@@ -263,8 +257,8 @@ const GithubCopilotSettings: FC<GithubCopilotSettingsProps> = ({ providerId }) =
                 <div key={idx} className="flex gap-2">
                   <span className={stepDotClass(step.status)} />
                   <div className="min-w-0">
-                    <div className="text-foreground text-sm leading-tight">{step.title}</div>
-                    <div className="mt-1 text-muted-foreground text-xs leading-snug">{step.description}</div>
+                    <div className="text-sm leading-tight text-foreground">{step.title}</div>
+                    <div className="mt-1 text-xs leading-snug text-muted-foreground">{step.description}</div>
                   </div>
                 </div>
               ))}
@@ -276,22 +270,22 @@ const GithubCopilotSettings: FC<GithubCopilotSettingsProps> = ({ providerId }) =
                   <div className="mb-3 flex items-start gap-3">
                     <span
                       className={cn(
-                        'flex size-6 shrink-0 items-center justify-center rounded-full font-bold text-primary-foreground text-xs',
+                        'flex size-6 shrink-0 items-center justify-center rounded-full text-xs font-bold text-primary-foreground',
                         currentStep > 1 ? 'bg-primary' : 'bg-primary'
                       )}>
                       2
                     </span>
                     <div>
-                      <div className="text-foreground text-sm">{t('settings.provider.copilot.step_copy_code')}</div>
-                      <div className="mt-0.5 text-foreground-tertiary text-xs">
+                      <div className="text-sm text-foreground">{t('settings.provider.copilot.step_copy_code')}</div>
+                      <div className="mt-0.5 text-xs text-foreground-tertiary">
                         {t('settings.provider.copilot.step_copy_code_detail')}
                       </div>
                     </div>
                   </div>
                   <div className="flex min-h-6 flex-row items-center justify-between">
-                    <Input value={userCode} readOnly className="mr-2 font-mono font-semibold text-sm" />
-                    <Button type="button" variant="secondary" onClick={handleCopyUserCode}>
-                      <Copy className="size-4" />
+                    <Input value={userCode} readOnly className="mr-2 font-mono text-sm font-semibold" />
+                    <Button type="button" variant="secondary" onClick={() => void copyUserCode(userCode)}>
+                      {userCodeCopied ? <Check className="size-4 text-success" /> : <Copy className="size-4" />}
                       {t('common.copy')}
                     </Button>
                   </div>
@@ -301,12 +295,12 @@ const GithubCopilotSettings: FC<GithubCopilotSettingsProps> = ({ providerId }) =
               {currentStep >= 1 && (
                 <div className="rounded-lg border border-border bg-muted/40 p-4 transition-colors hover:border-border">
                   <div className="mb-3 flex items-start gap-3">
-                    <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary font-bold text-primary-foreground text-xs">
+                    <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
                       3
                     </span>
                     <div>
-                      <div className="text-foreground text-sm">{t('settings.provider.copilot.step_authorize')}</div>
-                      <div className="mt-0.5 text-foreground-tertiary text-xs">
+                      <div className="text-sm text-foreground">{t('settings.provider.copilot.step_authorize')}</div>
+                      <div className="mt-0.5 text-xs text-foreground-tertiary">
                         {t('settings.provider.copilot.step_authorize_detail')}
                       </div>
                     </div>
@@ -315,7 +309,7 @@ const GithubCopilotSettings: FC<GithubCopilotSettingsProps> = ({ providerId }) =
                     {t('settings.provider.copilot.open_verification_page')}
                   </Button>
                   {verificationUri ? (
-                    <p className="ml-1 break-all text-foreground-tertiary text-xs">{verificationUri}</p>
+                    <p className="ml-1 text-xs break-all text-foreground-tertiary">{verificationUri}</p>
                   ) : null}
                 </div>
               )}
@@ -323,12 +317,12 @@ const GithubCopilotSettings: FC<GithubCopilotSettingsProps> = ({ providerId }) =
               {currentStep >= 2 && (
                 <div className="rounded-lg border border-border bg-muted/40 p-4 transition-colors hover:border-border">
                   <div className="mb-3 flex items-start gap-3">
-                    <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary font-bold text-primary-foreground text-xs">
+                    <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
                       4
                     </span>
                     <div>
-                      <div className="text-foreground text-sm">{t('settings.provider.copilot.step_connect')}</div>
-                      <div className="mt-0.5 text-foreground-tertiary text-xs">
+                      <div className="text-sm text-foreground">{t('settings.provider.copilot.step_connect')}</div>
+                      <div className="mt-0.5 text-xs text-foreground-tertiary">
                         {t('settings.provider.copilot.step_connect_detail')}
                       </div>
                     </div>

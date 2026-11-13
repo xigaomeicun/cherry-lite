@@ -1,3 +1,5 @@
+import { describe, expect, it } from 'vitest'
+
 import { ENDPOINT_TYPE, type Model, MODEL_CAPABILITY, SERVER_TOOL } from '@shared/data/types/model'
 import type { Provider } from '@shared/data/types/provider'
 import {
@@ -7,7 +9,8 @@ import {
   isServerToolModelEligible,
   resolveWebToolRoutes
 } from '@shared/utils/provider'
-import { describe, expect, it } from 'vitest'
+
+import bundledProviders from '../../../../packages/provider-registry/data/providers.json'
 
 const model = (apiModelId: string, overrides: Partial<Model> = {}): Model => ({
   id: `provider::${apiModelId}`,
@@ -24,7 +27,102 @@ const model = (apiModelId: string, overrides: Partial<Model> = {}): Model => ({
 const provider = (modelScope: 'all-chat-models' | 'model-dependent', id = 'anthropic'): Provider =>
   ({ id, serverTools: [{ id: SERVER_TOOL.WEB_SEARCH, modelScope }] }) as Provider
 
+describe('Qwen Anthropic web tools', () => {
+  it.each(['dashscope', 'qwencloud'])('routes search and fetch together on %s', (providerId) => {
+    const host = bundledProviders.providers.find((p) => p.id === providerId)! as unknown as Provider
+    for (const apiModelId of ['qwen3.8-max', 'deepseek-v4.1-flash-1017']) {
+      const routes = resolveWebToolRoutes(model(apiModelId, { capabilities: [MODEL_CAPABILITY.FUNCTION_CALL] }), host, {
+        webSearchEnabled: true,
+        modelToolsPreferred: false,
+        clientSearchAvailable: true,
+        clientFetchAvailable: false,
+        endpointType: ENDPOINT_TYPE.ANTHROPIC_MESSAGES
+      })
+      expect(routes).toMatchObject({ webSearch: 'server', webFetch: 'server' })
+    }
+  })
+
+  it.each(['dashscope', 'qwencloud'])('withholds undocumented Anthropic variants on %s', (providerId) => {
+    const host = bundledProviders.providers.find((p) => p.id === providerId)! as unknown as Provider
+    for (const apiModelId of [
+      'qwen3.8-omni-flash',
+      'qwen3.8-max-preview',
+      'qwen-turbo',
+      'deepseek-v4.1-flash',
+      'deepseek-v4.1-flash-9999'
+    ]) {
+      expect(isBuiltinWebSearchAvailable(model(apiModelId), host, ENDPOINT_TYPE.ANTHROPIC_MESSAGES)).toBe(false)
+      expect(isBuiltinWebFetchAvailable(model(apiModelId), host, ENDPOINT_TYPE.ANTHROPIC_MESSAGES)).toBe(false)
+    }
+  })
+
+  it.each([
+    'qwen3.8-flash',
+    'qwen3.8-27b',
+    'qwen3.7-plus',
+    'deepseek-v4-pro-0813',
+    'deepseek-v4-flash-0731',
+    'glm-5.2',
+    'kimi-k3'
+  ])('serves documented mainland Anthropic tools for %s', (apiModelId) => {
+    const host = bundledProviders.providers.find((p) => p.id === 'dashscope')! as unknown as Provider
+    expect(isBuiltinWebSearchAvailable(model(apiModelId), host, ENDPOINT_TYPE.ANTHROPIC_MESSAGES)).toBe(true)
+    expect(isBuiltinWebFetchAvailable(model(apiModelId), host, ENDPOINT_TYPE.ANTHROPIC_MESSAGES)).toBe(true)
+  })
+})
+
 describe('server-tool model eligibility', () => {
+  it.each([
+    ['dashscope', 'qwen3-max-preview'],
+    ['openai', 'gpt-5.2-chat-latest'],
+    ['moonshot', 'kimi-k2-instruct'],
+    ['qwencloud', 'qwen3.8-omni-flash']
+  ])('retains native search without an external backend for %s/%s', (providerId, modelId) => {
+    const host = provider('model-dependent', providerId)
+    expect(
+      resolveWebToolRoutes(model(modelId), host, {
+        webSearchEnabled: true,
+        modelToolsPreferred: true,
+        clientSearchAvailable: false,
+        clientFetchAvailable: false
+      })
+    ).toMatchObject({ webSearch: 'server' })
+  })
+
+  it('retains DashScope page fetching for qwen3-max-preview', () => {
+    expect(
+      isBuiltinWebFetchAvailable(model('qwen3-max-preview'), {
+        id: 'dashscope',
+        serverTools: [{ id: SERVER_TOOL.URL_CONTEXT, modelScope: 'model-dependent' }]
+      })
+    ).toBe(true)
+  })
+
+  it.each(['gemini', 'vertexai', 'cherryin', 'aihubmix'])(
+    'keeps Gemini 4 search and URL context alongside function tools on %s',
+    (providerId) => {
+      const argon = model('google/gemini-4-argon', { capabilities: [MODEL_CAPABILITY.FUNCTION_CALL] })
+      const host = {
+        id: providerId,
+        serverTools: [
+          { id: SERVER_TOOL.WEB_SEARCH, modelScope: 'model-dependent' },
+          { id: SERVER_TOOL.URL_CONTEXT, modelScope: 'model-dependent' }
+        ]
+      } as Provider
+      expect(isBuiltinWebSearchAvailable(argon, host)).toBe(true)
+      expect(isBuiltinWebFetchAvailable(argon, host)).toBe(true)
+      expect(
+        resolveWebToolRoutes(argon, host, {
+          webSearchEnabled: true,
+          modelToolsPreferred: true,
+          clientSearchAvailable: false,
+          clientFetchAvailable: false,
+          hasFunctionToolSignals: true
+        })
+      ).toMatchObject({ webSearch: 'server', webFetch: 'server' })
+    }
+  )
+
   it('uses generated registry eligibility without a generic model capability', () => {
     const claude = model('claude-sonnet-4-6')
 
@@ -37,7 +135,22 @@ describe('server-tool model eligibility', () => {
     const custom = model('private-model')
 
     expect(isBuiltinWebSearchAvailable(custom, provider('model-dependent'))).toBe(false)
-    expect(isBuiltinWebSearchAvailable(custom, { serverTools: [] } as unknown as Provider)).toBe(false)
+    expect(isBuiltinWebSearchAvailable(custom, { id: 'custom', serverTools: [] })).toBe(false)
+  })
+
+  it('does not bypass endpoint restrictions for all-chat tools', () => {
+    const host = {
+      id: 'custom',
+      serverTools: [
+        {
+          id: SERVER_TOOL.WEB_SEARCH,
+          modelScope: 'all-chat-models',
+          endpointTypes: [ENDPOINT_TYPE.OPENAI_RESPONSES]
+        }
+      ]
+    } as Provider
+    expect(isBuiltinWebSearchAvailable(model('custom-model'), host, ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS)).toBe(false)
+    expect(isBuiltinWebSearchAvailable(model('custom-model'), host, ENDPOINT_TYPE.OPENAI_RESPONSES)).toBe(true)
   })
 
   it.each(['deepseek-v3', 'deepseek-v3.2', 'deepseek-v4-flash', 'deepseek-v4-pro'])(
@@ -58,7 +171,7 @@ describe('server-tool model eligibility', () => {
         }
       ]
     } as Provider
-    const flash = model('deepseek-v4-flash', { capabilities: [MODEL_CAPABILITY.FUNCTION_CALL] })
+    const flash = model('deepseek-flash', { capabilities: [MODEL_CAPABILITY.FUNCTION_CALL] })
     const route = (endpointType: (typeof ENDPOINT_TYPE)[keyof typeof ENDPOINT_TYPE]) =>
       resolveWebToolRoutes(flash, deepseek, {
         webSearchEnabled: true,
@@ -106,6 +219,47 @@ describe('server-tool model eligibility', () => {
     expect(isBuiltinWebSearchAvailable(dated, provider('model-dependent', 'doubao'))).toBe(true)
   })
 
+  // QwenCloud splits web search across two same-tool declarations: qwen3.x lines ride Chat's
+  // enable_search, the DeepSeek-V4/GLM-5.2 ids the Responses web_search tool ("Responses API only"
+  // in the docs table). Eligibility must land on the SAME declaration as the pinned endpoint —
+  // otherwise Chat on deepseek-v4 routes server-side and silently serves no search.
+  it('matches model and endpoint on the same qwencloud declaration', () => {
+    const qwencloud = {
+      id: 'qwencloud',
+      serverTools: [
+        {
+          id: SERVER_TOOL.WEB_SEARCH,
+          modelScope: 'model-dependent',
+          endpointTypes: [ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS]
+        },
+        {
+          id: SERVER_TOOL.WEB_SEARCH,
+          modelScope: 'model-dependent',
+          endpointTypes: [ENDPOINT_TYPE.OPENAI_RESPONSES]
+        }
+      ]
+    } as unknown as Provider
+    const qwen = model('qwen3.7-max', { capabilities: [MODEL_CAPABILITY.FUNCTION_CALL] })
+    const deepseek = model('deepseek-v4-pro', { capabilities: [MODEL_CAPABILITY.FUNCTION_CALL] })
+    const route = (m: Model, endpointType: (typeof ENDPOINT_TYPE)[keyof typeof ENDPOINT_TYPE]) =>
+      resolveWebToolRoutes(m, qwencloud, {
+        webSearchEnabled: true,
+        clientSearchAvailable: true,
+        clientFetchAvailable: false,
+        modelToolsPreferred: true,
+        endpointType
+      })
+
+    expect(isBuiltinWebSearchAvailable(qwen, qwencloud, ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS)).toBe(true)
+    expect(isBuiltinWebSearchAvailable(qwen, qwencloud, ENDPOINT_TYPE.OPENAI_RESPONSES)).toBe(false)
+    expect(isBuiltinWebSearchAvailable(deepseek, qwencloud, ENDPOINT_TYPE.OPENAI_RESPONSES)).toBe(true)
+    // Chat pinned on a Responses-only line reads unavailable, so routing falls back to client tools.
+    expect(isBuiltinWebSearchAvailable(deepseek, qwencloud, ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS)).toBe(false)
+    expect(route(deepseek, ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS)).toMatchObject({ webSearch: 'client' })
+    expect(route(deepseek, ENDPOINT_TYPE.OPENAI_RESPONSES)).toMatchObject({ webSearch: 'server' })
+    expect(route(qwen, ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS)).toMatchObject({ webSearch: 'server' })
+  })
+
   // A gateway whose declaration narrows to `gemini` resolves the same google tool factory through the
   // model's `<host>.google` provider segment, so pre-3 Gemini hits the same native-vs-function-tool
   // conflict there. Keying the guard to the host id let cherryin/aihubmix ship the unsupported combo.
@@ -132,7 +286,7 @@ describe('server-tool model eligibility', () => {
         model('google/gemini-3-1-pro-preview', { capabilities: [MODEL_CAPABILITY.FUNCTION_CALL] }),
         {
           ...gateway
-        } as Provider,
+        },
         {
           webSearchEnabled: true,
           clientSearchAvailable: false,
@@ -409,7 +563,7 @@ describe('DashScope hosted search endpoint contract', () => {
       ['glm-5-2', 'glm-5.2'],
       ['kimi-k3', 'kimi/kimi-k3'],
       ['kimi-k3', 'kimi-k3']
-    ])('retains %s / %s only for Responses search', (canonicalId, wireId) => {
+    ])('retains %s / %s for Responses and Anthropic search', (canonicalId, wireId) => {
       const p = host(providerId)
       const m = model(wireId, {
         id: `${providerId}::${canonicalId}`,
@@ -419,7 +573,7 @@ describe('DashScope hosted search endpoint contract', () => {
       expect(isServerToolModelEligible(m, p, SERVER_TOOL.WEB_SEARCH)).toBe(true)
       expect(isBuiltinWebSearchAvailable(m, p, chat)).toBe(false)
       expect(isBuiltinWebSearchAvailable(m, p, responses)).toBe(true)
-      expect(isBuiltinWebSearchAvailable(m, p, ENDPOINT_TYPE.ANTHROPIC_MESSAGES)).toBe(false)
+      expect(isBuiltinWebSearchAvailable(m, p, ENDPOINT_TYPE.ANTHROPIC_MESSAGES)).toBe(true)
       expect(isBuiltinWebSearchAvailable(m, p)).toBe(false)
       const responseFirst = { ...m, endpointTypes: [responses, chat] }
       expect(isBuiltinWebSearchAvailable(responseFirst, p)).toBe(true)

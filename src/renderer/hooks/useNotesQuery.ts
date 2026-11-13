@@ -1,19 +1,7 @@
-import type { NotesTreeNode } from '@renderer/types/note'
 import { useMemo } from 'react'
 
-// 查找节点的工具函数
-export const findNodeByPath = (tree: NotesTreeNode[], targetPath: string): NotesTreeNode | null => {
-  for (const node of tree) {
-    if (node.externalPath === targetPath) {
-      return node
-    }
-    if (node.children) {
-      const found = findNodeByPath(node.children, targetPath)
-      if (found) return found
-    }
-  }
-  return null
-}
+import { findNodeByPath } from '@renderer/services/NotesTreeService'
+import type { NotesTreeNode } from '@renderer/types/note'
 
 /**
  * 获取当前活动节点（基于当前笔记树和活动文件路径）

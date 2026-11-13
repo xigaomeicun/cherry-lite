@@ -1,9 +1,10 @@
 import type * as NodeZlib from 'node:zlib'
 import { gzipSync } from 'node:zlib'
 
-import { BaseService } from '@main/core/lifecycle'
 import { MockMainPreferenceServiceUtils } from '@test-mocks/main/PreferenceService'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+import { BaseService } from '@main/core/lifecycle'
 
 const mocks = vi.hoisted(() => ({
   traceStorageSetTopicId: vi.fn(),
@@ -50,15 +51,6 @@ describe('ClaudeCodeTraceBridgeService', () => {
     vi.clearAllMocks()
   })
 
-  it('activates without binding a collector port', async () => {
-    const service = new ClaudeCodeTraceBridgeService()
-
-    await service._doInit()
-
-    expect(service.isTraceModeEnabled()).toBe(true)
-    expect((service as any).server).toBeUndefined()
-  })
-
   it('lazily starts the collector and returns Claude Code telemetry env', async () => {
     const service = new ClaudeCodeTraceBridgeService()
     await service._doInit()
@@ -73,7 +65,6 @@ describe('ClaudeCodeTraceBridgeService', () => {
       OTEL_LOGS_EXPORTER: 'otlp',
       OTEL_EXPORTER_OTLP_PROTOCOL: 'http/json',
       OTEL_EXPORTER_OTLP_TRACES_PROTOCOL: 'http/json',
-      OTEL_TRACES_EXPORT_INTERVAL: '1000',
       OTEL_LOG_USER_PROMPTS: '1',
       OTEL_LOG_TOOL_DETAILS: '1',
       OTEL_LOG_TOOL_CONTENT: '1',

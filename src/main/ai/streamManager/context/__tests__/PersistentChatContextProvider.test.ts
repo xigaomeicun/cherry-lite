@@ -1,15 +1,21 @@
+import { setupTestDatabase, withRoot } from '@test-helpers/db'
+import { eq } from 'drizzle-orm'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+import { fileEntryTable } from '@data/db/schemas/file'
 import { messageTable } from '@data/db/schemas/message'
 import { topicTable } from '@data/db/schemas/topic'
 import { userModelTable } from '@data/db/schemas/userModel'
 import { userProviderTable } from '@data/db/schemas/userProvider'
+import { assistantDataService } from '@data/services/AssistantService'
+import { fileRefService } from '@data/services/FileRefService'
 import { messageService } from '@data/services/MessageService'
 import { topicService } from '@data/services/TopicService'
 import { generateOrderKeySequence } from '@data/services/utils/orderKey'
-import { aiStreamAdmissionReasons, type AiStreamOpenRequest } from '@shared/ai/transport'
+import { aiStreamAdmissionReasons } from '@shared/ai/transport'
+import type { FileEntryId } from '@shared/data/types/file'
 import { createUniqueModelId } from '@shared/data/types/model'
 import { getKnowledgeBaseIdsFromParts } from '@shared/data/types/uiParts'
-import { setupTestDatabase, withRoot } from '@test-helpers/db'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { startAiChildTurnSpan } from '../../../observability'
 import { AiStreamAdmissionError } from '../../admission'
@@ -127,7 +133,7 @@ describe('PersistentChatContextProvider — steer continuation history', () => {
         topicId: 'topic-1',
         parentAnchorId: 'a1',
         userMessageParts: [{ type: 'text', text: 'actually, change direction' }]
-      } as AiStreamOpenRequest,
+      },
       { hasLiveStream: false }
     )
 
@@ -377,7 +383,7 @@ describe('PersistentChatContextProvider — steer continuation history', () => {
     expect(regenerated.models[0].request.knowledgeBaseIds).toEqual(knowledgeBaseIds)
   })
 
-  it('steer-continuation: opens an assistant turn under the steer user row with a reminder-wrapped prompt', async () => {
+  it('steer-continuation: opens an assistant turn under the steer user row and preserves its content', async () => {
     // u1 → a1 → u2, where u2 is the steer the user sent mid-turn (child of the assistant row).
     await dbh.db.insert(messageTable).values({
       id: 'u2',
@@ -431,9 +437,7 @@ describe('PersistentChatContextProvider — steer continuation history', () => {
     expect(flatten([history[1]])[0]).toEqual({ role: 'assistant', text: PARTIAL })
     const lastText = flatten([history[2]])[0].text
     expect(history[2].role).toBe('user')
-    expect(lastText).toContain('<system-reminder>')
     expect(lastText).toContain('actually do X instead')
-    expect(lastText).toContain('Please address this message and continue with your tasks.')
   })
 
   it('drops the paused partial when the new turn does not anchor on it (precondition is necessary)', async () => {
@@ -446,7 +450,7 @@ describe('PersistentChatContextProvider — steer continuation history', () => {
         topicId: 'topic-1',
         parentAnchorId: 'u1',
         userMessageParts: [{ type: 'text', text: 'retry from before' }]
-      } as AiStreamOpenRequest,
+      },
       { hasLiveStream: false }
     )
 
@@ -500,6 +504,88 @@ describe('PersistentChatContextProvider — steer continuation history', () => {
     expect(messageService.getChildrenByParentId(userMessageId)[0].modelId).toBe(selectedModelId)
   })
 
+  it('keeps a composer single-model snapshot on the default regeneration policy', async () => {
+    const prepared = await provider.prepareDispatch(
+      makeSubscriber(),
+      {
+        trigger: 'submit-message',
+        topicId: 'topic-1',
+        parentAnchorId: 'a1',
+        mentionedModelIds: [MODEL_ID],
+        userMessageParts: [{ type: 'text', text: 'ordinary single-model question' }]
+      },
+      { hasLiveStream: false }
+    )
+    const reserved = prepared.reservedMessages!.find((message) => message.role === 'assistant')!
+    expect(messageService.getById(reserved.id).data.modelSelection).toBe('default')
+  })
+
+  it.each(['default', 'explicit'] as const)(
+    'retains %s model selection through reservation and stream completion',
+    async (modelSelection) => {
+      const request = { trigger: 'regenerate-message' as const, topicId: 'topic-1', parentAnchorId: 'u1' }
+      const prepared = await provider.prepareDispatch(
+        makeSubscriber(),
+        modelSelection === 'explicit'
+          ? { ...request, mentionedModelIds: [MODEL_ID], appendToLiveGroupMessageId: 'a1' }
+          : request,
+        { hasLiveStream: false }
+      )
+      const reserved = prepared.reservedMessages!.find((message) => message.role === 'assistant')!
+      expect(reserved.metadata?.modelSelection).toBe(modelSelection)
+      expect(messageService.getById(reserved.id).data.modelSelection).toBe(modelSelection)
+
+      const listener = prepared.listeners.find((entry) => entry instanceof PersistenceListener)!
+      await listener.onDone({
+        status: 'success',
+        modelId: MODEL_ID,
+        finalMessage: { id: reserved.id, role: 'assistant', parts: [{ type: 'text', text: 'completed answer' }] }
+      })
+
+      expect(messageService.getById(reserved.id)).toMatchObject({
+        status: 'success',
+        data: { parts: [{ type: 'text', text: 'completed answer' }], modelSelection }
+      })
+    }
+  )
+
+  it.each(['submit-message', 'steer-continuation'] as const)(
+    'freezes the current assistant image into %s placeholders',
+    async (trigger) => {
+      const fileId = '019606a0-0000-7000-8000-00000000aa06' as FileEntryId
+      dbh.db
+        .insert(fileEntryTable)
+        .values({
+          id: fileId,
+          origin: 'internal',
+          name: 'avatar',
+          ext: 'webp',
+          size: 1,
+          cleanupPolicy: 'delete_when_unreferenced'
+        })
+        .run()
+      const assistant = assistantDataService.create({ name: 'Frozen author', modelId: MODEL_ID })
+      dbh.db.update(topicTable).set({ assistantId: assistant.id }).where(eq(topicTable.id, 'topic-1')).run()
+      dbh.db.transaction((tx) => assistantDataService.setAvatarSlotTx(tx, assistant.id, fileId))
+      vi.mocked(resolveAssistantModelId).mockReturnValueOnce({ assistantId: assistant.id, defaultModelId: MODEL_ID })
+      const request =
+        trigger === 'steer-continuation'
+          ? { topicId: 'topic-1', trigger, userMessageId: 'u1', fastMode: false }
+          : { topicId: 'topic-1', trigger, userMessageParts: [{ type: 'text' as const, text: 'question' }] }
+      const result = await provider.prepareDispatch(makeSubscriber(), request, { hasLiveStream: false })
+      const placeholder = messageService.getById(result.models[0].request.messageId!)
+      expect(placeholder.messageSnapshot).toMatchObject({
+        id: assistant.id,
+        name: assistant.name,
+        emoji: assistant.emoji,
+        avatarFileId: fileId
+      })
+      expect(fileRefService.findBySource({ sourceType: 'chat_message', sourceId: placeholder.id })).toEqual([
+        expect.objectContaining({ role: 'author_avatar', fileEntryId: fileId })
+      ])
+    }
+  )
+
   it('fans out @-mentioned siblings: shared siblingsGroupId, one placeholder per model, aligned placeholders[i]/turnRootSpans[i]', async () => {
     // Two @-mentioned models → two assistant placeholders sharing one siblings group.
     // All placeholders share the container traceId now; assert the per-model row and span
@@ -541,7 +627,7 @@ describe('PersistentChatContextProvider — steer continuation history', () => {
         parentAnchorId: 'u1',
         mentionedModelIds: [MODEL_A, MODEL_B],
         userMessageParts: [{ type: 'text', text: 'ask both models' }]
-      } as AiStreamOpenRequest,
+      },
       { hasLiveStream: false }
     )
 
@@ -565,6 +651,8 @@ describe('PersistentChatContextProvider — steer continuation history', () => {
     expect(phB?.modelId).toBe(MODEL_B)
     expect(phA?.siblingsGroupId).toBe(42)
     expect(phB?.siblingsGroupId).toBe(42)
+    expect(phA?.data.modelSelection).toBe('explicit')
+    expect(phB?.data.modelSelection).toBe('explicit')
     expect(prepared.models[0].request.messageId).toBe(phA?.id)
     expect(prepared.models[1].request.messageId).toBe(phB?.id)
 

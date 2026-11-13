@@ -1,14 +1,16 @@
-import { Button, Dialog, DialogContent, DialogTitle, Form, MenuItem, Scrollbar } from '@cherrystudio/ui'
+import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
+import { useForm, type UseFormReturn, useFormState, useWatch } from 'react-hook-form'
+import { useTranslation } from 'react-i18next'
+
+import { Button, Dialog, DialogContent, DialogTitle, Form, MenuItem, ScrollArea } from '@cherrystudio/ui'
 import { cn } from '@cherrystudio/ui/lib/utils'
-import type { ModelSelectorFilter } from '@renderer/components/ModelSelector'
-import { useAgentModelDisabled, useAgentModelFilter } from '@renderer/hooks/agent/useAgentModelFilter'
+import { type ModelSelectorFilter } from '@renderer/components/ModelSelector'
+import { useAgentModelFilter } from '@renderer/hooks/agent/useAgentModelFilter'
+import { useIsCherryCloudModelSelectable } from '@renderer/hooks/cherryCloud/useIsCherryCloudModelSelectable'
 import { useDefaultModel, useModels } from '@renderer/hooks/useModel'
 import { useProviderById } from '@renderer/hooks/useProvider'
 import { AGENT_RUNTIME_CAPABILITIES } from '@shared/ai/agentRuntimeCapabilities'
 import type { UniqueModelId } from '@shared/data/types/model'
-import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
-import { useForm, type UseFormReturn, useFormState, useWatch } from 'react-hook-form'
-import { useTranslation } from 'react-i18next'
 
 import {
   resourceDialogCloseButtonClassName,
@@ -18,6 +20,7 @@ import {
 } from '../components/EditDialogShared'
 import { BasicInfoStep } from './steps/BasicInfoStep'
 import { CapabilityStep } from './steps/CapabilityStep'
+import { KnowledgeStep } from './steps/KnowledgeStep'
 import { SystemPromptStep } from './steps/SystemPromptStep'
 import type { ResourceCreateWizardFormValues, ResourceCreateWizardKind, ResourceCreateWizardValues } from './types'
 
@@ -32,17 +35,22 @@ type ResourceCreateWizardProps = {
   isSubmitting?: boolean
   /** Seeds the name field when the caller already knows it (e.g. the picker's search query). */
   initialName?: string
+  initialValues?: Partial<Pick<ResourceCreateWizardFormValues, 'name' | 'description' | 'avatar' | 'prompt'>>
 }
 
-type StepId = 'basic' | 'system-prompt' | 'capability'
+type StepId = 'basic' | 'system-prompt' | 'knowledge' | 'capability'
 
 /** The avatar a brand-new resource starts with — exported so callers can preview what they'd create. */
 export function getResourceCreateDefaultAvatar(kind: ResourceCreateWizardKind) {
   return kind === 'assistant' ? '💬' : '🤖'
 }
 
-function getDefaultValues(kind: ResourceCreateWizardKind, initialName = ''): ResourceCreateWizardFormValues {
-  const agentType = kind === 'agent' ? 'pi' : 'claude-code'
+function getDefaultValues(
+  kind: ResourceCreateWizardKind,
+  initialName = '',
+  initialValues: ResourceCreateWizardProps['initialValues'] = {}
+): ResourceCreateWizardFormValues {
+  const agentType = kind === 'agent' ? 'pi-durable' : 'claude-code'
   return {
     avatar: getResourceCreateDefaultAvatar(kind),
     name: initialName,
@@ -52,7 +60,8 @@ function getDefaultValues(kind: ResourceCreateWizardKind, initialName = ''): Res
     modelId: null,
     prompt: '',
     knowledgeBaseIds: [],
-    skillIds: []
+    skillIds: [],
+    ...initialValues
   }
 }
 
@@ -130,14 +139,17 @@ export function ResourceCreateWizard({
   onSubmit,
   modelFilter,
   isSubmitting = false,
-  initialName
+  initialName,
+  initialValues
 }: ResourceCreateWizardProps) {
   const { t } = useTranslation()
-  const form = useForm<ResourceCreateWizardFormValues>({ defaultValues: getDefaultValues(kind, initialName) })
+  const form = useForm<ResourceCreateWizardFormValues>({
+    defaultValues: getDefaultValues(kind, initialName, initialValues)
+  })
   const agentType = form.watch('agentType')
   const agentModelFilter = useAgentModelFilter(kind === 'agent' ? agentType : undefined)
-  const isModelDisabled = useAgentModelDisabled(open && kind === 'agent')
   const activeModelFilter = kind === 'agent' ? agentModelFilter : modelFilter
+  const isModelSelectable = useIsCherryCloudModelSelectable({ includeAgentOnlyModels: kind === 'agent', enabled: open })
   const { models: availableModels } = useModels({ enabled: true }, { fetchEnabled: open })
   const { defaultModel } = useDefaultModel({ enabled: open })
   const { provider: defaultModelProvider } = useProviderById(open ? defaultModel?.providerId : undefined)
@@ -147,7 +159,7 @@ export function ResourceCreateWizard({
     availableModels.some((model) => model.id === defaultModel.id) &&
     defaultModelProvider?.isEnabled &&
     (!activeModelFilter || activeModelFilter(defaultModel, defaultModelProvider)) &&
-    !isModelDisabled(defaultModel, defaultModelProvider)
+    isModelSelectable(defaultModel)
       ? defaultModel.id
       : null
   const autoSelectedDefaultModelIdRef = useRef<UniqueModelId | null>(null)
@@ -167,12 +179,12 @@ export function ResourceCreateWizard({
   const steps = useMemo<{ id: StepId; label: string }[]>(() => {
     const basic = { id: 'basic' as const, label: t('library.config.dialogs.create.step.basic') }
     const systemPrompt = { id: 'system-prompt' as const, label: t('library.config.prompt.label') }
-    // (cherry-lite) the knowledge-base step was removed together with the KB feature.
-    if (kind === 'assistant') return [basic, systemPrompt]
+    const knowledge = { id: 'knowledge' as const, label: t('library.config.dialogs.create.step.knowledge') }
+    if (kind === 'assistant') return [basic, systemPrompt, knowledge]
 
     const capability = { id: 'capability' as const, label: t('library.config.dialogs.create.step.capability') }
     const caps = AGENT_RUNTIME_CAPABILITIES[agentType]
-    return [basic, systemPrompt, ...(caps.skills ? [capability] : [])]
+    return [basic, systemPrompt, ...(caps.skills ? [capability] : []), ...(caps.knowledgeBases ? [knowledge] : [])]
   }, [agentType, kind, t])
 
   useEffect(() => {
@@ -184,15 +196,25 @@ export function ResourceCreateWizard({
   // user is already filling in — the shared wizard has five callers and a comment would not hold them.
   const resetForOpen = useEffectEvent(() => {
     autoSelectedDefaultModelIdRef.current = null
-    form.reset(getDefaultValues(kind, initialName))
+    form.reset(getDefaultValues(kind, initialName, initialValues))
     form.clearErrors()
     setStepIndex(0)
   })
 
+  /** Last `(kind, open)` pair this wizard already initialised for. <Activity> destroys the
+   * effects of a hidden tab and re-creates them when the tab is shown again, so a re-show
+   * with an unchanged pair must not be treated as a fresh open — that would wipe the draft
+   * (name / description / prompt) and jump back to step 1. */
+  const lastHandledResetKeyRef = useRef<{ kind: ResourceCreateWizardKind; open: boolean } | null>(null)
+
   useEffect(() => {
+    const previous = lastHandledResetKeyRef.current
+    if (previous?.kind === kind && previous.open === open) return
+
+    lastHandledResetKeyRef.current = { kind, open }
     if (!open) return
+
     resetForOpen()
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- `useEffectEvent` reads the latest initialName; this effect is keyed by the open transition.
   }, [kind, open])
 
   // Preference/model/provider hydration may finish after the dialog opens. Seed only an
@@ -348,25 +370,29 @@ export function ResourceCreateWizard({
               </ol>
 
               {/* Active step */}
-              <Scrollbar className="min-w-0 flex-1 px-6 py-5">
+              <ScrollArea
+                contentProps={{ className: cn('px-6 py-5', currentStep.id === 'system-prompt' && 'h-full') }}
+                className="min-w-0 flex-1">
                 {currentStep.id === 'basic' ? (
                   <BasicInfoStep
                     form={form}
                     portalContainer={dialogContentElement}
                     fallbackAvatar={getResourceCreateDefaultAvatar(kind)}
                     modelFilter={activeModelFilter}
-                    isModelDisabled={isModelDisabled}
-                    runtimeSelectable={kind === 'agent'}
+                    showAgentFields={kind === 'agent'}
                     onSettingsNavigate={closeBeforeAction}
                   />
                 ) : null}
                 {currentStep.id === 'system-prompt' ? (
                   <SystemPromptStep form={form} portalContainer={dialogContentElement} />
                 ) : null}
+                {currentStep.id === 'knowledge' ? (
+                  <KnowledgeStep form={form} isSubmitting={submitting} portalContainer={dialogContentElement} />
+                ) : null}
                 {currentStep.id === 'capability' ? (
                   <CapabilityStep form={form} portalContainer={dialogContentElement} />
                 ) : null}
-              </Scrollbar>
+              </ScrollArea>
             </div>
 
             <WizardFooter

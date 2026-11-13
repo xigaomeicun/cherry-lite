@@ -1,4 +1,4 @@
-import { MODALITY, type Model, MODEL_CAPABILITY } from '@shared/data/types/model'
+import { MODALITY, MODEL_CAPABILITY, type Model } from '@shared/data/types/model'
 
 import type { VoiceCapabilities } from './voice'
 
@@ -36,6 +36,7 @@ export const SHERPA_VOICE_SUPPORTED_PLATFORM_KEYS = [
   'darwin-x64',
   'linux-arm64',
   'linux-x64',
+  'win32-arm64',
   'win32-x64'
 ] as const
 export const FUNASR_SUPPORTED_PLATFORM_KEYS = SHERPA_VOICE_SUPPORTED_PLATFORM_KEYS

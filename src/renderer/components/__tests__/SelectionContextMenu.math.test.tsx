@@ -1,11 +1,12 @@
-import { formatQuoteTokenPromptText } from '@renderer/components/composer/quoteToken'
-import { StaticMarkdown as AppMarkdown } from '@renderer/components/markdown'
-import { CommandSharedPreferencesContext } from '@renderer/hooks/command'
 import { MockUsePreferenceUtils } from '@test-mocks/renderer/usePreference'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import katex from 'katex'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+import { formatQuoteTokenPromptText } from '@renderer/components/composer/quoteToken'
+import { AppMarkdown } from '@renderer/components/markdown'
+import { CommandSharedPreferencesContext } from '@renderer/hooks/command'
 
 import SelectionContextMenu from '../SelectionContextMenu'
 

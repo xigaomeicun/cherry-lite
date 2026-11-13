@@ -1,14 +1,15 @@
+import { Copy, CornerDownLeft, LoaderCircle, Mic, RotateCcw, Square, Trash2, X } from 'lucide-react'
+import React, { useEffect, useRef, useSyncExternalStore } from 'react'
+import { useTranslation } from 'react-i18next'
+
 import { Button, Input } from '@cherrystudio/ui'
 import ModelAvatar from '@renderer/components/Avatar/ModelAvatar'
 import { useTimer } from '@renderer/hooks/useTimer'
 import { openSettingsTab } from '@renderer/services/mainWindowNavigation'
 import { toast } from '@renderer/services/toast'
-import type { DictationErrorCategory, DictationPhase } from '@renderer/services/voice'
 import { dictationService, voiceTargetManager } from '@renderer/services/voice'
+import type { DictationErrorCategory, DictationPhase } from '@renderer/services/voice'
 import type { Model } from '@shared/data/types/model'
-import { Copy, CornerDownLeft, LoaderCircle, Mic, RotateCcw, Square, Trash2, X } from 'lucide-react'
-import React, { useEffect, useRef, useSyncExternalStore } from 'react'
-import { useTranslation } from 'react-i18next'
 
 const errorTranslationKeys: Partial<Record<DictationErrorCategory, string>> = {
   model_required: 'settings.voice.status.unconfigured',

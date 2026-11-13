@@ -1,7 +1,11 @@
-import type * as CherryStudioUi from '@cherrystudio/ui'
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { useState } from 'react'
+import { useForm } from 'react-hook-form'
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+
+import type * as CherryStudioUi from '@cherrystudio/ui'
+import { Form } from '@cherrystudio/ui'
 
 const { mockLoggerWarn, mockUseKnowledgeBases, mockIpcRequest, mockToastSuccess } = vi.hoisted(() => ({
   mockLoggerWarn: vi.fn(),
@@ -68,6 +72,8 @@ vi.mock('@renderer/ipc', () => ({
   ipcApi: { request: mockIpcRequest }
 }))
 
+import { KnowledgeStep } from '../../create/steps/KnowledgeStep'
+import type { ResourceCreateWizardFormValues } from '../../create/types'
 import { PromptVariablesPopover } from '../EditDialogShared'
 
 beforeAll(() => {
@@ -113,5 +119,86 @@ describe('EditDialogShared', () => {
     } finally {
       portalContainer.remove()
     }
+  })
+
+  it('opens the knowledge page in a standalone window without closing the knowledge step', () => {
+    function Harness() {
+      const form = useForm<ResourceCreateWizardFormValues>({
+        defaultValues: {
+          avatar: '💬',
+          name: '',
+          description: '',
+          agentType: 'claude-code',
+          permissionMode: 'default',
+          modelId: null,
+          prompt: '',
+          knowledgeBaseIds: [],
+          skillIds: []
+        }
+      })
+
+      return (
+        <Form {...form}>
+          <KnowledgeStep form={form} portalContainer={null} />
+        </Form>
+      )
+    }
+
+    render(<Harness />)
+
+    expect(screen.queryByRole('button', { name: 'Open Knowledge to create one' })).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add knowledge base' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Open Knowledge to create one' }))
+
+    expect(mockIpcRequest).toHaveBeenCalledTimes(1)
+    expect(mockIpcRequest).toHaveBeenCalledWith(
+      'tab.detach',
+      expect.objectContaining({ url: '/app/knowledge', type: 'route' })
+    )
+    expect(screen.getByRole('button', { name: 'Open Knowledge to create one' })).toBeInTheDocument()
+  })
+
+  it('closes and disables the knowledge picker when submission starts', async () => {
+    mockUseKnowledgeBases.mockReturnValue({
+      bases: [{ id: 'knowledge-1', name: 'Knowledge one', itemCount: 1 }],
+      isLoading: false
+    })
+
+    function Harness() {
+      const [isSubmitting, setIsSubmitting] = useState(false)
+      const form = useForm<ResourceCreateWizardFormValues>({
+        defaultValues: {
+          avatar: '💬',
+          name: '',
+          description: '',
+          agentType: 'claude-code',
+          permissionMode: 'default',
+          modelId: null,
+          prompt: '',
+          knowledgeBaseIds: [],
+          skillIds: []
+        }
+      })
+
+      return (
+        <Form {...form}>
+          <KnowledgeStep form={form} isSubmitting={isSubmitting} portalContainer={null} />
+          <button type="button" onClick={() => setIsSubmitting(true)}>
+            Start submission
+          </button>
+        </Form>
+      )
+    }
+
+    render(<Harness />)
+
+    await userEvent.click(screen.getByRole('button', { name: 'Add knowledge base' }))
+    expect(screen.getByText('Knowledge one')).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Start submission' }))
+
+    expect(screen.queryByText('Knowledge one')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Add knowledge base' })).toBeDisabled()
   })
 })

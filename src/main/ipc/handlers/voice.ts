@@ -1,5 +1,5 @@
 import { application } from '@application'
-import { voiceIpcError, VoiceRuntimeError } from '@main/ai/voice/VoiceRuntimeError'
+import { VoiceRuntimeError, voiceIpcError } from '@main/ai/voice/VoiceRuntimeError'
 import type { VoiceOwner, VoiceSessionService } from '@main/ai/voice/VoiceSessionService'
 import type { voiceRequestSchemas } from '@shared/ipc/schemas/voice'
 import type { IpcHandlersFor, WindowId } from '@shared/ipc/types'

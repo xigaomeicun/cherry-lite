@@ -1,6 +1,8 @@
+import React, { memo, useState } from 'react'
+
 import { NormalTooltip } from '@cherrystudio/ui'
 import type { Citation } from '@renderer/types/message'
-import React, { memo, useState } from 'react'
+import { resolveSafeExternalUrl } from '@shared/utils/externalUrlSafety'
 
 import { KnowledgeCitationHoverContent } from '../../citations/KnowledgeCitation'
 import { WebCitationHoverContent } from '../../citations/WebCitation'
@@ -14,7 +16,11 @@ const CitationTooltip: React.FC<CitationTooltipProps> = ({ children, citation })
   // Passed down so the web hover defers its X oEmbed request until opened.
   const [isOpen, setIsOpen] = useState(false)
 
-  const isWeb = Boolean(citation.url) && citation.type !== 'knowledge' && citation.type !== 'memory'
+  const isWeb =
+    Boolean(citation.url) &&
+    !resolveSafeExternalUrl(citation.url)?.requiresConfirmation &&
+    citation.type !== 'knowledge' &&
+    citation.type !== 'memory'
   const hasHoverContent = isWeb || Boolean(citation.title?.trim() || citation.content?.trim())
   if (!hasHoverContent) return <>{children}</>
 

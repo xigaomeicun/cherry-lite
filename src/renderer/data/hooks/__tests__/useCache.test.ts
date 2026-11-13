@@ -12,6 +12,9 @@
  *    by `tsc`: each `@ts-expect-error` must suppress a real error.
  */
 
+import { act, renderHook } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, expectTypeOf, it, vi } from 'vitest'
+
 import { cacheService } from '@data/CacheService'
 import { useCache, usePersistCache, useSharedCache } from '@data/hooks/useCache'
 import type {
@@ -20,12 +23,11 @@ import type {
   InferUseCacheValue,
   IsTemplateKey,
   ProcessKey,
+  RendererPersistCacheSchema,
   SharedCacheKey,
   UseCacheCasualKey,
   UseCacheKey
 } from '@shared/data/cache/cacheSchemas'
-import { act, renderHook } from '@testing-library/react'
-import { afterEach, beforeEach, describe, expect, expectTypeOf, it, vi } from 'vitest'
 
 import { installCacheApiMock } from './testUtils'
 
@@ -151,17 +153,6 @@ describe('Template Key Type Utilities', () => {
       type AllowedKey = UseCacheCasualKey<'my.custom.key'>
       const key: AllowedKey = 'my.custom.key'
       expect(key).toBe('my.custom.key')
-    })
-  })
-
-  describe('Runtime template key detection', () => {
-    it('should correctly detect template keys', () => {
-      const isTemplate = (key: string) => key.includes('${') && key.includes('}')
-
-      expect(isTemplate('scroll.position.${id}')).toBe(true)
-      expect(isTemplate('entity.cache.${type}_${id}')).toBe(true)
-      expect(isTemplate('app.path.resources')).toBe(false)
-      expect(isTemplate('chat.web_search.searching')).toBe(false)
     })
   })
 
@@ -381,7 +372,7 @@ type PersistPrev<K extends Parameters<typeof usePersistCache>[0]> = Parameters<U
 
 // Representative value types
 type SelectedIds = InferUseCacheValue<'chat.selected_message_ids'> // string[]
-type KeepAlive = InferUseCacheValue<'mini_app.opened_keep_alive'> // CacheMiniAppType[]
+type PinnedTabs = RendererPersistCacheSchema['ui.tab.pinned_tabs']
 type GatewayRunning = InferSharedCacheValue<'feature.api_gateway.running'> // boolean
 type JobProgress = InferSharedCacheValue<'jobs.progress.job-1'> // { progress: number, ... }
 
@@ -390,12 +381,10 @@ describe('readonly updater (static guarantees)', () => {
     it('array value → shallow readonly array', () => {
       expectTypeOf<MemoryPrev<'chat.selected_message_ids'>>().toEqualTypeOf<Readonly<SelectedIds>>()
       expectTypeOf<MemoryPrev<'chat.selected_message_ids'>>().toEqualTypeOf<readonly string[]>()
-      expect(true).toBe(true)
     })
 
     it('object value → shallow readonly object', () => {
       expectTypeOf<SharedPrev<'jobs.progress.job-1'>>().toEqualTypeOf<Readonly<JobProgress>>()
-      expect(true).toBe(true)
     })
 
     it('primitive value → passes through unchanged (not wrapped)', () => {
@@ -403,14 +392,12 @@ describe('readonly updater (static guarantees)', () => {
       // `prev => prev + 1` would stop compiling.
       expectTypeOf<SharedPrev<'feature.api_gateway.running'>>().toEqualTypeOf<GatewayRunning>()
       expectTypeOf<SharedPrev<'feature.api_gateway.running'>>().toEqualTypeOf<boolean>()
-      expect(true).toBe(true)
     })
 
     it('shallow only — array elements are NOT deep-frozen', () => {
       // Element type stays the mutable value's element (we intentionally avoid a
       // recursive DeepReadonly, which caused filter/map assignability friction).
-      expectTypeOf<MemoryPrev<'mini_app.opened_keep_alive'>[number]>().toEqualTypeOf<KeepAlive[number]>()
-      expect(true).toBe(true)
+      expectTypeOf<PersistPrev<'ui.tab.pinned_tabs'>[number]>().toEqualTypeOf<PinnedTabs[number]>()
     })
   })
 

@@ -1,3 +1,5 @@
+import { estimateTokenCount } from 'tokenx'
+
 import { application } from '@application'
 import { knowledgeBaseService } from '@data/services/KnowledgeBaseService'
 import { knowledgeItemService } from '@data/services/KnowledgeItemService'
@@ -7,8 +9,7 @@ import { extractFtsTokens } from '@main/utils/trigramFtsQuery'
 import { DataApiErrorFactory } from '@shared/data/api/errors'
 import type { KnowledgeItem, KnowledgeItemChunk, KnowledgeSearchResult } from '@shared/data/types/knowledge'
 import { getKnowledgeItemDisplayTitle, isCompletedVectorKnowledgeBase } from '@shared/data/types/knowledge'
-import type { AbsoluteFilePath } from '@shared/types/file'
-import { estimateTokenCount } from 'tokenx'
+import { type AbsoluteFilePath, AbsoluteFilePathSchema } from '@shared/types/file'
 
 import { assertBaseCanRunRuntimeOperation } from '../base/baseGuards'
 import { getKnowledgeBaseFilePath } from '../pathStorage'
@@ -141,6 +142,10 @@ export class KnowledgeQueryService {
     const item = knowledgeItemService.getById(itemId)
 
     if (item.type === 'file') {
+      // A `preparing` file has not been copied into raw/ yet; its original is the only copy.
+      if (item.status === 'preparing') {
+        return AbsoluteFilePathSchema.parse(item.data.source)
+      }
       return getKnowledgeBaseFilePath(item.baseId, item.data.relativePath)
     }
 

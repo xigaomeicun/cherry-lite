@@ -1,3 +1,8 @@
+import { sortBy } from 'es-toolkit/compat'
+import { AlertTriangle, ChevronRight } from 'lucide-react'
+import { useEffect, useId, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
+
 import {
   Alert,
   Avatar,
@@ -18,18 +23,12 @@ import {
 import { useIcon } from '@cherrystudio/ui/icons'
 import { showErrorDetailPopup } from '@renderer/components/ErrorDetailModal'
 import type { ModelCheckKeySelection } from '@renderer/pages/settings/ProviderSettings/types/healthCheck'
-import {
-  getModelHealthCheckSkipReason,
-  healthCheckErrorToDisplayString
-} from '@renderer/pages/settings/ProviderSettings/utils/healthCheck'
+import { getModelHealthCheckSkipReason } from '@renderer/pages/settings/ProviderSettings/utils/healthCheck'
+import { healthCheckErrorToDisplayString } from '@renderer/services/modelHealthCheck'
 import { maskApiKey } from '@renderer/utils/api'
 import { getModelLogoRef } from '@renderer/utils/model'
 import type { Model } from '@shared/data/types/model'
 import type { ApiKeyEntry } from '@shared/data/types/provider'
-import { sortBy } from 'es-toolkit/compat'
-import { AlertTriangle, ChevronRight } from 'lucide-react'
-import { useEffect, useId, useMemo, useState } from 'react'
-import { useTranslation } from 'react-i18next'
 
 import { drawerClasses } from '../primitives/ProviderSettingsPrimitives'
 import { useModelListHealthRun } from './modelListHealthContext'
@@ -190,7 +189,7 @@ function ApiKeyScopeField({
     return (
       <div className="space-y-2">
         <Label id={labelId}>{t('settings.models.check.key_scope')}</Label>
-        <p className="text-muted-foreground text-sm">{t('settings.models.check.no_api_keys')}</p>
+        <p className="text-muted-foreground text-sm">{t('message.error.enter.api.label')}</p>
       </div>
     )
   }

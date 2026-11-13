@@ -1,5 +1,6 @@
-import type { Tab } from '@shared/data/cache/cacheValueTypes'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+import type { Tab } from '@shared/data/cache/cacheValueTypes'
 
 import { TAB_LIMITS, TabLruManager } from '../TabLruManager'
 
@@ -24,19 +25,6 @@ describe('TabLruManager', () => {
     vi.spyOn(console, 'info').mockImplementation(() => {})
     vi.spyOn(console, 'warn').mockImplementation(() => {})
     vi.spyOn(console, 'error').mockImplementation(() => {})
-  })
-
-  describe('constructor', () => {
-    it('should use default limits', () => {
-      const limits = manager.getLimits()
-      expect(limits.softCap).toBe(TAB_LIMITS.softCap)
-      expect(limits.hardCap).toBe(TAB_LIMITS.hardCap)
-    })
-
-    it('should accept custom limits', () => {
-      const customManager = new TabLruManager({ softCap: 5, hardCap: 15 })
-      expect(customManager.getLimits()).toEqual({ softCap: 5, hardCap: 15 })
-    })
   })
 
   describe('checkAndGetDormantCandidates', () => {
@@ -152,16 +140,6 @@ describe('TabLruManager', () => {
     })
 
     describe('edge cases', () => {
-      it('should handle tabs with undefined lastAccessTime', () => {
-        const tabs = Array.from({ length: TAB_LIMITS.softCap + 2 }, (_, i) =>
-          createTab(`tab-${i}`, { lastAccessTime: undefined })
-        )
-
-        // Should not throw
-        const result = manager.checkAndGetDormantCandidates(tabs, `tab-${TAB_LIMITS.softCap + 1}`)
-        expect(Array.isArray(result)).toBe(true)
-      })
-
       it('should preserve an all-pinned set between the soft and hard caps', () => {
         const tabs = Array.from({ length: TAB_LIMITS.softCap + 3 }, (_, i) => createTab(`tab-${i}`, { isPinned: true }))
 

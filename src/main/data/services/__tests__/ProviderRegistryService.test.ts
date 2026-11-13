@@ -1,19 +1,20 @@
 /**
  * Tests for ProviderRegistryService.
- * Uses setupTestDatabase() per AGENTS.md testing guidelines.
+ * Uses setupTestDatabase() per CLAUDE.md testing guidelines.
  */
 
 import { readFileSync } from 'node:fs'
+
+import { setupTestDatabase } from '@test-helpers/db'
+import { MockMainDbServiceUtils } from '@test-mocks/main/DbService'
+import { eq } from 'drizzle-orm'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { userProviderTable } from '@data/db/schemas/userProvider'
 import { providerService } from '@data/services/ProviderService'
 import { generateOrderKeyBetween } from '@data/services/utils/orderKey'
 import { createUniqueModelId } from '@shared/data/types/model'
 import { computeLanguageCost, createAiUsagePricingSnapshot } from '@shared/utils/usagePricing'
-import { setupTestDatabase } from '@test-helpers/db'
-import { MockMainDbServiceUtils } from '@test-mocks/main/DbService'
-import { eq } from 'drizzle-orm'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { mockMainLoggerService } from '../../../../../tests/__mocks__/MainLoggerService'
 
@@ -159,7 +160,7 @@ function setupRegistryData() {
         maxOutputTokens: 4096
       }
     ]
-  } as ReturnType<typeof readModelRegistry>)
+  })
 
   mockReadProviderModels.mockReturnValue({
     version: '1.0',
@@ -169,7 +170,7 @@ function setupRegistryData() {
         modelId: 'gpt-4o'
       }
     ]
-  } as ReturnType<typeof readProviderModelRegistry>)
+  })
 
   mockReadProviders.mockReturnValue({
     version: '1.0',
@@ -193,7 +194,7 @@ function setupMoonshotRegistryData() {
   mockReadModels.mockReturnValue({
     version: '1.0',
     models: [{ id: 'kimi-k2-7-code', name: 'Kimi K2.7 Code', capabilities: ['reasoning'] }]
-  } as ReturnType<typeof readModelRegistry>)
+  })
 
   mockReadProviderModels.mockReturnValue({
     version: '1.0',
@@ -208,7 +209,7 @@ function setupMoonshotRegistryData() {
         }
       }
     ]
-  } as ReturnType<typeof readProviderModelRegistry>)
+  })
 
   mockReadProviders.mockReturnValue({
     version: '1.0',
@@ -264,7 +265,42 @@ describe('ProviderRegistryService', () => {
     MockMainDbServiceUtils.setDb(dbh.db)
   })
 
+  it('lists MiMo presets using dotted wire identities and canonical preset links', () => {
+    const readGeneratedRegistry = <T>(filename: string): T =>
+      JSON.parse(
+        readFileSync(new URL(`../../../../../packages/provider-registry/data/${filename}`, import.meta.url), 'utf8')
+      ) as T
+    mockReadModels.mockReturnValue(readGeneratedRegistry<ReturnType<typeof readModelRegistry>>('models.json'))
+    mockReadProviderModels.mockReturnValue(
+      readGeneratedRegistry<ReturnType<typeof readProviderModelRegistry>>('provider-models.json')
+    )
+    mockReadProviders.mockReturnValue(readGeneratedRegistry<ReturnType<typeof readProviderRegistry>>('providers.json'))
+
+    const models = providerRegistryService.listProviderRegistryModels({ providerId: 'mimo' })
+
+    for (const [presetModelId, apiModelId] of [
+      ['mimo-v2-5', 'mimo-v2.5'],
+      ['mimo-v2-5-pro', 'mimo-v2.5-pro'],
+      ['mimo-v2-5-pro-ultraspeed', 'mimo-v2.5-pro-ultraspeed'],
+      ['mimo-v2-6-flash', 'mimo-v2.6-flash'],
+      ['mimo-v2-6-pro', 'mimo-v2.6-pro'],
+      ['mimo-v2-6-pro-ultraspeed', 'mimo-v2.6-pro-ultraspeed']
+    ]) {
+      expect(models.find((model) => model.presetModelId === presetModelId)).toMatchObject({
+        id: `mimo::${apiModelId}`,
+        apiModelId,
+        presetModelId
+      })
+    }
+  })
+
   describe('createCustomModel', () => {
+    it('exposes Qwen 3.8 Flash Next effort tiers for a compatible custom provider', () => {
+      const model = createCustomModel('strata', 'qwen3.8-flash-next')
+
+      expect(model.reasoning?.selectableEfforts).toEqual(['low', 'medium', 'xhigh'])
+    })
+
     it('does not infer image capability from an unknown model id', () => {
       const model = createCustomModel('openrouter', 'openai/gpt-99-image-foo')
 
@@ -363,23 +399,6 @@ describe('ProviderRegistryService', () => {
     })
   })
 
-  describe('cache reuse', () => {
-    it('should only read models.json once across multiple calls', async () => {
-      setupRegistryData()
-      await dbh.db.insert(userProviderTable).values({
-        providerId: 'openai',
-        presetProviderId: 'openai',
-        name: 'OpenAI',
-        orderKey: 'a0'
-      })
-
-      providerRegistryService.resolveModels('openai', ['gpt-4o'])
-      providerRegistryService.resolveModels('openai', ['gpt-4o'])
-
-      expect(mockReadModels).toHaveBeenCalledTimes(1)
-    })
-  })
-
   describe('resolveModels', () => {
     beforeEach(async () => {
       await dbh.db.insert(userProviderTable).values([
@@ -430,13 +449,13 @@ describe('ProviderRegistryService', () => {
               }
             ]
           }
-        } as any,
+        },
         {
           providerId: 'openai',
           modelId: 'gpt-4o',
           parameterSupport: { temperature: { supported: false } },
           pricing: { output: { perMillionTokens: 12 } }
-        } as any,
+        },
         'openai'
       )
 
@@ -568,11 +587,11 @@ describe('ProviderRegistryService', () => {
             capabilities: ['function-call']
           }
         ]
-      } as ReturnType<typeof readModelRegistry>)
+      })
       mockReadProviderModels.mockReturnValue({
         version: '1.0',
         overrides: [{ providerId: 'openai', modelId: 'qwen3-coder' }]
-      } as ReturnType<typeof readProviderModelRegistry>)
+      })
       mockReadProviders.mockReturnValue({
         version: '1.0',
         providers: [
@@ -641,7 +660,7 @@ describe('ProviderRegistryService', () => {
             reasoning: {}
           }
         ]
-      } as ReturnType<typeof readModelRegistry>)
+      })
       mockReadProviderModels.mockReturnValueOnce({
         version: '1.0',
         overrides: [
@@ -651,7 +670,7 @@ describe('ProviderRegistryService', () => {
             replaceWith: Symbol('invalid-replacement') as unknown as string
           }
         ]
-      } as ReturnType<typeof readProviderModelRegistry>)
+      })
       mockReadProviders.mockReturnValueOnce({
         version: '1.0',
         providers: [
@@ -705,7 +724,7 @@ describe('ProviderRegistryService', () => {
       mockReadModels.mockReturnValue({
         version: '1.0',
         models: [{ id: 'deepseek-v4-flash', name: 'DeepSeek V4 Flash', capabilities: ['function-call'] }]
-      } as ReturnType<typeof readModelRegistry>)
+      })
       mockReadProviderModels.mockReturnValue({
         version: '1.0',
         overrides: [
@@ -717,7 +736,7 @@ describe('ProviderRegistryService', () => {
             name: 'DeepSeek-V4-Flash 原厂直供'
           }
         ]
-      } as ReturnType<typeof readProviderModelRegistry>)
+      })
       mockReadProviders.mockReturnValue({
         version: '1.0',
         providers: [
@@ -757,14 +776,14 @@ describe('ProviderRegistryService', () => {
           { id: 'minimax-m2-1', name: 'MiniMax M2.1', capabilities: ['function-call'] },
           { id: 'qwen-plus', name: 'Qwen-Plus', capabilities: ['function-call'] }
         ]
-      } as ReturnType<typeof readModelRegistry>)
+      })
       mockReadProviderModels.mockReturnValue({
         version: '1.0',
         overrides: [
           { providerId: 'dashscope', modelId: 'minimax-m2-1', apiModelId: 'MiniMax-M2.1' },
           { providerId: 'dashscope', modelId: 'qwen-plus' }
         ]
-      } as ReturnType<typeof readProviderModelRegistry>)
+      })
       mockReadProviders.mockReturnValue({
         version: '1.0',
         providers: [
@@ -808,11 +827,11 @@ describe('ProviderRegistryService', () => {
       mockReadModels.mockReturnValue({
         version: '1.0',
         models: [{ id: 'claude-sonnet-4-5', name: 'Claude Sonnet 4.5', capabilities: ['function-call'] }]
-      } as ReturnType<typeof readModelRegistry>)
+      })
       mockReadProviderModels.mockReturnValue({
         version: '1.0',
         overrides: [{ providerId: 'aws-bedrock', modelId: 'claude-sonnet-4-5' }]
-      } as ReturnType<typeof readProviderModelRegistry>)
+      })
       mockReadProviders.mockReturnValue({
         version: '1.0',
         providers: [
@@ -841,10 +860,8 @@ describe('ProviderRegistryService', () => {
       mockReadModels.mockReturnValue({
         version: '1.0',
         models: [{ id: 'sd-1-5', name: 'SD 1.5', imageGeneration: block }]
-      } as ReturnType<typeof readModelRegistry>)
-      mockReadProviderModels.mockReturnValue({ version: '1.0', overrides: [] } as ReturnType<
-        typeof readProviderModelRegistry
-      >)
+      })
+      mockReadProviderModels.mockReturnValue({ version: '1.0', overrides: [] })
       mockReadProviders.mockReturnValue({
         version: '1.0',
         providers: [
@@ -865,11 +882,11 @@ describe('ProviderRegistryService', () => {
       mockReadModels.mockReturnValue({
         version: '1.0',
         models: [{ id: 'image-model', name: 'Image Model', imageGeneration: block }]
-      } as ReturnType<typeof readModelRegistry>)
+      })
       mockReadProviderModels.mockReturnValue({
         version: '1.0',
         overrides: [{ providerId: 'openai', modelId: 'image-model' }]
-      } as ReturnType<typeof readProviderModelRegistry>)
+      })
       mockReadProviders.mockReturnValue({
         version: '1.0',
         providers: [{ id: 'openai', name: 'OpenAI', defaultChatEndpoint: null, metadata: {} }]
@@ -884,11 +901,87 @@ describe('ProviderRegistryService', () => {
       expect(providerRegistryService.getImageGenerationSupport('custom-openai-image', 'image-model')).toEqual(block)
     })
 
+    it('projects official animation capabilities through the Desktop endpoint adapter', () => {
+      vi.stubEnv('CHERRY_EDITION', 'global')
+      mockReadModels.mockReturnValue(
+        JSON.parse(
+          readFileSync(new URL('../../../../../packages/provider-registry/data/models.json', import.meta.url), 'utf8')
+        )
+      )
+      mockReadProviderModels.mockReturnValue(
+        JSON.parse(
+          readFileSync(
+            new URL('../../../../../packages/provider-registry/data/provider-models.json', import.meta.url),
+            'utf8'
+          )
+        )
+      )
+      mockReadProviders.mockReturnValue(
+        JSON.parse(
+          readFileSync(
+            new URL('../../../../../packages/provider-registry/data/providers.json', import.meta.url),
+            'utf8'
+          )
+        )
+      )
+      const support = providerRegistryService.getImageGenerationSupport('openai', 'gpt-image-2.6-flare')
+      expect(support?.modes.generate?.supports?.frameDurationMs).toMatchObject({ max: 2000 })
+      expect(support?.modes.edit?.supports?.outputFormat).toMatchObject({ options: ['png', 'jpeg', 'webp'] })
+      expect(support?.modes.edit?.supports?.frameCount).toBeUndefined()
+      expect(
+        mockReadModels('models.json').models.find((model) => model.id === 'gpt-image-2-6-flare')?.imageGeneration?.modes
+          .edit?.supports?.outputFormat
+      ).toMatchObject({ options: ['png', 'jpeg', 'webp', 'gif'] })
+    })
+
+    it('does not expose native Grok ratio controls for a provider without a preset', () => {
+      mockReadModels.mockReturnValue(
+        JSON.parse(
+          readFileSync(new URL('../../../../../packages/provider-registry/data/models.json', import.meta.url), 'utf8')
+        )
+      )
+      mockReadProviderModels.mockReturnValue(
+        JSON.parse(
+          readFileSync(
+            new URL('../../../../../packages/provider-registry/data/provider-models.json', import.meta.url),
+            'utf8'
+          )
+        )
+      )
+      mockReadProviders.mockReturnValue(
+        JSON.parse(
+          readFileSync(
+            new URL('../../../../../packages/provider-registry/data/providers.json', import.meta.url),
+            'utf8'
+          )
+        )
+      )
+      const providerId = 'custom-grok-relay'
+      const modelId = 'grok-imagine-image-2-0'
+      dbh.db
+        .insert(userProviderTable)
+        .values({
+          providerId,
+          presetProviderId: null,
+          name: 'Custom Grok relay',
+          orderKey: generateOrderKeyBetween(null, null),
+          defaultChatEndpoint: 'openai-chat-completions',
+          endpointConfigs: {
+            'openai-chat-completions': { baseUrl: 'https://relay.example/v1' },
+            'openai-image-generation': { baseUrl: 'https://relay.example/v1' }
+          }
+        })
+        .run()
+
+      const lookup = providerRegistryService.lookupModel(providerId, modelId)
+      expect(lookup.registryOverride).toBeNull()
+      expect(lookup.presetModel?.id).toBe(modelId)
+      expect(providerRegistryService.getImageGenerationSupport(providerId, modelId)).toBeNull()
+    })
+
     it('getImageGenerationSupport returns null when the model is unknown', async () => {
-      mockReadModels.mockReturnValue({ version: '1.0', models: [] } as ReturnType<typeof readModelRegistry>)
-      mockReadProviderModels.mockReturnValue({ version: '1.0', overrides: [] } as ReturnType<
-        typeof readProviderModelRegistry
-      >)
+      mockReadModels.mockReturnValue({ version: '1.0', models: [] })
+      mockReadProviderModels.mockReturnValue({ version: '1.0', overrides: [] })
       mockReadProviders.mockReturnValue({
         version: '1.0',
         providers: [
@@ -945,7 +1038,7 @@ describe('ProviderRegistryService', () => {
             disabled: true
           }
         ]
-      } as ReturnType<typeof readProviderModelRegistry>)
+      })
       mockReadProviders.mockReturnValue({
         version: '1.0',
         providers: [
@@ -976,37 +1069,11 @@ describe('ProviderRegistryService', () => {
       ])
     })
 
-    it('lists the seven Radeon Cloud provider-registry models', () => {
-      const readGeneratedRegistry = <T>(filename: string): T =>
-        JSON.parse(
-          readFileSync(new URL(`../../../../../packages/provider-registry/data/${filename}`, import.meta.url), 'utf8')
-        ) as T
-      mockReadModels.mockReturnValue(readGeneratedRegistry<ReturnType<typeof readModelRegistry>>('models.json'))
-      mockReadProviderModels.mockReturnValue(
-        readGeneratedRegistry<ReturnType<typeof readProviderModelRegistry>>('provider-models.json')
-      )
-      mockReadProviders.mockReturnValue(
-        readGeneratedRegistry<ReturnType<typeof readProviderRegistry>>('providers.json')
-      )
-
-      const models = providerRegistryService.listProviderRegistryModels({ providerId: 'radeon-cloud' })
-
-      expect(models.map(({ presetModelId, apiModelId }) => [presetModelId, apiModelId])).toEqual([
-        ['deepseek-v4-flash', 'DeepSeek-V4-Flash'],
-        ['deepseek-v4-pro', 'DeepSeek-V4-Pro'],
-        ['glm-5-1', 'GLM-5.1'],
-        ['glm-5-2', 'GLM-5.2'],
-        ['gpt-oss-120b', 'gpt-oss-120b'],
-        ['kimi-k2-6', 'Kimi-K2.6'],
-        ['qwen3-6-35b-a3b', 'Qwen3.6-35B-A3B']
-      ])
-    })
-
     it('a standalone override (no models.json entry) only carries image-generation capability when it declares capabilities.force', async () => {
       // Regression: a vendor-exclusive override (e.g. Ollama's x/z-image-turbo) that sets
       // imageGeneration but omits `capabilities` synthesizes with capabilities: [] — invisible to
       // the Paintings model filter, which requires the image-generation capability.
-      mockReadModels.mockReturnValue({ version: '1.0', models: [] } as ReturnType<typeof readModelRegistry>)
+      mockReadModels.mockReturnValue({ version: '1.0', models: [] })
       mockReadProviderModels.mockReturnValue({
         version: '1.0',
         overrides: [
@@ -1028,7 +1095,7 @@ describe('ProviderRegistryService', () => {
             imageGeneration: { modes: { generate: { supports: {} } } }
           }
         ]
-      } as ReturnType<typeof readProviderModelRegistry>)
+      })
       mockReadProviders.mockReturnValue({
         version: '1.0',
         providers: [{ id: 'ollama', name: 'Ollama', defaultChatEndpoint: null, metadata: {} }]
@@ -1063,7 +1130,7 @@ describe('ProviderRegistryService', () => {
             capabilities: ['image-generation']
           }
         ]
-      } as ReturnType<typeof readModelRegistry>)
+      })
       mockReadProviderModels.mockReturnValue({
         version: '1.0',
         overrides: [
@@ -1073,7 +1140,7 @@ describe('ProviderRegistryService', () => {
             apiModelId: 'Qwen/Qwen-Image'
           }
         ]
-      } as ReturnType<typeof readProviderModelRegistry>)
+      })
       mockReadProviders.mockReturnValue({
         version: '1.0',
         providers: [

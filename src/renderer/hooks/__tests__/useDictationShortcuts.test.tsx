@@ -1,13 +1,14 @@
+import { MockUsePreferenceUtils } from '@test-mocks/renderer/usePreference'
+import { act, fireEvent, render, screen } from '@testing-library/react'
+import type { KeyboardEventHandler } from 'react'
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
+
 import { CommandProvider } from '@renderer/components/command/CommandProvider'
 import { useCommandHandler } from '@renderer/hooks/command'
 import { useDictationShortcuts } from '@renderer/hooks/useDictationShortcuts'
 import { dictationService, voiceTargetManager } from '@renderer/services/voice'
 import type * as PlatformUtils from '@renderer/utils/platform'
 import { commandShortcutPreferenceKey } from '@shared/utils/command'
-import { MockUsePreferenceUtils } from '@test-mocks/renderer/usePreference'
-import { act, fireEvent, render, screen } from '@testing-library/react'
-import type { KeyboardEventHandler } from 'react'
-import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from 'vitest'
 
 const platform = vi.hoisted(() => ({ isMac: false }))
 vi.mock('@renderer/utils/platform', async (importOriginal) => ({
@@ -196,6 +197,120 @@ describe('application-local dictation shortcuts', () => {
     expect(cancel).not.toHaveBeenCalled()
     fireEvent.keyUp(input, { code: 'KeyB', key: 'b', ctrlKey: true })
     expect(stop).toHaveBeenCalledOnce()
+  })
+
+  it.each(['hold', 'toggle'] as const)('yields a Dvorak %s chord to its character command', (mode) => {
+    platform.isMac = true
+    MockUsePreferenceUtils.setPreferenceValue('feature.voice.dictation.hold_shortcut', '')
+    MockUsePreferenceUtils.setPreferenceValue('feature.voice.dictation.toggle_shortcut', '')
+    MockUsePreferenceUtils.setPreferenceValue(`feature.voice.dictation.${mode}_shortcut`, 'MetaLeft+KeyG')
+    MockUsePreferenceUtils.setPreferenceValue(commandShortcutPreferenceKey('chat.input.focus'), {
+      binding: ['CommandOrControl', 'I'],
+      enabled: false
+    })
+    MockUsePreferenceUtils.setPreferenceValue(commandShortcutPreferenceKey('tab.close'), {
+      binding: ['CommandOrControl', 'I'],
+      enabled: true
+    })
+    const closeTab = vi.fn()
+    const tree = () => (
+      <CommandProvider>
+        <CommandHost onClose={closeTab} />
+      </CommandProvider>
+    )
+    const { rerender } = render(tree())
+    const input = screen.getByRole('textbox', { name: 'Dictation input' })
+    input.focus()
+    const press = (characterFirst = false) => {
+      if (characterFirst) fireEvent.keyDown(input, { code: 'KeyG', key: 'i' })
+      fireEvent.keyDown(input, { code: 'MetaLeft', key: 'Meta', metaKey: true })
+      if (!characterFirst) fireEvent.keyDown(input, { code: 'KeyG', key: 'i', metaKey: true })
+    }
+    press()
+    void act(() => vi.advanceTimersByTime(350))
+    expect(closeTab).toHaveBeenCalledOnce()
+    expect(start).not.toHaveBeenCalled()
+    fireEvent.keyUp(input, { code: 'KeyG', key: 'i', metaKey: true })
+    fireEvent.keyUp(input, { code: 'MetaLeft', key: 'Meta' })
+
+    MockUsePreferenceUtils.setPreferenceValue(commandShortcutPreferenceKey('tab.close'), {
+      binding: ['CommandOrControl', 'G'],
+      enabled: true
+    })
+    rerender(tree())
+    press(true)
+    void act(() => vi.advanceTimersByTime(350))
+    expect(closeTab).toHaveBeenCalledOnce()
+    expect(start).toHaveBeenCalledOnce()
+  })
+
+  it('keeps a Dvorak hold while its toggle character is still unknown', () => {
+    platform.isMac = true
+    MockUsePreferenceUtils.setPreferenceValue('feature.voice.dictation.hold_shortcut', 'MetaLeft')
+    MockUsePreferenceUtils.setPreferenceValue('feature.voice.dictation.toggle_shortcut', 'MetaLeft+ShiftRight+KeyG')
+    MockUsePreferenceUtils.setPreferenceValue(commandShortcutPreferenceKey('tab.close'), {
+      binding: ['CommandOrControl', 'Shift', 'G'],
+      enabled: true
+    })
+    MockUsePreferenceUtils.setPreferenceValue(commandShortcutPreferenceKey('chat.input.focus'), {
+      binding: ['CommandOrControl', 'I'],
+      enabled: false
+    })
+    const closeTab = vi.fn()
+    render(
+      <CommandProvider>
+        <CommandHost onClose={closeTab} />
+      </CommandProvider>
+    )
+    const input = screen.getByRole('textbox', { name: 'Dictation input' })
+    input.focus()
+    fireEvent.keyDown(input, { code: 'MetaLeft', key: 'Meta', metaKey: true })
+    void act(() => vi.advanceTimersByTime(300))
+    expect(start).toHaveBeenCalledOnce()
+    fireEvent.keyDown(input, { code: 'ShiftRight', key: 'Shift', metaKey: true, shiftKey: true })
+    expect(stop).not.toHaveBeenCalled()
+    fireEvent.keyDown(input, { code: 'KeyG', key: 'I', metaKey: true, shiftKey: true })
+    fireEvent.keyUp(input, { code: 'KeyG', key: 'I', metaKey: true, shiftKey: true })
+    fireEvent.keyUp(input, { code: 'ShiftRight', key: 'Shift', metaKey: true })
+    fireEvent.keyUp(input, { code: 'MetaLeft', key: 'Meta' })
+    expect(stop).not.toHaveBeenCalled()
+    expect(start).toHaveBeenCalledOnce()
+    expect(closeTab).not.toHaveBeenCalled()
+  })
+
+  it('rechecks a Dvorak hold against changed command preferences before starting', () => {
+    platform.isMac = true
+    MockUsePreferenceUtils.setPreferenceValue('feature.voice.dictation.hold_shortcut', 'MetaLeft+KeyG')
+    MockUsePreferenceUtils.setPreferenceValue('feature.voice.dictation.toggle_shortcut', '')
+    MockUsePreferenceUtils.setPreferenceValue(commandShortcutPreferenceKey('chat.input.focus'), {
+      binding: ['CommandOrControl', 'I'],
+      enabled: false
+    })
+    const closeTab = vi.fn()
+    const tree = () => (
+      <CommandProvider>
+        <CommandHost onClose={closeTab} />
+      </CommandProvider>
+    )
+    const { rerender } = render(tree())
+    const input = screen.getByRole('textbox', { name: 'Dictation input' })
+    input.focus()
+    fireEvent.keyDown(input, { code: 'MetaLeft', key: 'Meta', metaKey: true })
+    fireEvent.keyDown(input, { code: 'KeyG', key: 'i', metaKey: true })
+    void act(() => vi.advanceTimersByTime(100))
+    MockUsePreferenceUtils.setPreferenceValue(commandShortcutPreferenceKey('tab.close'), {
+      binding: ['CommandOrControl', 'I'],
+      enabled: true
+    })
+    rerender(tree())
+    void act(() => vi.advanceTimersByTime(300))
+    expect(start).not.toHaveBeenCalled()
+    fireEvent.keyUp(input, { code: 'KeyG', key: 'i', metaKey: true })
+    fireEvent.keyUp(input, { code: 'MetaLeft', key: 'Meta' })
+    fireEvent.keyDown(input, { code: 'MetaLeft', key: 'Meta', metaKey: true })
+    fireEvent.keyDown(input, { code: 'KeyG', key: 'i', metaKey: true })
+    expect(closeTab).toHaveBeenCalledOnce()
+    expect(start).not.toHaveBeenCalled()
   })
 
   it('leaves a newly conflicting toggle constituent available to its command', () => {

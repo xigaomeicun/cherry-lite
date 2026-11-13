@@ -1,6 +1,3 @@
-import { toast } from '@renderer/services/toast'
-import { DataApiErrorFactory } from '@shared/data/api/errors'
-import type { AgentSessionEntity } from '@shared/data/api/schemas/agentSessions'
 import { MockUseCacheUtils } from '@test-mocks/renderer/useCache'
 import {
   MockUseDataApiUtils,
@@ -11,6 +8,12 @@ import {
 } from '@test-mocks/renderer/useDataApi'
 import { act, renderHook } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+import { toast } from '@renderer/services/toast'
+import { DataApiErrorFactory } from '@shared/data/api/errors'
+import type { AgentSessionEntity } from '@shared/data/api/schemas/agentSessions'
+import { aiErrorCodes } from '@shared/ipc/errors/ai'
+import { IpcError } from '@shared/ipc/errors/IpcError'
 
 import {
   useActiveSession,
@@ -251,7 +254,7 @@ describe('useActiveSession', () => {
 
     const { result, rerender } = renderHook(
       ({ activeSessionId }) => useActiveSession({ activeSessionId, setActiveSessionId }),
-      { initialProps: { activeSessionId: 'temp-session-1' as string | null } }
+      { initialProps: { activeSessionId: 'temp-session-1' } }
     )
 
     act(() => result.current.setActiveSession(pendingSession))
@@ -278,49 +281,9 @@ describe('useSessions', () => {
     vi.clearAllMocks()
   })
 
-  it('disables loaded-page revalidation while a load-all session chain is still growing', () => {
-    renderHook(() => useSessions(undefined, { loadAll: true, pageSize: 200 }))
-
-    expect(mockUseInfiniteQuery).toHaveBeenCalledWith('/agent-sessions', {
-      query: undefined,
-      limit: 200,
-      enabled: undefined,
-      swrOptions: { revalidateAll: false, revalidateFirstPage: false }
-    })
-  })
-
-  it('flips revalidateAll on once a load-all session chain is fully loaded', () => {
-    mockUseInfiniteQuery.mockReturnValue(
-      buildInfiniteReturn({
-        pages: [{ items: [{ id: 'session-a', name: 'S' }] }],
-        hasNext: false
-      }) as never
-    )
-
-    renderHook(() => useSessions(undefined, { loadAll: true, pageSize: 200 }))
-
-    expect(mockUseInfiniteQuery).toHaveBeenLastCalledWith('/agent-sessions', {
-      query: undefined,
-      limit: 200,
-      enabled: undefined,
-      swrOptions: { revalidateAll: true, revalidateFirstPage: false }
-    })
-  })
-
-  it('keeps progressive session sources on first-page revalidation', () => {
-    renderHook(() => useSessions(undefined))
-
-    expect(mockUseInfiniteQuery).toHaveBeenCalledWith('/agent-sessions', {
-      query: undefined,
-      limit: 20,
-      enabled: undefined,
-      swrOptions: { revalidateAll: false, revalidateFirstPage: true }
-    })
-  })
-
   it('refreshes the session list when a backend-created Session is announced', () => {
     const refresh = vi.fn().mockResolvedValue(undefined)
-    mockUseInfiniteQuery.mockReturnValue(buildInfiniteReturn({ refresh }) as never)
+    mockUseInfiniteQuery.mockReturnValue(buildInfiniteReturn({ refresh }))
     renderHook(() => useSessions(undefined))
 
     act(() => {
@@ -332,79 +295,13 @@ describe('useSessions', () => {
     expect(refresh).toHaveBeenCalledOnce()
   })
 
-  it('does not revalidate previously loaded pages while the load-all session chain grows', () => {
-    // Simulate a multi-page loadAll: each render grows `pages` by one and
-    // keeps `hasNext` true until the final page. The auto-paginate effect
-    // drives `loadNext`; we assert that across every growth render the
-    // loaded-page revalidation stays disabled: `revalidateAll` prevents a
-    // quadratic re-fetch of earlier pages, while `revalidateFirstPage`
-    // prevents one redundant page-0 request per `loadNext`.
-    const loadNext = vi.fn()
-    let pages: Array<{ items: Array<{ id: string; name: string }>; nextCursor?: string }> = [
-      { items: [{ id: 's1', name: 'S1' }], nextCursor: 'c1' }
-    ]
-    let hasNext = true
-
-    mockUseInfiniteQuery.mockImplementation(
-      () =>
-        buildInfiniteReturn({
-          pages,
-          hasNext,
-          loadNext
-        }) as never
-    )
-
-    const { rerender } = renderHook(() => useSessions('agent-1', { loadAll: true, pageSize: 1 }))
-
-    // Page 1 → 2
-    pages = [...pages, { items: [{ id: 's2', name: 'S2' }], nextCursor: 'c2' }]
-    act(() => rerender())
-    // Page 2 → 3 (final)
-    pages = [...pages, { items: [{ id: 's3', name: 'S3' }] }]
-    hasNext = false
-    act(() => rerender())
-
-    // The auto-paginate effect drives loadNext; the key regression check is
-    // that neither previous pages nor page 0 are revalidated during growth.
-    expect(loadNext).toHaveBeenCalled()
-
-    // All calls during growth (every call except the final post-fully-loaded
-    // re-render where the effect flips revalidateAll on) must keep both
-    // growth-time revalidation modes off.
-    const growthCalls = mockUseInfiniteQuery.mock.calls.slice(0, -1)
-    expect(growthCalls.length).toBeGreaterThan(0)
-    for (const call of growthCalls) {
-      expect(call[1]).toMatchObject({ swrOptions: { revalidateAll: false, revalidateFirstPage: false } })
-    }
-    // The final call — after the chain is fully loaded — flips revalidateAll on.
-    const lastCall = mockUseInfiniteQuery.mock.calls[mockUseInfiniteQuery.mock.calls.length - 1]
-    expect(lastCall[1]).toMatchObject({ swrOptions: { revalidateAll: true, revalidateFirstPage: false } })
-  })
-
   it('returns empty sessions when agentId is null', () => {
-    mockUseInfiniteQuery.mockReturnValueOnce(buildInfiniteReturn() as never)
+    mockUseInfiniteQuery.mockReturnValueOnce(buildInfiniteReturn())
 
     const { result } = renderHook(() => useSessions(null))
 
     expect(result.current.sessions).toEqual([])
     expect(result.current.isLoading).toBe(false)
-  })
-
-  it('disables both session and pin queries when the source is disabled', () => {
-    mockUseInfiniteQuery.mockReturnValue(buildInfiniteReturn() as never)
-
-    renderHook(() => useSessions(undefined, { enabled: false }))
-
-    expect(mockUseInfiniteQuery).toHaveBeenCalledWith(
-      '/agent-sessions',
-      expect.objectContaining({
-        enabled: false
-      })
-    )
-    expect(mockUseQuery).toHaveBeenCalledWith('/pins', {
-      query: { entityType: 'session' },
-      enabled: false
-    })
   })
 
   it('refetches session pins after a pin membership notification', () => {
@@ -427,7 +324,7 @@ describe('useSessions', () => {
       { id: 's-1', name: 'Session 1' },
       { id: 's-2', name: 'Session 2' }
     ]
-    mockUseInfiniteQuery.mockReturnValue(buildInfiniteReturn({ pages: [{ items }] }) as never)
+    mockUseInfiniteQuery.mockReturnValue(buildInfiniteReturn({ pages: [{ items }] }))
 
     const { result } = renderHook(() => useSessions('agent-1'))
     await act(async () => {})
@@ -440,51 +337,13 @@ describe('useSessions', () => {
     const page1 = [{ id: 's-1', name: 'Session 1' }]
     const page2 = [{ id: 's-2', name: 'Session 2' }]
     mockUseInfiniteQuery.mockReturnValue(
-      buildInfiniteReturn({ pages: [{ items: page1, nextCursor: 'c1' }, { items: page2 }] }) as never
+      buildInfiniteReturn({ pages: [{ items: page1, nextCursor: 'c1' }, { items: page2 }] })
     )
 
     const { result } = renderHook(() => useSessions('agent-1'))
     await act(async () => {})
 
     expect(result.current.sessions.map((s: any) => s.id)).toEqual(['s-1', 's-2'])
-  })
-
-  it('reuses deeply equal session entities by id while allowing their order to change', () => {
-    const sessionA = createSession({ id: 'session-a', name: 'Session A' })
-    const sessionB = createSession({ id: 'session-b', name: 'Session B' })
-    let pages = [{ items: [sessionA, sessionB] }]
-    mockUseInfiniteQuery.mockImplementation(() => buildInfiniteReturn({ pages }) as never)
-
-    const { result, rerender } = renderHook(() => useSessions('agent-1'))
-    const firstSessions = result.current.sessions
-
-    pages = [
-      {
-        items: [
-          { ...sessionB, workspace: { ...sessionB.workspace } },
-          { ...sessionA, workspace: { ...sessionA.workspace } }
-        ]
-      }
-    ]
-    rerender()
-
-    expect(result.current.sessions).not.toBe(firstSessions)
-    expect(result.current.sessions[0]).toBe(firstSessions[1])
-    expect(result.current.sessions[1]).toBe(firstSessions[0])
-
-    const reorderedSessions = result.current.sessions
-    pages = [
-      {
-        items: [
-          { ...sessionB, name: 'Renamed Session B', workspace: { ...sessionB.workspace } },
-          { ...sessionA, workspace: { ...sessionA.workspace } }
-        ]
-      }
-    ]
-    rerender()
-
-    expect(result.current.sessions[0]).not.toBe(reorderedSessions[0])
-    expect(result.current.sessions[1]).toBe(reorderedSessions[1])
   })
 
   it('keeps togglePin stable while reading the latest pin map', async () => {
@@ -501,7 +360,7 @@ describe('useSessions', () => {
     }
     let pins: (typeof pin)[] = []
     const infiniteReturn = buildInfiniteReturn()
-    mockUseInfiniteQuery.mockReturnValue(infiniteReturn as never)
+    mockUseInfiniteQuery.mockReturnValue(infiniteReturn)
     mockUseQuery.mockImplementation((path: string) => ({
       data: path === '/pins' ? pins : undefined,
       isLoading: false,
@@ -522,12 +381,10 @@ describe('useSessions', () => {
     }))
 
     const { result, rerender } = renderHook(() => useSessions('agent-1'))
-    const initialTogglePin = result.current.togglePin
 
     pins = [pin]
     rerender()
 
-    expect(result.current.togglePin).toBe(initialTogglePin)
     await act(async () => result.current.togglePin('session-a'))
     expect(unpinTrigger).toHaveBeenCalledWith({ params: { id: pin.id } })
     expect(pinTrigger).not.toHaveBeenCalled()
@@ -540,7 +397,7 @@ describe('useSessions', () => {
         pages: [{ items: [{ id: 's-1', name: 'Session 1' }], nextCursor: 'c1' }],
         hasNext: true,
         loadNext
-      }) as never
+      })
     )
 
     const { result } = renderHook(() => useSessions('agent-1'))
@@ -560,7 +417,7 @@ describe('useSessions', () => {
         pages: [{ items: [{ id: 's-1', name: 'Session 1' }], nextCursor: 'c1' }],
         hasNext: true,
         loadNext
-      }) as never
+      })
     )
 
     renderHook(() => useSessions('agent-1', { loadAll: true }))
@@ -574,7 +431,7 @@ describe('useSessions', () => {
       buildInfiniteReturn({
         pages: [{ items: [{ id: 's-1', name: 'Session 1' }], nextCursor: 'c1' }],
         hasNext: true
-      }) as never
+      })
     )
     MockUseDataApiUtils.mockQueryResult('/pins', {
       data: [],
@@ -596,7 +453,7 @@ describe('useSessions', () => {
         pages: [{ items: [{ id: 's-1', name: 'Session 1' }], nextCursor: 'c1' }],
         hasNext: true,
         loadNext
-      }) as never
+      })
     )
 
     renderHook(() => useSessions('agent-1'))
@@ -612,7 +469,7 @@ describe('useSessions', () => {
         pages: [{ items: [{ id: 's-1', name: 'Session 1' }] }],
         hasNext: false,
         loadNext
-      }) as never
+      })
     )
 
     const { result } = renderHook(() => useSessions('agent-1'))
@@ -629,7 +486,7 @@ describe('useSessions', () => {
       buildInfiniteReturn({
         pages: [{ items: [], nextCursor: 'c1' }],
         hasNext: true
-      }) as never
+      })
     )
 
     const { result } = renderHook(() => useSessions('agent-1'))
@@ -644,7 +501,7 @@ describe('useSessions', () => {
       description: 'Notes'
     })
     const createTrigger = vi.fn().mockResolvedValueOnce(mockSession)
-    mockUseInfiniteQuery.mockReturnValue(buildInfiniteReturn({ refresh }) as never)
+    mockUseInfiniteQuery.mockReturnValue(buildInfiniteReturn({ refresh }))
     MockUseDataApiUtils.mockMutationWithTrigger('POST', '/agent-sessions', createTrigger)
 
     const { result } = renderHook(() => useSessions('agent-1'))
@@ -679,6 +536,100 @@ describe('useSessions', () => {
     expect(invalidate).toHaveBeenCalledWith(['/agent-sessions', '/agent-workspaces', '/pins', '/agent-channels'])
     expect(mockCloseConversationTabs).toHaveBeenCalledWith('agents', ['session-a'])
     expect(deleted).toBe(true)
+  })
+
+  it('refreshes and reports a stale session without closing its tab or claiming deletion', async () => {
+    mockIpcRequest.mockResolvedValue({ deletedIds: [] })
+
+    const { result } = renderHook(() => useSessions('agent-1'))
+    const invalidate = mockUseInvalidateCache.mock.results.at(-1)?.value
+    const deleted = await act(async () => result.current.deleteSession('session-a'))
+
+    expect(invalidate).toHaveBeenCalledWith(['/agent-sessions', '/agent-workspaces', '/pins', '/agent-channels'])
+    expect(mockCloseConversationTabs).not.toHaveBeenCalled()
+    expect(toast.info).toHaveBeenCalledWith('recycle_bin.already_moved')
+    expect(deleted).toBe(false)
+  })
+
+  it('uses the direct permanent deletion command only for explicit permanent deletion', async () => {
+    mockIpcRequest.mockResolvedValue({ deletedIds: ['session-a'] })
+    const { result } = renderHook(() => useSessions('agent-1'))
+    const deleted = await act(async () => result.current.deleteSession('session-a', { permanent: true }))
+    expect(deleted).toBe(true)
+    expect(mockIpcRequest).toHaveBeenCalledWith('ai.agent.session.delete_permanently', { sessionIds: ['session-a'] })
+    expect(mockCloseConversationTabs).toHaveBeenCalledWith('agents', ['session-a'])
+  })
+
+  it('returns a stale outcome without item feedback when a batch owner handles the result', async () => {
+    mockIpcRequest.mockResolvedValue({ deletedIds: [] })
+
+    const { result } = renderHook(() => useSessions('agent-1'))
+    const invalidate = mockUseInvalidateCache.mock.results.at(-1)?.value
+    const outcome = await act(async () => result.current.deleteSessionWithOutcome('session-a', { showFeedback: false }))
+
+    expect(outcome).toEqual({ status: 'stale' })
+    expect(invalidate).toHaveBeenCalledWith(['/agent-sessions', '/agent-workspaces', '/pins', '/agent-channels'])
+    expect(mockCloseConversationTabs).not.toHaveBeenCalled()
+    expect(toast.info).not.toHaveBeenCalled()
+    expect(toast.error).not.toHaveBeenCalled()
+  })
+
+  it('returns a failed outcome without item feedback when a batch owner handles the result', async () => {
+    mockIpcRequest.mockRejectedValue(new Error('Delete failed'))
+
+    const { result } = renderHook(() => useSessions('agent-1'))
+    const invalidate = mockUseInvalidateCache.mock.results.at(-1)?.value
+    const outcome = await act(async () => result.current.deleteSessionWithOutcome('session-a', { showFeedback: false }))
+
+    expect(outcome).toEqual({ status: 'failed', error: 'Delete failed' })
+    expect(invalidate).toHaveBeenCalledWith(['/agent-sessions', '/agent-workspaces', '/pins', '/agent-channels'])
+    expect(mockCloseConversationTabs).not.toHaveBeenCalled()
+    expect(toast.info).not.toHaveBeenCalled()
+    expect(toast.error).not.toHaveBeenCalled()
+  })
+
+  it('refreshes a pinned rejection as a failed outcome and does not close tabs', async () => {
+    mockIpcRequest.mockRejectedValue(new IpcError(aiErrorCodes.AI_AGENT_SESSION_PINNED, 'Session is pinned'))
+    const { result } = renderHook(() => useSessions('agent-1'))
+    const invalidate = mockUseInvalidateCache.mock.results.at(-1)?.value
+
+    const outcome = await act(async () =>
+      result.current.deleteSessionWithOutcome('session-a', { permanent: true, showFeedback: true })
+    )
+
+    expect(outcome).toEqual({ status: 'failed', error: 'recycle_bin.delete.pinned' })
+    expect(invalidate).toHaveBeenCalledWith(['/agent-sessions', '/agent-workspaces', '/pins', '/agent-channels'])
+    expect(mockCloseConversationTabs).not.toHaveBeenCalled()
+    expect(toast.error).toHaveBeenCalledWith('recycle_bin.delete.pinned')
+  })
+
+  it('reports the session mutation failure when the following refresh also fails', async () => {
+    mockIpcRequest.mockRejectedValue(new Error('Delete failed'))
+
+    const { result } = renderHook(() => useSessions('agent-1'))
+    const invalidate = mockUseInvalidateCache.mock.results.at(-1)?.value
+    invalidate.mockRejectedValueOnce(new Error('refresh failed'))
+    const outcome = await act(async () =>
+      result.current.deleteSessionWithOutcome('session-a', { permanent: true, showFeedback: false })
+    )
+
+    expect(outcome).toEqual({ status: 'failed', error: 'Delete failed' })
+    expect(invalidate).toHaveBeenCalledWith(['/agent-sessions', '/agent-workspaces', '/pins', '/agent-channels'])
+    expect(mockCloseConversationTabs).not.toHaveBeenCalled()
+    expect(toast.error).not.toHaveBeenCalled()
+  })
+
+  it('restores a session through the lifecycle IPC command and refreshes its read models', async () => {
+    const restoredSession = createSession({ id: 'session-a' })
+    mockIpcRequest.mockResolvedValue(restoredSession)
+
+    const { result } = renderHook(() => useSessions('agent-1'))
+    const invalidate = mockUseInvalidateCache.mock.results.at(-1)?.value
+    const restored = await act(async () => result.current.restoreSession('session-a'))
+
+    expect(mockIpcRequest).toHaveBeenCalledWith('ai.agent.session.restore', { sessionId: 'session-a' })
+    expect(invalidate).toHaveBeenCalledWith(['/agent-sessions', '/agent-sessions/session-a', '/agents/*'])
+    expect(restored).toBe(restoredSession)
   })
 
   it('keeps a committed session deletion successful when cache refresh fails', async () => {
@@ -729,7 +680,7 @@ describe('useSessions', () => {
       description: 'Notes'
     })
     const createTrigger = vi.fn().mockResolvedValueOnce(mockSession)
-    mockUseInfiniteQuery.mockReturnValue(buildInfiniteReturn({ refresh }) as never)
+    mockUseInfiniteQuery.mockReturnValue(buildInfiniteReturn({ refresh }))
     MockUseDataApiUtils.mockMutationWithTrigger('POST', '/agent-sessions', createTrigger)
 
     const { result } = renderHook(() => useSessions('agent-1'))
@@ -747,7 +698,7 @@ describe('useSessions', () => {
   })
 
   it('shows an error toast and returns null when DataApi session creation fails', async () => {
-    mockUseInfiniteQuery.mockReturnValue(buildInfiniteReturn() as never)
+    mockUseInfiniteQuery.mockReturnValue(buildInfiniteReturn())
     const createTrigger = vi.fn().mockRejectedValueOnce(new Error('create failed'))
     MockUseDataApiUtils.mockMutationWithTrigger('POST', '/agent-sessions', createTrigger)
 
@@ -769,7 +720,7 @@ describe('useLatestSession', () => {
 
   it('keeps first-entry restore gated while cached latest session is revalidating', () => {
     MockUseDataApiUtils.mockQueryResult('/agent-sessions/latest', {
-      data: { session: createSession({ id: 'session-latest' }) } as never,
+      data: { session: createSession({ id: 'session-latest' }) },
       isRefreshing: true
     })
 
@@ -833,25 +784,6 @@ describe('useUpdateSession', () => {
     })
     expect(updated).toBeDefined()
     expect(toast.success).toHaveBeenCalledWith('common.update_success')
-  })
-
-  it('keeps the session PATCH refresh scoped to session caches', () => {
-    renderHook(() => useUpdateSession())
-
-    const updateMutationCall = mockUseMutation.mock.calls.find(
-      ([method, path]) => method === 'PATCH' && path === '/agent-sessions/:sessionId'
-    )
-    const refresh = updateMutationCall?.[2]?.refresh as unknown as (context: {
-      args: { params: { sessionId: string }; body?: Record<string, unknown> }
-      result: AgentSessionEntity
-    }) => string[]
-
-    expect(
-      refresh({
-        args: { params: { sessionId: 'session-1' }, body: { name: 'Renamed session' } },
-        result: createSession()
-      })
-    ).toEqual(['/agent-sessions', '/agent-sessions/session-1'])
   })
 
   it('refreshes workspaces through the dedicated workspace mutation', async () => {

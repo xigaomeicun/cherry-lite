@@ -1,12 +1,25 @@
-import type { KnowledgeBase } from '@shared/data/types/knowledge'
-import { renderHook, waitFor } from '@testing-library/react'
+import { mockRendererLoggerService } from '@test-mocks/RendererLoggerService'
+import { act, renderHook, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { useKnowledgeBases } from '../useKnowledgeBase'
+import type { UpdateKnowledgeBaseDto } from '@shared/data/api/schemas/knowledges'
+import type { CreateKnowledgeBaseDto, KnowledgeBase, RestoreKnowledgeBaseResult } from '@shared/data/types/knowledge'
+
+import {
+  useCreateKnowledgeBase,
+  useDeleteKnowledgeBase,
+  useEnableKnowledgeBaseEmbedding,
+  useKnowledgeBases,
+  useRestoreKnowledgeBase,
+  useUpdateKnowledgeBase
+} from '../useKnowledgeBase'
+
+type CreateKnowledgeBaseInput = Pick<CreateKnowledgeBaseDto, 'name' | 'groupId' | 'embeddingModelId' | 'dimensions'>
 
 const mockUseInfiniteQuery = vi.fn()
 const mockUseMutation = vi.fn()
 const mockUseInvalidateCache = vi.fn()
+const mockInvalidateCache = vi.fn()
 const mockIpcRequest = vi.fn()
 
 vi.mock('@data/hooks/useDataApi', () => ({
@@ -23,6 +36,7 @@ vi.mock('@renderer/ipc', () => ({
 }))
 
 const createKnowledgeBase = (overrides: Partial<KnowledgeBase> = {}): KnowledgeBase => ({
+  orderKey: 'a0',
   id: '',
   name: '',
   groupId: null,
@@ -69,15 +83,6 @@ describe('useKnowledgeBases', () => {
     expect(result.current.bases).toEqual(bases)
     expect(result.current.isLoading).toBe(false)
     expect(result.current.error).toBeUndefined()
-    expect(result.current.refetch).toBe(refetch)
-
-    await waitFor(() => {
-      expect(mockUseInfiniteQuery).toHaveBeenLastCalledWith('/knowledge-bases', {
-        limit: 100,
-        enabled: undefined,
-        swrOptions: { revalidateAll: true, revalidateFirstPage: false }
-      })
-    })
   })
 
   it('auto-loads the next page without publishing a partial list', async () => {
@@ -177,24 +182,388 @@ describe('useKnowledgeBases', () => {
     expect(result.current.error).toBe(error)
     expect(loadNext).not.toHaveBeenCalled()
   })
+})
 
-  it('passes an explicit activation boundary to DataApi', () => {
-    mockUseInfiniteQuery.mockReturnValue({
-      pages: [],
+describe('useCreateKnowledgeBase', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.spyOn(mockRendererLoggerService, 'error').mockImplementation(() => {})
+    mockUseInvalidateCache.mockReturnValue(mockInvalidateCache)
+    mockInvalidateCache.mockResolvedValue(undefined)
+    mockIpcRequest.mockResolvedValue(createKnowledgeBase())
+  })
+
+  it('creates a knowledge base with the selected group id through runtime IPC and refreshes the list', async () => {
+    const createdBase = createKnowledgeBase({
+      id: 'base-2',
+      name: 'Base 2',
+      groupId: 'group-2',
+      embeddingModelId: 'openai::text-embedding-3-small',
+      dimensions: 2048
+    })
+    mockIpcRequest.mockResolvedValueOnce(createdBase)
+    const input: CreateKnowledgeBaseInput = {
+      name: '  Base 2  ',
+      groupId: 'group-2'
+    }
+
+    const { result } = renderHook(() => useCreateKnowledgeBase())
+    let created: KnowledgeBase | undefined
+
+    await act(async () => {
+      created = await result.current.createBase(input)
+    })
+    expect(mockIpcRequest).toHaveBeenCalledWith('knowledge.create_base', {
+      base: {
+        name: 'Base 2',
+        groupId: 'group-2'
+      }
+    })
+    expect(mockInvalidateCache).toHaveBeenCalledWith('/knowledge-bases')
+    expect(created).toEqual(createdBase)
+    expect(result.current.isCreating).toBe(false)
+    expect(result.current.createError).toBeUndefined()
+  })
+
+  it('omits groupId from the runtime IPC payload when the input stays ungrouped', async () => {
+    const createdBase = createKnowledgeBase({
+      id: 'base-3',
+      name: 'Base 3',
+      embeddingModelId: 'openai::text-embedding-3-small',
+      dimensions: 1536
+    })
+    mockIpcRequest.mockResolvedValueOnce(createdBase)
+    const input: CreateKnowledgeBaseInput = {
+      name: 'Base 3'
+    }
+
+    const { result } = renderHook(() => useCreateKnowledgeBase())
+
+    await act(async () => {
+      await result.current.createBase(input)
+    })
+
+    expect(mockIpcRequest).toHaveBeenCalledWith('knowledge.create_base', {
+      base: {
+        name: 'Base 3'
+      }
+    })
+  })
+
+  it('forwards the embedding model with its dimensions when one is picked', async () => {
+    const createdBase = createKnowledgeBase({
+      id: 'base-5',
+      name: 'Base 5',
+      embeddingModelId: 'openai::text-embedding-3-small',
+      dimensions: 1536
+    })
+    mockIpcRequest.mockResolvedValueOnce(createdBase)
+    const input: CreateKnowledgeBaseInput = {
+      name: 'Base 5',
+      embeddingModelId: '  openai::text-embedding-3-small  ',
+      dimensions: 1536
+    }
+
+    const { result } = renderHook(() => useCreateKnowledgeBase())
+
+    await act(async () => {
+      await result.current.createBase(input)
+    })
+
+    expect(mockIpcRequest).toHaveBeenCalledWith('knowledge.create_base', {
+      base: {
+        name: 'Base 5',
+        embeddingModelId: 'openai::text-embedding-3-small',
+        dimensions: 1536
+      }
+    })
+  })
+
+  it('keeps create rejected when runtime IPC fails without refreshing the list', async () => {
+    const createError = new Error('create failed')
+    mockIpcRequest.mockRejectedValueOnce(createError)
+    const input: CreateKnowledgeBaseInput = {
+      name: 'Base 4'
+    }
+    const { result } = renderHook(() => useCreateKnowledgeBase())
+
+    await act(async () => {
+      await expect(result.current.createBase(input)).rejects.toBe(createError)
+    })
+
+    expect(mockInvalidateCache).not.toHaveBeenCalled()
+    expect(result.current.isCreating).toBe(false)
+    expect(result.current.createError).toBe(createError)
+  })
+})
+
+describe('useRestoreKnowledgeBase', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.spyOn(mockRendererLoggerService, 'error').mockImplementation(() => {})
+    mockUseInvalidateCache.mockReturnValue(mockInvalidateCache)
+    mockInvalidateCache.mockResolvedValue(undefined)
+    mockIpcRequest.mockResolvedValue(createKnowledgeBase())
+  })
+
+  it('restores a knowledge base through runtime IPC and refreshes the list', async () => {
+    const restoredBase = createKnowledgeBase({
+      id: 'restored-base',
+      name: 'Legacy KB_bak',
+      embeddingModelId: 'openai::text-embedding-3-small',
+      dimensions: 1024
+    })
+    mockIpcRequest.mockResolvedValueOnce({ base: restoredBase, skippedMissingSourceCount: 0 })
+
+    const { result } = renderHook(() => useRestoreKnowledgeBase())
+    let restored: RestoreKnowledgeBaseResult | undefined
+
+    await act(async () => {
+      restored = await result.current.restoreBase({
+        sourceBaseId: '  source-base  ',
+        name: '  Legacy KB_bak  ',
+        embeddingModelId: '  openai::text-embedding-3-small  ',
+        dimensions: 1024
+      })
+    })
+
+    expect(mockIpcRequest).toHaveBeenCalledWith('knowledge.restore_base', {
+      sourceBaseId: 'source-base',
+      name: 'Legacy KB_bak',
+      embeddingModelId: 'openai::text-embedding-3-small',
+      dimensions: 1024
+    })
+    expect(mockInvalidateCache).toHaveBeenCalledWith('/knowledge-bases')
+    expect(restored).toEqual({ base: restoredBase, skippedMissingSourceCount: 0 })
+    expect(result.current.isRestoring).toBe(false)
+    expect(result.current.restoreError).toBeUndefined()
+  })
+
+  it('restores a BM25-only knowledge base with a null embedding config', async () => {
+    const restoredBase = createKnowledgeBase({
+      id: 'restored-base',
+      name: 'Legacy KB BM25',
+      embeddingModelId: null,
+      dimensions: null
+    })
+    mockIpcRequest.mockResolvedValueOnce({ base: restoredBase, skippedMissingSourceCount: 0 })
+
+    const { result } = renderHook(() => useRestoreKnowledgeBase())
+
+    await act(async () => {
+      await result.current.restoreBase({
+        sourceBaseId: 'source-base',
+        name: 'Legacy KB BM25',
+        embeddingModelId: null,
+        dimensions: null
+      })
+    })
+
+    expect(mockIpcRequest).toHaveBeenCalledWith('knowledge.restore_base', {
+      sourceBaseId: 'source-base',
+      name: 'Legacy KB BM25',
+      embeddingModelId: null,
+      dimensions: null
+    })
+    expect(mockInvalidateCache).toHaveBeenCalledWith('/knowledge-bases')
+  })
+
+  it('keeps restore rejected when runtime IPC fails without refreshing the list', async () => {
+    const restoreError = new Error('restore failed')
+    mockIpcRequest.mockRejectedValueOnce(restoreError)
+    const { result } = renderHook(() => useRestoreKnowledgeBase())
+
+    await act(async () => {
+      await expect(
+        result.current.restoreBase({
+          sourceBaseId: 'source-base',
+          name: 'Legacy KB_bak',
+          embeddingModelId: 'openai::text-embedding-3-small',
+          dimensions: 1024
+        })
+      ).rejects.toBe(restoreError)
+    })
+
+    expect(mockInvalidateCache).not.toHaveBeenCalled()
+    expect(result.current.isRestoring).toBe(false)
+    expect(result.current.restoreError).toBe(restoreError)
+  })
+})
+
+describe('useEnableKnowledgeBaseEmbedding', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.spyOn(mockRendererLoggerService, 'error').mockImplementation(() => {})
+    mockUseInvalidateCache.mockReturnValue(mockInvalidateCache)
+    mockInvalidateCache.mockResolvedValue(undefined)
+    mockIpcRequest.mockResolvedValue(createKnowledgeBase())
+  })
+
+  it('enables the embedding model through runtime IPC and refreshes the list', async () => {
+    const updatedBase = createKnowledgeBase({
+      id: 'base-1',
+      embeddingModelId: 'openai::text-embedding-3-small',
+      dimensions: 1536
+    })
+    mockIpcRequest.mockResolvedValueOnce(updatedBase)
+
+    const { result } = renderHook(() => useEnableKnowledgeBaseEmbedding())
+    let updated: KnowledgeBase | undefined
+
+    await act(async () => {
+      updated = await result.current.enableEmbedding('  base-1  ', {
+        embeddingModelId: '  openai::text-embedding-3-small  ',
+        dimensions: 1536,
+        chunkSize: 512
+      })
+    })
+
+    expect(mockIpcRequest).toHaveBeenCalledWith('knowledge.enable_embedding_model', {
+      baseId: 'base-1',
+      patch: {
+        embeddingModelId: 'openai::text-embedding-3-small',
+        dimensions: 1536,
+        chunkSize: 512
+      }
+    })
+    // Also refreshes the item list — enabling embedding flips every existing item back to
+    // processing/embedding, and the item list's own polling had already stopped.
+    expect(mockInvalidateCache).toHaveBeenCalledWith(['/knowledge-bases/base-1/items', '/knowledge-bases'])
+    expect(updated).toEqual(updatedBase)
+    expect(result.current.isEnabling).toBe(false)
+    expect(result.current.enableError).toBeUndefined()
+  })
+
+  it('rejects before calling IPC when the embedding model is missing', async () => {
+    const { result } = renderHook(() => useEnableKnowledgeBaseEmbedding())
+
+    await act(async () => {
+      await expect(
+        result.current.enableEmbedding('base-1', { embeddingModelId: null, dimensions: 1536 })
+      ).rejects.toThrow('Knowledge base embedding model is required')
+    })
+
+    expect(mockIpcRequest).not.toHaveBeenCalled()
+  })
+
+  it('rejects before calling IPC when dimensions are not a positive integer', async () => {
+    const { result } = renderHook(() => useEnableKnowledgeBaseEmbedding())
+
+    await act(async () => {
+      await expect(
+        result.current.enableEmbedding('base-1', {
+          embeddingModelId: 'openai::text-embedding-3-small',
+          dimensions: 0
+        })
+      ).rejects.toThrow('Knowledge base dimensions must be a positive integer')
+    })
+
+    expect(mockIpcRequest).not.toHaveBeenCalled()
+  })
+
+  it('keeps enable rejected when runtime IPC fails without refreshing the list', async () => {
+    const enableError = new Error('enable failed')
+    mockIpcRequest.mockRejectedValueOnce(enableError)
+    const { result } = renderHook(() => useEnableKnowledgeBaseEmbedding())
+
+    await act(async () => {
+      await expect(
+        result.current.enableEmbedding('base-1', {
+          embeddingModelId: 'openai::text-embedding-3-small',
+          dimensions: 1536
+        })
+      ).rejects.toBe(enableError)
+    })
+
+    expect(mockInvalidateCache).not.toHaveBeenCalled()
+    expect(result.current.isEnabling).toBe(false)
+    expect(result.current.enableError).toBe(enableError)
+  })
+})
+
+describe('useUpdateKnowledgeBase', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('updates a knowledge base with the expected params and body', async () => {
+    const updates: UpdateKnowledgeBaseDto = {
+      groupId: 'group-2'
+    }
+    const updatedBase = createKnowledgeBase({
+      id: 'base-1',
+      name: 'Base 1',
+      groupId: 'group-2'
+    })
+    const trigger = vi.fn().mockResolvedValue(updatedBase)
+    const updateError = new Error('update failed')
+
+    mockUseMutation.mockReturnValue({
+      trigger,
       isLoading: false,
-      isRefreshing: false,
-      error: undefined,
-      hasNext: false,
-      loadNext: vi.fn(),
-      refresh: vi.fn()
+      error: updateError
     })
 
-    renderHook(() => useKnowledgeBases({ enabled: false }))
+    const { result } = renderHook(() => useUpdateKnowledgeBase())
+    let updated: KnowledgeBase | undefined
 
-    expect(mockUseInfiniteQuery).toHaveBeenCalledWith('/knowledge-bases', {
-      limit: 100,
-      enabled: false,
-      swrOptions: { revalidateAll: false, revalidateFirstPage: false }
+    await act(async () => {
+      updated = await result.current.updateBase('base-1', updates)
     })
+    expect(trigger).toHaveBeenCalledWith({
+      params: { id: 'base-1' },
+      body: updates
+    })
+    expect(updated).toEqual(updatedBase)
+    expect(result.current.isUpdating).toBe(false)
+    expect(result.current.updateError).toBe(updateError)
+  })
+})
+
+describe('useDeleteKnowledgeBase', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.spyOn(mockRendererLoggerService, 'error').mockImplementation(() => {})
+    mockUseInvalidateCache.mockReturnValue(mockInvalidateCache)
+    mockInvalidateCache.mockResolvedValue(undefined)
+    mockIpcRequest.mockResolvedValue(undefined)
+  })
+
+  it('deletes a knowledge base through runtime IPC and refreshes dependent caches', async () => {
+    const { result } = renderHook(() => useDeleteKnowledgeBase())
+
+    await act(async () => {
+      await result.current.deleteBase('base-1')
+    })
+    expect(mockIpcRequest).toHaveBeenCalledWith('knowledge.delete_base', { baseId: 'base-1' })
+    expect(mockInvalidateCache).toHaveBeenCalledWith([
+      '/knowledge-bases',
+      '/agents',
+      '/agents/*',
+      '/assistants',
+      '/assistants/*'
+    ])
+    expect(result.current.isDeleting).toBe(false)
+    expect(result.current.deleteError).toBeUndefined()
+  })
+
+  it('keeps delete rejected when runtime IPC fails and still refreshes the list', async () => {
+    const deleteError = new Error('delete failed')
+    mockIpcRequest.mockRejectedValueOnce(deleteError)
+    const { result } = renderHook(() => useDeleteKnowledgeBase())
+
+    await act(async () => {
+      await expect(result.current.deleteBase('base-1')).rejects.toBe(deleteError)
+    })
+
+    expect(mockInvalidateCache).toHaveBeenCalledWith([
+      '/knowledge-bases',
+      '/agents',
+      '/agents/*',
+      '/assistants',
+      '/assistants/*'
+    ])
+    expect(result.current.isDeleting).toBe(false)
+    expect(result.current.deleteError).toBe(deleteError)
   })
 })

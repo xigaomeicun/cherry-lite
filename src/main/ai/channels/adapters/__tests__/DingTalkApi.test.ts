@@ -1,6 +1,7 @@
-import { t } from '@main/i18n'
 import { net } from 'electron'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+
+import { t } from '@main/i18n'
 
 import { DINGTALK_FILE_BYTES, DingTalkApi } from '../dingtalk/DingTalkApi'
 

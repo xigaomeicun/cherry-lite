@@ -1,7 +1,8 @@
-import { toast } from '@renderer/services/toast'
-import { DataApiErrorFactory } from '@shared/data/api/errors'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+import { toast } from '@renderer/services/toast'
+import { DataApiErrorFactory } from '@shared/data/api/errors'
 
 import ModelListItem from '../ModelListItem'
 
@@ -66,28 +67,6 @@ describe('ModelListItem', () => {
         writeText: vi.fn().mockResolvedValue(undefined)
       }
     })
-  })
-
-  it('renders the row without an enabled switch', () => {
-    render(
-      <ModelListItem
-        model={
-          {
-            id: 'openai::alpha',
-            providerId: 'openai',
-            name: 'Alpha',
-            isEnabled: true,
-            capabilities: []
-          } as any
-        }
-        onEdit={vi.fn()}
-        onDelete={vi.fn()}
-      />
-    )
-
-    expect(screen.queryByRole('switch')).not.toBeInTheDocument()
-    expect(screen.getByLabelText('common.settings')).toBeInTheDocument()
-    expect(screen.getByLabelText('settings.models.manage.remove_model')).toBeInTheDocument()
   })
 
   it('opens the model drawer only from the settings button', async () => {

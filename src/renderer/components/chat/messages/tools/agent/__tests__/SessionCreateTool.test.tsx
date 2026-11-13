@@ -54,20 +54,18 @@ describe('SessionCreateTool', () => {
     render(
       <Harness
         input={{ title: 'Research pricing', message: 'Compare the three enterprise plans and cite each source.' }}
-        output={
-          {
-            content: [
-              {
-                type: 'text',
-                text: JSON.stringify({
-                  ok: true,
-                  sessionId: 'session-research',
-                  delivery: { status: 'delivering' }
-                })
-              }
-            ]
-          } as never
-        }
+        output={{
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                ok: true,
+                sessionId: 'session-research',
+                delivery: { status: 'delivering' }
+              })
+            }
+          ]
+        }}
       />
     )
 
@@ -78,21 +76,77 @@ describe('SessionCreateTool', () => {
     expect(screen.queryByText(/"sessionId"/)).not.toBeInTheDocument()
   })
 
+  it('names the target Agent without claiming inherited context for a cross-Agent create', () => {
+    render(
+      <Harness
+        input={{ title: 'Research pricing', message: 'Compare plans.' }}
+        output={{
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                ok: true,
+                agentId: 'agent-b',
+                sessionId: 'session-research',
+                delivery: {
+                  sender: { agentId: 'agent-a' },
+                  receiver: { agentId: 'agent-b' },
+                  receiverSnapshot: { agentName: 'Various Scripts' }
+                }
+              })
+            }
+          ]
+        }}
+      />
+    )
+
+    expect(screen.getByText('Various Scripts / Research pricing')).toBeInTheDocument()
+    expect(screen.getByTitle('Various Scripts / Research pricing')).toBeInTheDocument()
+    expect(screen.getByText('Research pricing')).toBeInTheDocument()
+    expect(screen.queryByText('Using this agent and workspace')).toBeNull()
+  })
+
+  it('keeps inherited context and omits the Agent name for a same-Agent create', () => {
+    render(
+      <Harness
+        input={{ title: 'Research pricing', message: 'Compare plans.' }}
+        output={{
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                ok: true,
+                sessionId: 'session-research',
+                delivery: {
+                  sender: { agentId: 'agent-a' },
+                  receiver: { agentId: 'agent-a' },
+                  receiverSnapshot: { agentName: 'Various Scripts' }
+                }
+              })
+            }
+          ]
+        }}
+      />
+    )
+
+    expect(screen.getAllByText('Research pricing')).toHaveLength(2)
+    expect(screen.getByText('Using this agent and workspace')).toBeInTheDocument()
+    expect(screen.queryByText(/Various Scripts/)).toBeNull()
+  })
+
   it('copies the durable session id', async () => {
     const user = userEvent.setup()
     render(
       <Harness
         input={{ message: 'Do the work.' }}
-        output={
-          {
-            content: [
-              {
-                type: 'text',
-                text: JSON.stringify({ ok: true, sessionId: 'session-copy', delivery: { status: 'accepted' } })
-              }
-            ]
-          } as never
-        }
+        output={{
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({ ok: true, sessionId: 'session-copy', delivery: { status: 'accepted' } })
+            }
+          ]
+        }}
       />
     )
 
@@ -100,13 +154,6 @@ describe('SessionCreateTool', () => {
 
     expect(mocks.copyText).toHaveBeenCalledWith('session-copy', { successMessage: 'Copied' })
     expect(mocks.setCopied).toHaveBeenCalledWith(true)
-  })
-
-  it('uses the streaming state supplied by the tool card', () => {
-    render(<Harness isStreaming input={{ title: 'Research pricing', message: 'Compare plans.' }} />)
-
-    expect(screen.getByText('message.tools.sessionCreate.creating')).toBeInTheDocument()
-    expect(screen.queryByText('Started a new session')).toBeNull()
   })
 
   it.each([

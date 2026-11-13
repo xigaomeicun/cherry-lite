@@ -1,5 +1,5 @@
-import type { Model } from '@earendil-works/pi-ai'
 import { normalizeContext } from '@earendil-works/pi-ai'
+import type { Model } from '@earendil-works/pi-ai'
 import { streamSimple } from '@earendil-works/pi-ai/api/google-generative-ai'
 import { describe, expect, it } from 'vitest'
 

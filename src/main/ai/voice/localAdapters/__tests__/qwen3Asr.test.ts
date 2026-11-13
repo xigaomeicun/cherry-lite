@@ -1,8 +1,9 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
 import { application } from '@application'
 import type { AsrInferenceService } from '@main/ai/localModel'
 import { UtilityProcessError } from '@main/core/utilityProcess/UtilityProcessError'
 import { QWEN3_ASR_BUNDLE_ID } from '@shared/ai/localVoice'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { createQwen3AsrTranscriptionModel } from '../qwen3Asr'
 

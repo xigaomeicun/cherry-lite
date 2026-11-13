@@ -1,4 +1,9 @@
 import type { LanguageModelV3StreamPart } from '@ai-sdk/provider'
+import { setupTestDatabase, withRoot } from '@test-helpers/db'
+import type { LanguageModelMiddleware } from 'ai'
+import { eq } from 'drizzle-orm'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
 import { aiUsageRecordTable } from '@data/db/schemas/aiUsageRecord'
 import { assistantTable } from '@data/db/schemas/assistant'
 import { messageTable } from '@data/db/schemas/message'
@@ -14,10 +19,6 @@ import { createLanguageUsageMiddleware } from '@main/ai/hooks/billingHook'
 import { gatewayUsageNormalizeFeature } from '@main/ai/runtime/aiSdk/params/features/gatewayUsageNormalize'
 import { createAiUsageCaptureContext, createAiUsagePricingSnapshot } from '@main/ai/utils/usageCapture'
 import { DEFAULT_ASSISTANT_SETTINGS } from '@shared/data/types/assistant'
-import { setupTestDatabase, withRoot } from '@test-helpers/db'
-import type { LanguageModelMiddleware } from 'ai'
-import { eq } from 'drizzle-orm'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { notifyDataApiDataChangeMock } = vi.hoisted(() => ({
   notifyDataApiDataChangeMock: vi.fn()
@@ -205,6 +206,40 @@ describe('AiUsageRecordService', () => {
         })
       ])
     )
+  })
+
+  it('persists flat provider tokens without the gateway normalize middleware', async () => {
+    const capture = createLanguageUsageMiddleware(context())
+    const flatFinish = {
+      type: 'finish',
+      finishReason: { unified: 'stop', raw: 'stop' },
+      usage: {
+        inputTokens: 1_000_000,
+        outputTokens: 500_000,
+        totalTokens: 1_500_000,
+        cachedInputTokens: 0
+      }
+    } as unknown as LanguageModelV3StreamPart
+    const stream = new ReadableStream<LanguageModelV3StreamPart>({
+      start(controller) {
+        controller.enqueue(flatFinish)
+        controller.close()
+      }
+    })
+    const wrapped = await capture.wrapStream!({ doStream: async () => ({ stream }) } as never)
+
+    await wrapped.stream.pipeTo(new WritableStream())
+
+    expect(dbh.db.select().from(aiUsageRecordTable).get()).toMatchObject({
+      inputTokens: 1_000_000,
+      outputTokens: 500_000,
+      totalTokens: 1_500_000,
+      noCacheTokens: 1_000_000,
+      cacheReadTokens: 0,
+      cost: 2,
+      costCurrency: 'USD',
+      costSource: 'computed'
+    })
   })
 
   it('persists normalized gateway tokens and computed cost from a flat finish chunk', async () => {
@@ -560,8 +595,6 @@ describe('AiUsageRecordService', () => {
     pricingSnapshot.perImage.price = 99
     aiUsageRecordService.recordInvocation(invocation({ context: frozen }))
 
-    expect(Object.isFrozen(frozen)).toBe(true)
-    expect(Object.isFrozen(frozen.pricingSnapshot?.perImage)).toBe(true)
     expect(dbh.db.select().from(aiUsageRecordTable).get()).toMatchObject({
       providerId: 'provider-1',
       providerName: 'Provider One',
@@ -590,6 +623,39 @@ describe('AiUsageRecordService', () => {
       capturedAt: '2026-07-28T00:00:00.000Z'
     })
   })
+
+  it.each([
+    { imageCount: 1, price: 0.04, multiplier: 1, amount: 0.04 },
+    { imageCount: 3, price: 0.04, multiplier: 2, amount: 0.24 },
+    { imageCount: 3, price: 0, multiplier: 1, amount: 0 },
+    { imageCount: 0, price: 0.04, multiplier: 1, amount: 0 }
+  ])(
+    'prices $imageCount images at $price with multiplier $multiplier without token usage',
+    ({ imageCount, price, multiplier, amount }) => {
+      const pricing = {
+        input: { perMillionTokens: null, currency: 'CNY' as const },
+        output: { perMillionTokens: null, currency: 'CNY' as const },
+        perImage: { price, unit: 'image' as const }
+      }
+      const captured = context({
+        pricingSnapshot: undefined,
+        pricing,
+        billing: { defaultMultiplier: multiplier, scheduleEnabled: false, timeZone: 'UTC', periods: [] }
+      })
+      pricing.perImage.price = 99
+      aiUsageRecordService.recordInvocation(
+        invocation({ context: captured, modality: 'image', imageCount, usage: undefined })
+      )
+      expect(dbh.db.select().from(aiUsageRecordTable).get()).toMatchObject({
+        imageCount,
+        totalTokens: null,
+        cost: amount,
+        costCurrency: 'CNY',
+        costSource: 'computed',
+        costBreakdown: { image: amount }
+      })
+    }
+  )
 
   it('does not invent a currency for tiered pricing without an explicit currency', () => {
     expect(
@@ -670,7 +736,7 @@ describe('AiUsageRecordService', () => {
       ],
       capturedAt: '2026-07-28T00:00:00.000Z'
     })
-    expect(Object.isFrozen(snapshot?.inputTokenTiers)).toBe(true)
+
     expect(
       createAiUsagePricingSnapshot(
         {

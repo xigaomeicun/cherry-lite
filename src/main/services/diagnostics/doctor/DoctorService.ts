@@ -10,6 +10,9 @@ import { DataApiErrorFactory, isDataApiNotFoundError } from '@shared/data/api/er
 import { createUniqueModelId, parseUniqueModelId } from '@shared/data/types/model'
 import {
   DOCTOR_CHECK_CATALOG,
+  type DoctorConfirmResult,
+  type DoctorExecutionSnapshot,
+  type DoctorPendingCheck,
   DOCTOR_REPORT_TTL_MS,
   type DoctorBasics,
   type DoctorCancelResult,
@@ -17,11 +20,8 @@ import {
   type DoctorCheckResult,
   type DoctorCheckScope,
   type DoctorCheckStatus,
-  type DoctorConfirmResult,
-  type DoctorExecutionSnapshot,
   type DoctorFixRequest,
   type DoctorFixResult,
-  type DoctorPendingCheck,
   type DoctorReport,
   type DoctorRunResult,
   type DoctorRunTier,

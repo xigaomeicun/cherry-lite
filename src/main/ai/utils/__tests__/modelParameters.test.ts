@@ -1,7 +1,8 @@
+import { describe, expect, it } from 'vitest'
+
 import type { SamplingSettings } from '@main/ai/types'
 import type { AssistantSettings } from '@shared/data/types/assistant'
 import { MODEL_CAPABILITY } from '@shared/data/types/model'
-import { describe, expect, it } from 'vitest'
 
 import { makeAssistant as makeAssistantBase, makeModel } from '../../__tests__/fixtures'
 import {
@@ -9,7 +10,7 @@ import {
   filterStandardParams,
   getTemperature,
   getTopP,
-  stripRejectedSamplingParams
+  stripUnsupportedModelParams
 } from '../modelParameters'
 
 const OMIT_REASONING = { kind: 'omit' } as const
@@ -24,7 +25,56 @@ function makeSampling(settings: Partial<AssistantSettings> = {}): SamplingSettin
   return makeAssistantBase({ settings: { enableTemperature: true, ...settings } }).settings
 }
 
-describe('stripRejectedSamplingParams', () => {
+describe('stripUnsupportedModelParams', () => {
+  it('removes fixed-sampling Claude overrides from every request container without mutating inputs', () => {
+    const parameters = Object.freeze({
+      temperature: 0.5,
+      topP: 0.8,
+      top_p: 0.8,
+      topK: 5,
+      top_k: 5,
+      maxOutputTokens: 1024,
+      cachedContent: 'kept',
+      cached_content: 'kept',
+      metadata: Object.freeze({ top_k: 'application data' })
+    })
+    const params = Object.freeze({
+      standardParams: parameters,
+      providerOptions: Object.freeze({ anthropic: parameters, openrouter: parameters }),
+      bodyParams: parameters
+    })
+    const model = makeModel({ id: 'anthropic::claude-sonnet-5', providerId: 'anthropic' })
+
+    const result = stripUnsupportedModelParams(params, model)
+
+    const expected = {
+      maxOutputTokens: 1024,
+      cachedContent: 'kept',
+      cached_content: 'kept',
+      metadata: { top_k: 'application data' }
+    }
+    expect(result).toEqual({
+      standardParams: expected,
+      providerOptions: { anthropic: expected, openrouter: expected },
+      bodyParams: expected
+    })
+  })
+
+  it('preserves top-k overrides for a Claude model that supports sampling', () => {
+    const params = {
+      standardParams: { topK: 5 },
+      providerOptions: { anthropic: { topK: 5, top_k: 5 } },
+      bodyParams: { topK: 5, top_k: 5 }
+    }
+    const model = makeModel({ id: 'anthropic::claude-sonnet-4-6', providerId: 'anthropic' })
+
+    expect(stripUnsupportedModelParams(params, model)).toEqual({
+      standardParams: { topK: 5 },
+      providerOptions: { anthropic: { topK: 5, top_k: 5 } },
+      bodyParams: { topK: 5, top_k: 5 }
+    })
+  })
+
   describe('DashScope Qwen temperature normalization', () => {
     const model = makeModel({ id: 'dashscope::qwen-long', providerId: 'dashscope' })
 
@@ -38,7 +88,7 @@ describe('stripRejectedSamplingParams', () => {
           providerOptions: Object.freeze({ dashscope: values, other: values }),
           bodyParams: values
         })
-        const result = stripRejectedSamplingParams(params, model)
+        const result = stripUnsupportedModelParams(params, model)
         expect(result).not.toBe(params)
         expect(result.providerOptions).not.toBe(params.providerOptions)
         for (const container of [result.standardParams, ...Object.values(result.providerOptions), result.bodyParams]) {
@@ -57,7 +107,7 @@ describe('stripRejectedSamplingParams', () => {
       'preserves %j in every request container',
       (temperature) => {
         const values = { temperature }
-        const result = stripRejectedSamplingParams(
+        const result = stripUnsupportedModelParams(
           { standardParams: values, providerOptions: { dashscope: values, other: values }, bodyParams: values },
           model
         )
@@ -68,7 +118,7 @@ describe('stripRejectedSamplingParams', () => {
     )
 
     it('does not add absent temperatures', () => {
-      const result = stripRejectedSamplingParams(
+      const result = stripUnsupportedModelParams(
         { standardParams: {}, providerOptions: { dashscope: {}, other: {} }, bodyParams: {} },
         model
       )
@@ -78,7 +128,7 @@ describe('stripRejectedSamplingParams', () => {
     })
 
     it('deletes unsupported temperatures before normalization', () => {
-      const result = stripRejectedSamplingParams(
+      const result = stripUnsupportedModelParams(
         {
           standardParams: { temperature: 2 },
           providerOptions: { dashscope: { temperature: 2 }, other: { temperature: 2 } },
@@ -105,7 +155,7 @@ describe('stripRejectedSamplingParams', () => {
       ['dashscope', 'glm-4'],
       ['dashscope', 'kimi-k3']
     ])('preserves temperature for unmatched %s / %s models', (providerId, apiModelId) => {
-      const result = stripRejectedSamplingParams(
+      const result = stripUnsupportedModelParams(
         {
           standardParams: { temperature: 2 },
           providerOptions: { dashscope: { temperature: 2 }, other: { temperature: 2 } },
@@ -118,6 +168,48 @@ describe('stripRejectedSamplingParams', () => {
       }
     })
   })
+
+  it.each(['gemini-4-argon', 'google/gemini-4-argon', 'models/gemini-4-argon'])(
+    'removes Argon sampling and explicit cache references after overrides for %s',
+    (apiModelId) => {
+      const parameters = Object.freeze({
+        temperature: 0.5,
+        topP: 0.8,
+        top_p: 0.8,
+        topK: 40,
+        top_k: 40,
+        cachedContent: 'cachedContents/old',
+        cached_content: 'cachedContents/old',
+        maxOutputTokens: 131072,
+        continuationToken: 'resume',
+        thinkingConfig: { thinkingLevel: 'medium' },
+        metadata: { top_k: 'application data' }
+      })
+      const model = makeModel({ id: `custom::${apiModelId}`, apiModelId })
+      const cleaned = stripUnsupportedModelParams(
+        {
+          standardParams: parameters,
+          providerOptions: { google: parameters, vertex: parameters },
+          bodyParams: parameters
+        },
+        model
+      )
+      const expected = {
+        maxOutputTokens: 131072,
+        continuationToken: 'resume',
+        thinkingConfig: { thinkingLevel: 'medium' },
+        metadata: { top_k: 'application data' }
+      }
+      expect(cleaned).toEqual({
+        standardParams: expected,
+        providerOptions: { google: expected, vertex: expected },
+        bodyParams: expected
+      })
+      expect(getTemperature(makeSampling(), model, OMIT_REASONING)).toBeUndefined()
+      expect(getTopP(makeSampling({ enableTopP: true }), model, OMIT_REASONING)).toBeUndefined()
+      expect(parameters.cachedContent).toBe('cachedContents/old')
+    }
+  )
 
   it.each([
     { temperature: false, topP: false, standard: {}, wire: {} },
@@ -160,7 +252,7 @@ describe('stripRejectedSamplingParams', () => {
         providerOptions: Object.freeze({ openai: wireParams, other: wireParams }),
         bodyParams: wireParams
       })
-      const result = stripRejectedSamplingParams(params, model)
+      const result = stripUnsupportedModelParams(params, model)
       expect(result.standardParams).toEqual({ ...standard, maxOutputTokens: 100 })
       const expectedWire = {
         ...wire,
@@ -169,7 +261,7 @@ describe('stripRejectedSamplingParams', () => {
       }
       expect(result.providerOptions).toEqual({ openai: expectedWire, other: expectedWire })
       expect(result.bodyParams).toEqual(expectedWire)
-      expect(stripRejectedSamplingParams(result, model)).toEqual(result)
+      expect(stripUnsupportedModelParams(result, model)).toEqual(result)
     }
   )
 })
@@ -379,7 +471,7 @@ describe('filterStandardParams', () => {
 
   it('keeps topK for other models', () => {
     const input = { topK: 40 }
-    expect(filterStandardParams(input, makeModel())).toBe(input)
+    expect(filterStandardParams(input, makeModel())).toEqual(input)
   })
 })
 

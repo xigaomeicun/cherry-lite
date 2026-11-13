@@ -15,6 +15,8 @@
  * propagates as the cancellation it is rather than a retryable error.
  */
 
+import * as z from 'zod'
+
 import { application } from '@application'
 import { buildParamsSchema, type ParamValues } from '@cherrystudio/provider-registry'
 import { modelService } from '@data/services/ModelService'
@@ -29,24 +31,12 @@ import {
   parseUniqueModelId,
   type UniqueModelId
 } from '@shared/data/types/model'
-import * as z from 'zod'
 
 import { type GenerateImageToolInput, editInputImageLimit, limitGenerateImageInputIds } from './generateImageTool'
 
 const logger = loggerService.withContext('Painting')
 
-export const GENERATE_IMAGE_DESCRIPTION = `Generate or edit an image using the user's configured painting model.
-
-Use this when:
-- The user asks you to draw, paint, illustrate, or generate an image, picture, logo, or icon.
-- The user asks you to modify a previously generated image and provides its FileEntry id.
-
-Notes:
-- Describe the desired image or edit vividly in the prompt.
-- Pass image_ids only when editing or using existing images as references.
-- Generation can take 10-60 seconds.
-- Requires a painting model configured in Settings > Default Model. If none is set this returns a
-  configuration note — tell the user instead of retrying.`
+export const GENERATE_IMAGE_DESCRIPTION = `Generate or edit an image with the user's painting model. Pass image_ids only for edits; needs a configured model.`
 
 /**
  * A failed generation must be distinguishable from "ran fine, produced files":

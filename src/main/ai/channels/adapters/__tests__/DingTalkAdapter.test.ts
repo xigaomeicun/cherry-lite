@@ -1,7 +1,8 @@
-import { t } from '@main/i18n'
-import { fetchRemoteBytes } from '@main/utils/remoteFetch'
 import { net } from 'electron'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+import { t } from '@main/i18n'
+import { fetchRemoteBytes } from '@main/utils/remoteFetch'
 
 const sdk = vi.hoisted(() => ({ clients: [] as any[], connect: true }))
 vi.mock('dingtalk-stream', async () => {

@@ -1,3 +1,7 @@
+import { useState } from 'react'
+import { type UseFormReturn, useWatch } from 'react-hook-form'
+import { useTranslation } from 'react-i18next'
+
 import { FormField, FormItem } from '@cherrystudio/ui'
 import { PromptEditorField } from '@renderer/components/PromptEditorField'
 import {
@@ -11,9 +15,6 @@ import { useModelById } from '@renderer/hooks/useModel'
 import { usePromptProcessor } from '@renderer/hooks/usePromptProcessor'
 import { RESOURCE_PROMPT_POLISH_SYSTEM_PROMPT } from '@renderer/utils/resourceCatalog'
 import { AGENT_PROMPT } from '@shared/ai/prompts'
-import { useState } from 'react'
-import { type UseFormReturn, useWatch } from 'react-hook-form'
-import { useTranslation } from 'react-i18next'
 
 import type { ResourceCreateWizardFormValues } from '../types'
 
@@ -29,6 +30,7 @@ type SystemPromptStepProps = {
 export function SystemPromptStep({ form, portalContainer }: SystemPromptStepProps) {
   const { t } = useTranslation()
   const [resetPreviewKey, setResetPreviewKey] = useState(0)
+  const [polishing, setPolishing] = useState(false)
   const name = useWatch({ control: form.control, name: 'name' })
   const modelId = useWatch({ control: form.control, name: 'modelId' })
   const prompt = useWatch({ control: form.control, name: 'prompt' })
@@ -52,6 +54,7 @@ export function SystemPromptStep({ form, portalContainer }: SystemPromptStepProp
                   field.onChange(value)
                   setResetPreviewKey((key) => key + 1)
                 }}
+                onRunningChange={setPolishing}
               />
             }
             label={
@@ -71,6 +74,7 @@ export function SystemPromptStep({ form, portalContainer }: SystemPromptStepProp
             maxHeight={EDIT_DIALOG_PROMPT_MAX_HEIGHT}
             autoFocus
             fill
+            disabled={polishing}
           />
         </FormItem>
       )}

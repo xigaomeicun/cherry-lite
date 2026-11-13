@@ -1,6 +1,7 @@
+import { useEffect, useEffectEvent } from 'react'
+
 import type { IpcEventName } from '@shared/ipc/schemas/ipcSchemas'
 import type { EventPayload } from '@shared/ipc/types'
-import { useEffect, useEffectEvent } from 'react'
 
 import { ipcApi } from './ipcApi'
 
@@ -18,8 +19,5 @@ export function useIpcOn<E extends IpcEventName>(event: E, handler: (payload: Ev
   const onEvent = useEffectEvent(handler)
   useEffect(() => {
     return ipcApi.on(event, onEvent)
-    // `onEvent` is an Effect Event — useEffectEvent returns a fresh reference every
-    // render, so it MUST be excluded from deps; only `event` should re-subscribe.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [event])
 }

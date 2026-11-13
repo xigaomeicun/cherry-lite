@@ -5,9 +5,10 @@
  * Components read parts directly via useMessageParts / usePartsMap.
  */
 
-import type { CherryMessagePart } from '@shared/data/types/message'
 import type { ReactNode } from 'react'
 import { createContext, use, useMemo } from 'react'
+
+import type { CherryMessagePart } from '@shared/data/types/message'
 
 // ============================================================================
 // Refresh Context — allows deep components to trigger data refresh
@@ -76,6 +77,16 @@ export function MessagePartsScopeProvider({
 /** Read the parts map from context (null when no provider is present). */
 export function usePartsMap() {
   return use(PartsContext)
+}
+
+/**
+ * Read a parts map holding only the current message when inside a message
+ * scope, else the complete map. Scoped consumers skip other messages' chunks.
+ */
+export function useScopedPartsMap(): PartsMap {
+  const scope = use(MessagePartsScopeContext)
+  const scopedMap = useMemo(() => (scope ? { [scope.messageId]: scope.parts } : null), [scope])
+  return scopedMap ?? use(PartsContext)
 }
 
 /** Check if parts data is provided. */

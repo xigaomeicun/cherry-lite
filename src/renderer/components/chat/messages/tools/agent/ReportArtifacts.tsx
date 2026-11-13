@@ -1,5 +1,10 @@
-import { Button } from '@cherrystudio/ui'
 import { Icon } from '@iconify/react'
+import type { TFunction } from 'i18next'
+import { ChevronDown } from 'lucide-react'
+import { type MouseEvent, useCallback, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
+
+import { Button } from '@cherrystudio/ui'
 import { CommandContextMenu, type CommandContextMenuExtraItem, CommandPopupMenu } from '@renderer/components/command'
 import { getOpenTargetBadge, getOpenTargetLabel, OpenTargetIcon } from '@renderer/components/OpenTarget'
 import { useExternalOpenTargets } from '@renderer/hooks/useExternalOpenTargets'
@@ -10,10 +15,6 @@ import { REPORT_ARTIFACTS_TOOL_NAME, reportArtifactsInputSchema } from '@shared/
 import type { ExternalOpenTarget } from '@shared/types/externalApp'
 import { AbsoluteFilePathSchema } from '@shared/types/file'
 import { archiveExts, getFileTypeByExt } from '@shared/utils/file'
-import type { TFunction } from 'i18next'
-import { ChevronDown } from 'lucide-react'
-import { type MouseEvent, useCallback, useMemo, useState } from 'react'
-import { useTranslation } from 'react-i18next'
 
 import { useOptionalMessageListActions } from '../../MessageListProvider'
 
@@ -30,6 +31,11 @@ interface ReportArtifactsViewModel {
 }
 
 export function isReportArtifactsToolResponse(toolResponse: ReportArtifactsToolResponse): boolean {
+  if (
+    toolResponse.tool.type === 'mcp' &&
+    (!('serverName' in toolResponse.tool) || toolResponse.tool.serverName !== 'cherry-tools')
+  )
+    return false
   const toolName = toolResponse.tool.name
   return toolName === REPORT_ARTIFACTS_TOOL_NAME || toolName.endsWith(`__${REPORT_ARTIFACTS_TOOL_NAME}`)
 }
@@ -41,7 +47,7 @@ export function getReportArtifactsViewModel(
   let summary: string | undefined
 
   for (const toolResponse of toolResponses) {
-    if (!isReportArtifactsToolResponse(toolResponse)) continue
+    if (!isReportArtifactsToolResponse(toolResponse) || toolResponse.status !== 'done') continue
 
     const parsed = reportArtifactsInputSchema.safeParse(toolResponse.arguments)
     if (!parsed.success) continue
@@ -73,8 +79,10 @@ const artifactDocumentFormats: Record<string, [string, string]> = {
   pdf: ['chat.input.tools.file_type.document', 'PDF'],
   md: ['chat.input.tools.file_type.document', 'Markdown'],
   markdown: ['chat.input.tools.file_type.document', 'Markdown'],
+  mdx: ['chat.input.tools.file_type.document', 'Markdown'],
   rtf: ['chat.input.tools.file_type.document', 'RTF'],
   odt: ['chat.input.tools.file_type.document', 'OpenDocument'],
+  epub: ['chat.input.tools.file_type.document', 'EPUB'],
   ppt: ['chat.input.tools.file_type.presentation', 'PowerPoint'],
   pptx: ['chat.input.tools.file_type.presentation', 'PowerPoint'],
   odp: ['chat.input.tools.file_type.presentation', 'OpenDocument'],

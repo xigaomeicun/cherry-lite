@@ -4,16 +4,16 @@ import type { GoogleGenerativeAIProviderOptions } from '@ai-sdk/google'
 import type { OpenAIResponsesProviderOptions } from '@ai-sdk/openai'
 import type { ProviderOptions } from '@ai-sdk/provider-utils'
 import type { XaiResponsesProviderOptions } from '@ai-sdk/xai'
+import type { JSONValue } from 'ai'
+import { merge } from 'es-toolkit/compat'
+
 import type { ResolvedServiceTierControl } from '@data/services/ProviderRegistryService'
 import { loggerService } from '@logger'
 import { ENDPOINT_TYPE, type EndpointType, type Model, type ServiceTierSelection } from '@shared/data/types/model'
 import type { Provider } from '@shared/data/types/provider'
 import { type AiSdkParam, isAiSdkParam } from '@shared/types/aiSdk'
 import { isReasoningModel } from '@shared/utils/model'
-import { isSupportFastMode } from '@shared/utils/provider'
 import { SystemProviderIds } from '@shared/utils/systemProviderId'
-import type { JSONValue } from 'ai'
-import { merge } from 'es-toolkit/compat'
 
 import type { AppProviderId } from '../types'
 import type { ProviderCapabilities } from '../types'
@@ -23,28 +23,6 @@ import { encodeReasoningInvocation, type ResolvedReasoningInvocation } from './r
 import { getWebSearchParams } from './websearch'
 
 const logger = loggerService.withContext('aiCore.utils.options')
-
-export function applyFastModeToProviderOptions(
-  provider: Pick<Provider, 'fastMode'>,
-  model: Pick<Model, 'supportsFastMode'>,
-  providerOptions: ProviderOptions,
-  fastMode: boolean
-): ProviderOptions {
-  if (!fastMode || !isSupportFastMode(provider, model)) {
-    return providerOptions
-  }
-  // 'claude-code' carries Fast inside the SDK, not through providerOptions.
-  if (provider.fastMode.transport !== 'openai-priority') return providerOptions
-  const serviceTier = provider.fastMode.serviceTier ?? 'priority'
-
-  return {
-    ...providerOptions,
-    openai: {
-      ...providerOptions.openai,
-      serviceTier
-    }
-  }
-}
 
 export function resolveServiceTierWireValue(
   control: ResolvedServiceTierControl,
@@ -67,7 +45,7 @@ export function applyServiceTierToProviderOptions<T extends ProviderOptions>(
     if (!namespace || !Object.hasOwn(namespace, control.wire.delivery.key)) return providerOptions
     const cleanedNamespace = { ...namespace }
     delete cleanedNamespace[control.wire.delivery.key]
-    return { ...providerOptions, [providerOptionsKey]: cleanedNamespace } as T
+    return { ...providerOptions, [providerOptionsKey]: cleanedNamespace }
   }
   return {
     ...providerOptions,
@@ -75,7 +53,7 @@ export function applyServiceTierToProviderOptions<T extends ProviderOptions>(
       ...providerOptions[providerOptionsKey],
       [control.wire.delivery.key]: resolveServiceTierWireValue(control, selection)
     }
-  } as T
+  }
 }
 
 function shouldNormalizeOpenAICompatibleReasoning(
@@ -255,7 +233,7 @@ export function mergeCustomProviderParameters(
   providerOptions: Record<string, Record<string, JSONValue>>,
   providerParams: Record<string, any>,
   rawProviderId: string,
-  adapterFamily: AppProviderId = rawProviderId as AppProviderId
+  adapterFamily: AppProviderId = rawProviderId
 ): Record<string, Record<string, JSONValue>> {
   const actualAiSdkProviderIds = Object.keys(providerOptions)
   const primaryAiSdkProviderId = actualAiSdkProviderIds[0]

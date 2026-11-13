@@ -1,5 +1,7 @@
 import fs from 'node:fs'
 
+import { app, dialog } from 'electron'
+
 import { application } from '@application'
 import { readRestoreJournal } from '@data/db/restore/restoreJournal'
 import {
@@ -10,7 +12,6 @@ import {
 } from '@data/db/restore/restorePromotion'
 import { loggerService } from '@logger'
 import { resolveSystemLanguage, t } from '@main/i18n'
-import { app, dialog } from 'electron'
 
 const logger = loggerService.withContext('BackupRestoreGate')
 

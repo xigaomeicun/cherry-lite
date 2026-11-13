@@ -1,3 +1,5 @@
+import { v4 as uuidv4, v7 as uuidv7 } from 'uuid'
+
 import type { knowledgeBaseTable, knowledgeItemTable } from '@data/db/schemas/knowledge'
 import { foldPathSegment } from '@main/utils/file'
 import { nextFreeKnowledgeRelativePath } from '@main/utils/knowledge'
@@ -14,12 +16,11 @@ import {
   KnowledgeRelativePathSchema
 } from '@shared/data/types/knowledge'
 import type { FileMetadata } from '@shared/data/types/legacyFile'
-import { v4 as uuidv4, v7 as uuidv7 } from 'uuid'
 
 import { legacyModelToUniqueId } from '../transformers/ModelTransformers'
 import { legacyStorageNames } from './legacyFileMappings'
 
-export type NewKnowledgeBase = typeof knowledgeBaseTable.$inferInsert
+export type NewKnowledgeBase = Omit<typeof knowledgeBaseTable.$inferInsert, 'orderKey'>
 export type NewKnowledgeItem = typeof knowledgeItemTable.$inferInsert
 
 export type LegacyKnowledgeItemType = 'file' | 'url' | 'note' | 'sitemap' | 'directory' | 'memory' | 'video'
@@ -186,7 +187,7 @@ function normalizeMigratedKnowledgeBaseConfig<T extends Partial<NewKnowledgeBase
     typeof chunkSizeCandidate === 'number' && Number.isInteger(chunkSizeCandidate) && chunkSizeCandidate > 0
       ? chunkSizeCandidate
       : DEFAULT_KNOWLEDGE_BASE_CHUNK_SIZE
-  normalized.chunkSize = chunkSize as T['chunkSize']
+  normalized.chunkSize = chunkSize
 
   const chunkOverlapCandidate = normalized.chunkOverlap
   if (
@@ -195,15 +196,15 @@ function normalizeMigratedKnowledgeBaseConfig<T extends Partial<NewKnowledgeBase
     chunkOverlapCandidate < 0 ||
     chunkOverlapCandidate >= chunkSize
   ) {
-    normalized.chunkOverlap = getDefaultChunkOverlap(chunkSize) as T['chunkOverlap']
+    normalized.chunkOverlap = getDefaultChunkOverlap(chunkSize)
   }
 
   if (normalized.documentCount != null && normalized.documentCount <= 0) {
-    normalized.documentCount = undefined as T['documentCount']
+    normalized.documentCount = undefined
   }
 
   if (normalized.threshold != null && (normalized.threshold < 0 || normalized.threshold > 1)) {
-    normalized.threshold = undefined as T['threshold']
+    normalized.threshold = undefined
   }
 
   return normalized

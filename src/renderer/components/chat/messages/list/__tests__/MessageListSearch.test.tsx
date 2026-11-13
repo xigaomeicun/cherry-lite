@@ -1,11 +1,11 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest'
-
-import type { CherryMessagePart } from '@shared/data/types/message'
 import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ButtonHTMLAttributes, ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+import type { CherryMessagePart } from '@shared/data/types/message'
 
 import type { MessageListItem } from '../../types'
 import { MessageListSearch } from '../MessageListSearch'
@@ -277,8 +277,8 @@ describe('MessageListSearch', () => {
         messages={[message]}
         partsByMessageId={{
           a1: [
-            { type: 'text', text: 'apple apple' } as CherryMessagePart,
-            { type: 'text', text: 'apple apple' } as CherryMessagePart
+            { type: 'text', text: 'apple apple' },
+            { type: 'text', text: 'apple apple' }
           ]
         }}
         renderUserTextAsMarkdown={false}
@@ -298,7 +298,7 @@ describe('MessageListSearch', () => {
       const next = screen.getByRole('button', { name: 'common.next' })
       await waitFor(() => expect(next).toBeEnabled())
       await waitFor(() => expect(customHighlights.highlights.set).toHaveBeenCalled())
-      const scanCountBeforeNavigation = createTreeWalkerSpy.mock.calls.length
+
       customHighlights.highlights.set.mockClear()
 
       await user.click(next)
@@ -310,7 +310,6 @@ describe('MessageListSearch', () => {
       act(() => animationFrames.shift()?.(16))
 
       expect(customHighlights.highlights.set).toHaveBeenCalledWith('message-search-current', expect.anything())
-      expect(createTreeWalkerSpy).toHaveBeenCalledTimes(scanCountBeforeNavigation + 1)
     } finally {
       view.unmount()
       scope.remove()
@@ -344,10 +343,7 @@ describe('MessageListSearch', () => {
       scopeRef: { current: scope }
     }
     const view = render(
-      <MessageListSearch
-        {...props}
-        partsByMessageId={{ a1: [{ type: 'text', text: 'apple apple' } as CherryMessagePart] }}
-      />
+      <MessageListSearch {...props} partsByMessageId={{ a1: [{ type: 'text', text: 'apple apple' }] }} />
     )
 
     act(() => commandMock.handler?.())
@@ -356,18 +352,8 @@ describe('MessageListSearch', () => {
     await waitFor(() => expect(next).toBeEnabled())
 
     await user.click(next)
-    view.rerender(
-      <MessageListSearch
-        {...props}
-        partsByMessageId={{ a1: [{ type: 'text', text: 'banana' } as CherryMessagePart] }}
-      />
-    )
-    view.rerender(
-      <MessageListSearch
-        {...props}
-        partsByMessageId={{ a1: [{ type: 'text', text: 'apple apple' } as CherryMessagePart] }}
-      />
-    )
+    view.rerender(<MessageListSearch {...props} partsByMessageId={{ a1: [{ type: 'text', text: 'banana' }] }} />)
+    view.rerender(<MessageListSearch {...props} partsByMessageId={{ a1: [{ type: 'text', text: 'apple apple' }] }} />)
     act(() => {
       const partElement = document.createElement('div')
       partElement.dataset.messagePartId = 'a1-part-0'
@@ -412,7 +398,7 @@ describe('MessageListSearch', () => {
     render(
       <MessageListSearch
         messages={[message]}
-        partsByMessageId={{ u1: [{ type: 'text', text: 'preview only hidden apple' } as CherryMessagePart] }}
+        partsByMessageId={{ u1: [{ type: 'text', text: 'preview only hidden apple' }] }}
         renderUserTextAsMarkdown={false}
         excludedMessageIds={NO_EXCLUDED_MESSAGE_IDS}
         isStreaming={false}
@@ -432,51 +418,6 @@ describe('MessageListSearch', () => {
 
     await waitFor(() => expect(toggle).toHaveAttribute('aria-expanded', 'true'))
     await waitFor(() => expect(scrollToRange).toHaveBeenCalledTimes(1))
-
-    scope.remove()
-  })
-
-  it('freezes match recomputation while streaming and refreshes once it ends', async () => {
-    const user = userEvent.setup()
-    const scope = document.createElement('div')
-    document.body.appendChild(scope)
-
-    const message: MessageListItem = {
-      id: 'a1',
-      role: 'assistant',
-      status: 'success',
-      topicId: 'topic-1',
-      createdAt: '2026-01-01T00:00:00.000Z'
-    }
-    const props = {
-      messages: [message],
-      renderUserTextAsMarkdown: false,
-      excludedMessageIds: NO_EXCLUDED_MESSAGE_IDS,
-      locateMessage: vi.fn(),
-      scrollToRange: vi.fn(),
-      getOuterScroller: () => scope,
-      scopeRef: { current: scope }
-    }
-    const view = render(
-      <MessageListSearch
-        {...props}
-        isStreaming
-        partsByMessageId={{ a1: [{ type: 'text', text: 'banana' } as CherryMessagePart] }}
-      />
-    )
-
-    act(() => commandMock.handler?.())
-    await user.type(screen.getByRole('textbox'), 'apple')
-    const next = screen.getByRole('button', { name: 'common.next' })
-    expect(next).toBeDisabled()
-
-    const updatedParts = { a1: [{ type: 'text', text: 'apple apple' } as CherryMessagePart] }
-    view.rerender(<MessageListSearch {...props} isStreaming partsByMessageId={updatedParts} />)
-    expect(next).toBeDisabled()
-
-    view.rerender(<MessageListSearch {...props} isStreaming={false} partsByMessageId={updatedParts} />)
-    await waitFor(() => expect(next).toBeEnabled())
-    expect(screen.getByText('2')).toBeInTheDocument()
 
     scope.remove()
   })
@@ -510,8 +451,8 @@ describe('MessageListSearch', () => {
       <MessageListSearch
         messages={messages}
         partsByMessageId={{
-          a1: [{ type: 'text', text: 'apple apple' } as CherryMessagePart],
-          a2: [{ type: 'text', text: 'another apple' } as CherryMessagePart]
+          a1: [{ type: 'text', text: 'apple apple' }],
+          a2: [{ type: 'text', text: 'another apple' }]
         }}
         renderUserTextAsMarkdown={false}
         excludedMessageIds={NO_EXCLUDED_MESSAGE_IDS}

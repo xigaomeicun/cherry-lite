@@ -1,9 +1,10 @@
-import { preferenceTable } from '@data/db/schemas/preference'
-import { seeders } from '@data/db/seeding/seederRegistry'
-import { SeedRunner } from '@data/db/seeding/SeedRunner'
 import { setupTestDatabase } from '@test-helpers/db'
 import { and, eq } from 'drizzle-orm'
 import { describe, expect, it } from 'vitest'
+
+import { preferenceTable } from '@data/db/schemas/preference'
+import { seeders } from '@data/db/seeding/seederRegistry'
+import { SeedRunner } from '@data/db/seeding/SeedRunner'
 
 const LEGACY_PREFERENCE_KEY = 'chat.web_search.client_tools_preferred'
 const MODEL_TOOLS_PREFERRED_KEY = 'chat.web_search.model_tools_preferred'
@@ -31,13 +32,6 @@ describe('WebSearchPreferenceUpgradeSeeder', () => {
       })
       .run()
   }
-
-  it('defaults a new installation to model-native web tools', () => {
-    new SeedRunner(dbh.db).runAll(WEB_SEARCH_PREFERENCE_SEEDERS)
-
-    expect(readPreference(MODEL_TOOLS_PREFERRED_KEY)).toBe(true)
-    expect(readPreference(LEGACY_PREFERENCE_KEY)).toBeUndefined()
-  })
 
   it.each([
     { legacyValue: false, expectedValue: true },

@@ -1,10 +1,10 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 
 import type * as CherryStudioUi from '@cherrystudio/ui'
 import type { TranslateLanguage } from '@shared/data/types/translate'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 
 vi.mock('@cherrystudio/ui', async (importOriginal) => {
   return await importOriginal<typeof CherryStudioUi>()
@@ -44,19 +44,16 @@ afterEach(() => {
 })
 
 describe('LanguageSelect', () => {
-  it('uses the trigger width without retaining the popover default width', async () => {
-    render(<LanguageSelect value="zh-cn" />)
+  it('finds a language by typing its language code', () => {
+    const onChange = vi.fn()
+    render(<LanguageSelect value="en-us" onChange={onChange} />)
 
-    fireEvent.focus(screen.getByRole('combobox'))
+    const trigger = screen.getByRole('combobox')
+    fireEvent.focus(trigger)
+    fireEvent.change(trigger, { target: { value: 'zh-cn' } })
+    fireEvent.keyDown(trigger, { key: 'Enter' })
 
-    const popoverContent = await waitFor(() => {
-      const content = document.querySelector<HTMLElement>('[data-slot="popover-content"]')
-      expect(content).toBeInTheDocument()
-      return content!
-    })
-
-    expect(popoverContent).toHaveClass('w-[var(--radix-popover-trigger-width)]')
-    expect(popoverContent).not.toHaveClass('w-72')
+    expect(onChange).toHaveBeenCalledWith('zh-cn')
   })
 
   it('shows the flag and localized name without the raw language code in the closed selector', () => {

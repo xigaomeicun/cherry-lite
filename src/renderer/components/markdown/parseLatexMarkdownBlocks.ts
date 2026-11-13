@@ -1,8 +1,9 @@
-import { remarkLatexMath } from '@renderer/utils/remarkLatexMath'
 import remarkParse from 'remark-parse'
 import { parseMarkdownIntoBlocks } from 'streamdown'
 import { unified } from 'unified'
 import { visit } from 'unist-util-visit'
+
+import { remarkLatexMath } from '@renderer/utils/remarkLatexMath'
 
 const parser = unified().use(remarkParse).use(remarkLatexMath).freeze()
 

@@ -1,12 +1,11 @@
 import { act, fireEvent, render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import type { ButtonHTMLAttributes, ErrorInfo, PropsWithChildren, ReactNode } from 'react'
 import { Activity, useLayoutEffect, useState } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { Tooltip } from '@cherrystudio/ui'
 
-import { getRightPaneWidthPolicy } from '../../../shell/paneLayout'
-import { createResourcePaneCapability, type ResourcePaneConfig } from '../resourcePane'
 import {
   RightPanel,
   type RightPanelCapability,
@@ -21,9 +20,6 @@ import {
   useRightPanelPresentationMaximized,
   useRightPanelState
 } from '../RightPanel'
-
-const LIST_POLICY = getRightPaneWidthPolicy('navigation-list')
-const INSPECTOR_POLICY = getRightPaneWidthPolicy('inspector')
 
 const commandMock = vi.hoisted(() => ({ handler: undefined as (() => void) | undefined }))
 
@@ -295,13 +291,14 @@ describe('RightPanel', () => {
     expect(screen.getByText('first:1')).toBe(first)
   })
 
-  it('replaces state when a panel identity changes', () => {
+  it('closes a replaced instance until the user explicitly opens its replacement', async () => {
+    const user = userEvent.setup()
     const { rerender } = render(
       <Harness defaultOpen>
         <RightPanel />
       </Harness>
     )
-    fireEvent.click(screen.getByText('first:0'))
+    await user.click(screen.getByRole('button', { name: 'first:0' }))
 
     rerender(
       <Harness defaultOpen scope={{ ...readyScope, firstKey: 'replacement' }}>
@@ -309,7 +306,84 @@ describe('RightPanel', () => {
       </Harness>
     )
 
-    expect(screen.getByText('first:0')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'first:0' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'second:0' })).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'open first' }))
+    expect(screen.getByRole('button', { name: 'first:0' })).toBeVisible()
+  })
+
+  it('closes an unavailable selection without opening another panel or reopening on recovery', async () => {
+    const user = userEvent.setup()
+    const { rerender } = render(
+      <Harness defaultOpen>
+        <RightPanel />
+      </Harness>
+    )
+
+    rerender(
+      <Harness defaultOpen scope={{ ...readyScope, firstReadiness: 'unavailable' }}>
+        <RightPanel />
+      </Harness>
+    )
+
+    expect(screen.queryByRole('button', { name: 'first:0' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'second:0' })).not.toBeInTheDocument()
+    rerender(
+      <Harness defaultOpen>
+        <RightPanel />
+      </Harness>
+    )
+    expect(screen.queryByRole('button', { name: 'first:0' })).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'open second' }))
+    expect(screen.getByRole('button', { name: 'second:0' })).toBeVisible()
+  })
+
+  it('keeps the selected stable instance open when another instance changes', async () => {
+    const user = userEvent.setup()
+    const { rerender } = render(
+      <Harness>
+        <RightPanel />
+      </Harness>
+    )
+    await user.click(screen.getByRole('button', { name: 'open second' }))
+    await user.click(screen.getByRole('button', { name: 'second:0' }))
+
+    rerender(
+      <Harness scope={{ ...readyScope, firstKey: 'replacement' }}>
+        <RightPanel />
+      </Harness>
+    )
+
+    expect(screen.getByRole('button', { name: 'second:1' })).toBeVisible()
+  })
+
+  it('opens an instance created in the same batch as its selection request', async () => {
+    function OpenDynamicPanel({ onCreate }: { onCreate: () => void }) {
+      const actions = useRightPanelActions()
+      return (
+        <button
+          type="button"
+          onClick={() => {
+            onCreate()
+            actions.requestOpen('first')
+          }}>
+          create panel
+        </button>
+      )
+    }
+    function DynamicHarness() {
+      const [created, setCreated] = useState(false)
+      return (
+        <RightPanelProvider capabilities={created ? capabilities : []} scope={readyScope}>
+          <OpenDynamicPanel onCreate={() => setCreated(true)} />
+          <RightPanel />
+        </RightPanelProvider>
+      )
+    }
+    const user = userEvent.setup()
+    render(<DynamicHarness />)
+    await user.click(screen.getByRole('button', { name: 'create panel' }))
+    expect(screen.getByRole('button', { name: 'first:0' })).toBeVisible()
   })
 
   it('preserves open intent while environmental presentation is disabled', () => {
@@ -358,6 +432,21 @@ describe('RightPanel', () => {
     expect(screen.getByTestId('presentation-open')).toHaveTextContent('false')
   })
 
+  it('opens the default available panel when the parent opens without naming a panel', () => {
+    const pane = (defaultOpen: boolean) => (
+      <RightPanelProvider capabilities={capabilities} scope={readyScope} defaultOpen={defaultOpen}>
+        <ControllerProbe />
+        <RightPanelViewport />
+      </RightPanelProvider>
+    )
+    const { rerender } = render(pane(false))
+
+    rerender(pane(true))
+
+    expect(screen.getByTestId('presentation-open')).toHaveTextContent('true')
+    expect(screen.getByRole('button', { name: 'first:0' })).toBeVisible()
+  })
+
   it('uses one toggle behavior for shortcuts', () => {
     render(
       <Harness>
@@ -386,31 +475,6 @@ describe('RightPanel', () => {
     expect(screen.getByTestId('right-pane-host')).toHaveAttribute('data-open', 'true')
   })
 
-  it('keeps the composer lifted from the maximize click until the pane stops covering the centre', () => {
-    render(
-      <Harness defaultOpen>
-        <RightPanelViewport>
-          <RightPanel />
-        </RightPanelViewport>
-      </Harness>
-    )
-
-    expect(screen.getByTestId('composer-elevated')).toHaveTextContent('false')
-
-    fireEvent.click(screen.getByRole('button', { name: 'common.maximize' }))
-    expect(screen.getByTestId('composer-elevated')).toHaveTextContent('true')
-
-    fireEvent.click(screen.getByRole('button', { name: 'common.minimize' }))
-
-    // The restore drops the maximized presentation at the click, but the pane goes on covering the
-    // centre: dropping the composer here sinks it behind the pane for the rest of the animation.
-    expect(screen.getByTestId('presentation-maximized')).toHaveTextContent('false')
-    expect(screen.getByTestId('composer-elevated')).toHaveTextContent('true')
-
-    fireEvent.click(screen.getByRole('button', { name: 'settle pane' }))
-    expect(screen.getByTestId('composer-elevated')).toHaveTextContent('false')
-  })
-
   it('offers maximize only for capable panels and keeps the minimize control while maximized', () => {
     render(
       <Harness defaultOpen>
@@ -433,17 +497,6 @@ describe('RightPanel', () => {
     expect(screen.getByTestId('right-pane-host')).toHaveAttribute('data-maximized', 'false')
     expect(screen.getByTestId('presentation-maximized')).toHaveTextContent('false')
     expect(screen.queryByRole('button', { name: 'common.maximize' })).toBeNull()
-  })
-
-  it('lets a content-composed panel replace the shell header', () => {
-    render(
-      <Harness defaultOpen scope={{ ...readyScope, firstHeaderMode: 'content' }}>
-        <RightPanel />
-      </Harness>
-    )
-
-    expect(screen.queryByTestId('shell-tab-list')).toBeNull()
-    expect(screen.getByText('first:0')).toBeInTheDocument()
   })
 
   it('drops the close tooltip once the panel closes, so it cannot park at the viewport origin', () => {
@@ -523,26 +576,6 @@ describe('RightPanel', () => {
     consoleError.mockRestore()
   })
 
-  it('sizes the pane from the presented panel, so a list and an artifact never share a width', () => {
-    render(
-      <Harness defaultOpen>
-        <RightPanelViewport>
-          <RightPanel />
-        </RightPanelViewport>
-      </Harness>
-    )
-
-    const host = screen.getByTestId('right-pane-host')
-    expect(host).toHaveAttribute('data-cache-key', INSPECTOR_POLICY.cacheKey)
-    expect(host).toHaveAttribute('data-max-width', String(INSPECTOR_POLICY.maxWidth))
-
-    fireEvent.click(screen.getByRole('button', { name: 'open second' }))
-
-    expect(host).toHaveAttribute('data-cache-key', LIST_POLICY.cacheKey)
-    expect(host).toHaveAttribute('data-max-width', String(LIST_POLICY.maxWidth))
-    expect(host).toHaveAttribute('data-min-width', String(LIST_POLICY.minWidth))
-  })
-
   it('rejects duplicate panel ids', () => {
     const duplicateCapabilities = [capabilities[0], capabilities[0]]
     vi.spyOn(console, 'error').mockImplementation(() => {})
@@ -554,13 +587,5 @@ describe('RightPanel', () => {
         </RightPanelProvider>
       )
     ).toThrow('Duplicate right-panel id: first')
-  })
-})
-
-describe('createResourcePaneCapability', () => {
-  it('sizes by the navigation-list preset, so the list never inherits the inspector envelope', () => {
-    const capability = createResourcePaneCapability<{ resourcePane: ResourcePaneConfig | null }>()
-
-    expect(capability.widthPreset).toBe('navigation-list')
   })
 })

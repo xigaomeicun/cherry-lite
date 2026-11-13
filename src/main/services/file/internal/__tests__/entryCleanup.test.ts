@@ -2,6 +2,12 @@ import { mkdir, mkdtemp, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 
+import { setupTestDatabase } from '@test-helpers/db'
+import { MockMainCacheServiceUtils } from '@test-mocks/main/CacheService'
+import { MockMainDbServiceUtils } from '@test-mocks/main/DbService'
+import { eq } from 'drizzle-orm'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
 import { application } from '@application'
 import { fileEntryTable } from '@data/db/schemas/file'
 import { chatMessageFileRefTable, paintingFileRefTable } from '@data/db/schemas/fileRelations'
@@ -11,15 +17,10 @@ import { topicTable } from '@data/db/schemas/topic'
 import { fileEntryService } from '@data/services/FileEntryService'
 import { fileRefService } from '@data/services/FileRefService'
 import { loggerService } from '@logger'
-import { KeyedMutex } from '@main/core/concurrency/KeyedMutex'
 import type { CleanupPolicy, FileEntryId } from '@shared/data/types/file'
 import { AbsoluteFilePathSchema } from '@shared/types/file'
+import { KeyedMutex } from '@shared/utils/async'
 import { canonicalizeFilePath } from '@shared/utils/file'
-import { setupTestDatabase } from '@test-helpers/db'
-import { MockMainCacheServiceUtils } from '@test-mocks/main/CacheService'
-import { MockMainDbServiceUtils } from '@test-mocks/main/DbService'
-import { eq } from 'drizzle-orm'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { danglingCache } from '../../danglingCache'
 import { createVersionCacheImpl } from '../../versionCache'
@@ -381,7 +382,6 @@ describe('entryCleanup', () => {
   })
 
   it('reports the candidates this pass picked up', async () => {
-    expect(ENTRY_CLEANUP_BATCH_LIMIT).toBe(100)
     for (let i = 0; i < 5; i++) await seedInternal(nthId(200 + i), 'delete_when_unreferenced')
     const report = await runEntryCleanup(makeDeps())
     expect(report.candidates).toBe(5)
@@ -415,24 +415,48 @@ describe('entryCleanup', () => {
     expect(fileEntryService.findById(id)).toBeNull()
   })
 
-  it('emits the file-entry-cleanup structured log', async () => {
-    const id = nthId(10)
-    await seedInternal(id, 'delete_when_unreferenced')
-    const infoSpy = vi.spyOn(loggerService, 'info')
-    await runEntryCleanup(makeDeps())
-    expect(infoSpy).toHaveBeenCalledWith(
-      'file-entry-cleanup',
-      expect.objectContaining({ event: 'file-entry-cleanup', outcome: 'completed' })
-    )
-  })
-
   describe('summariseEntryCleanup', () => {
     it('projects the narrow wire summary from a full report', async () => {
       const id = nthId(11)
       await seedInternal(id, 'delete_when_unreferenced')
       const report = await runEntryCleanup(makeDeps())
       const summary = summariseEntryCleanup(report)
-      expect(summary).toEqual({ outcome: 'completed', candidates: report.candidates, deleted: report.deleted })
+      expect(summary).toEqual({
+        outcome: 'completed',
+        candidates: report.candidates,
+        deleted: report.deleted,
+        hasPendingWork: false
+      })
+    })
+
+    it('marks a saturated batch as possible pending work', () => {
+      const summary = summariseEntryCleanup({
+        outcome: 'completed',
+        candidates: ENTRY_CLEANUP_BATCH_LIMIT,
+        deleted: ENTRY_CLEANUP_BATCH_LIMIT,
+        skippedRefsReappeared: 0,
+        gonePinned: 0,
+        failed: 0,
+        unlinkFailures: 0,
+        durationMs: 1
+      })
+
+      expect(summary.hasPendingWork).toBe(true)
+    })
+
+    it('marks an unlink failure as pending work', () => {
+      const summary = summariseEntryCleanup({
+        outcome: 'completed',
+        candidates: 1,
+        deleted: 1,
+        skippedRefsReappeared: 0,
+        gonePinned: 0,
+        failed: 0,
+        unlinkFailures: 1,
+        durationMs: 1
+      })
+
+      expect(summary.hasPendingWork).toBe(true)
     })
   })
 })

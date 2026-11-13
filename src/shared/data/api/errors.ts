@@ -482,7 +482,7 @@ export class DataApiError<T extends ErrorCode = ErrorCode> extends Error {
       code,
       error.message,
       ERROR_STATUS_MAP[code],
-      { originalError: error.message, context: error.name } as DetailsForCode<typeof code>,
+      { originalError: error.message, context: error.name },
       requestContext
     )
   }
@@ -816,6 +816,19 @@ export function isDataApiNotFoundError(error: unknown): boolean {
 }
 
 /**
+ * Check if an error is a NOT_FOUND DataApiError raised for a specific resource.
+ * @param error - Any thrown value
+ * @param resource - The resource name passed to `DataApiErrorFactory.notFound`
+ * @returns true if the error is that resource's NOT_FOUND DataApiError
+ */
+export function isDataApiResourceNotFoundError(
+  error: unknown,
+  resource: string
+): error is DataApiError<ErrorCode.NOT_FOUND> {
+  return isDataApiNotFoundError(error) && (error as DataApiError<ErrorCode.NOT_FOUND>).details?.resource === resource
+}
+
+/**
  * Check if an object is a serialized DataApiError.
  * @param error - Any object
  * @returns true if the object has DataApiError structure
@@ -869,7 +882,7 @@ export function toDataApiError(error: unknown, context?: string): DataApiError {
   return DataApiErrorFactory.create(
     ErrorCode.INTERNAL_SERVER_ERROR,
     `Unknown error${context ? ` in ${context}` : ''}: ${String(error)}`,
-    { originalError: String(error), context } as DetailsForCode<ErrorCode.INTERNAL_SERVER_ERROR>
+    { originalError: String(error), context }
   )
 }
 

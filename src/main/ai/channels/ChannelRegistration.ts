@@ -1,9 +1,10 @@
-import { application } from '@application'
-import { agentChannelService } from '@data/services/AgentChannelService'
-import type { OutputFor } from '@shared/ipc/types'
 import { net } from 'electron'
 import { delay } from 'es-toolkit'
 import * as z from 'zod'
+
+import { application } from '@application'
+import { agentChannelService } from '@data/services/AgentChannelService'
+import type { OutputFor } from '@shared/ipc/types'
 
 const text = z.string().min(1).max(4096)
 const wecomBegin = z.object({ data: z.object({ scode: text, auth_url: text }) })

@@ -25,6 +25,8 @@
  */
 
 import { isAbortError } from '@ai-sdk/provider-utils'
+import type { UIMessage } from 'ai'
+
 import { application } from '@application'
 import { loggerService } from '@logger'
 import type { FileAttachmentRef } from '@main/ai/messages/attachmentTypes'
@@ -35,10 +37,10 @@ import type { FileUIPart } from '@shared/data/types/message'
 import { readCherryMeta } from '@shared/data/types/uiParts'
 import { FILE_TYPE, type FileType } from '@shared/types/file'
 import { getFileTypeByExt } from '@shared/utils/file'
-import type { UIMessage } from 'ai'
 
-import { allocateInlineCaps, type AttachmentBudget } from './attachmentBudget'
+import type { AttachmentBudget } from './attachmentBudget'
 import { extractDocumentText, noExtractableTextNote } from './attachmentTextExtraction'
+import { runAttachmentWorker } from './attachmentWorkerClient'
 import { collectComposerFileTokenIds, isActiveManagedFilePart } from './composerFileParts'
 import { materializeNativeFilePart } from './fileProcessor'
 
@@ -126,6 +128,13 @@ export interface PrepareChatContext {
   isToolCapable: boolean
   /** Shared token pool for inlined text. Absent → every file gets the flat page size. */
   budget?: AttachmentBudget
+  /**
+   * Path-forwarding caller (agent runtime): keep a first-party part whose extension is
+   * unlisted (`FILE_TYPE.OTHER` — e.g. an AVIF/HEIC image) as a file part instead of
+   * replacing it with an unsupported-type note, so the caller's local-path fallback still
+   * has the file reference.
+   */
+  keepUnroutableFileParts?: boolean
   signal?: AbortSignal
 }
 
@@ -213,13 +222,13 @@ async function prepareChatMessage<T extends UIMessage>(
   const inlineNative = async (part: FileUIPart): Promise<boolean> => {
     const inlined = await materializeNativeFilePart(part)
     if (!inlined) return false
-    kept.push(inlined as UIMessage['parts'][number])
+    kept.push(inlined)
     return true
   }
 
   for (const part of message.parts) {
     if (part.type !== 'file') {
-      kept.push(part as UIMessage['parts'][number])
+      kept.push(part)
       continue
     }
 
@@ -231,16 +240,16 @@ async function prepareChatMessage<T extends UIMessage>(
       const inlined = await materializeNativeFilePart(part)
       if (!inlined) {
         logger.warn('Dropped unresolved legacy file part; degrading to note', { messageId: message.id })
-        kept.push(noteOf(name) as UIMessage['parts'][number])
+        kept.push(noteOf(name))
       } else {
         const rejectedKind = rejectedMediaKind(inlined.mediaType, ctx.nativeSupport)
         if (rejectedKind) {
           kept.push({
             type: 'text',
             text: `[${rejectedKind} attachment omitted: this model does not accept ${rejectedKind} input]`
-          } as UIMessage['parts'][number])
+          })
         } else {
-          kept.push(inlined as UIMessage['parts'][number])
+          kept.push(inlined)
         }
       }
       continue
@@ -270,7 +279,7 @@ async function prepareChatMessage<T extends UIMessage>(
       if (isNative(bareExt, fileType, ctx.nativeSupport)) {
         if (!(await inlineNative(part))) {
           logger.warn('Native file materialization failed; degrading to note', { messageId: message.id, displayName })
-          kept.push(noteOf(handle) as UIMessage['parts'][number])
+          kept.push(noteOf(handle))
         }
         continue
       }
@@ -294,6 +303,13 @@ async function prepareChatMessage<T extends UIMessage>(
         continue
       }
 
+      // The caller forwards the file by local path (agent runtime), and the note below would
+      // drop the only usable reference to it.
+      if (ctx.keepUnroutableFileParts && fileType === FILE_TYPE.OTHER) {
+        kept.push(part)
+        continue
+      }
+
       // Non-native first-party attachment → inline its (capped) text.
       const body = await extractNonNativeText(fileEntryId, fileType, handle, ctx.signal)
       defer(kept, pending, handle, body)
@@ -301,11 +317,11 @@ async function prepareChatMessage<T extends UIMessage>(
       if (ctx.signal?.aborted || isAbortError(error)) throw error
       if (error instanceof NonVisionImageOcrError) throw error
       logger.error('Failed to prepare attached file', error as Error, { messageId: message.id, displayName })
-      kept.push(noteOf(handle) as UIMessage['parts'][number])
+      kept.push(noteOf(handle))
     }
   }
 
-  return { ...message, parts: kept } as T
+  return { ...message, parts: kept }
 }
 
 /**
@@ -319,7 +335,7 @@ export async function prepareChatMessages<T extends UIMessage = UIMessage>(
 ): Promise<T[]> {
   const pending: PendingInline[] = []
   const prepared = await Promise.all(messages.map((message) => prepareChatMessage(message, ctx, pending)))
-  applyInlineCaps(pending, ctx)
+  await applyInlineCaps(pending, ctx)
   return prepared
 }
 
@@ -339,11 +355,13 @@ function defer(parts: UIMessage['parts'], pending: PendingInline[], handle: stri
   parts.push({ type: 'text', text: '' })
 }
 
-function applyInlineCaps(pending: PendingInline[], ctx: PrepareChatContext): void {
+async function applyInlineCaps(pending: PendingInline[], ctx: PrepareChatContext): Promise<void> {
+  if (pending.length === 0) return
   const caps = ctx.budget
-    ? allocateInlineCaps(
-        pending.map((entry) => entry.body),
-        ctx.budget
+    ? await runAttachmentWorker(
+        'allocate',
+        { bodies: pending.map((entry) => entry.body), tokens: ctx.budget.tokens },
+        ctx.signal
       )
     : pending.map(() => READ_FILE_PAGE_SIZE)
 

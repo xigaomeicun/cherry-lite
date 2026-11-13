@@ -1,3 +1,9 @@
+import type { TFunction } from 'i18next'
+import { AlertCircle, Download, Languages, X } from 'lucide-react'
+import type { ReactNode } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
+
 import { Button, CircularProgress, EmptyState, Tooltip } from '@cherrystudio/ui'
 import { useInvalidateCache } from '@data/hooks/useDataApi'
 import { loggerService } from '@logger'
@@ -13,11 +19,6 @@ import { IpcError } from '@shared/ipc/errors/IpcError'
 import { translateErrorCodes } from '@shared/ipc/errors/translate'
 import type { PdfTranslationProgressStage, PdfTranslationStage } from '@shared/ipc/schemas/translate'
 import type { AbsoluteFilePath } from '@shared/types/file'
-import type { TFunction } from 'i18next'
-import { AlertCircle, Download, Languages, X } from 'lucide-react'
-import type { ReactNode } from 'react'
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { useTranslation } from 'react-i18next'
 
 import { saveTranslationFileAs } from '../translationFiles'
 
@@ -335,7 +336,7 @@ const PdfTranslationView = ({
                   type="button"
                   variant="ghost"
                   size="icon-sm"
-                  className="shrink-0 text-foreground-muted hover:text-foreground"
+                  className="shrink-0 text-muted-foreground hover:text-foreground"
                   aria-label={t('translate.pdf.action.close')}
                   onClick={close}>
                   <X size={14} />
@@ -358,7 +359,7 @@ const PdfTranslationView = ({
                     type="button"
                     variant="ghost"
                     size="icon-sm"
-                    className="shrink-0"
+                    className="shrink-0 text-muted-foreground"
                     aria-label={t('translate.pdf.action.export')}
                     onClick={() => void exportOutput()}>
                     <Download size={14} />

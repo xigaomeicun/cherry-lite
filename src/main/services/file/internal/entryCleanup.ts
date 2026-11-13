@@ -1,6 +1,6 @@
 /**
  * Scan-based cleanup pass for delete_when_unreferenced file entries.
- * Spec: docs/references/file/file-entry-cleanup.md §5.
+ * Spec: docs/dev/references/file/file-entry-cleanup.md §5.
  *
  * No queue, no triggers: candidates are derived from current DB state, so the
  * pass is idempotent and crash-safe by construction. Discovery uses the
@@ -16,8 +16,10 @@ import { loggerService } from '@logger'
 import type { FileEntry, FileEntryId } from '@shared/data/types/file'
 import type { EntryCleanupSummary } from '@shared/types/file'
 
+import { runPathMutationExclusive } from '../pathMutationLock'
 import type { FileManagerDeps } from './deps'
 import { cleanupDeletedEntry } from './entry/lifecycle'
+import type { IntakeStore } from './IntakeStore'
 
 const logger = loggerService.withContext('FileManager:entryCleanup')
 
@@ -54,6 +56,7 @@ type CandidateOutcome = { kind: 'deleted'; entry: FileEntry } | { kind: 'refs-re
 
 export async function runEntryCleanup(
   deps: FileManagerDeps,
+  intakeProtection?: Pick<IntakeStore, 'load' | 'isProtected'>,
   retainedEntries: ReadonlyMap<FileEntryId, unknown> = new Map()
 ): Promise<EntryCleanupReport> {
   const startedAt = Date.now()
@@ -74,6 +77,7 @@ export async function runEntryCleanup(
     })
   }
   try {
+    await intakeProtection?.load()
     const batch = deps.fileEntryService.findCleanupCandidates({
       graceMs: ENTRY_CLEANUP_GRACE_MS,
       limit: ENTRY_CLEANUP_BATCH_LIMIT,
@@ -101,37 +105,45 @@ export async function runEntryCleanup(
 
     for (const candidate of batch) {
       try {
-        const outcome = deps.fileEntryService.withWriteTx((tx): CandidateOutcome => {
-          const row = deps.fileEntryService.findByIdTx(tx, candidate.id)
-          if (row === null || row.cleanupPolicy !== 'delete_when_unreferenced') {
-            return { kind: 'gone-or-pinned' }
-          }
-          if (
-            retainedEntries.has(candidate.id) ||
-            deps.fileRefService.countPersistentRefsByEntryIdTx(tx, candidate.id) > 0
-          ) {
-            return { kind: 'refs-reappeared' }
-          }
-          deps.fileEntryService.deleteTx(tx, candidate.id)
-          return { kind: 'deleted', entry: row }
-        })
+        await deps.contentWriteLock.runExclusive(candidate.id, () =>
+          runPathMutationExclusive(async () => {
+            const outcome = deps.fileEntryService.withWriteTx((tx): CandidateOutcome => {
+              const row = deps.fileEntryService.findByIdTx(tx, candidate.id)
+              if (
+                row === null ||
+                row.cleanupPolicy !== 'delete_when_unreferenced' ||
+                intakeProtection?.isProtected(candidate.id)
+              ) {
+                return { kind: 'gone-or-pinned' }
+              }
+              if (
+                retainedEntries.has(candidate.id) ||
+                deps.fileRefService.countPersistentRefsByEntryIdTx(tx, candidate.id) > 0
+              ) {
+                return { kind: 'refs-reappeared' }
+              }
+              deps.fileEntryService.deleteTx(tx, candidate.id)
+              return { kind: 'deleted', entry: row }
+            })
 
-        switch (outcome.kind) {
-          case 'deleted': {
-            deleted++
-            const { unlinkFailed } = await cleanupDeletedEntry(deps, outcome.entry)
-            if (unlinkFailed) unlinkFailures++
-            break
-          }
-          case 'refs-reappeared':
-            skippedRefsReappeared++
-            break
-          case 'gone-or-pinned':
-            gonePinned++
-            break
-          default:
-            assertNever(outcome)
-        }
+            switch (outcome.kind) {
+              case 'deleted': {
+                deleted++
+                const { unlinkFailed } = await cleanupDeletedEntry(deps, outcome.entry)
+                if (unlinkFailed) unlinkFailures++
+                break
+              }
+              case 'refs-reappeared':
+                skippedRefsReappeared++
+                break
+              case 'gone-or-pinned':
+                gonePinned++
+                break
+              default:
+                assertNever(outcome)
+            }
+          })
+        )
       } catch (err) {
         // Stateless retry (spec §5.6): the next pass re-derives this candidate.
         failed++
@@ -189,5 +201,14 @@ function finish(report: EntryCleanupReport, code?: string): EntryCleanupReport {
 
 /** Narrow the internal report to the wire summary — see `EntryCleanupSummary`. */
 export function summariseEntryCleanup(report: EntryCleanupReport): EntryCleanupSummary {
-  return { outcome: report.outcome, candidates: report.candidates, deleted: report.deleted }
+  return {
+    outcome: report.outcome,
+    candidates: report.candidates,
+    deleted: report.deleted,
+    hasPendingWork:
+      report.outcome !== 'completed' ||
+      report.failed > 0 ||
+      report.unlinkFailures > 0 ||
+      report.candidates === ENTRY_CLEANUP_BATCH_LIMIT
+  }
 }

@@ -1,11 +1,12 @@
+import { useCallback, useMemo } from 'react'
+import { useTranslation } from 'react-i18next'
+
 import { useGroups } from '@renderer/hooks/useGroups'
 import type { AgentDetail, ResourceItem, ResourceType, SortKey } from '@renderer/types/resourceCatalog'
 import { getAgentAvatarFromConfiguration, getAgentDescriptionForDisplay } from '@renderer/utils/agent'
 import type { InstalledSkill } from '@shared/data/types/agent'
 import type { Assistant } from '@shared/data/types/assistant'
 import type { Prompt } from '@shared/data/types/prompt'
-import { useCallback, useMemo } from 'react'
-import { useTranslation } from 'react-i18next'
 
 import { agentAdapter } from './agentAdapter'
 import { assistantAdapter } from './assistantAdapter'
@@ -84,6 +85,7 @@ export function useResourceLibrary({
         name: a.name,
         description: a.description || '',
         avatar: a.emoji || '💬',
+        avatarSrc: a.avatarSrc,
         // Embedded by AssistantService.list through ModelService; null when the
         // bound model row was removed.
         model: a.modelName ?? undefined,
@@ -105,6 +107,7 @@ export function useResourceLibrary({
         name: a.name ?? '',
         description: getAgentDescriptionForDisplay(a, t),
         avatar: getAgentAvatarFromConfiguration(a.configuration),
+        avatarSrc: a.avatarSrc,
         model: a.modelName ?? undefined,
         createdAt: a.createdAt,
         updatedAt: a.updatedAt,

@@ -1,11 +1,12 @@
 import { EventEmitter } from 'node:events'
 
+import type { BrowserWindow } from 'electron'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
 import { application } from '@application'
 import { BaseService } from '@main/core/lifecycle/BaseService'
 import type { ManagedWindow } from '@main/core/window/types'
 import { WindowType } from '@main/core/window/types'
-import type { BrowserWindow } from 'electron'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { SelectionService } from '../SelectionService'
 

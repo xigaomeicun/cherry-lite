@@ -7,9 +7,10 @@
  */
 import fs from 'node:fs/promises'
 
-import type { FileProcessorMerged } from '@shared/data/presets/fileProcessing'
-import { type FileInfo, FileInfoSchema } from '@shared/types/file'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+import type { DocumentToMarkdownCapability, FileProcessorMerged } from '@shared/data/presets/fileProcessing'
+import { type FileInfo, FileInfoSchema } from '@shared/types/file'
 
 import { doc2xDocumentToMarkdownHandler } from '../doc2x/documentToMarkdown/handler'
 import { mineruDocumentToMarkdownHandler } from '../mineru/documentToMarkdown/handler'
@@ -43,7 +44,7 @@ function buildConfig(id: 'doc2x' | 'mineru' | 'paddleocr', apiHost: string): Fil
         apiHost
       }
     ]
-  } as FileProcessorMerged
+  }
 }
 
 async function prepareRemote(
@@ -57,7 +58,7 @@ async function prepareRemote(
   if (prepared.mode !== 'remote-poll') {
     throw new Error('Expected remote-poll prepared job')
   }
-  return prepared as PreparedRemoteJob<'document_to_markdown'>
+  return prepared
 }
 
 describe('A1 whitelist invariant: real toPersistable() never emits apiKey', () => {
@@ -71,7 +72,14 @@ describe('A1 whitelist invariant: real toPersistable() never emits apiKey', () =
     const prepared = await prepareRemote(doc2xDocumentToMarkdownHandler, config)
 
     const persisted = prepared.toPersistable(
-      { apiHost: 'https://doc2x.example.com', apiKey: 'SUPER_SECRET', stage: 'exporting' } as never,
+      {
+        apiHost: 'https://doc2x.example.com',
+        apiKey: 'SUPER_SECRET',
+        stage: 'exporting',
+        modelVersion: 'v3-2026',
+        formulaLevel: 2,
+        mergeCrossPageForms: true
+      },
       'provider-task-xyz'
     )
 
@@ -81,7 +89,28 @@ describe('A1 whitelist invariant: real toPersistable() never emits apiKey', () =
     expect(persisted).toMatchObject({
       providerTaskId: 'provider-task-xyz',
       apiHost: 'https://doc2x.example.com',
-      stage: 'exporting'
+      stage: 'exporting',
+      modelVersion: 'v3-2026',
+      formulaLevel: 2,
+      mergeCrossPageForms: true
+    })
+
+    const restored = prepared.rehydrate(persisted, {
+      ...config,
+      capabilities: [
+        {
+          ...(config.capabilities[0] as DocumentToMarkdownCapability),
+          modelId: 'v2',
+          formulaLevel: 0,
+          mergeCrossPageForms: false
+        }
+      ]
+    })
+
+    expect(restored.remoteContext).toMatchObject({
+      modelVersion: 'v3-2026',
+      formulaLevel: 2,
+      mergeCrossPageForms: true
     })
   })
 
@@ -90,7 +119,7 @@ describe('A1 whitelist invariant: real toPersistable() never emits apiKey', () =
     const prepared = await prepareRemote(mineruDocumentToMarkdownHandler, config)
 
     const persisted = prepared.toPersistable(
-      { apiHost: 'https://mineru.example.com', apiKey: 'SUPER_SECRET' } as never,
+      { apiHost: 'https://mineru.example.com', apiKey: 'SUPER_SECRET' },
       'batch-id-abc'
     )
 
@@ -108,7 +137,7 @@ describe('A1 whitelist invariant: real toPersistable() never emits apiKey', () =
     const prepared = await prepareRemote(paddleDocumentToMarkdownHandler, config)
 
     const persisted = prepared.toPersistable(
-      { apiHost: 'https://paddle.example.com', apiKey: 'SUPER_SECRET' } as never,
+      { apiHost: 'https://paddle.example.com', apiKey: 'SUPER_SECRET' },
       'job-id-123'
     )
 

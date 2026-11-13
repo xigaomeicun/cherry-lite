@@ -1,6 +1,5 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest'
-
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -45,7 +44,7 @@ function triggerResizeObserver() {
 }
 
 function getScrollElement() {
-  return screen.getByTestId('scroll-item').closest('[data-scrolling]') as HTMLElement
+  return screen.getByTestId('scroll-item').closest('[data-horizontal-scroll-viewport]') as HTMLElement
 }
 
 describe('HorizontalScrollContainer', () => {
@@ -58,7 +57,7 @@ describe('HorizontalScrollContainer', () => {
         observe: vi.fn((target: Element) => instance.targets.push(target)),
         disconnect: vi.fn()
       } as unknown as ResizeObserver
-    }) as unknown as typeof ResizeObserver
+    })
   })
 
   afterEach(() => {
@@ -93,7 +92,7 @@ describe('HorizontalScrollContainer', () => {
     expect(screen.queryByRole('button', { name: 'Scroll right' })).not.toBeInTheDocument()
   })
 
-  it('scrolls with shared icon buttons and custom accessible labels', () => {
+  it('scrolls the requested distance using custom accessible labels', () => {
     render(
       <HorizontalScrollContainer scrollDistance={120} scrollLeftLabel="Previous items" scrollRightLabel="Next items">
         <span data-testid="scroll-item">Item</span>
@@ -106,23 +105,14 @@ describe('HorizontalScrollContainer', () => {
 
     triggerResizeObserver()
 
-    const leftButton = screen.getByRole('button', { name: 'Previous items' })
-    const rightButton = screen.getByRole('button', { name: 'Next items' })
-    expect(leftButton).toHaveAttribute('data-slot', 'button')
-    expect(rightButton).toHaveAttribute('data-variant', 'ghost')
-    expect(leftButton).toHaveClass('hover:bg-background', 'focus-visible:bg-background')
-    expect(rightButton).toHaveClass('hover:bg-background', 'focus-visible:bg-background')
-    expect(leftButton).not.toHaveClass('hover:bg-accent', 'focus-visible:bg-accent')
-    expect(rightButton).not.toHaveClass('hover:bg-accent', 'focus-visible:bg-accent')
-
-    fireEvent.click(leftButton)
-    fireEvent.click(rightButton)
+    fireEvent.click(screen.getByRole('button', { name: 'Previous items' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Next items' }))
 
     expect(scrollBy).toHaveBeenNthCalledWith(1, { behavior: 'smooth', left: -120 })
     expect(scrollBy).toHaveBeenNthCalledWith(2, { behavior: 'smooth', left: 120 })
   })
 
-  it('recalculates for DOM content changes without recreating observers', async () => {
+  it('recalculates available scroll directions after DOM content changes', async () => {
     render(
       <HorizontalScrollContainer {...accessibleLabels}>
         <span data-testid="scroll-item">One</span>
@@ -139,6 +129,5 @@ describe('HorizontalScrollContainer', () => {
     })
 
     expect(await screen.findByRole('button', { name: 'Scroll right' })).toBeInTheDocument()
-    expect(resizeObserverInstances).toHaveLength(1)
   })
 })

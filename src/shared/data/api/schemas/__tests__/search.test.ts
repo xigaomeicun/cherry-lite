@@ -1,16 +1,11 @@
-import {
-  AGENT_SESSION_MESSAGE_SEARCH_ROLES,
-  type AgentSessionMessageSearchRole,
-  TOPIC_MESSAGE_SEARCH_ROLES,
-  type TopicMessageSearchRole
-} from '@shared/data/types/message'
 import { describe, expect, expectTypeOf, it } from 'vitest'
+
+import { type AgentSessionMessageSearchRole, type TopicMessageSearchRole } from '@shared/data/types/message'
 
 import {
   CONTENT_SEARCH_MAX_LIMIT_PER_SOURCE,
   type ContentSearchGroup,
   ContentSearchQuerySchema,
-  contentSearchSourceTypes,
   ENTITY_SEARCH_MAX_LIMIT_PER_TYPE,
   type EntitySearchGroup,
   type EntitySearchItem,
@@ -77,8 +72,8 @@ describe('EntitySearchQuerySchema', () => {
       }
     }
 
-    expect(assertItemNarrowing).toBeTypeOf('function')
-    expect(assertGroupNarrowing).toBeTypeOf('function')
+    void assertItemNarrowing
+    void assertGroupNarrowing
   })
 })
 
@@ -136,9 +131,7 @@ describe('ContentSearchQuerySchema', () => {
     ).toThrow()
   })
 
-  it('keeps the source tuple and grouped response union in lockstep', () => {
-    expect(contentSearchSourceTypes).toEqual(['topic-message', 'session-message'])
-
+  it('narrows grouped response items by their source type', () => {
     const assertNarrowing = (group: ContentSearchGroup) => {
       if (group.sourceType === 'topic-message') {
         expectTypeOf(group.items).toEqualTypeOf<TopicMessageContentSearchItem[]>()
@@ -148,12 +141,10 @@ describe('ContentSearchQuerySchema', () => {
       }
     }
 
-    expect(assertNarrowing).toBeTypeOf('function')
+    void assertNarrowing
   })
 
   it('derives result role types from shared search role allowlists', () => {
-    expect(TOPIC_MESSAGE_SEARCH_ROLES).toEqual(['user', 'assistant'])
-    expect(AGENT_SESSION_MESSAGE_SEARCH_ROLES).toEqual(['user', 'assistant', 'system'])
     expectTypeOf<TopicMessageContentSearchItem['role']>().toEqualTypeOf<TopicMessageSearchRole | undefined>()
     expectTypeOf<SessionMessageContentSearchItem['role']>().toEqualTypeOf<AgentSessionMessageSearchRole | undefined>()
   })

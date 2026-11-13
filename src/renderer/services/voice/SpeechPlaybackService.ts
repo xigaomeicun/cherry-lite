@@ -15,10 +15,10 @@ import {
 import type { SpeechPlayback } from './speechPlaybackTypes'
 import type { SpeechTextInput } from './SpeechTextInput'
 import {
-  type SpeechInput,
-  type SpeechPreferenceInput,
-  type VoiceCommandEvent,
   VoiceDomainError,
+  type SpeechPreferenceInput,
+  type SpeechInput,
+  type VoiceCommandEvent,
   type VoiceOperation,
   type VoiceService,
   voiceService

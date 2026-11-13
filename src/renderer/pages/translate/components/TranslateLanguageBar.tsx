@@ -1,3 +1,9 @@
+import { ArrowLeftRight } from 'lucide-react'
+import type { FC } from 'react'
+import { useCallback, useMemo } from 'react'
+import { useTranslation } from 'react-i18next'
+import stringWidth from 'string-width'
+
 import { Button, Combobox, type ComboboxOption, Tooltip } from '@cherrystudio/ui'
 import { useLanguages } from '@renderer/hooks/translate'
 import { cn } from '@renderer/utils/style'
@@ -7,11 +13,6 @@ import type {
   TranslateLangCode,
   TranslateSourceLanguage
 } from '@shared/data/preference/preferenceTypes'
-import { ArrowLeftRight } from 'lucide-react'
-import type { FC } from 'react'
-import { useCallback, useMemo } from 'react'
-import { useTranslation } from 'react-i18next'
-import stringWidth from 'string-width'
 
 type Props = {
   className?: string

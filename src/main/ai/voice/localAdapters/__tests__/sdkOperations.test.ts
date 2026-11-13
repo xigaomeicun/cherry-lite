@@ -1,5 +1,6 @@
-import { SpeechInputKind, SpeechOutputKind, TranscriptionInputKind } from '@shared/ai/voice'
 import { describe, expect, it } from 'vitest'
+
+import { SpeechInputKind, SpeechOutputKind, TranscriptionInputKind } from '@shared/ai/voice'
 
 import { speechFixture, transcriptionFixture } from '../../__tests__/voiceExecutionFixtures'
 import type { TranscriptRevision } from '../../executionTypes'

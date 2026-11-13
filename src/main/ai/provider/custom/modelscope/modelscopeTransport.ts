@@ -1,7 +1,8 @@
 import type { FetchFunction } from '@ai-sdk/provider-utils'
+import { Agent } from 'undici'
+
 import { DEFAULT_TIMEOUT } from '@main/ai/constants'
 import { parseDataUrl } from '@shared/utils/dataUrl'
-import { Agent } from 'undici'
 
 import {
   DEFAULT_IMAGE_REQUEST_TIMEOUT_MS,

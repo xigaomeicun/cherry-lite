@@ -1,10 +1,11 @@
 import { createServer, type Server } from 'node:http'
 
+import { mockMainLoggerService } from '@test-mocks/MainLoggerService'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
 import type * as CustomFetchModule from '@main/ai/utils/customFetch'
 import { ENDPOINT_TYPE } from '@shared/data/types/model'
 import { SystemProviderIds } from '@shared/utils/systemProviderId'
-import { mockMainLoggerService } from '@test-mocks/MainLoggerService'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { makeProvider } from '../../__tests__/fixtures/provider'
 import { GeminiModelsResponseSchema } from '../listModelsSchemas'
@@ -108,8 +109,7 @@ describe('listModels - Gemini pagination token compatibility', () => {
 
     const result = await listModels(provider, undefined, { throwOnError: true })
 
-    // This fork's `listModels` returns the model array directly, not `{ models }`.
-    expect(result).toEqual([
+    expect(result.models).toEqual([
       expect.objectContaining({
         id: 'custom-gemini::gemini-test',
         apiModelId: 'gemini-test',
@@ -166,7 +166,7 @@ describe('listModels - LM Studio response isolation', () => {
       }
     })
 
-    const models = await listModels(provider)
+    const { models } = await listModels(provider)
 
     expect(models.map((model) => model.apiModelId)).toEqual(['first-model', 'second-model'])
     expect(models[0]?.name).toBe('First Model')

@@ -46,8 +46,9 @@ import type {
   WorkflowInput,
   WorkflowOutput
 } from '@anthropic-ai/claude-agent-sdk/sdk-tools'
-import { TO_MARKDOWN_TOOL_NAME } from '@shared/ai/builtinTools'
 import * as z from 'zod'
+
+import { TO_MARKDOWN_TOOL_NAME } from '@shared/ai/builtinTools'
 
 import type { ToolDisclosureItem } from './ToolDisclosure'
 
@@ -103,7 +104,7 @@ export interface SkillToolInput {
 export type SkillToolOutput = string | TextOutput[]
 
 export type ReadToolInput = FileReadInput
-export type ReadToolOutput = FileReadOutput | string | TextOutput[]
+export type ReadToolOutput = FileReadOutput | string | TextOutput[] | { content: (TextOutput | { type: 'image' })[] }
 
 export type TaskToolInput = AgentInput
 export type TaskToolOutput = AgentOutput | TextOutput[]
@@ -245,7 +246,7 @@ export function isBackgroundAgentOutput(output: AgentToolOutput | undefined): bo
  */
 export function parseAskUserQuestionToolInput(value: unknown): AskUserQuestionToolInput | undefined {
   const result = AskUserQuestionToolInputSchema.safeParse(value)
-  return result.success ? (result.data as AskUserQuestionToolInput) : undefined
+  return result.success ? result.data : undefined
 }
 
 export type ListMcpResourcesToolInput = ListMcpResourcesInput

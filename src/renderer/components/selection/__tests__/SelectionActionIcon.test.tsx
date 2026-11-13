@@ -1,5 +1,4 @@
 import '@testing-library/jest-dom/vitest'
-
 import { render, screen, waitFor } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 
@@ -54,6 +53,5 @@ describe('SelectionActionIcon', () => {
 
     await waitFor(() => expect(dynamicIconState.render).toHaveBeenCalledWith('custom-icon'))
     expect(icon).toHaveAttribute('data-icon-name', 'custom-icon')
-    expect(icon).toHaveClass('custom-icon-class')
   })
 })

@@ -396,6 +396,45 @@ export function sortSessionsForDisplayGroups<T extends SessionListItem>(
   })
 }
 
+export type SessionListViewOptions = {
+  agentById: ReadonlyMap<string, SessionDisplayAgent>
+  agentRankById: ReadonlyMap<string, number>
+  labels: SessionDisplayGroupLabels
+  mode: AgentSessionDisplayMode
+  now: SessionDisplaySortOptions['now']
+  /** `undefined` lists every agent; `null` lists nothing until an agent is chosen. */
+  visibleAgentId: string | null | undefined
+  workspaces: readonly WorkspaceDisplaySource[]
+}
+
+/** Builds the list as displayed, so rendering and event handlers cannot disagree on order. */
+export function deriveSessionListView<T extends SessionListItem>(
+  items: readonly T[],
+  { agentById, agentRankById, labels, mode, now, visibleAgentId, workspaces }: SessionListViewOptions,
+  optimisticMove?: ResourceListItemReorderPayload | null
+) {
+  const workdirDisplay = createSessionWorkdirDisplayMaps(items, workspaces)
+  const sorted = sortSessionsForDisplayGroups(items, { agentRankById, mode, now, workdirDisplay })
+  const ordered = optimisticMove ? applyOptimisticSessionDisplayMove(sorted, optimisticMove) : sorted
+  const visibleItems =
+    visibleAgentId === undefined
+      ? ordered
+      : visibleAgentId
+        ? ordered.filter((session) => session.agentId === visibleAgentId)
+        : []
+  const hasAgentSection = mode === 'agent' && (agentById.size > 0 || visibleItems.some((session) => !session.pinned))
+  const groupBy = createSessionDisplayGroupResolver<T>({
+    agentById,
+    labels,
+    mode,
+    now,
+    pinnedAsSection: mode !== 'time' && (mode !== 'agent' || hasAgentSection),
+    workdirDisplay
+  })
+
+  return { groupBy, items: visibleItems, workdirDisplay }
+}
+
 export function normalizeSessionDropPayload(payload: ResourceListItemReorderPayload): ResourceListItemReorderPayload {
   return payload
 }
@@ -418,30 +457,6 @@ export function buildSessionAgentGroupDropAnchor(
   return buildResourceListGroupDropAnchor(payload, overAgentId)
 }
 
-/**
- * Resolve the cross-agent MOVE target for a session-item drop, or `undefined` when the drop carries
- * no ownership change (a plain reorder inside one group, or a gesture the list must refuse).
- *
- * In the `agent` display mode a group IS an agent, so dropping a session into another agent's group
- * reassigns the session's owner. The `time` / `workdir` modes group by bucket / workspace — their
- * group ids carry no agent, so a cross-group drop there can never move anything.
- *
- * Refused targets: the pinned group (pin state is not ownership) and the orphan `unknown agent`
- * group — both fail `getAgentIdFromSessionGroupId`. A same-group drop is never a move.
- */
-export function getSessionMoveTargetAgentId({
-  mode,
-  sourceGroupId,
-  targetGroupId
-}: {
-  mode: AgentSessionDisplayMode
-  sourceGroupId: string
-  targetGroupId: string
-}): string | undefined {
-  if (mode !== 'agent' || sourceGroupId === targetGroupId) return undefined
-  return getAgentIdFromSessionGroupId(targetGroupId)
-}
-
 export function canDropSessionItemInDisplayGroup({
   mode,
   sourceGroupId,
@@ -451,13 +466,9 @@ export function canDropSessionItemInDisplayGroup({
   sourceGroupId: string
   targetGroupId: string
 }) {
-  if (mode === 'time') return false
-  if (sourceGroupId === SESSION_PINNED_GROUP_ID || targetGroupId === SESSION_PINNED_GROUP_ID) {
-    return sourceGroupId === targetGroupId
-  }
-  if (sourceGroupId === targetGroupId) return true
-  // A cross-group drop is a valid gesture only where we can actually reassign the session.
-  return getSessionMoveTargetAgentId({ mode, sourceGroupId, targetGroupId }) !== undefined
+  // Same-group only, so allowing the pinned group cannot move a row out of it:
+  // both sides must already be pinned.
+  return mode !== 'time' && sourceGroupId === targetGroupId
 }
 
 export function applyOptimisticSessionDisplayMove<T extends SessionListItem>(

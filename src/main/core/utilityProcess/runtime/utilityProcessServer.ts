@@ -19,10 +19,10 @@ import type {
   FrameIdentity,
   LogFrame,
   LogLevel,
-  RemoteErrorShape,
   ResultFrame,
-  StreamOpenFrame,
-  Unstamped
+  RemoteErrorShape,
+  Unstamped,
+  StreamOpenFrame
 } from '../protocol/frames'
 import { isConnectFrame, isMainFrame, matchesIdentity } from '../protocol/guards'
 import { toRemoteError } from '../protocol/remoteError'

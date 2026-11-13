@@ -1,7 +1,6 @@
-import type { ConversationAppId } from '@renderer/types/conversation'
-import { emojiTabIcon } from '@renderer/utils/tabIcons'
-import type { Tab } from '@shared/data/cache/cacheValueTypes'
 import { useEffect } from 'react'
+
+import { emojiTabIcon } from '@renderer/utils/tabIcons'
 
 import { useCurrentTabId } from './useCurrentTab'
 import { useOptionalTabsContext } from './useTabsContext'
@@ -10,22 +9,10 @@ export interface TabSelfVisuals {
   title: string
   emoji?: string | null
   icon?: string
-  /** Route-ownership guard: only stamp while the tab is on this app's routes. */
-  appId?: ConversationAppId
   /** Only stamp while the current tab URL belongs to this caller-supplied route prefix. */
   routePrefix?: string
   /** Keep the tab's stored title/icon while the bound conversation is still loading. */
   preserveVisuals?: boolean
-}
-
-const TAB_APP_ROUTE_PREFIX: Record<ConversationAppId, string> = {
-  assistants: '/app/chat',
-  agents: '/app/agents'
-}
-
-function tabBelongsToApp(tab: Pick<Tab, 'url'>, appId: ConversationAppId): boolean {
-  const routePrefix = TAB_APP_ROUTE_PREFIX[appId]
-  return tab.url === routePrefix || tab.url.startsWith(`${routePrefix}?`) || tab.url.startsWith(`${routePrefix}/`)
 }
 
 /**
@@ -40,7 +27,6 @@ export function useTabSelfVisuals({
   title,
   emoji,
   icon: imageIcon,
-  appId,
   routePrefix,
   preserveVisuals = false
 }: TabSelfVisuals): void {
@@ -52,7 +38,6 @@ export function useTabSelfVisuals({
   useEffect(() => {
     if (!currentTabId || !updateTab || !currentTab) return
     if (preserveVisuals) return
-    if (appId && !tabBelongsToApp(currentTab, appId)) return
     if (
       routePrefix &&
       currentTab.url !== routePrefix &&
@@ -63,5 +48,5 @@ export function useTabSelfVisuals({
     const icon = imageIcon ?? emojiTabIcon(emoji)
     if (currentTab.title === title && currentTab.icon === icon) return
     updateTab(currentTabId, { title, icon })
-  }, [currentTabId, currentTab, updateTab, title, emoji, imageIcon, appId, routePrefix, preserveVisuals])
+  }, [currentTabId, currentTab, updateTab, title, emoji, imageIcon, routePrefix, preserveVisuals])
 }

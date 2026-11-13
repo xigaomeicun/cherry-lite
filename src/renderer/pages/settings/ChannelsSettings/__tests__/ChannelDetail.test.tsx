@@ -3,6 +3,8 @@ import userEvent from '@testing-library/user-event'
 import React from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import type * as CherryUiModule from '@cherrystudio/ui'
+
 import ChannelDetail from '../ChannelDetail'
 import type { AvailableChannel } from '../channelTypes'
 
@@ -36,10 +38,6 @@ vi.mock('@renderer/components/resourceCatalog/selectors', () => ({
   WorkspaceSelector: ({ trigger }: { trigger: React.ReactNode }) => <>{trigger}</>
 }))
 
-vi.mock('@renderer/components/Scrollbar', () => ({
-  default: ({ children, ...props }: React.HTMLAttributes<HTMLDivElement>) => <div {...props}>{children}</div>
-}))
-
 vi.mock('@renderer/components/SettingsPrimitives', () => ({
   SettingDivider: (props: React.HTMLAttributes<HTMLHRElement>) => <hr {...props} />,
   SettingGroup: ({ children, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
@@ -51,8 +49,9 @@ vi.mock('@renderer/components/SettingsPrimitives', () => ({
   SettingTitle: ({ children, ...props }: React.HTMLAttributes<HTMLDivElement>) => <div {...props}>{children}</div>
 }))
 
-vi.mock('@renderer/data/hooks/useDataApi', () => ({
-  useQuery: () => ({ data: [] })
+vi.mock('@renderer/data/hooks/useDataApi', async () => ({
+  useDataChange: (await import('@renderer/data/hooks/useDataChange')).useDataChange,
+  useQuery: () => ({ data: [], refetch: vi.fn() })
 }))
 
 vi.mock('@renderer/hooks/agent/useAgent', () => ({
@@ -82,7 +81,8 @@ vi.mock('react-i18next', () => ({
   })
 }))
 
-vi.mock('@cherrystudio/ui', () => {
+vi.mock('@cherrystudio/ui', async (importOriginal) => {
+  const actual = await importOriginal<typeof CherryUiModule>()
   const SelectContext = React.createContext<{ onValueChange?: (value: string) => void } | null>(null)
 
   const passthrough =
@@ -103,13 +103,29 @@ vi.mock('@cherrystudio/ui', () => {
     }
 
   return {
+    ...actual,
     Badge: passthrough('span'),
     Button: ({ children, onClick, ...props }: React.ButtonHTMLAttributes<HTMLButtonElement>) => (
       <button type="button" onClick={onClick} {...props}>
         {children}
       </button>
     ),
-    ConfirmDialog: ({ open }: { open?: boolean }) => (open ? <div role="dialog" /> : null),
+    ConfirmDialog: ({
+      open,
+      onConfirm,
+      confirmText
+    }: {
+      open?: boolean
+      onConfirm?: () => void
+      confirmText?: string
+    }) =>
+      open ? (
+        <div role="dialog">
+          <button type="button" onClick={() => onConfirm?.()}>
+            {confirmText ?? 'Confirm'}
+          </button>
+        </div>
+      ) : null,
     Dialog: ({
       children,
       open,
@@ -223,14 +239,11 @@ describe('ChannelDetail', () => {
       }
     ]
 
-    // ChannelDetail now reads logs/statuses via ipcApi.request and subscribes via useIpcOn
-    // (ipcApi.on). Stub the IpcApi bridge: log/status queries resolve empty, events no-op.
+    // Logs and QR events still use IpcApi; connection status comes from Shared Cache.
     window.api = {
       ipcApi: {
         request: vi.fn((route: string) =>
-          route === 'channel.get_logs' || route === 'channel.get_statuses'
-            ? Promise.resolve([])
-            : Promise.resolve(undefined)
+          route === 'channel.get_logs' ? Promise.resolve([]) : Promise.resolve(undefined)
         ),
         on: vi.fn(() => () => {})
       }
@@ -272,6 +285,73 @@ describe('ChannelDetail', () => {
       ['channel-1', { configPatch: { bot_id: 'new-bot' } }],
       ['channel-1', { configPatch: { secret: ' secret ' } }]
     ])
+  })
+
+  it('holds a Full Access channel override behind a scope confirmation', async () => {
+    const user = userEvent.setup()
+    channelMocks.channels = [{ ...channelMocks.channels[0], permissionMode: 'default' }]
+    render(<ChannelDetail channelDef={channelDef} />)
+
+    const editTooltip = await screen.findByText('common.edit')
+    const editButton = within(editTooltip.closest('[data-testid="tooltip"]') as HTMLElement).getByRole('button')
+    await user.click(editButton)
+
+    await screen.findByDisplayValue('Telegram channel')
+    await user.click(screen.getByText('agent.settings.tooling.permissionMode.bypassPermissions.title'))
+
+    expect(await screen.findByRole('dialog')).toBeInTheDocument()
+    expect(channelMocks.updateChannel).not.toHaveBeenCalledWith('channel-1', {
+      permissionMode: 'bypassPermissions'
+    })
+
+    await user.click(screen.getByText('agent.settings.tooling.permissionMode.fullAccessConfirm.confirm'))
+
+    expect(channelMocks.updateChannel).toHaveBeenCalledWith('channel-1', {
+      permissionMode: 'bypassPermissions'
+    })
+  })
+
+  it('drops a pending Full Access confirmation when another window changes the mode', async () => {
+    const user = userEvent.setup()
+    channelMocks.channels = [{ ...channelMocks.channels[0], permissionMode: 'default' }]
+    const { rerender } = render(<ChannelDetail channelDef={channelDef} />)
+
+    const editTooltip = await screen.findByText('common.edit')
+    const editButton = within(editTooltip.closest('[data-testid="tooltip"]') as HTMLElement).getByRole('button')
+    await user.click(editButton)
+
+    await screen.findByDisplayValue('Telegram channel')
+    await user.click(screen.getByText('agent.settings.tooling.permissionMode.bypassPermissions.title'))
+    expect(await screen.findByRole('dialog')).toBeInTheDocument()
+
+    channelMocks.channels = [{ ...channelMocks.channels[0], permissionMode: 'plan' }]
+    rerender(<ChannelDetail channelDef={channelDef} />)
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(channelMocks.updateChannel).not.toHaveBeenCalledWith('channel-1', {
+      permissionMode: 'bypassPermissions'
+    })
+  })
+
+  it('drops a pending Full Access confirmation when another mode is chosen', async () => {
+    const user = userEvent.setup()
+    channelMocks.channels = [{ ...channelMocks.channels[0], permissionMode: 'default' }]
+    render(<ChannelDetail channelDef={channelDef} />)
+
+    const editTooltip = await screen.findByText('common.edit')
+    const editButton = within(editTooltip.closest('[data-testid="tooltip"]') as HTMLElement).getByRole('button')
+    await user.click(editButton)
+
+    await screen.findByDisplayValue('Telegram channel')
+    await user.click(screen.getByText('agent.settings.tooling.permissionMode.bypassPermissions.title'))
+    expect(await screen.findByRole('dialog')).toBeInTheDocument()
+
+    await user.click(screen.getByText('agent.settings.tooling.permissionMode.auto.title'))
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(channelMocks.updateChannel).not.toHaveBeenCalledWith('channel-1', {
+      permissionMode: 'bypassPermissions'
+    })
   })
 
   it('saves Feishu mention-only changes and renders reloaded values', async () => {
@@ -472,21 +552,5 @@ describe('ChannelDetail', () => {
         })
       )
     })
-  })
-
-  it('closes the edit dialog without clearing its content first', () => {
-    const { rerender } = render(<ChannelDetail channelDef={channelDef} />)
-
-    const editTooltip = screen.getByText('common.edit')
-    const editButton = within(editTooltip.closest('[data-testid="tooltip"]') as HTMLElement).getByRole('button')
-    fireEvent.click(editButton)
-    fireEvent.click(screen.getByRole('button', { name: 'close dialog' }))
-
-    channelMocks.channels = []
-    rerender(<ChannelDetail channelDef={channelDef} />)
-
-    const title = screen.getByRole('heading', { name: 'Telegram channel' })
-    expect(title).toBeInTheDocument()
-    expect(title.closest('[data-open]')).toHaveAttribute('data-open', 'false')
   })
 })

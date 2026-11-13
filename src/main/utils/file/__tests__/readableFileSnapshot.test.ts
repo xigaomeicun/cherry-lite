@@ -3,8 +3,9 @@ import type * as FsPromises from 'node:fs/promises'
 import { type FileHandle, lstat, open } from 'node:fs/promises'
 import { Readable } from 'node:stream'
 
-import type { AbsoluteFilePath } from '@shared/types/file'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+
+import type { AbsoluteFilePath } from '@shared/types/file'
 
 import { openReadableFileSnapshot } from '../fs'
 

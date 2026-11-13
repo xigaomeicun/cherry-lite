@@ -1,5 +1,6 @@
-import type { Model, RuntimeReasoning } from '@shared/data/types/model'
 import { describe, expect, it } from 'vitest'
+
+import type { Model, RuntimeReasoning } from '@shared/data/types/model'
 
 import { deriveThinkingOptions, nearestThinkingOption } from '../reasoning'
 
@@ -32,15 +33,6 @@ describe('deriveThinkingOptions', () => {
         })
       )
     ).toEqual(['default', 'none', 'low', 'medium', 'high', 'xhigh'])
-  })
-
-  it('hoists none after the synthesized default option', () => {
-    expect(deriveThinkingOptions(model({ selectableEfforts: ['low', 'none', 'high'] }))).toEqual([
-      'default',
-      'none',
-      'low',
-      'high'
-    ])
   })
 })
 

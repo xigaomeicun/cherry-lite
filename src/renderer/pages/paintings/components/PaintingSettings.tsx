@@ -1,7 +1,8 @@
-import { InfoTooltip, InputNumber } from '@cherrystudio/ui'
 import type { FC } from 'react'
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
+
+import { InfoTooltip, InputNumber } from '@cherrystudio/ui'
 
 import { type BaseConfigItem, isOptionsConfigItem } from '../form/baseConfigItem'
 import { imageGenerationToFields } from '../form/imageGenerationToFields'
@@ -33,11 +34,17 @@ function shouldRenderConfigItem(item: BaseConfigItem, painting: Record<string, u
 
 export interface PaintingSettingsProps {
   painting: PaintingData
+  inputImageCount?: number
   onConfigChange: (updates: Partial<PaintingData>) => void
   onGenerateRandomSeed?: (key: string) => void
 }
 
-const PaintingSettings: FC<PaintingSettingsProps> = ({ painting, onConfigChange, onGenerateRandomSeed }) => {
+const PaintingSettings: FC<PaintingSettingsProps> = ({
+  painting,
+  inputImageCount = 0,
+  onConfigChange,
+  onGenerateRandomSeed
+}) => {
   const { t } = useTranslation()
   // The form's reads/writes target `painting.params` — the canonical-name bag
   // that `canonicalGenerate` partitions into AI SDK args vs provider bag at
@@ -50,9 +57,9 @@ const PaintingSettings: FC<PaintingSettingsProps> = ({ painting, onConfigChange,
   const configItems = useMemo(
     () =>
       imageGenerationToFields(registrySupport, {
-        mode: tabToImageGenerationMode(painting.mode)
+        mode: tabToImageGenerationMode(painting.mode, inputImageCount)
       }),
-    [registrySupport, painting.mode]
+    [registrySupport, painting.mode, inputImageCount]
   )
 
   return (
@@ -75,9 +82,7 @@ const PaintingSettings: FC<PaintingSettingsProps> = ({ painting, onConfigChange,
             <PaintingFieldRenderer
               item={item}
               painting={paintingParams}
-              onChange={(updates) =>
-                onConfigChange({ params: { ...paintingParams, ...updates } } as Partial<PaintingData>)
-              }
+              onChange={(updates) => onConfigChange({ params: { ...paintingParams, ...updates } })}
               onGenerateRandomSeed={onGenerateRandomSeed}
             />
           </div>

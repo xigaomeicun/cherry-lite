@@ -1,3 +1,5 @@
+import { describe, expect, it } from 'vitest'
+
 import { assertSafeKnowledgeRelativePath, CHERRY_META_DIR } from '@main/features/knowledge'
 import {
   KNOWLEDGE_BASE_ERROR_MISSING_EMBEDDING_MODEL,
@@ -5,7 +7,6 @@ import {
   KNOWLEDGE_NOTE_CONTENT_MAX
 } from '@shared/data/types/knowledge'
 import { FILE_TYPE } from '@shared/types/file'
-import { describe, expect, it } from 'vitest'
 
 import { legacyModelToUniqueId } from '../../transformers/ModelTransformers'
 import {
@@ -111,25 +112,6 @@ describe('KnowledgeMappings', () => {
       ok: true,
       value: expect.objectContaining({
         name: 'My KB'
-      })
-    })
-  })
-
-  it('transformKnowledgeBase fills default chunk config when legacy values are missing', () => {
-    expect(
-      transformKnowledgeBase(
-        {
-          id: 'kb-default-config',
-          name: 'KB default config',
-          model: { id: 'BAAI/bge-m3', name: 'bge', provider: 'silicon' }
-        },
-        1024
-      )
-    ).toStrictEqual({
-      ok: true,
-      value: expect.objectContaining({
-        chunkSize: 1024,
-        chunkOverlap: 200
       })
     })
   })

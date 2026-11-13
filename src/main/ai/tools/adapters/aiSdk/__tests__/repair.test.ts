@@ -1,8 +1,9 @@
 import type { JSONSchema7, LanguageModelV3ToolCall } from '@ai-sdk/provider'
-import { KB_SEARCH_TOOL_NAME } from '@shared/ai/builtinTools'
 import { InvalidToolInputError, jsonSchema, NoSuchToolError } from 'ai'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as z from 'zod'
+
+import { KB_SEARCH_TOOL_NAME } from '@shared/ai/builtinTools'
 
 const { generateText } = vi.hoisted(() => ({ generateText: vi.fn() }))
 
@@ -43,14 +44,16 @@ async function callRepair(
     system: undefined,
     messages: [],
     toolCall,
-    tools: { [KB_SEARCH_TOOL_NAME]: { inputSchema: querySchema } } as never,
+    tools: { [KB_SEARCH_TOOL_NAME]: { inputSchema: querySchema } },
     inputSchema: async () => ({ type: 'object', properties: { query: { type: 'string' } } }) as never,
     error
   })
 }
 
 describe('createAiRepair', () => {
-  beforeEach(() => generateText.mockReset())
+  beforeEach(() => {
+    generateText.mockReset()
+  })
 
   it('asks ai-core generateText with Output.object and returns the structured repair', async () => {
     generateText.mockResolvedValue({ output: { query: 'hello world' } })
@@ -91,8 +94,8 @@ describe('createAiRepair', () => {
       system: undefined,
       messages: [],
       toolCall: makeToolCall('mcp_search', 'not json at all'),
-      tools: { mcp_search: { inputSchema: jsonSchema(schemaJson) } } as never,
-      inputSchema: async () => schemaJson as never,
+      tools: { mcp_search: { inputSchema: jsonSchema(schemaJson) } },
+      inputSchema: async () => schemaJson,
       error: inputErr
     })
 
@@ -114,8 +117,8 @@ describe('createAiRepair', () => {
       system: undefined,
       messages: [],
       toolCall: makeToolCall('mcp_search', 'not json at all'),
-      tools: { mcp_search: { inputSchema: jsonSchema(schemaJson) } } as never,
-      inputSchema: async () => schemaJson as never,
+      tools: { mcp_search: { inputSchema: jsonSchema(schemaJson) } },
+      inputSchema: async () => schemaJson,
       error: inputErr
     })
 
@@ -135,8 +138,8 @@ describe('createAiRepair', () => {
       system: undefined,
       messages: [],
       toolCall: makeToolCall('mcp_search', 'not json at all'),
-      tools: { mcp_search: { inputSchema: jsonSchema(schemaJson) } } as never,
-      inputSchema: async () => schemaJson as never,
+      tools: { mcp_search: { inputSchema: jsonSchema(schemaJson) } },
+      inputSchema: async () => schemaJson,
       error: inputErr
     })
 
@@ -156,8 +159,8 @@ describe('createAiRepair', () => {
       system: undefined,
       messages: [],
       toolCall: makeToolCall('mcp_search', { q: 'hello world' }),
-      tools: { mcp_search: { inputSchema: jsonSchema(schemaJson) } } as never,
-      inputSchema: async () => schemaJson as never,
+      tools: { mcp_search: { inputSchema: jsonSchema(schemaJson) } },
+      inputSchema: async () => schemaJson,
       error: inputErr
     })
 
@@ -173,36 +176,13 @@ describe('createAiRepair', () => {
       system: undefined,
       messages: [],
       toolCall: makeToolCall('arguments_tool', { query: 'hello world' }),
-      tools: { arguments_tool: { inputSchema: schema } } as never,
+      tools: { arguments_tool: { inputSchema: schema } },
       inputSchema: async () => z.toJSONSchema(schema) as never,
       error: inputErr
     })
 
     expect(repaired).not.toBeNull()
     expect(JSON.parse(repaired!.input)).toEqual({ arguments: { query: 'hello world' } })
-  })
-
-  it('reuses the request usage middleware so repair is an independent invocation', async () => {
-    const plugins = [{ name: 'usage' }]
-    const repairWithUsage = createAiRepair({
-      providerId: 'openai',
-      providerSettings: { apiKey: 'test' },
-      modelId: 'gpt-4o-mini',
-      getUsagePlugins: () => plugins as never
-    })
-    generateText.mockResolvedValue({ output: { query: 'hello world' } })
-
-    const repaired = await repairWithUsage({
-      system: undefined,
-      messages: [],
-      toolCall: makeToolCall(KB_SEARCH_TOOL_NAME, { q: 'hello world' }),
-      tools: { [KB_SEARCH_TOOL_NAME]: { inputSchema: querySchema } } as never,
-      inputSchema: async () => ({ type: 'object', properties: { query: { type: 'string' } } }) as never,
-      error: inputErr
-    })
-
-    expect(repaired).not.toBeNull()
-    expect(generateText.mock.calls[0][3]).toBe(plugins)
   })
 
   it('returns null when generateText returns no structured output', async () => {
@@ -226,7 +206,7 @@ describe('createAiRepair', () => {
       system: undefined,
       messages: [],
       toolCall: makeToolCall(KB_SEARCH_TOOL_NAME, { q: 'hi' }),
-      tools: {} as never,
+      tools: {},
       inputSchema: async () => {
         throw new Error('unknown tool')
       },

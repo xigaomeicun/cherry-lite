@@ -2,10 +2,11 @@
  * ChatContextProvider — produces a ready-to-dispatch bundle for one
  * `ai.stream.open` request. `dispatchStreamRequest` picks the first
  * provider whose `canHandle(topicId)` matches, asks it to prepare, and
- * calls `manager.send(...)` itself. See `docs/references/ai/stream-manager.md`.
+ * calls `manager.send(...)` itself. See `docs/dev/references/ai/stream-manager.md`.
  */
 
 import type { Span } from '@opentelemetry/api'
+
 import type { CherryUIMessage, MessageRuntimeTiming } from '@shared/data/types/message'
 import type { ServiceTierSelection, UniqueModelId } from '@shared/data/types/model'
 import type { ReasoningEffortOption } from '@shared/types/aiSdk'

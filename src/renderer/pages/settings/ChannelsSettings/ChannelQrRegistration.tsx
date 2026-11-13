@@ -1,10 +1,11 @@
+import { QRCodeSVG } from 'qrcode.react'
+import { useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
+
 import { Button, Dialog, DialogContent, DialogHeader, DialogTitle } from '@cherrystudio/ui'
 import { useChannels } from '@renderer/hooks/agent/useChannels'
 import { ipcApi } from '@renderer/ipc'
 import type { AgentChannelType } from '@shared/data/api/schemas/agentChannels'
-import { QRCodeSVG } from 'qrcode.react'
-import { useEffect, useRef, useState } from 'react'
-import { useTranslation } from 'react-i18next'
 
 import type { ChannelData } from './channelTypes'
 

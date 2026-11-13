@@ -1,9 +1,10 @@
-import { entityTagTable, tagTable } from '@data/db/schemas/tagging'
-import { TagService, tagService } from '@data/services/TagService'
-import { DataApiError, ErrorCode } from '@shared/data/api/errors'
 import { setupTestDatabase } from '@test-helpers/db'
 import { eq } from 'drizzle-orm'
 import { describe, expect, it } from 'vitest'
+
+import { entityTagTable, tagTable } from '@data/db/schemas/tagging'
+import { tagService } from '@data/services/TagService'
+import { DataApiError, ErrorCode } from '@shared/data/api/errors'
 
 const TAG_1 = '11111111-1111-4111-8111-111111111111'
 const TAG_2 = '22222222-2222-4222-8222-222222222222'
@@ -22,10 +23,6 @@ describe('TagService', () => {
       { id: TAG_3, name: 'coding', color: '#00ff00', createdAt: 3, updatedAt: 3 }
     ])
   }
-
-  it('should export a module-level singleton', () => {
-    expect(tagService).toBeInstanceOf(TagService)
-  })
 
   describe('list', () => {
     it('should return all tags ordered by name', async () => {

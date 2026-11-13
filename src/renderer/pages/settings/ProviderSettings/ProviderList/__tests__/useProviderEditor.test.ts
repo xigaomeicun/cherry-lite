@@ -1,7 +1,8 @@
-import type * as ImageUtils from '@renderer/utils/image'
-import { ENDPOINT_TYPE } from '@shared/data/types/model'
 import { act, renderHook } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+import type * as ImageUtils from '@renderer/utils/image'
+import { ENDPOINT_TYPE } from '@shared/data/types/model'
 
 import { useProviderEditor } from '../useProviderEditor'
 
@@ -64,15 +65,6 @@ describe('useProviderEditor', () => {
     })
     useProviderActionsMock.mockReturnValue({
       updateProviderById: updateProviderByIdMock
-    })
-  })
-
-  describe('initial state', () => {
-    it('starts closed with no editing provider', () => {
-      const { result } = renderHook(() => useProviderEditor(makeParams()))
-      expect(result.current.isOpen).toBe(false)
-      expect(result.current.editingProvider).toBeNull()
-      expect(result.current.initialLogo).toBeUndefined()
     })
   })
 

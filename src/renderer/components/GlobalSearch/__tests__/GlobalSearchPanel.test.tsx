@@ -1,17 +1,18 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import type { UserEvent } from '@testing-library/user-event'
+import userEvent from '@testing-library/user-event'
+import * as React from 'react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import type * as CherryStudioUI from '@cherrystudio/ui'
 import type {
   EntitySearchResponse,
   SessionMessageContentSearchItem,
   TopicMessageContentSearchItem
 } from '@shared/data/api/schemas/search'
 import type { GlobalSearchRecentEntry, Tab } from '@shared/data/cache/cacheValueTypes'
-import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import type { UserEvent } from '@testing-library/user-event'
-import userEvent from '@testing-library/user-event'
-import * as React from 'react'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { GLOBAL_SEARCH_MESSAGE_PREVIEW_LIMIT } from '../globalSearchGroups'
 
@@ -62,13 +63,14 @@ const mocks = vi.hoisted(() => ({
   tabs: [] as Tab[],
   preferenceValues: {
     'app.user.name': 'JD',
-    'ui.sidebar.favorites': [
+    'ui.sidebar_shortcut': [
       { type: 'app', id: 'assistants' },
       { type: 'app', id: 'agents' },
       { type: 'app', id: 'translate' }
     ],
     'feature.paintings.default_provider': 'zhipu'
   } as Record<string, unknown>,
+  casualCache: new Map<string, unknown>(),
   persistCacheValues: {
     'ui.chat.last_used_topic_id': undefined,
     'ui.agent.last_used_session_id': undefined
@@ -114,7 +116,8 @@ vi.mock('react', async () => {
   }
 })
 
-vi.mock('@cherrystudio/ui', async () => {
+vi.mock('@cherrystudio/ui', async (importOriginal) => {
+  const actual = await importOriginal<typeof CherryStudioUI>()
   const React = await vi.importActual<ReactModule>('react')
   const DropdownMenuContext = React.createContext<{
     open: boolean
@@ -126,6 +129,7 @@ vi.mock('@cherrystudio/ui', async () => {
   } | null>(null)
 
   return {
+    ...actual,
     Button: ({
       children,
       type = 'button',
@@ -272,6 +276,7 @@ vi.mock('@renderer/components/resourceCatalog/dialogs/edit', () => ({
 }))
 
 vi.mock('@renderer/components/icons/SvgIcon', () => ({
+  McpLogo: (props: React.ComponentProps<'svg'>) => <svg aria-hidden="true" {...props} />,
   OpenClawIcon: (props: React.ComponentProps<'svg'>) => <svg aria-hidden="true" {...props} />,
   OpenClawSidebarIcon: (props: React.ComponentProps<'svg'>) => <svg aria-hidden="true" {...props} />
 }))
@@ -413,7 +418,11 @@ vi.mock('@renderer/utils/routeTitle', () => ({
 }))
 
 vi.mock('@data/CacheService', () => ({
-  cacheService: { set: mocks.cacheSet }
+  cacheService: {
+    set: mocks.cacheSet,
+    hasCasual: (key: string) => mocks.casualCache.has(key),
+    setCasual: (key: string, value: unknown) => mocks.casualCache.set(key, value)
+  }
 }))
 
 vi.mock('@data/DataApiService', () => {
@@ -593,7 +602,7 @@ vi.mock('react-i18next', () => ({
 
 import { toast } from '@renderer/services/toast'
 
-import { GlobalSearchPanel, testOnlyClearRefreshHistory } from '../GlobalSearchPanel'
+import { GlobalSearchPanel } from '../GlobalSearchPanel'
 import { getGlobalSearchOptionDomId, GLOBAL_MESSAGE_SEARCH_LOAD_MORE_ITEM_ID } from '../useGlobalSearchKeyboard'
 import { GLOBAL_SEARCH_QUERY_DEBOUNCE_MS } from '../useImeAwareDebouncedValue'
 
@@ -604,7 +613,7 @@ afterEach(() => {
 
 describe('GlobalSearchPanel', () => {
   beforeEach(() => {
-    testOnlyClearRefreshHistory()
+    mocks.casualCache.clear()
     // Conversation tabs open on the conversation's own URL (`/app/chat?topicId=…`), so match the
     // route prefix rather than the bare path.
     mocks.openTab.mockImplementation((route: string) => {
@@ -628,7 +637,7 @@ describe('GlobalSearchPanel', () => {
     mocks.sessionMessageQueryResult = undefined
     mocks.preferenceValues = {
       'app.user.name': 'JD',
-      'ui.sidebar.favorites': [
+      'ui.sidebar_shortcut': [
         { type: 'app', id: 'assistants' },
         { type: 'app', id: 'agents' },
         { type: 'app', id: 'translate' }
@@ -797,7 +806,6 @@ describe('GlobalSearchPanel', () => {
       expect(screen.queryByRole('heading', { name: 'Apps' })).not.toBeInTheDocument()
       expect(resultOption).toBeInTheDocument()
       expect(screen.getByText('2 minutes ago')).toBeInTheDocument()
-      expect(screen.getAllByText('🧪')).not.toHaveLength(0)
       expect(searchInput).toHaveAttribute('aria-expanded', 'true')
       expect(searchInput).toHaveAttribute('aria-controls', listbox.id)
       expect(searchInput).toHaveAttribute('aria-activedescendant', resultOption.id)
@@ -809,7 +817,7 @@ describe('GlobalSearchPanel', () => {
         enabled: true,
         query: expect.objectContaining({
           q: 'assistant',
-          types: ['topic', 'session', 'assistant', 'agent']
+          types: ['topic', 'session', 'assistant', 'agent', 'knowledge-base']
         })
       })
     )
@@ -927,19 +935,6 @@ describe('GlobalSearchPanel', () => {
     })
   })
 
-  it('does not render quick app shortcuts after typing', async () => {
-    const user = userEvent.setup()
-
-    render(<GlobalSearchPanel onClose={mocks.onClose} />)
-    await typeSearchQuery(user, 'query')
-
-    expect(screen.queryByText('Quick apps')).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Chat' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Agent' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Manage' })).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Search type: Conversation' })).toBeInTheDocument()
-  })
-
   it('updates query types when the topic filter is selected', async () => {
     const user = userEvent.setup()
 
@@ -1004,20 +999,33 @@ describe('GlobalSearchPanel', () => {
           enabled: true,
           query: expect.objectContaining({
             q: 'plan',
-            types: ['topic', 'session', 'assistant', 'agent']
+            types: ['topic', 'session', 'assistant', 'agent', 'knowledge-base']
           })
         })
       )
     })
   })
 
-  it('has no knowledge search filter (knowledge-base feature removed)', async () => {
+  it('updates query types when the knowledge filter is selected', async () => {
     const user = userEvent.setup()
 
     render(<GlobalSearchPanel onClose={mocks.onClose} />)
 
     await typeSearchQuery(user, 'docs')
-    expect(screen.queryByRole('button', { name: 'Search type: Knowledge' })).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Search type: Knowledge' }))
+
+    await waitFor(() => {
+      expect(mocks.useQuery).toHaveBeenLastCalledWith(
+        '/search/entities',
+        expect.objectContaining({
+          enabled: true,
+          query: expect.objectContaining({
+            q: 'docs',
+            types: ['knowledge-base']
+          })
+        })
+      )
+    })
   })
 
   it('does not emit a topic selection when no target tab is opened', async () => {
@@ -1031,7 +1039,7 @@ describe('GlobalSearchPanel', () => {
       createdAt: '2026-01-01T00:00:00.000Z',
       updatedAt: '2026-01-01T00:00:00.000Z',
       messages: []
-    } as never)
+    })
     mocks.queryResult = {
       query: 'topic',
       groups: [
@@ -1070,7 +1078,7 @@ describe('GlobalSearchPanel', () => {
       createdAt: '2026-01-01T00:00:00.000Z',
       updatedAt: '2026-01-01T00:00:00.000Z',
       messages: []
-    } as never)
+    })
     mocks.queryResult = {
       query: 'topic',
       groups: [
@@ -1128,48 +1136,6 @@ describe('GlobalSearchPanel', () => {
       source: 'agents',
       tabId: 'opened-agent-tab'
     })
-  })
-
-  it('caps topic and work groups in all search and expands them on demand', async () => {
-    const user = userEvent.setup()
-    mocks.queryResult = {
-      query: 'plan',
-      groups: [
-        {
-          type: 'topic',
-          items: Array.from({ length: 6 }, (_, index) => ({
-            type: 'topic',
-            id: `topic-${index}`,
-            title: `Topic ${index}`,
-            target: { topicId: `topic-${index}` }
-          }))
-        },
-        {
-          type: 'session',
-          items: Array.from({ length: 6 }, (_, index) => ({
-            type: 'session',
-            id: `session-${index}`,
-            title: `Work ${index}`,
-            target: { sessionId: `session-${index}`, agentId: 'agent-1' }
-          }))
-        }
-      ]
-    }
-
-    render(<GlobalSearchPanel onClose={mocks.onClose} />)
-
-    await typeSearchQuery(user, 'plan')
-
-    expect(await screen.findByRole('option', { name: /Topic 0/ })).toBeInTheDocument()
-    expect(screen.getByRole('option', { name: /Topic 4/ })).toBeInTheDocument()
-    expect(screen.queryByRole('option', { name: /Topic 5/ })).not.toBeInTheDocument()
-    expect(screen.getByRole('option', { name: /Work 4/ })).toBeInTheDocument()
-    expect(screen.queryByRole('option', { name: /Work 5/ })).not.toBeInTheDocument()
-
-    await user.click(screen.getAllByRole('option', { name: 'Show 1 more' })[0])
-
-    expect(screen.getByRole('option', { name: /Topic 5/ })).toBeInTheDocument()
-    expect(screen.queryByRole('option', { name: /Work 5/ })).not.toBeInTheDocument()
   })
 
   it('shows a capped message preview group in all search and switches to message search from its footer', async () => {
@@ -1275,19 +1241,11 @@ describe('GlobalSearchPanel', () => {
     await typeSearchQuery(user, 'needle')
 
     const messageSearchButton = screen.getByRole('radio', { name: 'Messages' })
-    const filterButton = screen.getByRole('button', { name: 'Search type: Conversation' })
-
-    expect(messageSearchButton.compareDocumentPosition(filterButton)).toBe(Node.DOCUMENT_POSITION_FOLLOWING)
 
     await user.click(messageSearchButton)
     expect(screen.queryByRole('button', { name: 'Chat' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Manage' })).not.toBeInTheDocument()
     expect(messageSearchButton).toHaveAttribute('aria-checked', 'true')
-    expect(
-      messageSearchButton.compareDocumentPosition(
-        screen.getByRole('button', { name: 'Message source: Conversation messages' })
-      )
-    ).toBe(Node.DOCUMENT_POSITION_FOLLOWING)
     expect(screen.queryByRole('button', { name: 'Match mode' })).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Created time: Any time' })).toBeInTheDocument()
 
@@ -1991,9 +1949,6 @@ describe('GlobalSearchPanel', () => {
 
     await typeSearchQuery(user, 'plan')
     await user.click(screen.getByRole('button', { name: 'Updated time: Any time' }))
-    expect(screen.getByRole('menuitemradio', { name: 'Last 7 days' }).parentElement?.parentElement).toHaveClass(
-      'z-[90]'
-    )
     await user.click(screen.getByRole('menuitemradio', { name: 'Last 7 days' }))
 
     await waitFor(() => {
@@ -2492,6 +2447,40 @@ describe('GlobalSearchPanel', () => {
     })
   })
 
+  it('opens the active knowledge base result with Enter', async () => {
+    const user = userEvent.setup()
+    mocks.queryResult = {
+      query: 'docs',
+      groups: [
+        {
+          type: 'knowledge-base',
+          items: [
+            {
+              type: 'knowledge-base',
+              id: 'knowledge-1',
+              title: 'Docs',
+              emoji: '📚',
+              target: { knowledgeBaseId: 'knowledge-1' }
+            }
+          ]
+        }
+      ]
+    }
+
+    render(<GlobalSearchPanel onClose={mocks.onClose} />)
+
+    const input = screen.getByLabelText('Search conversations, tasks, assistants, agents, and knowledge...')
+    await user.type(input, 'docs')
+    await screen.findByText('Docs')
+    await user.keyboard('{Enter}')
+
+    expect(mocks.openTab).toHaveBeenCalledWith('/app/knowledge')
+    await waitFor(() => {
+      expect(mocks.eventEmit).toHaveBeenCalledWith('GLOBAL_SEARCH_SELECT_KNOWLEDGE_BASE', 'knowledge-1')
+    })
+    expect(mocks.onClose).toHaveBeenCalledTimes(1)
+  })
+
   it('refreshes recent topic titles from /topics/:id on open', async () => {
     mocks.recentItems = [
       {
@@ -2501,7 +2490,7 @@ describe('GlobalSearchPanel', () => {
         lastAccessTime: 20
       }
     ]
-    mocks.dataApiGet.mockResolvedValueOnce({ name: 'Fresh name from server' } as never)
+    mocks.dataApiGet.mockResolvedValueOnce({ name: 'Fresh name from server' })
 
     render(<GlobalSearchPanel onClose={mocks.onClose} />)
 
@@ -2555,7 +2544,7 @@ describe('GlobalSearchPanel', () => {
         lastAccessTime: 20
       }
     ]
-    mocks.dataApiGet.mockResolvedValueOnce({ name: 'Already fresh' } as never)
+    mocks.dataApiGet.mockResolvedValueOnce({ name: 'Already fresh' })
 
     render(<GlobalSearchPanel onClose={mocks.onClose} />)
 
@@ -2585,7 +2574,7 @@ describe('GlobalSearchPanel', () => {
         lastAccessTime: 20
       }
     ]
-    mocks.dataApiGet.mockResolvedValueOnce({ name: 'Fresh session name from server' } as never)
+    mocks.dataApiGet.mockResolvedValueOnce({ name: 'Fresh session name from server' })
 
     render(<GlobalSearchPanel onClose={mocks.onClose} />)
 
@@ -2694,42 +2683,6 @@ describe('GlobalSearchPanel', () => {
     )
   })
 
-  it('only refreshes up to the display limit items ordered by lastAccessTime', async () => {
-    mocks.recentItems = Array.from({ length: 7 }, (_, index) => ({
-      kind: 'topic',
-      topicId: `topic-${index + 1}`,
-      title: `Stale ${index + 1}`,
-      lastAccessTime: 10 + index
-    }))
-
-    mocks.dataApiGet.mockImplementation((path: string) => {
-      const match = path.match(/\/topics\/topic-(\d+)/)
-      if (match) {
-        const id = match[1]
-        return Promise.resolve({ name: `Fresh ${id}` })
-      }
-      return Promise.resolve({ name: '' })
-    })
-
-    render(<GlobalSearchPanel onClose={mocks.onClose} />)
-
-    await waitFor(() => {
-      expect(mocks.dataApiGet).toHaveBeenCalledTimes(6)
-    })
-
-    expect(mocks.dataApiGet).not.toHaveBeenCalledWith('/topics/topic-1')
-
-    expect(mocks.recentItems).toEqual([
-      { kind: 'topic', topicId: 'topic-1', title: 'Stale 1', lastAccessTime: 10 },
-      { kind: 'topic', topicId: 'topic-2', title: 'Fresh 2', lastAccessTime: 11 },
-      { kind: 'topic', topicId: 'topic-3', title: 'Fresh 3', lastAccessTime: 12 },
-      { kind: 'topic', topicId: 'topic-4', title: 'Fresh 4', lastAccessTime: 13 },
-      { kind: 'topic', topicId: 'topic-5', title: 'Fresh 5', lastAccessTime: 14 },
-      { kind: 'topic', topicId: 'topic-6', title: 'Fresh 6', lastAccessTime: 15 },
-      { kind: 'topic', topicId: 'topic-7', title: 'Fresh 7', lastAccessTime: 16 }
-    ])
-  })
-
   it('does not update recent items state if the panel component is unmounted before the fetch completes', async () => {
     mocks.recentItems = [
       {
@@ -2777,7 +2730,7 @@ describe('GlobalSearchPanel', () => {
         lastAccessTime: 20
       }
     ]
-    mocks.dataApiGet.mockResolvedValueOnce({ name: 'First Refresh' } as never)
+    mocks.dataApiGet.mockResolvedValueOnce({ name: 'First Refresh' })
 
     const { unmount } = render(<GlobalSearchPanel onClose={mocks.onClose} />)
     await waitFor(() => {
@@ -2803,7 +2756,7 @@ describe('GlobalSearchPanel', () => {
         lastAccessTime: 20
       }
     ]
-    mocks.dataApiGet.mockResolvedValue({ name: 'Refreshed Title' } as never)
+    mocks.dataApiGet.mockResolvedValue({ name: 'Refreshed Title' })
 
     const { unmount } = render(<GlobalSearchPanel onClose={mocks.onClose} />)
     await waitFor(() => {

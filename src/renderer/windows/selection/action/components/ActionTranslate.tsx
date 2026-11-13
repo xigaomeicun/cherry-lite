@@ -1,21 +1,24 @@
+import { ArrowRight, ChevronDown, CircleHelp, Globe2, Loader2, Settings2 } from 'lucide-react'
+import type { FC } from 'react'
+import React, { Suspense, useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
+
 import { Button, Popover, PopoverContent, PopoverTrigger, Tooltip } from '@cherrystudio/ui'
 import { usePreference } from '@data/hooks/usePreference'
 import { preferenceService } from '@data/PreferenceService'
 import { loggerService } from '@logger'
 import { toMessageListItem } from '@renderer/components/chat/messages/utils/messageListItem'
+import { CodeBlockWrapLinesContext } from '@renderer/components/CodeBlockView/wrapLinesContext'
 import CopyButton from '@renderer/components/CopyButton'
 import LanguageSelect from '@renderer/components/LanguageSelect'
 import { detectLanguageOrUnknown, useDetectLang, useLanguages, useTranslate } from '@renderer/hooks/translate'
+import { useDefaultModel } from '@renderer/hooks/useModel'
 import { cn } from '@renderer/utils/style'
 import { pickBidirectionalTarget, UNKNOWN_LANG_CODE } from '@renderer/utils/translate'
 import type { SelectionActionItem, TranslateLangCode } from '@shared/data/preference/preferenceTypes'
 import { BUILTIN_LANGUAGE } from '@shared/data/presets/translateLanguages'
-import type { CherryMessagePart, CherryUIMessage } from '@shared/data/types/message'
+import type { CherryMessagePart } from '@shared/data/types/message'
 import type { TranslateLanguage } from '@shared/data/types/translate'
-import { ArrowRight, ChevronDown, CircleHelp, Globe2, Loader2, Settings2 } from 'lucide-react'
-import type { FC } from 'react'
-import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useTranslation } from 'react-i18next'
 
 import { getSelectionActionErrorMessage } from '../errorMessage'
 import { ResultReadAloudButton } from './ResultReadAloudButton'
@@ -42,9 +45,12 @@ const ActionTranslate: FC<Props> = ({ action, sourceEntityId, scrollToBottom }) 
   const selectedText = action.selectedText
 
   const [language] = usePreference('app.language')
+  const [autoDetectionMethod] = usePreference('feature.translate.auto_detection_method')
   const { languages, getLanguage } = useLanguages()
   const isLanguagesLoaded = languages !== undefined
   const detectLanguage = useDetectLang()
+  const { quickModel } = useDefaultModel()
+  const detectionModelId = autoDetectionMethod === 'franc' ? undefined : quickModel?.id
   // Read once, not subscribed: the pair is session-local, so saves from other windows must not retarget it.
   const [savedLangCodes, setSavedLangCodes] = useState<{
     preferred: TranslateLangCode
@@ -161,7 +167,7 @@ const ActionTranslate: FC<Props> = ({ action, sourceEntityId, scrollToBottom }) 
   })
 
   const translationParts = useMemo<CherryMessagePart[]>(
-    () => (content ? [{ type: 'text', text: content } as CherryMessagePart] : []),
+    () => (content ? [{ type: 'text', text: content }] : []),
     [content]
   )
 
@@ -179,7 +185,7 @@ const ActionTranslate: FC<Props> = ({ action, sourceEntityId, scrollToBottom }) 
         metadata: {
           status: isTranslating ? 'pending' : 'success'
         }
-      } as CherryUIMessage,
+      },
       { topicId: TRANSLATION_TOPIC_ID }
     )
   }, [isTranslating, translationParts])
@@ -239,9 +245,12 @@ const ActionTranslate: FC<Props> = ({ action, sourceEntityId, scrollToBottom }) 
     })
   }, [])
 
-  useEffect(() => {
+  const translateSelection = useEffectEvent(() => {
     void fetchResult()
-  }, [fetchResult])
+  })
+  useEffect(() => {
+    translateSelection()
+  }, [selectedText, initialized, targetLanguage.langCode, alterLanguage.langCode, detectionModelId])
 
   const handleChangeLanguage = useCallback(
     (newTargetLanguage: TranslateLanguage, newAlterLanguage: TranslateLanguage) => {
@@ -331,7 +340,7 @@ const ActionTranslate: FC<Props> = ({ action, sourceEntityId, scrollToBottom }) 
 
   return (
     <>
-      <div className="flex w-full flex-1 flex-col items-center">
+      <div className="flex w-full min-w-0 flex-1 flex-col items-center">
         <div className="flex w-full flex-wrap items-center gap-x-1.5 gap-y-1">
           <div className="flex min-w-0 shrink items-center gap-1.5">
             {/* Detected language display (read-only) */}
@@ -417,15 +426,17 @@ const ActionTranslate: FC<Props> = ({ action, sourceEntityId, scrollToBottom }) 
             </div>
           </div>
         )}
-        <div className="mt-4 w-full whitespace-pre-wrap break-words">
+        <div className="mt-4 w-full min-w-0 max-w-full whitespace-pre-wrap break-words">
           {(isDetecting || isPreparing) && <Loader2 className="size-4 animate-spin text-muted-foreground" />}
           {content && (
             <Suspense fallback={<Loader2 className="size-4 animate-spin text-muted-foreground" />}>
-              <ActionResultContent
-                key={latestAssistantMessage.id}
-                message={latestAssistantMessage}
-                partsByMessageId={partsMap}
-              />
+              <CodeBlockWrapLinesContext value={true}>
+                <ActionResultContent
+                  key={latestAssistantMessage.id}
+                  message={latestAssistantMessage}
+                  partsByMessageId={partsMap}
+                />
+              </CodeBlockWrapLinesContext>
             </Suspense>
           )}
         </div>

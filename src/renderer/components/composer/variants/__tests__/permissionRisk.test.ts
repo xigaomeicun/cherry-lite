@@ -1,5 +1,6 @@
-import { AgentToolsType } from '@renderer/components/chat/messages/tools/shared/agentToolTypes'
 import { describe, expect, it } from 'vitest'
+
+import { AgentToolsType } from '@renderer/components/chat/messages/tools/shared/agentToolTypes'
 
 import { getPermissionRiskEffects } from '../permissionRisk'
 

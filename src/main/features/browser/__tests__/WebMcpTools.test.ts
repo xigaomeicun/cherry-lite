@@ -1,6 +1,7 @@
-import { Signal } from '@main/core/lifecycle'
 import type { Protocol } from 'devtools-protocol'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+
+import { Signal } from '@main/core/lifecycle'
 
 import { handleCallWebTool, handleListWebTools } from '../mcp/tools/webMcp'
 import { GuestSession } from '../session/GuestSession'
@@ -77,6 +78,7 @@ describe('native website tools', () => {
       tabId: 'tab',
       tools: [{ name: 'lookup', inputSchema: tool.inputSchema }]
     })
+    expect(f.mock.debugger.sendCommand.mock.calls.map(([method]) => method)).toContain('Runtime.enable')
     f.setExecute((id) =>
       f.emit('WebMCP.toolResponded', { invocationId: id, status: 'Completed', output: { price: 42 } })
     )

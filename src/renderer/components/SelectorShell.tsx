@@ -1,14 +1,3 @@
-import {
-  Button,
-  Input,
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-  Switch,
-  Tooltip,
-  usePortalContainer
-} from '@cherrystudio/ui'
-import { cn } from '@cherrystudio/ui/lib/utils'
 import { Search, X } from 'lucide-react'
 import {
   type ComponentPropsWithoutRef,
@@ -24,6 +13,19 @@ import {
 } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import {
+  Button,
+  Input,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+  Switch,
+  Tooltip,
+  usePortalContainer
+} from '@cherrystudio/ui'
+import { cn } from '@cherrystudio/ui/lib/utils'
+import { useExitPresence } from '@renderer/hooks/useExitPresence'
+
 type PopoverContentProps = ComponentPropsWithoutRef<typeof PopoverContent>
 /**
  * Use `lazy-keep` only for high-frequency popovers where remounting list state is noticeably costly.
@@ -34,6 +36,7 @@ const DEFAULT_COLLISION_PADDING = 12
 export const DEFAULT_SELECTOR_CONTENT_HEIGHT = 344
 const SELECTOR_CONTENT_POSITION_CLASS = 'animation-selector-shell-content'
 const SELECTOR_PANEL_ANIMATION_CLASS = 'animation-selector-shell-panel'
+const SELECTOR_EXIT_DURATION_MS = 120
 
 export type SelectorShellLayout = {
   availableListHeight?: number
@@ -196,6 +199,7 @@ export function SelectorShell({
   'data-testid': dataTestId
 }: SelectorShellProps) {
   const { t } = useTranslation()
+  const { isPresent } = useExitPresence(open ? true : null, SELECTOR_EXIT_DURATION_MS)
   const triggerNode = isValidElement(trigger) ? trigger : <span>{trigger}</span>
   const {
     forceMount,
@@ -221,6 +225,7 @@ export function SelectorShell({
   const [localPortalContainer] = useState(createLocalPortalContainer)
   const [availableListHeight, setAvailableListHeight] = useState<number | undefined>(undefined)
   const [hasOpened, setHasOpened] = useState(open)
+  const openedAtRef = useRef(0)
   const pagePortalContainer = usePortalContainer()
   const hasSearch = Boolean(search)
   const hasFilterContent = Boolean(filterContent)
@@ -416,6 +421,10 @@ export function SelectorShell({
     }
   }, [])
 
+  useLayoutEffect(() => {
+    if (open) openedAtRef.current = performance.now()
+  }, [open])
+
   const shouldRenderContent = mountStrategy === 'lazy-keep' ? open || hasOpened : true
   const shouldForceMount = mountStrategy === 'lazy-keep' || forceMount ? true : undefined
   const resolvedPortalContainer = portalContainer ?? pagePortalContainer ?? localPortalContainer ?? undefined
@@ -438,7 +447,8 @@ export function SelectorShell({
             collisionPadding={collisionPadding}
             portalContainer={resolvedPortalContainer}
             forceMount={shouldForceMount}
-            hidden={mountStrategy === 'lazy-keep' && !open ? true : hidden}
+            hidden={mountStrategy === 'lazy-keep' && !isPresent ? true : hidden}
+            inert={mountStrategy === 'lazy-keep' && !open ? true : undefined}
             {...restContentProps}
             style={{
               width: toCssSize(width),
@@ -448,8 +458,13 @@ export function SelectorShell({
               ...style
             }}
             onInteractOutside={(event) => {
-              const originalTarget = (event.detail?.originalEvent?.target ?? event.target) as Element | null
+              const originalEvent = event.detail?.originalEvent
+              const originalTarget = (originalEvent?.target ?? event.target) as Element | null
               if (originalTarget?.closest?.('[data-entity-context-menu-root]')) {
+                event.preventDefault()
+              }
+              // Kept-mounted content defers dismissal to the click, so a press that opened it from outside must not close it.
+              if (originalEvent && originalEvent.timeStamp < openedAtRef.current) {
                 event.preventDefault()
               }
               onInteractOutside?.(event)
@@ -464,6 +479,7 @@ export function SelectorShell({
             onKeyDown={onKeyDown}
             className={cn(
               'max-h-[var(--radix-popover-content-available-height)] w-90 overflow-visible rounded-none border-0 bg-transparent p-0 shadow-none',
+              'motion-reduce:data-[state=closed]:hidden',
               SELECTOR_CONTENT_POSITION_CLASS,
               contentClassName
             )}

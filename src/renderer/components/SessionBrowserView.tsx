@@ -1,18 +1,19 @@
-import { BrowserChrome } from '@renderer/components/BrowserChrome'
-import { BrowserOverlays } from '@renderer/components/BrowserOverlays'
-import type { WebviewAnnotationSavedPayload } from '@renderer/components/WebviewAnnotationControls'
-import { WebviewImportBanner } from '@renderer/components/WebviewImportBanner'
-import {
-  type AgentBrowserRuntimeService,
-  agentBrowserRuntimeService
-} from '@renderer/services/AgentBrowserRuntimeService'
-import type { WebviewAnnotationTarget } from '@shared/types/webviewAnnotation'
-import { WebviewSecurityProfile } from '@shared/utils/webviewSecurity'
 import type { WebviewTag } from 'electron'
 import type { ReactNode } from 'react'
 import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
+
+import { BrowserChrome } from '@renderer/components/BrowserChrome'
+import { BrowserOverlays } from '@renderer/components/BrowserOverlays'
+import type { WebviewAnnotationSavedPayload } from '@renderer/components/WebviewAnnotationControls'
+import { WebviewImportBanner } from '@renderer/components/WebviewImportBanner'
+import {
+  agentBrowserRuntimeService,
+  type AgentBrowserRuntimeService
+} from '@renderer/services/AgentBrowserRuntimeService'
+import type { WebviewAnnotationTarget } from '@shared/types/webviewAnnotation'
+import { WebviewSecurityProfile } from '@shared/utils/webviewSecurity'
 
 export interface SessionBrowserViewProps {
   runtime?: AgentBrowserRuntimeService

@@ -1,6 +1,7 @@
-import type { screenshotOptionsSchema } from '@main/ai/mcp/browserToolDefinitions'
 import type { Protocol } from 'devtools-protocol'
 import * as z from 'zod'
+
+import type { screenshotOptionsSchema } from '@main/ai/mcp/browserToolDefinitions'
 
 import type { CommandOptions } from '../browserUse'
 import { BrowserSessionError } from '../session/BrowserSessionError'

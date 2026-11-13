@@ -1,3 +1,6 @@
+import { sql } from 'drizzle-orm'
+import { check, index, integer, real, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core'
+
 import {
   type AiUsageCostBreakdown,
   type AiUsagePricingSnapshot,
@@ -17,8 +20,6 @@ import {
   AiUsageRecordSourceTypeSchema
 } from '@shared/data/types/aiUsageRecord'
 import { CURRENCY, type Currency, objectValues } from '@shared/data/types/model'
-import { sql } from 'drizzle-orm'
-import { check, index, integer, real, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core'
 
 import { uuidPrimaryKeyOrdered } from './_columnHelpers'
 
@@ -33,12 +34,12 @@ const recordKindCheckValues = sqlEnumValues(AiUsageRecordKindSchema.options)
 const sourceTypeCheckValues = sqlEnumValues(AiUsageRecordSourceTypeSchema.options)
 
 /**
- * Immutable best-effort fact for one observable provider invocation.
+ * Best-effort fact with immutable amounts for one observable provider invocation.
  *
  * Historical v1 assistant-message aggregates share this table with
  * `recordKind = 'legacy-aggregate'`. All identities are request-time snapshots
  * and deliberately have no foreign keys so later rename/deletion cannot change
- * attribution.
+ * attribution. Native response correlation may fill its initially unknown message owner.
  */
 export const aiUsageRecordTable = sqliteTable(
   'ai_usage_record',

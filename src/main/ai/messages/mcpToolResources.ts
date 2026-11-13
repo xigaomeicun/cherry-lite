@@ -1,6 +1,7 @@
-import { EmbeddedResourceSchema } from '@modelcontextprotocol/sdk/types.js'
-import type { McpResource } from '@shared/types/mcp'
+import { EmbeddedResourceSchema } from '@modelcontextprotocol/core'
 import { isToolUIPart, type UIMessage } from 'ai'
+
+import type { McpResource } from '@shared/types/mcp'
 
 export function mcpToolResourceKey(serverId: string, uri: string): string {
   return JSON.stringify([serverId, uri])

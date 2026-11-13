@@ -208,7 +208,8 @@ describe('local tool identity', () => {
           ? { type: 'json', value: { answer: 'success' } }
           : {
               type: 'error-text',
-              value: 'Tool execution denied.'
+              value:
+                "The user doesn't want to proceed with this tool use. The tool use was rejected (it did not run). Wait for the user's instructions instead of retrying it."
             }
       })
     ])

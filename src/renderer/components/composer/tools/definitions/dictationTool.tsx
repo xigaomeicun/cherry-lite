@@ -1,3 +1,6 @@
+import { Copy, LoaderCircle, Mic, RotateCcw, Settings, Square, Trash2, Undo2, X } from 'lucide-react'
+import { useEffect, useMemo, useSyncExternalStore } from 'react'
+
 import { getQuickPanelSearchAliases } from '@renderer/components/composer/quickPanel'
 import type {
   ComposerToolLauncher,
@@ -7,9 +10,7 @@ import { DICTATION_TOOLBAR_MANIFEST } from '@renderer/components/composer/tools/
 import { defineTool, type ToolRenderContext, TopicType } from '@renderer/components/composer/tools/types'
 import type { QuickPanelInputAdapter } from '@renderer/components/QuickPanel'
 import { openSettingsTab } from '@renderer/services/mainWindowNavigation'
-import { type DictationErrorCategory, type DictationPhase, dictationService } from '@renderer/services/voice'
-import { Copy, LoaderCircle, Mic, RotateCcw, Settings, Square, Trash2, Undo2, X } from 'lucide-react'
-import { useEffect, useMemo, useSyncExternalStore } from 'react'
+import { dictationService, type DictationErrorCategory, type DictationPhase } from '@renderer/services/voice'
 
 type DictationContext = ToolRenderContext<readonly [], readonly []>
 
@@ -35,7 +36,7 @@ const PHASE_TRANSLATION_KEYS: Record<Exclude<DictationPhase, 'idle'>, string> = 
 function dictationErrorKey(error?: DictationErrorCategory) {
   switch (error) {
     case 'model_required':
-      return 'settings.voice.status.unconfigured'
+      return 'settings.voice.status.model_required'
     case 'unsupported':
     case 'asset_required':
     case 'voice_unavailable':
@@ -190,9 +191,11 @@ const DictationComposerRuntime = ({ context }: { context: DictationContext }) =>
         id: 'dictation:open-settings',
         kind: 'command',
         sources: ['root-panel'],
-        label: t('settings.voice.action.open_settings'),
+        label: t(
+          error === 'model_required' ? 'settings.dependencies.localModels.title' : 'settings.voice.action.open_settings'
+        ),
         icon: <Settings />,
-        action: () => openSettingsTab('/settings/voice')
+        action: () => openSettingsTab(error === 'model_required' ? '/settings/local-models' : '/settings/voice')
       })
     }
 

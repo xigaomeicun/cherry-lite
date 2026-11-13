@@ -1,13 +1,15 @@
 import { randomUUID } from 'node:crypto'
 
+import { Mutex } from 'async-mutex'
+
 import type { Disposable } from '@main/core/lifecycle'
 import { normalizeBrowserEntryUrl } from '@shared/utils/browserUrl'
-import { Mutex } from 'async-mutex'
 
 import { settleAction } from '../actions/settle'
 import type { BrowserPointerFeedback } from '../BrowserCursor'
 import type { BrowserGuestTarget } from '../BrowserGuestRegistry'
 import type { BrowserSessionService } from '../BrowserSessionService'
+import type { CommandOptions } from '../browserUse'
 import { BrowserSessionError } from '../session/BrowserSessionError'
 import type { GuestSession } from '../session/GuestSession'
 import { sanitizeSnapshotUrl } from '../snapshot/serializeSnapshot'
@@ -17,6 +19,7 @@ export interface BrowserSessionBinding {
   assertAvailable(): void
   get(): BrowserGuestTarget | undefined
   ensureGuest(signal: AbortSignal, url?: string): Promise<BrowserGuestTarget>
+  focusInput(target: BrowserGuestTarget, options: CommandOptions): Promise<void>
   reveal(target: BrowserGuestTarget): void
   cursorMoved?(): void
   trackCursor?(hide: () => void): Disposable
@@ -98,6 +101,11 @@ export class SessionBrowserController extends BrowserPageController {
         tabId: target.tabId,
         session: this.lease.session,
         pointer: this.pointerFeedback(target, this.lease.session),
+        focusInput: async (options: CommandOptions) => {
+          this.assertAvailable()
+          await this.binding.focusInput(target, options)
+          this.assertAvailable()
+        },
         signal: AbortSignal.any([this.operationSignal, target.abort.signal])
       }
     })

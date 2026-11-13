@@ -1,5 +1,8 @@
 import path from 'node:path'
 
+import { mockMainLoggerService } from '@test-mocks/MainLoggerService'
+import { beforeEach, describe, expect, it } from 'vitest'
+
 import {
   inferReasoningControls,
   REASONING_FORMAT_PROFILES,
@@ -7,8 +10,6 @@ import {
   type ReasoningWireProfile
 } from '@cherrystudio/provider-registry'
 import { readProviderRegistry } from '@cherrystudio/provider-registry/node'
-import { mockMainLoggerService } from '@test-mocks/MainLoggerService'
-import { beforeEach, describe, expect, it } from 'vitest'
 
 import { makeModel } from '../../__tests__/fixtures'
 import { encodeReasoningInvocation, resolveReasoningInvocation } from '../reasoningSerializers'
@@ -69,18 +70,6 @@ describe('resolveReasoningInvocation budget constraints', () => {
     expect(result.budgetTokens).toBe(8191)
     expect(result.budgetTokens).toBeGreaterThanOrEqual(1024)
     expect(result.budgetTokens).toBeLessThan(8192)
-  })
-
-  it('encodes an audited provider budget target without serializer model branches', () => {
-    const profile: ReasoningWireProfile = {
-      effort: {
-        operations: [{ target: 'reasoning_budget', value: { source: 'budget' } }],
-        budget: { min: 1, missing: { type: 'omit-mode' } }
-      }
-    }
-    const invocation = resolveReasoningInvocation({ selection: 'high', model, profile })
-
-    expect(encodeReasoningInvocation(invocation)).toEqual({ reasoning_budget: 51_404 })
   })
 
   it('encodes an audited nested string toggle target', () => {
@@ -225,13 +214,6 @@ describe('OpenAI Responses reasoning summary', () => {
     }
   })
 
-  // Without `reasoning.summary` OpenAI returns no summary at all, so the provider default must
-  // travel even when the user never picks an effort tier.
-  it('emits the summary default on the Default selection, with no effort', () => {
-    const invocation = resolveReasoningInvocation({ selection: 'default', model: gpt5, profile: openaiWire })
-    expect(encodeReasoningInvocation(invocation)).toEqual({ reasoningSummary: 'auto' })
-  })
-
   it('lets an explicit assistant selection override the default', () => {
     const invocation = resolveReasoningInvocation({
       selection: 'high',
@@ -256,7 +238,9 @@ describe('OpenAI Responses reasoning summary', () => {
 })
 
 describe('resolveReasoningInvocation logging', () => {
-  beforeEach(() => mockMainLoggerService.info.mockClear())
+  beforeEach(() => {
+    mockMainLoggerService.info.mockClear()
+  })
 
   // `resolveReasoningInvocation` runs for every message. 'default' means the user asked for
   // nothing, and it reaches the omit paths on ordinary traffic: any non-reasoning model, plus

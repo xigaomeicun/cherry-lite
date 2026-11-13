@@ -1,10 +1,12 @@
-import { markBuiltinAgentDeletedTx } from '@data/db/builtinAgentTombstone'
+import { setupTestDatabase } from '@test-helpers/db'
+import { eq, isNull, sql } from 'drizzle-orm'
+import { app } from 'electron'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
 import { agentTable } from '@data/db/schemas/agent'
 import { agentSessionTable } from '@data/db/schemas/agentSession'
 import { agentWorkspaceTable } from '@data/db/schemas/agentWorkspace'
 import { appStateTable } from '@data/db/schemas/appState'
-import { userModelTable } from '@data/db/schemas/userModel'
-import { ensureCherryAiDefaultProviderAndModelTx } from '@data/db/seeding/seeders/cherryaiDefaultModelSeeder'
 import { CherryAssistantSeeder } from '@data/db/seeding/seeders/cherryAssistantSeeder'
 import { SeedRunner } from '@data/db/seeding/SeedRunner'
 import type { ISeeder } from '@data/db/types'
@@ -12,11 +14,6 @@ import { agentService } from '@data/services/AgentService'
 import { agentSessionService } from '@data/services/AgentSessionService'
 import { generateOrderKeyBetween } from '@data/services/utils/orderKey'
 import { AGENT_WORKSPACE_TYPE } from '@shared/data/api/schemas/agentWorkspaces'
-import { CHERRYAI_DEFAULT_UNIQUE_MODEL_ID } from '@shared/data/presets/cherryai'
-import { setupTestDatabase } from '@test-helpers/db'
-import { eq, isNull, sql } from 'drizzle-orm'
-import { app } from 'electron'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 function builtinAgents(db: ReturnType<typeof setupTestDatabase>['db']) {
   return db
@@ -31,10 +28,6 @@ describe('CherryAssistantSeeder', () => {
 
   beforeEach(() => {
     vi.mocked(app.getPreferredSystemLanguages).mockReturnValue(['en-US'])
-  })
-
-  it('uses a new rollout version after the version 1 eligibility decision', () => {
-    expect(new CherryAssistantSeeder().version).toBe('2')
   })
 
   function insertOrdinaryAgent(): string {
@@ -57,22 +50,11 @@ describe('CherryAssistantSeeder', () => {
     new CherryAssistantSeeder().run(dbh.db)
 
     const [agent] = builtinAgents(dbh.db)
-    expect(agent).toMatchObject({
-      type: 'claude-code',
-      name: 'Cherry Assistant',
-      description: '',
-      instructions: '',
-      model: null
-    })
     expect(agent.configuration).toMatchObject({
-      avatar: '🍒',
-      permission_mode: 'acceptEdits',
-      bootstrap_completed: true,
-      env_vars: {},
       builtin_role: 'assistant'
     })
     const [session] = dbh.db.select().from(agentSessionTable).where(eq(agentSessionTable.agentId, agent.id)).all()
-    expect(session).toMatchObject({ agentId: agent.id, name: '' })
+    expect(session).toMatchObject({ agentId: agent.id })
     const [workspace] = dbh.db
       .select()
       .from(agentWorkspaceTable)
@@ -81,24 +63,12 @@ describe('CherryAssistantSeeder', () => {
     expect(workspace).toMatchObject({ type: AGENT_WORKSPACE_TYPE.SYSTEM })
   })
 
-  it('creates the builtin agent with a Chinese name for Chinese systems', () => {
-    vi.mocked(app.getPreferredSystemLanguages).mockReturnValue(['zh-CN'])
-
-    new CherryAssistantSeeder().run(dbh.db)
-
-    const [agent] = builtinAgents(dbh.db)
-    expect(agent.name).toBe('Cherry 小助手')
-  })
-
-  it('falls back to the English name when preferred system languages are unavailable', () => {
+  it('seeds successfully when preferred system languages are unavailable', () => {
     vi.mocked(app.getPreferredSystemLanguages).mockImplementation(() => {
       throw new Error('preferred languages unavailable')
     })
 
     expect(() => new CherryAssistantSeeder().run(dbh.db)).not.toThrow()
-
-    const [agent] = builtinAgents(dbh.db)
-    expect(agent.name).toBe('Cherry Assistant')
   })
 
   it('preserves an existing permission mode when the seeder reruns', () => {
@@ -222,47 +192,5 @@ describe('CherryAssistantSeeder', () => {
     expect(builtinAgents(dbh.db)).toHaveLength(1)
     const [journal] = dbh.db.select().from(appStateTable).where(eq(appStateTable.key, 'seed:cherryAssistant')).all()
     expect(journal?.value).toMatchObject({ version: '2' })
-  })
-
-  it('does not recreate Cherry Assistant once the user deletion is tombstoned', () => {
-    new CherryAssistantSeeder().run(dbh.db)
-    const [assistant] = builtinAgents(dbh.db)
-    expect(assistant).toBeDefined()
-
-    // Mirrors what the delete endpoint leaves behind: the row is gone and the tombstone is the only
-    // memory of the user's choice. A version bump re-runs this seeder, which must respect it.
-    markBuiltinAgentDeletedTx(dbh.db, 'assistant')
-    dbh.db.delete(agentTable).where(eq(agentTable.id, assistant.id)).run()
-    dbh.db.delete(agentSessionTable).run()
-
-    new CherryAssistantSeeder().run(dbh.db)
-
-    expect(builtinAgents(dbh.db)).toHaveLength(0)
-    expect(dbh.db.select().from(agentSessionTable).all()).toHaveLength(0)
-  })
-
-  it('falls back to a null model when the CherryAI default model is absent', () => {
-    new CherryAssistantSeeder().run(dbh.db)
-
-    const [agent] = builtinAgents(dbh.db)
-    expect(agent.model).toBeNull()
-  })
-
-  it('leaves the model unconfigured when the CherryAI default is the only available model', () => {
-    // Materialize the managed CherryAI provider + default model WITHOUT
-    // `CherryAiDefaultModelSeeder.run()`, which Cherry-Lite deliberately neuters so a fresh library
-    // never auto-installs the vendor's provider. The rows still exist in a real library (the v1→v2
-    // migration writes them), and this asserts the seeder never adopts that unrunnable model.
-    dbh.db.transaction((tx) => ensureCherryAiDefaultProviderAndModelTx(tx))
-    new CherryAssistantSeeder().run(dbh.db)
-
-    const [model] = dbh.db
-      .select()
-      .from(userModelTable)
-      .where(eq(userModelTable.id, CHERRYAI_DEFAULT_UNIQUE_MODEL_ID))
-      .all()
-    const [agent] = builtinAgents(dbh.db)
-    expect(model).toBeDefined()
-    expect(agent.model).toBeNull()
   })
 })

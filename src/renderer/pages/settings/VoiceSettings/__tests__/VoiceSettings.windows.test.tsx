@@ -1,9 +1,10 @@
-import { LOCAL_VOICE_MODELS, WINDOWS_ASR_MODEL_ID, WINDOWS_TTS_MODEL_ID } from '@shared/ai/localVoice'
 import { MockUsePreferenceUtils } from '@test-mocks/renderer/usePreference'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import i18n from 'i18next'
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+
+import { LOCAL_VOICE_MODELS, WINDOWS_ASR_MODEL_ID, WINDOWS_TTS_MODEL_ID } from '@shared/ai/localVoice'
 
 vi.unmock('@cherrystudio/ui')
 

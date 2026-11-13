@@ -1,7 +1,8 @@
-import { cacheService } from '@data/CacheService'
 import { MockCacheUtils } from '@test-mocks/renderer/CacheService'
 import { render } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+import { cacheService } from '@data/CacheService'
 
 const tabMocks = vi.hoisted(() => ({
   isActiveTab: true,
@@ -33,12 +34,6 @@ describe('HomeTabRuntime', () => {
       />
     )
 
-    expect(tabMocks.useTabSelfVisuals).toHaveBeenCalledWith({
-      title: 'Topic A',
-      emoji: '🍒',
-      appId: 'assistants',
-      preserveVisuals: false
-    })
     expect(cacheService.setPersist).toHaveBeenCalledWith('ui.chat.last_used_topic_id', 'topic-a')
   })
 

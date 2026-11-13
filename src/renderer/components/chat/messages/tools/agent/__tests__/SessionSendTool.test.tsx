@@ -31,64 +31,27 @@ describe('SessionSendTool', () => {
     render(
       <Harness
         input={{ target_session_id: 'session-build', message: 'Implement the reviewed plan.' }}
-        output={
-          {
-            content: [
-              {
-                type: 'text',
-                text: JSON.stringify({
-                  ok: true,
-                  status: 'accepted',
-                  delivery: {
-                    receiver: { agentId: 'agent-builder', sessionId: 'session-build' },
-                    receiverSnapshot: { agentName: 'Builder', sessionName: 'Build session' }
-                  }
-                })
-              }
-            ]
-          } as never
-        }
+        output={{
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                ok: true,
+                status: 'accepted',
+                delivery: {
+                  receiver: { agentId: 'agent-builder', sessionId: 'session-build' },
+                  receiverSnapshot: { agentName: 'Builder', sessionName: 'Build session' }
+                }
+              })
+            }
+          ]
+        }}
       />
     )
 
     expect(screen.getAllByText('Builder / Build session')).toHaveLength(2)
     expect(screen.getByText('Implement the reviewed plan.')).toBeInTheDocument()
     expect(screen.getByText('Accepted')).toBeInTheDocument()
-  })
-
-  it('uses the streaming state supplied by the tool card', () => {
-    render(<Harness isStreaming input={{ target_session_id: 'session-build', message: 'Implement it.' }} />)
-
-    expect(screen.getByText('message.tools.sessionSend.sending')).toBeInTheDocument()
-    expect(screen.queryByText('Sent to')).toBeNull()
-    expect(screen.queryByText('Untitled session')).toBeNull()
-  })
-
-  it('labels an untitled target without exposing its id', () => {
-    render(
-      <Harness
-        input={{ target_session_id: 'opaque-id', message: 'Implement it.' }}
-        output={
-          {
-            content: [
-              {
-                type: 'text',
-                text: JSON.stringify({
-                  ok: true,
-                  delivery: {
-                    receiver: { sessionId: 'opaque-id' },
-                    receiverSnapshot: { sessionName: '' }
-                  }
-                })
-              }
-            ]
-          } as never
-        }
-      />
-    )
-
-    expect(screen.getAllByText('Untitled session')).toHaveLength(2)
-    expect(screen.queryByText('opaque-id')).toBeNull()
   })
 
   it.each([

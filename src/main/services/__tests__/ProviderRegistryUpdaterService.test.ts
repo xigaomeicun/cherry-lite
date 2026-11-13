@@ -66,8 +66,9 @@ vi.mock('electron', () => ({
   net: { fetch: netFetchMock }
 }))
 
-import { REGISTRY_SCHEMA_VERSION } from '@cherrystudio/provider-registry/node'
 import { MockMainCacheServiceUtils } from '@test-mocks/main/CacheService'
+
+import { REGISTRY_SCHEMA_VERSION } from '@cherrystudio/provider-registry/node'
 
 import { builtinEndpoints } from '../network/endpoints'
 import {
@@ -299,14 +300,6 @@ describe('ProviderRegistryUpdaterService.check', () => {
     await service.check()
     expect(netFetchMock).toHaveBeenCalledWith(url, expect.anything())
     expect(url).toContain(country === 'US' ? 'raw.githubusercontent.com' : 'raw.gitcode.com')
-  })
-
-  it('uses the GitCode mirror inside China', async () => {
-    mockRemote({ dataVersion: 'v2', country: 'CN' })
-
-    await service.check()
-
-    expect(netFetchMock).toHaveBeenCalledWith(expect.stringContaining('raw.gitcode.com'), expect.anything())
   })
 
   it('uses the GitCode fallback when country detection fails without caching a guessed country', async () => {

@@ -1,6 +1,7 @@
-import { SkillDetails } from '@renderer/pages/settings/SkillDetails/SkillDetails'
 import { createFileRoute } from '@tanstack/react-router'
 import * as z from 'zod'
+
+import { SkillDetails } from '@renderer/pages/settings/SkillDetails/SkillDetails'
 
 // Receives the originating tab scope from the list so the back navigation can
 // hand it back; absent when the detail route is opened directly.

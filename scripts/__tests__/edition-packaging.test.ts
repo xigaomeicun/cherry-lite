@@ -1,9 +1,10 @@
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
 
-import type { ProviderEdition } from '@cherrystudio/provider-registry'
 import { afterEach, describe, expect, expectTypeOf, it, vi } from 'vitest'
 import { parse } from 'yaml'
+
+import type { ProviderEdition } from '@cherrystudio/provider-registry'
 
 import createChinaEditionConfig from '../../electron-builder.cn.config.cjs'
 import { APP_EDITIONS, type AppEdition } from '../../src/shared/types/appEdition'
@@ -91,10 +92,7 @@ describe('edition packaging', () => {
       nsisGuid: '41a4ccd8-bcc0-5710-9eee-0e164da68057',
       productName: 'Cherry Studio',
       protocol: 'cherrystudio',
-      publish: {
-        provider: 'generic',
-        url: 'https://github.com/xigaomeicun/cherry-lite/releases/latest/download'
-      },
+      publish: expect.objectContaining({ provider: 'generic', url: 'https://releases.cherry-ai.com' }),
       windowsArtifactName: '${productName}-${version}-${arch}-setup.${ext}'
     })
   })
@@ -110,7 +108,11 @@ describe('edition packaging', () => {
       extraMetadata: {
         cherryEdition: CHINA_EDITION
       },
-      publish: { provider: 'generic', url: 'https://releases.cherry-ai.com', channel: 'latest-cn' }
+      publish: expect.objectContaining({
+        provider: 'generic',
+        url: 'https://releases.cherry-ai.com',
+        channel: 'latest-cn'
+      })
     })
   })
 
@@ -179,14 +181,5 @@ describe('edition packaging', () => {
       'Cherry-Studio-CN-2.1.0-mac-x64.dmg',
       'Cherry-Studio-CN-2.1.0-mac-arm64.dmg'
     ])
-  })
-
-  it('keeps sync-to-gitcode.yml as a neutralized workflow_dispatch shell', () => {
-    const raw = readFileSync(path.join(projectRoot, '.github/workflows/sync-to-gitcode.yml'), 'utf8')
-    const workflow = parse(raw) as { on?: Record<string, unknown>; jobs?: Record<string, unknown> }
-
-    expect(Object.keys(workflow.on ?? {})).toEqual(['workflow_dispatch'])
-    expect(Object.keys(workflow.jobs ?? {})).toEqual(['noop'])
-    expect(raw).toMatch(/neutralized for cherry-lite/i)
   })
 })

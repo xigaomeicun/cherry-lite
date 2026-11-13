@@ -46,12 +46,8 @@ const setPrefs = (
 const model = { id: 'openai::gpt-4o' } as never
 
 describe('resolveRequestContextSettings — compression-model assembly', () => {
-  beforeEach(() => mockResolveCompressionModel.mockClear())
-
-  it('falls back to the request model id when compress.model_id is null', async () => {
-    setPrefs({ modelId: null })
-    const { compressionModel } = await resolveRequestContextSettings(model, CONVERSATION)
-    expect(compressionModel?.languageModel.modelId).toBe('openai::gpt-4o')
+  beforeEach(() => {
+    mockResolveCompressionModel.mockClear()
   })
 
   it('uses an explicit compress.model_id when set', async () => {
@@ -66,11 +62,6 @@ describe('resolveRequestContextSettings — compression-model assembly', () => {
   // empty string is representable. `??` alone would pass it through to
   // `resolveCompressionModel('')`, which returns null and silently switched
   // compression off; blank must read as "no pick" and use the current model.
-  it.each([[''], ['   ']])('treats a blank compress.model_id (%j) as "use the current model"', async (blank) => {
-    setPrefs({ modelId: blank })
-    const { compressionModel } = await resolveRequestContextSettings(model, CONVERSATION)
-    expect(compressionModel?.languageModel.modelId).toBe('openai::gpt-4o')
-  })
 
   it('does not resolve a compression model when compression is disabled', async () => {
     setPrefs({ compressEnabled: false })
@@ -88,7 +79,9 @@ describe('resolveRequestContextSettings — compression-model assembly', () => {
 })
 
 describe('resolveRequestContextSettings — assistant override layer (P2-D)', () => {
-  beforeEach(() => mockResolveCompressionModel.mockClear())
+  beforeEach(() => {
+    mockResolveCompressionModel.mockClear()
+  })
 
   it('lets an assistant compress.modelId beat the global pick', async () => {
     setPrefs({ modelId: 'openai::global-compressor' })

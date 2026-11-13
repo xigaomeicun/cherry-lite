@@ -1,12 +1,12 @@
 import '@testing-library/jest-dom/vitest'
-
-import type { DoctorController } from '@renderer/hooks/doctor'
-import { buildDoctorViewModel } from '@renderer/utils/doctor'
-import type { DoctorCheckResult, DoctorPendingCheck, DoctorState, DoctorSubjectRef } from '@shared/types/doctor'
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type * as ReactI18next from 'react-i18next'
 import { describe, expect, it, vi } from 'vitest'
+
+import type { DoctorController } from '@renderer/hooks/doctor'
+import { buildDoctorViewModel } from '@renderer/utils/doctor'
+import type { DoctorCheckResult, DoctorPendingCheck, DoctorState, DoctorSubjectRef } from '@shared/types/doctor'
 
 vi.unmock('@cherrystudio/ui')
 
@@ -61,7 +61,8 @@ function createController(state: DoctorState) {
       downloadProgress: 0,
       available: false,
       ignore: false,
-      manualCheck: false
+      manualCheck: false,
+      lastErrorKey: null
     },
     cancel: vi.fn<DoctorController['cancel']>(),
     canChangePanel: true,
@@ -76,6 +77,7 @@ function createController(state: DoctorState) {
     openPath: vi.fn<DoctorController['openPath']>(),
     requestEvidence: vi.fn<DoctorController['requestEvidence']>(),
     run: vi.fn<DoctorController['run']>(),
+    scope: 'global',
     session: {
       activePanel: 'checks',
       descriptionDraft: '',

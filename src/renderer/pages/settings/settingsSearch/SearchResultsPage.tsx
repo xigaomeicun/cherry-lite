@@ -1,9 +1,10 @@
-import HighlightText from '@renderer/components/HighlightText'
-import { SettingsContentColumn } from '@renderer/components/SettingsPrimitives'
-import { cn } from '@renderer/utils/style'
 import { useNavigate, useSearch } from '@tanstack/react-router'
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
+
+import HighlightText from '@renderer/components/HighlightText'
+import { SettingsContentColumn } from '@renderer/components/SettingsPrimitives'
+import { cn } from '@renderer/utils/style'
 
 import { settingsSearchSections } from './aggregate'
 import { rankEntries } from './searchEngine'
@@ -65,7 +66,9 @@ const SearchResultsPage = () => {
   if (!results.length) {
     return (
       <SettingsContentColumn>
-        <p className="mt-16 text-center text-muted-foreground text-sm">{t('settings.search.noResults')}</p>
+        <p className="mt-16 text-center text-muted-foreground text-sm">
+          {t(!query.trim() ? 'settings.search.placeholder' : 'settings.search.noResults')}
+        </p>
       </SettingsContentColumn>
     )
   }

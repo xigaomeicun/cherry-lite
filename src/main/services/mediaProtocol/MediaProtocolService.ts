@@ -1,10 +1,11 @@
 import { randomUUID } from 'node:crypto'
 
+import { protocol, session } from 'electron'
+import parseRange from 'range-parser'
+
 import { loggerService } from '@logger'
 import { BaseService, Injectable, Phase, ServicePhase } from '@main/core/lifecycle'
 import { isAppRendererUrl } from '@main/core/security/validateSender'
-import { protocol, session } from 'electron'
-import parseRange from 'range-parser'
 
 import { CHERRY_MEDIA_SCHEME, MEDIA_KINDS, type MediaEntry, type MediaKind } from './types'
 

@@ -1,3 +1,6 @@
+import { type FC, useCallback, useEffect, useId, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
+
 import {
   Button,
   Dialog,
@@ -14,8 +17,6 @@ import PromptEditorField, { type PromptEditorFieldHandles } from '@renderer/comp
 import { PromptPolishActions } from '@renderer/components/resourceCatalog/dialogs/components/PromptPolishActions'
 import type { Prompt, PromptVisibility } from '@shared/data/types/prompt'
 import { PROMPT_CONTENT_MAX, PROMPT_TITLE_MAX } from '@shared/data/types/prompt'
-import { type FC, useCallback, useEffect, useId, useRef, useState } from 'react'
-import { useTranslation } from 'react-i18next'
 
 const QUICK_PHRASE_POLISH_SYSTEM_PROMPT = [
   'You are a user-prompt editor. Improve the supplied reusable user message without changing its intent or behavior.',
@@ -63,6 +64,7 @@ const PromptEditDialog: FC<PromptEditDialogProps> = ({
   const [formData, setFormData] = useState<FormData>({ title: '', content: '', visibility: defaultVisibility })
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [resetPreviewKey, setResetPreviewKey] = useState(0)
+  const [polishing, setPolishing] = useState(false)
   const promptEditorRef = useRef<PromptEditorFieldHandles | null>(null)
   const visibilitySwitchId = useId()
   const variablePlaceholder = t('settings.prompts.variablePlaceholder')
@@ -149,6 +151,7 @@ const PromptEditDialog: FC<PromptEditDialogProps> = ({
         emptyValueSystemPrompt={QUICK_PHRASE_GENERATION_SYSTEM_PROMPT}
         existingValueSystemPrompt={QUICK_PHRASE_POLISH_SYSTEM_PROMPT}
         onChange={handlePromptActionChange}
+        onRunningChange={setPolishing}
         disabled={isSaving}
       />
       <Tooltip content={t('library.config.prompt.insert_variable')}>
@@ -157,7 +160,7 @@ const PromptEditDialog: FC<PromptEditDialogProps> = ({
           variant="ghost"
           aria-label={t('library.config.prompt.insert_variable')}
           onClick={handleInsertVariable}
-          disabled={isSaving}
+          disabled={isSaving || polishing}
           className="flex size-6 min-h-0 items-center justify-center rounded-md border border-border-subtle p-0 text-muted-foreground! shadow-none transition-colors hover:bg-accent/50 hover:text-foreground! focus-visible:bg-accent/50 focus-visible:text-foreground! focus-visible:ring-0 disabled:cursor-not-allowed disabled:opacity-40">
           <BracesVariableIcon className="size-3" />
         </Button>
@@ -191,6 +194,7 @@ const PromptEditDialog: FC<PromptEditDialogProps> = ({
             placeholder={t('settings.prompts.contentPlaceholder')}
             actions={promptActions}
             resetPreviewKey={resetPreviewKey}
+            disabled={polishing}
           />
 
           <div className="flex items-center gap-2">

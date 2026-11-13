@@ -1,10 +1,11 @@
+import { createJSONRPCErrorResponse, JSONRPCErrorException, JSONRPCServer, type JSONRPCResponse } from 'json-rpc-2.0'
+
 import {
   jsonRpcNotificationSchema,
   jsonRpcRequestSchema,
-  type RemoteFailure,
-  remoteLimits
+  remoteLimits,
+  type RemoteFailure
 } from '@cherrystudio/remote-protocol'
-import { createJSONRPCErrorResponse, JSONRPCErrorException, type JSONRPCResponse, JSONRPCServer } from 'json-rpc-2.0'
 
 interface Schema<T> {
   safeParse(input: unknown): { success: true; data: T } | { success: false; error: unknown }

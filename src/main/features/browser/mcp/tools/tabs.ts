@@ -1,4 +1,4 @@
-import { CloseTabSchema, ListTabsSchema, SwitchTabSchema } from '@main/ai/mcp/browserToolDefinitions'
+import { ListTabsSchema, SwitchTabSchema, CloseTabSchema } from '@main/ai/mcp/browserToolDefinitions'
 
 import { BrowserSessionError } from '../../session/BrowserSessionError'
 import type { BrowserController } from '../browserController'

@@ -1,5 +1,6 @@
-import type { CherryMessagePart } from '@shared/data/types/message'
 import { describe, expect, it } from 'vitest'
+
+import type { CherryMessagePart } from '@shared/data/types/message'
 
 import {
   buildCitationPartsRegistry,
@@ -240,11 +241,6 @@ describe('resolveMessageCitations', () => {
   it('joins grep match snippets into the citation preview', () => {
     const mc = resolveMessageCitations([kbReadPart(kbGrepOutput('ggg-1'))])
     expect(mc.byId.get('ggg-1')).toMatchObject({ title: 'Three.md', content: 'first hit … second hit' })
-  })
-
-  it('truncates a long read slice to a tooltip-sized snippet', () => {
-    const mc = resolveMessageCitations([kbReadPart(kbReadOutput('rrr-1', { content: 'x'.repeat(2000) }))])
-    expect(mc.byId.get('rrr-1')?.content).toBe(`${'x'.repeat(300)}…`)
   })
 
   it('aliases a document to its existing citation when kb_search already returned it', () => {

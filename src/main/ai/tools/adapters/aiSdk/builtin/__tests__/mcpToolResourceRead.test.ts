@@ -3,11 +3,12 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 
 import type { ToolExecutionOptions } from '@ai-sdk/provider-utils'
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
+
 import { application } from '@application'
 import { collectMcpToolResources, registerMcpToolResources } from '@main/ai/messages/mcpToolResources'
 import type { McpResourceReadResult } from '@shared/ai/builtinTools'
 import type { McpResource } from '@shared/types/mcp'
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 
 vi.mock('@application', async () => {
   const { mockApplicationFactory } = await import('@test-mocks/main/application')

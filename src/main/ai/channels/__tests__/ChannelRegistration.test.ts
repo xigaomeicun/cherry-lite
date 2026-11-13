@@ -1,10 +1,11 @@
 import { EventEmitter } from 'node:events'
 
-import { application } from '@application'
-import { agentChannelService } from '@data/services/AgentChannelService'
 import { setupTestDatabase } from '@test-helpers/db'
 import { type BrowserWindow, net } from 'electron'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+import { application } from '@application'
+import { agentChannelService } from '@data/services/AgentChannelService'
 
 import { ChannelRegistration } from '../ChannelRegistration'
 

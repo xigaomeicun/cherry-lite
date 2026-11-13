@@ -1,8 +1,9 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
 import { openSettingsTab } from '@renderer/services/mainWindowNavigation'
 import { popup } from '@renderer/services/popup'
 import { toast } from '@renderer/services/toast'
 import type { CherryMessagePart } from '@shared/data/types/message'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { readMessageAloud } from '../messagePlayback'
 import { speechPlaybackService } from '../SpeechPlaybackService'

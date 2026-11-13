@@ -1,4 +1,7 @@
+import { and, eq, inArray } from 'drizzle-orm'
+
 import { application } from '@application'
+import { notifyDataApiDataChange } from '@data/dataApiDataChange'
 import {
   type AgentChannelRow as ChannelRow,
   agentChannelSessionTable as channelSessionsTable,
@@ -26,7 +29,6 @@ import {
   type AgentWorkspaceReferenceItem
 } from '@shared/data/api/schemas/agentWorkspaces'
 import type { ChannelConfig, ChannelType } from '@shared/data/types/channel'
-import { and, eq, inArray } from 'drizzle-orm'
 
 const logger = loggerService.withContext('ChannelService')
 
@@ -88,8 +90,8 @@ export class AgentChannelService {
       name: data.name,
       agentId: data.agentId,
       workspace: data.workspace,
-      config: normalizeChannelConfig(data.config),
-      isActive: data.isActive ?? true,
+      config: validateChannelConfig(data.type, data.config, isActive),
+      isActive,
       permissionMode: data.permissionMode
     }
 
@@ -103,7 +105,9 @@ export class AgentChannelService {
     }
 
     logger.info('Channel created', { channelId: result[0].id, type: data.type })
-    return this.rowToEntity(result[0])
+    const channel = this.rowToEntity(result[0])
+    this.notifyReadModelChange(channel.id, 'membership')
+    return channel
   }
 
   getChannel(id: string): AgentChannelEntity | null {
@@ -270,6 +274,7 @@ export class AgentChannelService {
     if (!result) return null
 
     logger.info('Channel updated', { channelId: id })
+    this.notifyReadModelChange(id, 'projection')
     return this.rowToEntity(result)
   }
 
@@ -278,6 +283,7 @@ export class AgentChannelService {
     const result = database.delete(channelsTable).where(eq(channelsTable.id, id)).returning().all()
     if (result.length > 0) {
       logger.info('Channel deleted', { channelId: id })
+      this.notifyReadModelChange(id, 'membership')
     }
     return result.length > 0
   }
@@ -297,6 +303,14 @@ export class AgentChannelService {
         'activate channel',
         type === 'wecom' ? t('common.wecom_duplicate_bot') : t('common.dingtalk_duplicate_bot')
       )
+  }
+
+  private notifyReadModelChange(id: string, kind: 'membership' | 'projection'): void {
+    notifyDataApiDataChange([
+      { endpoint: '/agent-workspaces', kind: 'membership' },
+      { endpoint: '/agent-channels', kind, entityIds: [id] },
+      { endpoint: '/agent-channels/:channelId', routeParams: { channelId: id }, entityIds: [id] }
+    ])
   }
 
   // ---- Task subscription methods ----

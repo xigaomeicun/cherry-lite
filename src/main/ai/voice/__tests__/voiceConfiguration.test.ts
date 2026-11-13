@@ -1,14 +1,15 @@
+import { afterEach, describe, expect, it, vi } from 'vitest'
+
 import {
   APPLE_ASR_MODEL_ID,
   APPLE_TTS_MODEL_ID,
   FUNASR_MODEL_ID,
   QWEN3_TTS_MODEL_ID,
   TranscriptionLanguageSource,
-  VoiceModelSupport,
   WINDOWS_ASR_MODEL_ID,
-  WINDOWS_TTS_MODEL_ID
+  WINDOWS_TTS_MODEL_ID,
+  VoiceModelSupport
 } from '@shared/ai/localVoice'
-import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { resolveSpeechConfiguration, resolveTranscriptionConfiguration } from '../localAdapters'
 import { appleSpeechDefinition, appleTranscriptionDefinition } from '../localAdapters/apple'

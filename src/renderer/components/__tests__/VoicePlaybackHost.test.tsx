@@ -1,10 +1,11 @@
-import type * as VoiceModule from '@renderer/services/voice'
-import { VoiceDomainError } from '@renderer/services/voice'
 import { mockToast } from '@test-mocks/renderer/toast'
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import i18n from 'i18next'
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+
+import { VoiceDomainError } from '@renderer/services/voice'
+import type * as VoiceModule from '@renderer/services/voice'
 
 vi.unmock('@cherrystudio/ui')
 

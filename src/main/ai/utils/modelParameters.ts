@@ -5,6 +5,7 @@
  */
 
 import type { ProviderOptions } from '@ai-sdk/provider-utils'
+
 import { loggerService } from '@logger'
 import { DEFAULT_TIMEOUT } from '@main/ai/constants'
 import type { SamplingSettings } from '@main/ai/types'
@@ -14,6 +15,7 @@ import {
   isClaudeFixedSamplingModel,
   isClaudeReasoningModel,
   isGemini3Model,
+  isGemini4Model,
   isMaxTemperatureOneModel,
   isQwenModel,
   isSupportedFlexServiceTier,
@@ -41,10 +43,11 @@ type SamplingParams = {
   bodyParams: Record<string, unknown>
 }
 
-/** Sanitize merged parameters before SDK serialization or body passthrough. */
-export function stripRejectedSamplingParams(params: SamplingParams, model: Model): SamplingParams {
+/** Sanitize model parameters after all request overrides have been merged. */
+export function stripUnsupportedModelParams(params: SamplingParams, model: Model): SamplingParams {
   const acceptsTemperature = modelAcceptsSamplingParam(model, 'temperature')
   const acceptsTopP = modelAcceptsSamplingParam(model, 'topP')
+  const gemini4 = isGemini4Model(model)
   const normalizeTemperature = model.providerId === 'dashscope' && isQwenModel(model)
   if (acceptsTemperature && acceptsTopP && !normalizeTemperature) return params
 
@@ -54,6 +57,14 @@ export function stripRejectedSamplingParams(params: SamplingParams, model: Model
     if (!acceptsTopP) {
       delete cleaned.topP
       delete cleaned.top_p
+    }
+    if (gemini4 || isClaudeFixedSamplingModel(model)) {
+      delete cleaned.topK
+      delete cleaned.top_k
+    }
+    if (gemini4) {
+      delete cleaned.cachedContent
+      delete cleaned.cached_content
     }
     if (
       normalizeTemperature &&
@@ -162,9 +173,9 @@ export function filterStandardParams(
   standardParams: Partial<Record<AiSdkParam, any>>,
   model: Model
 ): Partial<Record<AiSdkParam, any>> {
-  if (isGemini3Model(model) && 'topK' in standardParams) {
+  if ((isGemini3Model(model) || isGemini4Model(model)) && 'topK' in standardParams) {
     const { topK, ...rest } = standardParams
-    logger.info(`Gemini 3.x model ${model.id} uses default sampling settings, dropping topK=${topK} from custom params`)
+    logger.info(`Gemini model ${model.id} uses default sampling settings, dropping topK=${topK} from custom params`)
     return rest
   }
 

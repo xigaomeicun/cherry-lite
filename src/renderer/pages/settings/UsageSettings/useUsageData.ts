@@ -1,3 +1,6 @@
+import { debounce } from 'es-toolkit/compat'
+import { useEffect, useMemo, useRef } from 'react'
+
 import { useDataChange, useInfiniteFlatItems, useInfiniteQuery, useQuery } from '@renderer/data/hooks/useDataApi'
 import type {
   AiUsageRecordListSortBy,
@@ -5,8 +8,6 @@ import type {
   AiUsageRecordStatsBucket
 } from '@shared/data/api/schemas/aiUsageRecords'
 import { CURRENCY, type Currency } from '@shared/data/types/model'
-import { debounce } from 'es-toolkit/compat'
-import { useEffect, useMemo, useRef } from 'react'
 
 import {
   applyTimelineCurrency,
@@ -85,7 +86,10 @@ export function useUsageData({
   )
   const overviewStatsResult = useQuery('/ai-usage-records/stats', { query: overviewStatsQuery })
   const previousOverviewStatsResult = useQuery('/ai-usage-records/stats', { query: previousOverviewStatsQuery })
-  const exploreStatsResult = useQuery('/ai-usage-records/stats', { query: exploreQuery })
+  const exploreStatsResult = useQuery('/ai-usage-records/stats', {
+    query: exploreQuery,
+    swrOptions: { keepPreviousData: false }
+  })
   const exploreTimelineResult = useQuery('/ai-usage-records/timeline', {
     query: exploreQuery,
     enabled: rollup !== 'total'
@@ -134,6 +138,7 @@ export function useUsageData({
     exploreOther: exploreStatsResult.data?.other ?? EMPTY_STATS_METRICS,
     timelineLoading: timelineQueryResult.isLoading && timelineQueryResult.data === undefined,
     overviewLoading: overviewStatsResult.isLoading && overviewStatsResult.data === undefined,
+    exploreStatsError: exploreStatsResult.data === undefined ? exploreStatsResult.error : undefined,
     exploreStatsLoading: exploreStatsResult.isLoading && exploreStatsResult.data === undefined,
     exploreTimelineLoading: exploreTimelineResult.isLoading && exploreTimelineResult.data === undefined
   }

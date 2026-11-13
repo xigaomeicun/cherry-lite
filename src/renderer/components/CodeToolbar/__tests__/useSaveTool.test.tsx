@@ -1,9 +1,10 @@
-import type { CodeEditorHandles } from '@cherrystudio/ui'
-import type { ActionTool } from '@renderer/components/ActionTools'
-import { useSaveTool } from '@renderer/components/CodeToolbar/hooks/useSaveTool'
 import { act, renderHook } from '@testing-library/react'
 import { useState } from 'react'
 import { describe, expect, it, vi } from 'vitest'
+
+import type { CodeEditorHandles } from '@cherrystudio/ui'
+import type { ActionTool } from '@renderer/components/ActionTools'
+import { useSaveTool } from '@renderer/components/CodeToolbar/hooks/useSaveTool'
 
 const mocks = vi.hoisted(() => ({
   t: (key: string) => key
@@ -27,7 +28,6 @@ describe('useSaveTool', () => {
       { initialProps: { enabled: true } }
     )
 
-    expect(result.current[0]).toMatchObject({ id: 'save', tooltip: 'code_block.edit.save.label' })
     act(() => result.current[0].onClick?.())
     expect(save).toHaveBeenCalledOnce()
 

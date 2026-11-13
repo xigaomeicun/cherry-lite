@@ -1,12 +1,9 @@
-import { createActionRegistry } from '@renderer/components/chat/actions/actionRegistry'
-import type { ResolvedAction } from '@renderer/components/chat/actions/actionTypes'
-import { OpenInNewWindowIcon } from '@renderer/components/icons/WindowIcons'
-import type { Topic } from '@renderer/types/topic'
-import type { TopicTabPosition } from '@shared/data/preference/preferenceTypes'
 import type { TFunction } from 'i18next'
 import {
+  Archive,
   BrushCleaning,
   Copy,
+  Database,
   Edit3,
   ExternalLink,
   FileText,
@@ -21,6 +18,13 @@ import {
   UploadIcon
 } from 'lucide-react'
 import type { ReactNode } from 'react'
+
+import { createActionRegistry } from '@renderer/components/chat/actions/actionRegistry'
+import type { ResolvedAction } from '@renderer/components/chat/actions/actionTypes'
+import SidebarShortcutIcon from '@renderer/components/icons/SidebarShortcutIcon'
+import { OpenInNewWindowIcon } from '@renderer/components/icons/WindowIcons'
+import type { Topic } from '@renderer/types/topic'
+import type { TopicTabPosition } from '@shared/data/preference/preferenceTypes'
 
 export type TopicExportMenuOptions = Record<
   | 'docx'
@@ -45,8 +49,11 @@ export interface TopicMoveAssistantTarget {
   icon?: ReactNode
 }
 
+type TopicDeleteHandler = (topic: Topic) => void | Promise<void>
+
 export interface TopicActionContext {
   exportMenuOptions: TopicExportMenuOptions
+  isArchiveBlocked: boolean
   isActiveInCurrentTab: boolean
   isRenaming: boolean
   onAutoRename: TopicMenuHandler
@@ -54,7 +61,11 @@ export interface TopicActionContext {
   onCopyImage: TopicMenuHandler
   onCopyMarkdown: TopicMenuHandler
   onCopyPlainText: TopicMenuHandler
-  onDelete: TopicMenuHandler
+  onDelete: TopicDeleteHandler
+  /** Irreversible delete. Absent means the menu has no permanent-delete entry. */
+  onDeletePermanently?: TopicDeleteHandler
+  /** Configured `resource.delete_permanently` label. Empty omits the hint. */
+  permanentDeleteShortcut?: string
   onExportImage: TopicMenuHandler
   onExportJoplin: TopicMenuHandler
   onExportMarkdown: TopicMenuHandler
@@ -69,10 +80,13 @@ export interface TopicActionContext {
   onOpenInNewTab?: TopicMenuHandler
   onOpenInNewWindow?: TopicMenuHandler
   onPinTopic: TopicMenuHandler
+  onToggleSidebar?: TopicMenuHandler
+  onSaveToKnowledge: TopicMenuHandler
   onSaveToNotes: TopicMenuHandler
   onSetPanePosition?: (position: TopicTabPosition) => void | Promise<void>
   onStartRename: TopicMenuHandler
   panePosition?: TopicTabPosition
+  sidebarPinned?: boolean
   t: TFunction
   topic: Topic
   topicsLength: number
@@ -109,7 +123,10 @@ const hasExportOption = ({ exportMenuOptions }: TopicActionContext) =>
   exportMenuOptions.markdown_reason ||
   exportMenuOptions.docx ||
   exportMenuOptions.notion ||
-  exportMenuOptions.obsidian
+  exportMenuOptions.yuque ||
+  exportMenuOptions.obsidian ||
+  exportMenuOptions.joplin ||
+  exportMenuOptions.siyuan
 
 topicActionRegistry.registerCommand({
   id: 'topic.auto-rename',
@@ -124,6 +141,12 @@ topicActionRegistry.registerCommand({
 topicActionRegistry.registerCommand({
   id: 'topic.pin',
   run: ({ onPinTopic, topic }) => onPinTopic(topic)
+})
+
+topicActionRegistry.registerCommand({
+  id: 'topic.toggle-sidebar',
+  availability: ({ onToggleSidebar }) => ({ visible: !!onToggleSidebar, enabled: !!onToggleSidebar }),
+  run: ({ onToggleSidebar, topic }) => onToggleSidebar?.(topic)
 })
 
 topicActionRegistry.registerCommand({
@@ -173,6 +196,11 @@ topicActionRegistry.registerCommand({
 })
 
 topicActionRegistry.registerCommand({
+  id: 'topic.save-knowledge',
+  run: ({ onSaveToKnowledge, topic }) => onSaveToKnowledge(topic)
+})
+
+topicActionRegistry.registerCommand({
   id: 'topic.export.image',
   run: ({ onExportImage, topic }) => onExportImage(topic)
 })
@@ -198,8 +226,23 @@ topicActionRegistry.registerCommand({
 })
 
 topicActionRegistry.registerCommand({
+  id: 'topic.export.yuque',
+  run: ({ onExportYuque, topic }) => onExportYuque(topic)
+})
+
+topicActionRegistry.registerCommand({
   id: 'topic.export.obsidian',
   run: ({ onExportObsidian, topic }) => onExportObsidian(topic)
+})
+
+topicActionRegistry.registerCommand({
+  id: 'topic.export.joplin',
+  run: ({ onExportJoplin, topic }) => onExportJoplin(topic)
+})
+
+topicActionRegistry.registerCommand({
+  id: 'topic.export.siyuan',
+  run: ({ onExportSiyuan, topic }) => onExportSiyuan(topic)
 })
 
 topicActionRegistry.registerCommand({
@@ -230,6 +273,11 @@ topicActionRegistry.registerCommand({
   run: ({ onDelete, topic }) => onDelete(topic)
 })
 
+topicActionRegistry.registerCommand({
+  id: 'topic.delete-permanently',
+  run: ({ onDeletePermanently, topic }) => onDeletePermanently?.(topic)
+})
+
 topicActionRegistry.registerAction({
   id: 'topic.auto-rename',
   commandId: 'topic.auto-rename',
@@ -256,6 +304,15 @@ topicActionRegistry.registerAction({
   label: ({ t, topic }) => (topic.pinned ? t('chat.topics.unpin') : t('chat.topics.pin')),
   icon: ({ topic }) => (topic.pinned ? <PinOffIcon size={14} /> : <PinIcon size={14} />),
   order: 30,
+  surface: 'menu'
+})
+
+topicActionRegistry.registerAction({
+  id: 'topic.toggle-sidebar',
+  commandId: 'topic.toggle-sidebar',
+  label: ({ sidebarPinned, t }) => (sidebarPinned ? t('launchpad.unpin_from_sidebar') : t('launchpad.pin_to_sidebar')),
+  icon: ({ sidebarPinned }) => <SidebarShortcutIcon pinned={sidebarPinned} size={14} />,
+  order: 32,
   surface: 'menu'
 })
 
@@ -347,6 +404,16 @@ topicActionRegistry.registerAction({
 })
 
 topicActionRegistry.registerAction({
+  id: 'topic.save-knowledge',
+  commandId: 'topic.save-knowledge',
+  label: ({ t }) => t('chat.save.topic.knowledge.menu_title'),
+  icon: () => <Database size={14} />,
+  group: 'share',
+  order: 60,
+  surface: 'menu'
+})
+
+topicActionRegistry.registerAction({
   id: 'topic.export',
   label: ({ t }) => t('chat.topics.export.title'),
   icon: () => <UploadIcon size={14} />,
@@ -396,12 +463,36 @@ topicActionRegistry.registerAction({
       availability: ({ exportMenuOptions }) => ({ visible: exportMenuOptions.notion })
     },
     {
+      id: 'topic.export.yuque',
+      commandId: 'topic.export.yuque',
+      label: ({ t }) => t('chat.topics.export.yuque'),
+      order: 60,
+      surface: 'menu',
+      availability: ({ exportMenuOptions }) => ({ visible: exportMenuOptions.yuque })
+    },
+    {
       id: 'topic.export.obsidian',
       commandId: 'topic.export.obsidian',
       label: ({ t }) => t('chat.topics.export.obsidian'),
       order: 70,
       surface: 'menu',
       availability: ({ exportMenuOptions }) => ({ visible: exportMenuOptions.obsidian })
+    },
+    {
+      id: 'topic.export.joplin',
+      commandId: 'topic.export.joplin',
+      label: ({ t }) => t('chat.topics.export.joplin'),
+      order: 80,
+      surface: 'menu',
+      availability: ({ exportMenuOptions }) => ({ visible: exportMenuOptions.joplin })
+    },
+    {
+      id: 'topic.export.siyuan',
+      commandId: 'topic.export.siyuan',
+      label: ({ t }) => t('chat.topics.export.siyuan'),
+      order: 90,
+      surface: 'menu',
+      availability: ({ exportMenuOptions }) => ({ visible: exportMenuOptions.siyuan })
     }
   ]
 })
@@ -444,21 +535,35 @@ topicActionRegistry.registerAction({
 topicActionRegistry.registerAction({
   id: 'topic.delete',
   commandId: 'topic.delete',
-  label: ({ t }) => t('common.delete'),
-  icon: () => <Trash2 size={14} />,
+  label: ({ t }) => t('common.archive'),
+  icon: () => <Archive size={14} />,
   group: 'danger',
   order: 90,
   surface: 'menu',
+  // Deleting the last topic is allowed: the handler selects a neighbour when one exists and
+  // otherwise clears the active topic. Pinned topics must be unpinned before they can be deleted.
+  availability: ({ isArchiveBlocked, t, topic }) => ({
+    visible: !topic.pinned,
+    enabled: !isArchiveBlocked,
+    reason: isArchiveBlocked ? t('recycle_bin.move.blocked_generation') : undefined
+  })
+})
+
+topicActionRegistry.registerAction({
+  id: 'topic.delete-permanently',
+  commandId: 'topic.delete-permanently',
+  label: ({ t }) => t('common.delete_permanently'),
+  icon: () => <Trash2 size={14} />,
+  group: 'danger',
+  order: 100,
+  surface: 'menu',
   danger: true,
-  // Deleting the last topic is allowed — the delete handler opens a fresh empty one afterwards, so
-  // the view is never stranded. Pinned topics must be unpinned before they can be deleted.
-  availability: ({ topic }) => ({ visible: !topic.pinned }),
-  confirm: ({ t }) => ({
-    title: t('chat.topics.manage.delete.confirm.title'),
-    description: t('chat.topics.manage.delete.confirm.content', { count: 1 }),
-    confirmText: t('common.delete'),
-    cancelText: t('common.cancel'),
-    destructive: true
+  shortcut: ({ permanentDeleteShortcut }) => permanentDeleteShortcut ?? '',
+  // Same pin/busy gate as Archive. Callers mark an in-flight delete with isArchiveBlocked.
+  availability: ({ isArchiveBlocked, onDeletePermanently, t, topic }) => ({
+    visible: Boolean(onDeletePermanently) && !topic.pinned,
+    enabled: !isArchiveBlocked,
+    reason: isArchiveBlocked ? t('recycle_bin.move.blocked_generation') : undefined
   })
 })
 

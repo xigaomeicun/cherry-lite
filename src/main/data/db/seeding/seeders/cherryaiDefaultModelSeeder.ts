@@ -1,4 +1,7 @@
+import { and, eq } from 'drizzle-orm'
+
 import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry'
+import { preferenceTable } from '@data/db/schemas/preference'
 import type { InsertUserModelRow } from '@data/db/schemas/userModel'
 import { userModelTable } from '@data/db/schemas/userModel'
 import type { InsertUserProviderRow } from '@data/db/schemas/userProvider'
@@ -16,7 +19,6 @@ import {
   CHERRYAI_PROVIDER_NAME
 } from '@shared/data/presets/cherryai'
 import type { ModelCapability } from '@shared/data/types/model'
-import { eq } from 'drizzle-orm'
 
 import type { DbType, ISeeder } from '../../types'
 import { hashObject } from '../hashObject'
@@ -132,6 +134,33 @@ function createDefaultModelPreferenceRows(): DefaultModelPreferenceRow[] {
   }))
 }
 
+function ensureDefaultModelPreferencesTx(tx: TxLike): void {
+  for (const { scope, key, value } of createDefaultModelPreferenceRows()) {
+    const [existing] = tx
+      .select({ value: preferenceTable.value })
+      .from(preferenceTable)
+      .where(and(eq(preferenceTable.scope, scope), eq(preferenceTable.key, key)))
+      .limit(1)
+      .all()
+
+    if (!existing) {
+      logger.warn('Self-healed missing default model preference', { key, value })
+      tx.insert(preferenceTable)
+        .values({
+          scope,
+          key,
+          value
+        })
+        .run()
+    }
+  }
+}
+
+function ensureCherryAiDefaultModelSetupTx(tx: TxLike): void {
+  ensureCherryAiDefaultProviderAndModelTx(tx)
+  ensureDefaultModelPreferencesTx(tx)
+}
+
 export class CherryAiDefaultModelSeeder implements ISeeder {
   readonly name = 'cherryaiDefaultModel'
   readonly description = 'Ensure CherryAI providers, default model, and default model preferences'
@@ -146,8 +175,7 @@ export class CherryAiDefaultModelSeeder implements ISeeder {
     })
   }
 
-  run(_db: DbType): void {
-    // Cherry-Lite: 彻底绝育！不自动向数据库塞入 CherryAI 和 Cherry Cloud 默认服务商及模型
-    return
+  run(db: DbType): void {
+    db.transaction((tx) => ensureCherryAiDefaultModelSetupTx(tx))
   }
 }

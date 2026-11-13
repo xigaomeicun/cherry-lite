@@ -1,5 +1,6 @@
-import { SafeExtSchema } from '@shared/types/file'
 import { describe, expect, it } from 'vitest'
+
+import { SafeExtSchema } from '@shared/types/file'
 
 import { ContentHashSchema, FileEntryIdSchema, FileEntrySchema, SafeNameSchema } from '../file'
 
@@ -185,7 +186,6 @@ describe('FileEntrySchema origin invariants', () => {
       // strictObject parses external without externalPath as a missing field;
       // discriminator routing still picks the external arm via `origin`.
       const base = makeExternal()
-      // biome-ignore lint/performance/noDelete: we want the absent-field semantics
       delete (base as { externalPath?: string }).externalPath
       expect(FileEntrySchema.safeParse(base).success).toBe(false)
     })
@@ -251,7 +251,6 @@ describe('FileEntrySchema size/ext boundaries', () => {
 
   it('rejects internal with absent size (internal size is mandatory)', () => {
     const base = makeInternal()
-    // biome-ignore lint/performance/noDelete: we want the absent-field semantics
     delete (base as { size?: number }).size
     expect(FileEntrySchema.safeParse(base).success).toBe(false)
   })
@@ -307,19 +306,6 @@ describe('FileEntrySchema size/ext boundaries', () => {
     // test just confirms the schema itself allows bare multi-letter extensions.
     expect(FileEntrySchema.safeParse(makeInternal({ ext: 'gz' })).success).toBe(true)
     expect(FileEntrySchema.safeParse(makeInternal({ ext: '7z' })).success).toBe(true)
-  })
-})
-
-// ─── Brand (duck-typing prevention) ───
-
-describe('FileEntrySchema brand', () => {
-  it('parsed entry carries brand (type-level guarantee; runtime only checks structure)', () => {
-    const result = FileEntrySchema.safeParse(makeInternal())
-    expect(result.success).toBe(true)
-    // The brand is a compile-time construct — we can't assert it at runtime,
-    // but the following assignment would fail type-check if brand were lost:
-    //   const typed: FileEntry = { ...makeInternal() } // type error (missing brand)
-    //   const typed: FileEntry = result.data!           // OK
   })
 })
 

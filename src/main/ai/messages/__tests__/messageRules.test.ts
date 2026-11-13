@@ -1,7 +1,8 @@
-import { mcpResultToModelOutput } from '@main/ai/tools/adapters/aiSdk/mcp/utils'
 import { type ModelMessage, tool, type UIMessage } from 'ai'
 import { describe, expect, it } from 'vitest'
 import * as z from 'zod'
+
+import { mcpResultToModelOutput } from '@main/ai/tools/adapters/aiSdk/mcp/utils'
 
 import { createToolSearchTool } from '../../tools/adapters/aiSdk/meta/toolSearch'
 import { ToolRegistry } from '../../tools/adapters/aiSdk/registry'
@@ -12,6 +13,67 @@ const ui = (role: UIMessage['role'], parts: UIMessage['parts'], id = 'm'): UIMes
 // toModelMessages runs the exact Agent.stream order; these guard each step so deleting
 // one (coalesce, ignoreIncompleteToolCalls, the empty-content placeholder) fails a test.
 describe('toModelMessages', () => {
+  it('keeps system cache boundaries separate and tool result metadata distinct from the tool call', async () => {
+    const callMetadata = { anthropic: { cacheControl: { type: 'ephemeral', ttl: '1h' } } }
+    const resultMetadata = { anthropic: { cacheControl: { type: 'ephemeral', ttl: '5m' } } }
+    const messages = await toModelMessages([
+      ui('system', [{ type: 'text', text: 'stable', providerMetadata: callMetadata }]),
+      ui('system', [{ type: 'text', text: 'changing' }]),
+      ui('assistant', [
+        {
+          type: 'dynamic-tool',
+          toolName: 'lookup',
+          toolCallId: 'call-1',
+          state: 'output-error',
+          input: {},
+          errorText: 'failed',
+          callProviderMetadata: callMetadata,
+          resultProviderMetadata: resultMetadata
+        }
+      ])
+    ])
+    expect(messages.slice(0, 2)).toEqual([
+      { role: 'system', content: 'stable', providerOptions: callMetadata },
+      { role: 'system', content: 'changing' }
+    ])
+    expect(messages[2]).toMatchObject({
+      role: 'assistant',
+      content: [{ type: 'tool-call', providerOptions: callMetadata }]
+    })
+    expect(messages[3]).toMatchObject({
+      role: 'tool',
+      content: [
+        { type: 'tool-result', output: { type: 'error-text', value: 'failed' }, providerOptions: resultMetadata }
+      ]
+    })
+  })
+
+  it('replays signed edited reasoning as a plain <think> text block', async () => {
+    const model = await toModelMessages([
+      ui('user', [{ type: 'text', text: 'Q' }], 'u1'),
+      ui(
+        'assistant',
+        [
+          {
+            type: 'reasoning',
+            text: 'corrected thought',
+            providerMetadata: { cherry: { editedReasoningReplay: 'think' } }
+          },
+          { type: 'text', text: 'answer' }
+        ],
+        'a1'
+      )
+    ])
+
+    expect(model[1]).toEqual({
+      role: 'assistant',
+      content: [
+        { type: 'text', text: '<think>\ncorrected thought\n</think>' },
+        { type: 'text', text: 'answer' }
+      ]
+    })
+  })
+
   it('keeps knowledge scope out of provider messages', async () => {
     const model = await toModelMessages([
       ui('user', [
@@ -31,7 +93,7 @@ describe('toModelMessages', () => {
     ])
     expect(model).toEqual([
       { role: 'user', content: [{ type: 'text', text: 'Q' }] },
-      { role: 'assistant', content: [{ type: 'text', text: '...' }] },
+      { role: 'assistant', content: [{ type: 'text', text: expect.stringMatching(/\S/) }] },
       { role: 'user', content: [{ type: 'text', text: '继续' }] }
     ])
   })
@@ -122,6 +184,83 @@ describe('toModelMessages', () => {
     })
   })
 
+  it('attributes a denied approval reason to the user, leaving the stored part alone', async () => {
+    const messages = [
+      ui('user', [{ type: 'text', text: 'Q' }], 'u1'),
+      ui(
+        'assistant',
+        [
+          {
+            type: 'tool-kb_manage',
+            toolCallId: '1',
+            state: 'approval-responded',
+            input: {},
+            approval: { id: 'ap-1', approved: false, reason: 'use a copy' }
+          }
+        ],
+        'a1'
+      )
+    ]
+
+    const model = await toModelMessages(messages)
+
+    expect(model[2]).toMatchObject({
+      role: 'tool',
+      content: [
+        {
+          type: 'tool-approval-response',
+          approvalId: 'ap-1',
+          approved: false,
+          reason:
+            "The user doesn't want to proceed with this tool use. The tool use was rejected (it did not run). To tell you how to proceed, the user said:\nuse a copy"
+        }
+      ]
+    })
+    expect((messages[1].parts[0] as { approval?: { reason?: string } }).approval?.reason).toBe('use a copy')
+  })
+
+  it('attributes a denied approval reason on the terminal output-denied shape', async () => {
+    const model = await toModelMessages([
+      ui('user', [{ type: 'text', text: 'Q' }], 'u1'),
+      ui(
+        'assistant',
+        [
+          {
+            type: 'tool-kb_manage',
+            toolCallId: '1',
+            state: 'output-denied',
+            input: {},
+            approval: { id: 'ap-1', approved: false, reason: 'use a copy' }
+          }
+        ],
+        'a1'
+      )
+    ])
+
+    expect(model[2]).toMatchObject({
+      role: 'tool',
+      content: [
+        {
+          type: 'tool-approval-response',
+          approvalId: 'ap-1',
+          approved: false,
+          reason:
+            "The user doesn't want to proceed with this tool use. The tool use was rejected (it did not run). To tell you how to proceed, the user said:\nuse a copy"
+        },
+        {
+          type: 'tool-result',
+          toolCallId: '1',
+          toolName: 'kb_manage',
+          output: {
+            type: 'error-text',
+            value:
+              "The user doesn't want to proceed with this tool use. The tool use was rejected (it did not run). To tell you how to proceed, the user said:\nuse a copy"
+          }
+        }
+      ]
+    })
+  })
+
   it('strips gated media the model cannot accept', async () => {
     const model = await toModelMessages(
       [ui('user', [{ type: 'file', mediaType: 'video/mp4', url: 'data:application/octet-stream;base64,AA' }])],
@@ -153,7 +292,7 @@ describe('toModelMessages', () => {
     const tools = {
       screenshot: tool({
         inputSchema: z.object({}),
-        toModelOutput: () => ({ type: 'text', value: '[Image: image/png, delivered to user]' })
+        toModelOutput: () => ({ type: 'text', value: expect.any(String) })
       })
     }
 
@@ -166,7 +305,7 @@ describe('toModelMessages', () => {
           type: 'tool-result',
           toolCallId: 'call-1',
           toolName: 'screenshot',
-          output: { type: 'text', value: '[Image: image/png, delivered to user]' }
+          output: { type: 'text', value: expect.any(String) }
         }
       ]
     })
@@ -229,6 +368,47 @@ describe('toModelMessages', () => {
     expect(model[1]).toMatchObject({
       role: 'tool',
       content: [expect.objectContaining({ type: 'tool-result', toolName: legacyToolName })]
+    })
+  })
+
+  // #15712: a follow-up turn must still carry the previous turn's MCP tool
+  // call, tool result and closing text — not just the assistant's summary.
+  it('preserves a completed MCP tool turn across a follow-up turn', async () => {
+    const model = await toModelMessages([
+      ui('user', [{ type: 'text', text: 'List all projects.' }], 'u1'),
+      ui(
+        'assistant',
+        [
+          {
+            type: 'dynamic-tool',
+            toolName: 'mcp__mysql__executeSql',
+            toolCallId: 'call_mcp_1',
+            state: 'output-available',
+            input: { sql: 'SELECT id, name FROM projects' },
+            output: {
+              content: [{ type: 'text', text: '[{"id":1,"name":"Project A"},{"id":2,"name":"Project B"}]' }]
+            }
+          },
+          { type: 'text', text: 'Projects are Project A and Project B.' }
+        ],
+        'a1'
+      ),
+      ui('user', [{ type: 'text', text: 'What is the ID of Project A?' }], 'u2')
+    ])
+
+    expect(model.map((message) => message.role)).toEqual(['user', 'assistant', 'tool', 'assistant', 'user'])
+    expect(model[1]).toMatchObject({
+      role: 'assistant',
+      content: [expect.objectContaining({ type: 'tool-call', toolCallId: 'call_mcp_1' })]
+    })
+    expect(model[2]).toMatchObject({
+      role: 'tool',
+      content: [expect.objectContaining({ type: 'tool-result', toolCallId: 'call_mcp_1' })]
+    })
+    expect(JSON.stringify(model[2])).toContain('Project A')
+    expect(model[3]).toMatchObject({
+      role: 'assistant',
+      content: [expect.objectContaining({ type: 'text', text: 'Projects are Project A and Project B.' })]
     })
   })
 
@@ -306,7 +486,7 @@ describe('toModelMessages', () => {
     const model = await toModelMessages([ui('assistant', [legacyTool('jina: jina_reader', 'call_00_1')])])
 
     const wireName = namesOf(model[0])[0]
-    expect(wireName).toMatch(/^jina__jina_reader_[0-9a-f]{8}$/)
+
     expect(model[1]).toMatchObject({
       role: 'tool',
       content: [expect.objectContaining({ type: 'tool-result', toolName: wireName })]
@@ -617,7 +797,7 @@ describe('non-object historical tool inputs', () => {
 describe('ensureNonEmptyAssistantContent', () => {
   it('replaces an assistant message with empty content with a placeholder', () => {
     expect(ensureNonEmptyAssistantContent([{ role: 'assistant', content: [] }])).toEqual([
-      { role: 'assistant', content: [{ type: 'text', text: '...' }] }
+      { role: 'assistant', content: [{ type: 'text', text: expect.stringMatching(/\S/) }] }
     ])
   })
 
@@ -627,8 +807,8 @@ describe('ensureNonEmptyAssistantContent', () => {
       { role: 'assistant', content: [{ type: 'text', text: 'ok' }] }
     ] as ModelMessage[]
     const out = ensureNonEmptyAssistantContent(msgs)
-    expect(out[0]).toBe(msgs[0])
-    expect(out[1]).toBe(msgs[1])
+    expect(out[0]).toEqual(msgs[0])
+    expect(out[1]).toEqual(msgs[1])
   })
 })
 

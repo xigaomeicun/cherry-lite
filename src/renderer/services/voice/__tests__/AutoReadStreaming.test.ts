@@ -1,5 +1,6 @@
-import type { CherryUIMessage } from '@shared/data/types/message'
 import { describe, expect, it, vi } from 'vitest'
+
+import type { CherryUIMessage } from '@shared/data/types/message'
 
 import { AutoReadService } from '../AutoReadService'
 import type { SpeechPlaybackStartInput } from '../SpeechPlaybackService'

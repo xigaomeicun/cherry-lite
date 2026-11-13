@@ -1,28 +1,8 @@
 import type { LanguageModelV3Prompt } from '@ai-sdk/provider'
-import type { Model } from '@shared/data/types/model'
-import type { Provider } from '@shared/data/types/provider'
 import type { LanguageModelMiddleware } from 'ai'
 import { describe, expect, it } from 'vitest'
 
-import type { RequestScope } from '../../scope'
-import { createStripReasoningReplayMiddleware, stripReasoningReplayFeature } from '../stripReasoningReplay'
-
-const scope = (providerId: string, apiModelId: string, aiSdkProviderId = 'open-responses') =>
-  ({
-    aiSdkProviderId,
-    provider: { id: providerId, presetProviderId: providerId } as Provider,
-    model: { id: apiModelId, apiModelId } as Model
-  }) as unknown as RequestScope
-
-describe('stripReasoningReplayFeature.applies', () => {
-  it('strips only for the HuggingFace router on the neutral adapter', () => {
-    expect(stripReasoningReplayFeature.applies!(scope('huggingface', 'MiniMaxAI/MiniMax-M2'))).toBe(true)
-    // Faithful Responses endpoints keep their reasoning replay.
-    expect(stripReasoningReplayFeature.applies!(scope('deepseek', 'deepseek-v4-flash', 'openai'))).toBe(false)
-    expect(stripReasoningReplayFeature.applies!(scope('doubao', 'doubao-seed-2-1-pro-260628', 'openai'))).toBe(false)
-    expect(stripReasoningReplayFeature.applies!(scope('huggingface', 'MiniMaxAI/MiniMax-M2', 'openai'))).toBe(false)
-  })
-})
+import { createStripReasoningReplayMiddleware } from '../stripReasoningReplay'
 
 describe('strip middleware', () => {
   it('removes reasoning parts from assistant messages only', async () => {
@@ -39,7 +19,7 @@ describe('strip middleware', () => {
     ]
     const result = await middleware.transformParams!({
       type: 'stream',
-      params: { prompt } as never,
+      params: { prompt },
       model: {} as never
     })
     expect(result.prompt[1].content).toEqual([{ type: 'text', text: 'answer' }])

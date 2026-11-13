@@ -1,6 +1,7 @@
-import type { ImageGenerationSupport } from '@shared/data/types/model'
 import { describe, expect, it } from 'vitest'
 import * as z from 'zod'
+
+import type { ImageGenerationSupport } from '@shared/data/types/model'
 
 import {
   buildGenerateImageToolSchema,
@@ -39,7 +40,7 @@ describe('generate_image input contract', () => {
     expect(inputSchema.safeParse({ prompt: 'a cat', size: '2048x2048' }).success).toBe(false)
   })
 
-  it('limits edit references independently from the maxImages output parameter', () => {
+  it('allows uncapped edit references independently from the maxImages output parameter', () => {
     const support = {
       modes: {
         generate: { supports: { size: { type: 'enum', options: ['1024x1024'] } } },
@@ -54,7 +55,7 @@ describe('generate_image input contract', () => {
     const inputSchema = buildGenerateImageToolSchema(support)
 
     expect(inputSchema.safeParse({ prompt: 'edit', image_ids: ['f1'], quality: 'high' }).success).toBe(true)
-    expect(inputSchema.safeParse({ prompt: 'edit', image_ids: ['f1', 'f2'], quality: 'high' }).success).toBe(false)
+    expect(inputSchema.safeParse({ prompt: 'edit', image_ids: ['f1', 'f2', 'f3'], quality: 'high' }).success).toBe(true)
   })
 
   it('lifts the edit reference cap to the model-declared maxInputImages', () => {
@@ -73,8 +74,9 @@ describe('generate_image input contract', () => {
     expect(editInputImageLimit(support)).toBe(3)
   })
 
-  it('truncates input ids to the effective edit limit', () => {
-    expect(editInputImageLimit(null)).toBe(1)
+  it('preserves all input ids when no edit limit is declared', () => {
+    expect(editInputImageLimit(null)).toBeUndefined()
+    expect(limitGenerateImageInputIds(['a', 'b', 'c'])).toEqual(['a', 'b', 'c'])
     expect(limitGenerateImageInputIds(['a', 'b', 'c'], 2)).toEqual(['a', 'b'])
     expect(limitGenerateImageInputIds(['a'], 3)).toEqual(['a'])
   })

@@ -1,6 +1,7 @@
+import { useCallback, useMemo } from 'react'
+
 import { usePreference } from '@data/hooks/usePreference'
 import type { MessageRenderConfigUpdate } from '@renderer/components/chat/messages/types'
-import { useCallback, useMemo } from 'react'
 
 export function useMessageListRenderConfig() {
   const [userName] = usePreference('app.user.name')
@@ -34,6 +35,7 @@ export function useMessageListRenderConfig() {
       codeFancyBlock,
       thoughtAutoCollapse,
       collapseCompletedToolHistory: true,
+      expandToolSteps: false,
       keepIntermediateAssistantText,
       mathEnableSingleDollar,
       showMessageOutline,

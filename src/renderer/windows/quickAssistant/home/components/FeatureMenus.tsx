@@ -1,9 +1,10 @@
-import { Scrollbar } from '@cherrystudio/ui'
-import { cn } from '@renderer/utils/style'
 import { CornerDownLeft, FileText, Languages, Lightbulb, MessageSquare } from 'lucide-react'
 import type { Dispatch, SetStateAction } from 'react'
 import { useImperativeHandle, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+
+import { ScrollArea } from '@cherrystudio/ui'
+import { cn } from '@renderer/utils/style'
 
 interface FeatureMenusProps {
   text: string
@@ -85,7 +86,7 @@ const FeatureMenus = ({
   }))
 
   return (
-    <Scrollbar className="h-auto shrink-0 [-webkit-app-region:no-drag]">
+    <ScrollArea className="h-auto shrink-0 [-webkit-app-region:no-drag]">
       <div className="flex cursor-pointer flex-col gap-1">
         {features.map((feature, index) => (
           <button
@@ -93,16 +94,16 @@ const FeatureMenus = ({
             key={index}
             onClick={feature.onClick}
             className={cn(
-              'flex w-full cursor-pointer select-none flex-row items-center gap-3 rounded-lg border-0 bg-transparent px-4 py-2 text-left transition-colors [-webkit-app-region:no-drag] hover:bg-accent',
+              'flex w-full cursor-pointer flex-row items-center gap-3 rounded-lg border-0 bg-transparent px-4 py-2 text-left transition-colors select-none [-webkit-app-region:no-drag] hover:bg-accent',
               index === selectedIndex && 'bg-accent'
             )}>
             <span className="flex shrink-0 items-center justify-center">{feature.icon}</span>
-            <span className="m-0 flex-1 text-foreground text-sm">{feature.title}</span>
+            <span className="m-0 flex-1 text-sm text-foreground">{feature.title}</span>
             {index === selectedIndex && <CornerDownLeft className="size-4 text-muted-foreground" />}
           </button>
         ))}
       </div>
-    </Scrollbar>
+    </ScrollArea>
   )
 }
 FeatureMenus.displayName = 'FeatureMenus'

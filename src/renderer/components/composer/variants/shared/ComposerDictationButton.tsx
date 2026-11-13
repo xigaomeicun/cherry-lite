@@ -1,10 +1,11 @@
+import { Mic, X } from 'lucide-react'
+import { useSyncExternalStore } from 'react'
+import { useTranslation } from 'react-i18next'
+
 import { BarVisualizer, Button, Tooltip } from '@cherrystudio/ui'
 import { useComposerToolLauncherController } from '@renderer/components/composer/ComposerToolRuntime'
 import type { QuickPanelInputAdapter } from '@renderer/components/QuickPanel'
 import { dictationService } from '@renderer/services/voice'
-import { Mic, X } from 'lucide-react'
-import { useSyncExternalStore } from 'react'
-import { useTranslation } from 'react-i18next'
 
 import { COMPOSER_SEND_ACCESSORY_BUTTON_CLASS } from './ComposerControlScaffolding'
 

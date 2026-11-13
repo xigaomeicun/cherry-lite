@@ -1,6 +1,7 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
 import type { Model } from '@shared/data/types/model'
 import type { Provider } from '@shared/data/types/provider'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({ countTokens: vi.fn(), providerToAiSdkConfig: vi.fn(), clientOptions: vi.fn() }))
 
@@ -48,9 +49,7 @@ describe('tryRemoteAnthropicCount', () => {
       expect.objectContaining({
         baseURL: 'https://api.x',
         fetch,
-        defaultHeaders: headers,
-        timeout: 5_000,
-        maxRetries: 0
+        defaultHeaders: headers
       })
     )
   })

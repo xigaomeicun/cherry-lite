@@ -1,5 +1,6 @@
-import type { browserRefSchema, snapshotOptionsSchema } from '@main/ai/mcp/browserToolDefinitions'
 import type * as z from 'zod'
+
+import type { browserRefSchema, snapshotOptionsSchema } from '@main/ai/mcp/browserToolDefinitions'
 
 export type BrowserRef = z.infer<typeof browserRefSchema>
 export type SnapshotOptions = z.infer<typeof snapshotOptionsSchema>

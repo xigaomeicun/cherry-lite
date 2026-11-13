@@ -396,7 +396,7 @@ export function createProxyBypassMatcher(
           }
         }
       } catch (error) {
-        log?.error?.('Failed to check bypass:', error as Error)
+        log?.error?.('Failed to check bypass:', error)
         return false
       }
 

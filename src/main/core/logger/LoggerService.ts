@@ -1,3 +1,11 @@
+import os from 'os'
+import path from 'path'
+import { isMainThread } from 'worker_threads'
+
+import { app, ipcMain } from 'electron'
+import winston from 'winston'
+import DailyRotateFile from 'winston-daily-rotate-file'
+
 /* eslint-disable no-restricted-syntax */
 import { DIAGNOSTICS_ENABLED } from '@main/core/diagnostics'
 import { LOGS_DIR } from '@main/core/paths/constants'
@@ -6,12 +14,6 @@ import { IpcChannel } from '@shared/IpcChannel'
 import type { LogContextData, LogLevel, LogSourceWithContext } from '@shared/types/logger'
 import { LEVEL, LEVEL_MAP, MAX_LOG_RETENTION_DAYS } from '@shared/types/logger'
 import { redactSecretText } from '@shared/utils/redaction'
-import { app, ipcMain } from 'electron'
-import os from 'os'
-import path from 'path'
-import winston from 'winston'
-import DailyRotateFile from 'winston-daily-rotate-file'
-import { isMainThread } from 'worker_threads'
 
 const ANSICOLORS = {
   RED: '\x1b[31m',
@@ -87,7 +89,7 @@ function sanitizeLogValue(value: unknown, depth = 0, seen = new WeakSet<object>(
 /**
  * CS_DIAGNOSTICS makes a packaged build behave like dev for logging: the verbose file
  * level, console output, and the CSLOGGER_MAIN_* overrides all turn on together.
- * Idempotent when already in dev (`isDev || x === isDev`). See docs/references/diagnostics/README.md.
+ * Idempotent when already in dev (`isDev || x === isDev`). See docs/dev/references/diagnostics/README.md.
  */
 const DEV_LOGGING = isDev || DIAGNOSTICS_ENABLED
 
@@ -302,9 +304,11 @@ export class LoggerService {
       // Bounded name/message/stack plus small diagnostic tags only: custom
       // enumerable props (e.g. AI SDK requestBodyValues) never reach disk (#20363).
       Object.assign(entry, toSafeError(first))
+      entry.errorMessage = entry.message
       fileMessage = `${message} ${String(entry.message)}`
     } else if (first !== null && typeof first === 'object') {
       Object.assign(entry, sanitizeLogValue(first) as Record<string, unknown>)
+      if (typeof entry.errorMessage === 'string') fileMessage = `${message} ${entry.errorMessage}`
     } else if (first !== undefined) {
       rest.push(first)
     }

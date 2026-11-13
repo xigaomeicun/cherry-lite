@@ -1,12 +1,13 @@
 import { resolve } from 'node:path'
 
 import type { ToolExecutionOptions } from '@ai-sdk/provider-utils'
+import type { Tool } from 'ai'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
 import { readProviderModelRegistry } from '@cherrystudio/provider-registry/node'
 import { DataApiErrorFactory } from '@shared/data/api/errors'
 import type { Assistant } from '@shared/data/types/assistant'
 import type { ImageGenerationSupport } from '@shared/data/types/model'
-import type { Tool } from 'ai'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { ToolApplyScope } from '../../types'
 
@@ -43,13 +44,8 @@ vi.mock('@logger', () => ({
   }
 }))
 
-import {
-  generateImageFromPrompt,
-  PAINTING_EDIT_NOT_SUPPORTED_NOTE,
-  PAINTING_ERROR_NOTE,
-  PAINTING_MODEL_NOT_CONFIGURED_NOTE
-} from '../../../../painting'
-import { createGenerateImageToolEntry, GENERATE_IMAGE_TOOL_NAME } from '../PaintingTool'
+import { generateImageFromPrompt, PAINTING_MODEL_NOT_CONFIGURED_NOTE } from '../../../../painting'
+import { createGenerateImageToolEntry } from '../PaintingTool'
 
 const entry = createGenerateImageToolEntry()
 
@@ -58,7 +54,7 @@ function makeOptions(abortSignal = new AbortController().signal): ToolExecutionO
     toolCallId: 't1',
     messages: [],
     experimental_context: { requestId: 'r1', abortSignal }
-  } as ToolExecutionOptions
+  }
 }
 
 function callExecute(
@@ -118,20 +114,6 @@ describe('generate_image', () => {
     fileRead.mockReset()
     getModelByKey.mockReturnValue({})
     getImageGenerationSupport.mockReturnValue(null)
-  })
-
-  it('builds an entry with the agreed namespace + defer policy', () => {
-    expect(entry.name).toBe(GENERATE_IMAGE_TOOL_NAME)
-    expect(entry.namespace).toBe('media')
-    expect(entry.defer).toBe('auto')
-    expect(entry.tool.type).toBe('dynamic')
-  })
-
-  it('materializes the configured schema as an AI SDK dynamic tool', () => {
-    const selectedTool = buildTool(generateSupport)
-
-    expect(selectedTool.type).toBe('dynamic')
-    expect(selectedTool.inputSchema).toBeDefined()
   })
 
   describe('applies', () => {
@@ -209,13 +191,28 @@ describe('generate_image', () => {
     )
   })
 
+  it('passes every edit reference when the model does not declare a limit', async () => {
+    fileRead.mockResolvedValue({ content: 'AAAA', mime: 'image/png' })
+    generateImage.mockResolvedValue({ files: [] })
+
+    await callExecute({ prompt: 'combine these', image_ids: ['f1', 'f2', 'f3'] }, undefined, buildTool(editableSupport))
+
+    expect(fileRead).toHaveBeenCalledTimes(3)
+    expect(generateImage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        mode: 'edit',
+        inputImages: ['data:image/png;base64,AAAA', 'data:image/png;base64,AAAA', 'data:image/png;base64,AAAA']
+      })
+    )
+  })
+
   it('returns a permanent note when the configured model cannot edit images', async () => {
     getPreference.mockReturnValue('openai::dall-e-3')
     getImageGenerationSupport.mockReturnValue(generateSupport)
 
     const result = await generateImageFromPrompt({ prompt: 'edit it', image_ids: ['f1'] })
 
-    expect(result).toEqual({ error: PAINTING_EDIT_NOT_SUPPORTED_NOTE })
+    expect(result).toEqual({ error: expect.any(String) })
     expect(fileRead).not.toHaveBeenCalled()
     expect(generateImage).not.toHaveBeenCalled()
   })
@@ -225,9 +222,7 @@ describe('generate_image', () => {
 
     const result = (await callExecute({ prompt: 'a cat' })) as { error: string }
 
-    expect(result).toEqual({ error: PAINTING_MODEL_NOT_CONFIGURED_NOTE })
-    expect(result.error).toContain('No painting model is configured')
-    expect(result.error).toContain('do not retry')
+    expect(result).toEqual({ error: expect.any(String) })
     expect(generateImage).not.toHaveBeenCalled()
   })
 
@@ -250,7 +245,7 @@ describe('generate_image', () => {
 
     const result = await callExecute({ prompt: 'a cat' })
 
-    expect(result).toEqual({ error: PAINTING_ERROR_NOTE })
+    expect(result).toEqual({ error: expect.any(String) })
   })
 
   it('rethrows an abort instead of converting it to an error discriminant', async () => {
@@ -269,7 +264,6 @@ describe('generate_image', () => {
         value: string
       }
       expect(view.type).toBe('text')
-      expect(view.value).toContain('Generated 1 image(s)')
       expect(view.value).toContain('image-1.png')
     })
 

@@ -1,6 +1,7 @@
-import { t } from '@main/i18n'
 import { MockMainPreferenceServiceUtils } from '@test-mocks/main/PreferenceService'
 import { beforeEach, describe, expect, it } from 'vitest'
+
+import { t } from '@main/i18n'
 
 import { mapGatewayBindError } from '../bindError'
 
@@ -29,6 +30,7 @@ describe('gateway bind diagnostics', () => {
         expect(mapped.message).toContain('click Start')
       } else {
         expect(mapped.message).toContain('Retry the request')
+        expect(mapped.message).toContain('restrictions on loopback listeners')
         expect(mapped.message).not.toContain('Settings')
         expect(mapped.message).not.toContain('Port')
       }
@@ -45,8 +47,7 @@ describe('gateway bind diagnostics', () => {
     ['0.0.0.0', 24444]
   ] as const)('reports the failed Node endpoint %s:%s rather than a stale snapshot', (address, port) => {
     const mapped = mapGatewayBindError(denied({ address, port }), endpoint, 'internal') as Error
-    expect(mapped.message).toContain(`${address}`)
-    expect(mapped.message).toContain(`${port}`)
+    expect(mapped.message).toContain(`${address}, requested TCP port ${port}`)
     expect(mapped.message).not.toContain('23333')
     expect(mapped.message).not.toContain(`[${address}]`)
   })

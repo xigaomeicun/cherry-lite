@@ -1,6 +1,6 @@
 import { agentSessionService } from '@data/services/AgentSessionService'
 
-import { type BrowserGuestContext, BrowserGuestRegistry, type BrowserGuestTarget } from './BrowserGuestRegistry'
+import { BrowserGuestRegistry, type BrowserGuestTarget, type BrowserGuestContext } from './BrowserGuestRegistry'
 
 export interface AgentBrowserContext {
   agentId: string

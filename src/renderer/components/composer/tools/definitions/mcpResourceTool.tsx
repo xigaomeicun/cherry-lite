@@ -1,3 +1,6 @@
+import { Loader2 } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+
 import { loggerService } from '@logger'
 import { ComposerPanelSymbol, prepareComposerQuickPanelSearch } from '@renderer/components/composer/quickPanel'
 import type { ComposerToolLauncher } from '@renderer/components/composer/toolLauncher'
@@ -9,11 +12,8 @@ import { useScopedMcpServers } from '@renderer/hooks/useMcpServer'
 import { ipcApi } from '@renderer/ipc'
 import { toast } from '@renderer/services/toast'
 import { isSupportedToolUse } from '@renderer/utils/assistant'
-import { formatErrorMessageWithPrefix } from '@renderer/utils/error'
 import { DEFAULT_MCP_MODE } from '@shared/data/types/assistant'
 import type { McpResource } from '@shared/types/mcp'
-import { Loader2 } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { mcpResourceToComposerToken } from '../../variants/shared/composerTokens'
 
@@ -48,11 +48,16 @@ export const McpResourceComposerRuntime = ({ context }: { context: McpResourceTo
   // and neither the insert nor the toast may run against a dead runtime.
   const isMountedRef = useRef(true)
   const selectionGenerationRef = useRef(0)
+  const requestIdRef = useRef<string | undefined>(undefined)
 
   useEffect(() => {
     isMountedRef.current = true
     return () => {
       isMountedRef.current = false
+      if (requestIdRef.current)
+        void ipcApi
+          .request('mcp.request.cancel', { requestId: requestIdRef.current })
+          .catch((error) => logger.debug('MCP resource cancellation failed', { error }))
     }
   }, [])
 
@@ -92,7 +97,7 @@ export const McpResourceComposerRuntime = ({ context }: { context: McpResourceTo
       if (cancelled) return
       setResources(
         results.flatMap((result, index) => {
-          if (result.status === 'fulfilled') return (result.value as McpResource[] | undefined) ?? []
+          if (result.status === 'fulfilled') return result.value ?? []
           logger.warn('Failed to list MCP resources', { serverId: servers[index].id, error: result.reason })
           return []
         })
@@ -136,6 +141,12 @@ export const McpResourceComposerRuntime = ({ context }: { context: McpResourceTo
   const handleSelect = useCallback(
     async (resource: McpResource, options?: QuickPanelCallBackOptions) => {
       const generation = ++selectionGenerationRef.current
+      if (requestIdRef.current)
+        void ipcApi
+          .request('mcp.request.cancel', { requestId: requestIdRef.current })
+          .catch((error) => logger.debug('MCP resource cancellation failed', { error }))
+      const requestId = crypto.randomUUID()
+      requestIdRef.current = requestId
       try {
         // A declared binary type cannot be inlined. Insert the deferred read immediately instead of
         // downloading the blob once for classification and again when the runtime reads it.
@@ -150,6 +161,8 @@ export const McpResourceComposerRuntime = ({ context }: { context: McpResourceTo
         // Capped main-side: only the inline budget crosses IPC, plus the metadata needed to decide
         // between inlining and attaching a reference.
         const preview = await ipcApi.request('mcp.server.read_resource_preview', {
+          requestId,
+          topicId: session?.sessionId,
           serverId: resource.serverId,
           uri: resource.uri,
           maxChars: MCP_RESOURCE_INLINE_MAX_CHARS
@@ -174,10 +187,16 @@ export const McpResourceComposerRuntime = ({ context }: { context: McpResourceTo
           serverId: resource.serverId,
           uri: resource.uri
         })
-        toast.error(formatErrorMessageWithPrefix(error, t('chat.input.mcp_resources.read_failed')))
+        toast.errorFromException(error, {
+          category: 'mcp',
+          mcpServer: { id: resource.serverId, name: resource.serverName },
+          isCurrent: () => isMountedRef.current && generation === selectionGenerationRef.current
+        })
+      } finally {
+        if (requestIdRef.current === requestId) requestIdRef.current = undefined
       }
     },
-    [insertReferenceToken, insertText, resourceReader, t]
+    [insertReferenceToken, insertText, resourceReader, t, session?.sessionId]
   )
 
   const items = useMemo<QuickPanelListItem[]>(() => {

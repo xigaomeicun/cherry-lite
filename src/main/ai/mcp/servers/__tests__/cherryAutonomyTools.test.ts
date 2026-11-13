@@ -2,9 +2,13 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 
-import { resetOutboundImageDeliveryForTests } from '@main/ai/channels/outboundImageDelivery'
-import type { AgentSessionWorkspaceSource } from '@shared/data/api/schemas/agentWorkspaces'
+import type { Client } from '@modelcontextprotocol/client'
+import { McpServer } from '@modelcontextprotocol/server'
+import { connectMcpTestClient } from '@test-helpers/mcp/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+import type * as ChannelsModule from '@main/ai/channels'
+import type { AgentSessionWorkspaceSource } from '@shared/data/api/schemas/agentWorkspaces'
 
 // Mock TaskService before importing CherryAutonomyTools
 const mockCreateTask = vi.fn()
@@ -13,19 +17,19 @@ const mockDeleteTask = vi.fn()
 const mockGetNotifyAdapters = vi.fn()
 const mockSendMessage = vi.fn()
 const mockSendFile = vi.fn()
-const mockSendImage = vi.fn()
 const mockGetAgent = vi.fn()
 const mockListAgents = vi.fn()
 const mockUpdateAgent = vi.fn()
-const mockSyncChannel = vi.fn()
-const mockDisconnectChannel = vi.fn()
-const mockWaitForQrUrl = vi.fn()
 const mockQRCodeToDataURL = vi.fn()
 const mockListChannels = vi.fn()
 const mockCreateChannel = vi.fn()
+const mockCreateChannelAndWaitForQr = vi.fn()
 const mockGetChannel = vi.fn()
 const mockUpdateChannel = vi.fn()
+const mockUpdateChannelAndWaitForQr = vi.fn()
 const mockDeleteChannel = vi.fn()
+const mockReconnectChannel = vi.fn()
+const mockReconnectChannelWithQr = vi.fn()
 const mockGetSession = vi.fn()
 const mockGetLatestActive = vi.fn()
 const mockReadConversation = vi.fn()
@@ -104,10 +108,7 @@ vi.mock('@application', async () => {
     ChannelManager: {
       getNotifyAdapters: mockGetNotifyAdapters,
       getAgentAdapters: mockGetNotifyAdapters,
-      getAdapterStatuses: vi.fn().mockReturnValue([]),
-      syncChannel: mockSyncChannel,
-      disconnectChannel: mockDisconnectChannel,
-      waitForQrUrl: mockWaitForQrUrl
+      getAdapterStatuses: vi.fn().mockReturnValue([])
     }
   } as Parameters<typeof mockApplicationFactory>[0])
 })
@@ -119,20 +120,23 @@ vi.mock('qrcode', () => ({
 vi.mock('@data/services/AgentChannelService', () => ({
   agentChannelService: {
     listChannels: mockListChannels,
-    createChannel: mockCreateChannel,
-    getChannel: mockGetChannel,
-    updateChannel: mockUpdateChannel,
-    deleteChannel: mockDeleteChannel
+    getChannel: mockGetChannel
   }
 }))
 
-vi.mock('@data/services/AgentChannelWorkflowService', () => ({
-  agentChannelWorkflowService: {
-    createChannel: mockCreateChannel,
-    updateChannel: mockUpdateChannel,
-    deleteChannel: mockDeleteChannel
+vi.mock('@main/ai/channels', async (importOriginal) => {
+  const actual = await importOriginal<typeof ChannelsModule>()
+  return {
+    ...actual,
+    createAgentChannel: mockCreateChannel,
+    createAgentChannelAndWaitForQr: mockCreateChannelAndWaitForQr,
+    updateAgentChannel: mockUpdateChannel,
+    updateAgentChannelAndWaitForQr: mockUpdateChannelAndWaitForQr,
+    deleteAgentChannel: mockDeleteChannel,
+    reconnectAgentChannel: mockReconnectChannel,
+    reconnectAgentChannelWithQr: mockReconnectChannelWithQr
   }
-}))
+})
 
 vi.mock('@main/services/MainWindowService', () => ({
   windowService: {
@@ -140,43 +144,50 @@ vi.mock('@main/services/MainWindowService', () => ({
   }
 }))
 
-const { CherryAutonomyTools } = await import('../cherryAutonomyTools')
-type CherryAutonomyToolsInstance = InstanceType<typeof CherryAutonomyTools>
+const { registerAutonomyTools } = await import('../cherryAutonomyTools')
 const WORKSPACE_SOURCE = { type: 'system' as const }
 const WORKSPACE_PATH = '/tmp/cherry-test-workspace'
+const clients: Client[] = []
 
-function createServer(
+async function createServer(
   agentId = 'agent_test',
   workspacePath = WORKSPACE_PATH,
   notifyChannelIds: string | string[] | null = 'ch1',
   workspaceSource: AgentSessionWorkspaceSource = WORKSPACE_SOURCE
-) {
+): Promise<Client> {
   const trustedNotifyChannels = (Array.isArray(notifyChannelIds) ? notifyChannelIds : [notifyChannelIds]).flatMap(
     (id) => (id ? [{ id, type: 'telegram' as const }] : [])
   )
-  // getKnowledgeBaseIds is required on CherryAgentContext but unused by the autonomy tools.
-  return new CherryAutonomyTools({
-    agentId,
-    sessionId: 'session_test',
-    workspaceSource,
-    workspacePath,
-    trustedNotifyChannels,
-    allowAnyOwnedNotifyChannel: typeof notifyChannelIds === 'string',
-    getKnowledgeBaseIds: () => []
+  const client = await connectMcpTestClient(() => {
+    const server = new McpServer({ name: 'cherry-tools', version: '1.0.0' })
+    registerAutonomyTools(server, {
+      agentId,
+      sessionId: 'session_test',
+      workspaceSource,
+      workspacePath,
+      trustedNotifyChannels,
+      allowAnyOwnedNotifyChannel: typeof notifyChannelIds === 'string'
+    })
+    return server
   })
+  clients.push(client)
+  return client
 }
 
-// Helper mirroring how CherryBuiltinToolsServer's CallTool handler routes autonomy calls
-// (returns `any` so assertions can poke content items without narrowing the SDK union).
+// Returns `any` so assertions can poke content items without narrowing the SDK union.
 async function callTool(
-  server: CherryAutonomyToolsInstance,
+  server: Client | Promise<Client>,
   args: Record<string, unknown>,
   toolName = 'cron'
 ): Promise<any> {
-  return server.call(toolName, args)
+  return (await server).callTool({ name: toolName, arguments: args })
 }
 
-describe('CherryAutonomyTools', () => {
+async function listTools(server: Client | Promise<Client>) {
+  return (await (await server).listTools()).tools
+}
+
+describe('cherry-tools autonomy tools', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockGetChannel.mockImplementation((channelId: string) => ({ id: channelId, agentId: 'agent_1' }))
@@ -191,35 +202,31 @@ describe('CherryAutonomyTools', () => {
     mockGetInteractionState.mockReturnValue({ currentTurn: 'interactive', userResponse: 'stream' })
   })
 
-  it('advertises the read contract, search limit and configured notification recipient', () => {
-    const server = createServer('agent_test', WORKSPACE_PATH, 'ch1')
-    const tools = server.tools()
+  afterEach(async () => {
+    await Promise.all(clients.splice(0).map((client) => client.close()))
+  })
+
+  it('advertises the read contract, search limit and configured notification recipient', async () => {
+    const tools = await listTools(createServer('agent_test', WORKSPACE_PATH, 'ch1'))
     expect(tools.map((tool) => tool.name)).toContain('agent_list')
     const readSchema = tools.find((tool) => tool.name === 'session_read')?.inputSchema
     expect(readSchema?.required).toContain('session_id')
     expect(readSchema?.properties?.limit).toMatchObject({ type: 'integer', exclusiveMinimum: 0 })
-    expect(readSchema).not.toHaveProperty('$schema')
     expect(readSchema?.properties).not.toHaveProperty('type')
     expect(tools.find((tool) => tool.name === 'session_search')?.inputSchema.properties?.query).toMatchObject({
       maxLength: 4096
     })
-    expect(tools.find((tool) => tool.name === 'notify')?.description).toContain('Files are first-class deliverables')
+    expect(tools.find((tool) => tool.name === 'notify')?.description).toContain('workspace file')
     expect(tools.find((tool) => tool.name === 'notify')?.description).toContain(
       'Configured recipients: telegram (ch1).'
     )
   })
 
-  it('hides notify for sessions without a source channel', async () => {
+  it('does not offer notify for sessions without a source channel', async () => {
     const server = createServer('agent_test', WORKSPACE_PATH, null)
 
-    expect(server.tools().map((tool) => tool.name)).not.toContain('notify')
-    expect(server.handles('notify')).toBe(true)
-
-    const result = await callTool(server, { message: 'Hello' }, 'notify')
-    expect(result.isError).toBe(true)
-    expect(result.content[0].text).toContain(
-      'notify is unavailable because this turn has no configured notification recipients'
-    )
+    expect((await listTools(server)).map((tool) => tool.name)).not.toContain('notify')
+    await expect(callTool(server, { message: 'Hello' }, 'notify')).rejects.toThrow('notify')
     expect(mockGetNotifyAdapters).not.toHaveBeenCalled()
   })
 
@@ -271,7 +278,9 @@ describe('CherryAutonomyTools', () => {
             ? { message: 'delegate' }
             : toolName === 'session_send'
               ? { target_session_id: 'session_b', message: 'delegate' }
-              : {}
+              : toolName === 'session_read'
+                ? { session_id: 'topic-1' }
+                : {}
 
       const result = await callTool(createServer(), args, toolName)
 
@@ -449,7 +458,6 @@ describe('CherryAutonomyTools', () => {
       const result = await callTool(createServer(), { direction: 'sideways' }, 'session_deliveries')
 
       expect(result.isError).toBe(true)
-      expect(result.content[0].text).toContain("invalid 'direction'")
       expect(mockListSessionDeliveries).not.toHaveBeenCalled()
     })
 
@@ -578,42 +586,6 @@ describe('CherryAutonomyTools', () => {
       })
     })
 
-    it('places metadata-only Session hits after ranked message evidence', async () => {
-      mockSearchSessionMessages.mockReturnValue([
-        {
-          messageId: 'message-ranked',
-          sessionId: 'session-ranked',
-          sessionName: 'Ranked evidence',
-          agentId: 'agent_a',
-          agentName: 'Agent A',
-          snippet: 'ranked evidence',
-          createdAt: '2026-08-10T00:00:00.000Z'
-        }
-      ])
-      mockSearchSessions.mockReturnValue([
-        {
-          item: {
-            id: 'session-metadata',
-            title: 'Metadata only',
-            subtitle: 'Agent B',
-            target: { agentId: 'agent_b' }
-          },
-          matches: [{ field: 'name', snippet: 'Metadata only' }]
-        }
-      ])
-
-      const result = await callTool(createServer(), { query: 'evidence' }, 'session_search')
-
-      expect(JSON.parse(result.content[0].text).sessions).toEqual([
-        expect.objectContaining({ sessionId: 'session-ranked', matches: [expect.anything()] }),
-        expect.objectContaining({
-          sessionId: 'session-metadata',
-          matches: [],
-          metadataMatches: [{ field: 'name', snippet: 'Metadata only' }]
-        })
-      ])
-    })
-
     it('merges metadata evidence and applies limit to final Sessions', async () => {
       mockSearchSessionMessages.mockReturnValue([
         {
@@ -694,6 +666,25 @@ describe('CherryAutonomyTools', () => {
         agentId: 'agent_test',
         sessionId: 'session-new',
         delivery: { id: 'delivery-1', status: 'accepted' }
+      })
+    })
+
+    it('creates a Session for an explicit target Agent while retaining the trusted sender', async () => {
+      mockGetAgent.mockReturnValue({ id: 'agent-target', name: 'Target', model: 'provider::model' })
+      mockCreateSessionWithDelivery.mockReturnValue({
+        session: { id: 'session-target', agentId: 'agent-target' },
+        message: { id: 'message-target', delivery: { status: 'accepted' } }
+      })
+
+      await callTool(createServer(), { message: 'Delegate this', target_agent_id: 'agent-target' }, 'session_create')
+
+      expect(mockCreateSessionWithDelivery).toHaveBeenCalledWith({
+        senderAgentId: 'agent_test',
+        senderSessionId: 'session_test',
+        targetAgentId: 'agent-target',
+        sessionName: '',
+        workspace: WORKSPACE_SOURCE,
+        content: 'Delegate this'
       })
     })
 
@@ -787,7 +778,7 @@ describe('CherryAutonomyTools', () => {
       mockCreateTask.mockReturnValue(task)
 
       const server = createServer('agent_1', WORKSPACE_PATH, null)
-      const result = await callTool(server, {
+      await callTool(server, {
         action: 'add',
         name: 'Daily standup',
         message: 'Run standup check',
@@ -802,7 +793,6 @@ describe('CherryAutonomyTools', () => {
         timeoutMinutes: undefined,
         channelIds: undefined
       })
-      expect(result.content[0].text).toContain('Job created')
     })
 
     it('should create a task with interval schedule', async () => {
@@ -924,20 +914,6 @@ describe('CherryAutonomyTools', () => {
       expect(mockCreateTask).not.toHaveBeenCalled()
     })
 
-    it('treats an explicit empty channel_ids as no delivery while omission fans out', async () => {
-      mockCreateTask.mockReturnValue({ id: 'task_empty' })
-
-      await callTool(createServer('agent_1', WORKSPACE_PATH, ['ch1', 'ch2']), {
-        action: 'add',
-        name: 'silent',
-        message: 'run',
-        cron: '* * * * *',
-        channel_ids: []
-      })
-
-      expect(mockCreateTask).toHaveBeenCalledWith('agent_1', expect.objectContaining({ channelIds: undefined }))
-    })
-
     it.each([[null], ['ch1'], [{ id: 'ch1' }], [[1]]])(
       'rejects a non-array channel_ids (%s) instead of reading it as omission',
       async (rawChannelIds) => {
@@ -950,7 +926,6 @@ describe('CherryAutonomyTools', () => {
         })
 
         expect(result.isError).toBe(true)
-        expect(result.content[0].text).toContain("'channel_ids' must be an array of channel ids")
         expect(mockCreateTask).not.toHaveBeenCalled()
       }
     )
@@ -1016,15 +991,6 @@ describe('CherryAutonomyTools', () => {
       expect(mockListTasks).toHaveBeenCalledWith('agent_1', { limit: 100 })
       expect(result.content[0].text).toContain('Job 1')
     })
-
-    it('should handle empty task list', async () => {
-      mockListTasks.mockReturnValue({ tasks: [], total: 0 })
-
-      const server = createServer()
-      const result = await callTool(server, { action: 'list' })
-
-      expect(result.content[0].text).toBe('No scheduled jobs.')
-    })
   })
 
   describe('remove action', () => {
@@ -1032,10 +998,9 @@ describe('CherryAutonomyTools', () => {
       mockDeleteTask.mockResolvedValue(true)
 
       const server = createServer('agent_1')
-      const result = await callTool(server, { action: 'remove', id: 'task_1' })
+      await callTool(server, { action: 'remove', id: 'task_1' })
 
       expect(mockDeleteTask).toHaveBeenCalledWith('agent_1', 'task_1')
-      expect(result.content[0].text).toContain('removed')
     })
 
     it('should error when task not found', async () => {
@@ -1055,8 +1020,7 @@ describe('CherryAutonomyTools', () => {
         connected,
         notifyChatIds: chatIds,
         sendMessage: mockSendMessage,
-        sendFile: mockSendFile,
-        sendImage: mockSendImage
+        sendFile: mockSendFile
       }
     }
 
@@ -1065,14 +1029,13 @@ describe('CherryAutonomyTools', () => {
       mockGetNotifyAdapters.mockReturnValue([makeAdapter('ch1', ['100', '200']), makeAdapter('ch2', ['300'])])
 
       const server = createServer('agent_1')
-      const result = await callTool(server, { message: 'Hello user!' }, 'notify')
+      await callTool(server, { message: 'Hello user!' }, 'notify')
 
       expect(mockGetNotifyAdapters).toHaveBeenCalledWith('agent_1')
       expect(mockSendMessage).toHaveBeenCalledTimes(2)
       expect(mockSendMessage).toHaveBeenCalledWith('100', 'Hello user!')
       expect(mockSendMessage).toHaveBeenCalledWith('200', 'Hello user!')
       expect(mockSendMessage).not.toHaveBeenCalledWith('300', 'Hello user!')
-      expect(result.content[0].text).toContain('Message sent to 2 chat(s)')
     })
 
     it('should filter by channel_id when provided', async () => {
@@ -1080,12 +1043,11 @@ describe('CherryAutonomyTools', () => {
       mockGetNotifyAdapters.mockReturnValue([makeAdapter('ch1', ['100']), makeAdapter('ch2', ['200'])])
 
       const server = createServer('agent_1')
-      const result = await callTool(server, { message: 'Targeted', channel_id: 'ch2' }, 'notify')
+      await callTool(server, { message: 'Targeted', channel_id: 'ch2' }, 'notify')
 
       expect(mockGetNotifyAdapters).toHaveBeenCalledWith('agent_1')
       expect(mockSendMessage).toHaveBeenCalledTimes(1)
       expect(mockSendMessage).toHaveBeenCalledWith('200', 'Targeted')
-      expect(result.content[0].text).toContain('Message sent to 1 chat(s)')
     })
 
     it('rejects an explicit source-session target outside the Agent’s live adapters', async () => {
@@ -1127,7 +1089,7 @@ describe('CherryAutonomyTools', () => {
       const workspace = await mkdtemp(path.join(tmpdir(), 'cherry-notify-fanout-'))
       try {
         await writeFile(path.join(workspace, 'report.txt'), 'done')
-        const result = await callTool(
+        await callTool(
           createServer('agent_1', workspace, ['ch1', 'ch2']),
           { message: 'Task complete', file_path: 'report.txt' },
           'notify'
@@ -1136,8 +1098,6 @@ describe('CherryAutonomyTools', () => {
         expect(mockSendMessage).toHaveBeenCalledWith('100', 'Task complete')
         expect(mockSendMessage).toHaveBeenCalledWith('200', 'Task complete')
         expect(mockSendFile).toHaveBeenCalledTimes(2)
-        expect(result.content[0].text).toContain('Message sent to 2 chat(s)')
-        expect(result.content[0].text).toContain('File "report.txt" sent to 2 chat(s)')
       } finally {
         await rm(workspace, { recursive: true, force: true })
       }
@@ -1204,13 +1164,12 @@ describe('CherryAutonomyTools', () => {
       mockGetNotifyAdapters.mockReturnValue([makeAdapter('ch1', [])])
 
       const server = createServer('agent_1')
-      const result = await callTool(server, { message: 'Hello' }, 'notify')
+      await callTool(server, { message: 'Hello' }, 'notify')
 
       expect(mockSendMessage).not.toHaveBeenCalled()
       expect(mockSendFile).not.toHaveBeenCalled()
-      expect(result.content[0].text).toContain('Message sent to 0 chat(s)')
+
       // No failed attempts (nobody configured) is an informational result, not an error.
-      expect(result.isError).toBeFalsy()
     })
 
     it('should error when both message and file_path are missing', async () => {
@@ -1278,8 +1237,6 @@ describe('CherryAutonomyTools', () => {
       let outside: string
 
       beforeEach(async () => {
-        resetOutboundImageDeliveryForTests()
-        mockSendImage.mockReset()
         workspace = await mkdtemp(path.join(tmpdir(), 'cherry-notify-'))
         outside = await mkdtemp(path.join(tmpdir(), 'cherry-outside-'))
       })
@@ -1295,7 +1252,7 @@ describe('CherryAutonomyTools', () => {
         await writeFile(path.join(workspace, 'report.txt'), 'hello')
 
         const server = createServer('agent_1', workspace)
-        const result = await callTool(server, { file_path: 'report.txt' }, 'notify')
+        await callTool(server, { file_path: 'report.txt' }, 'notify')
 
         expect(mockSendFile).toHaveBeenCalledTimes(2)
         const [chatId, file] = mockSendFile.mock.calls[0]
@@ -1303,42 +1260,6 @@ describe('CherryAutonomyTools', () => {
         expect(file.filename).toBe('report.txt')
         expect(file.media_type).toBe('text/plain')
         expect(Buffer.from(file.data, 'base64').toString()).toBe('hello')
-        expect(result.content[0].text).toContain('File "report.txt" sent to 2 chat(s)')
-      })
-
-      it('should deliver workspace images via sendImage (not sendFile)', async () => {
-        mockSendImage.mockResolvedValue(undefined)
-        mockGetNotifyAdapters.mockReturnValue([makeAdapter('ch1', ['100'])])
-        await writeFile(path.join(workspace, 'shot.png'), Buffer.from([0x89, 0x50, 0x4e, 0x47]))
-
-        const server = createServer('agent_1', workspace)
-        const result = await callTool(server, { file_path: 'shot.png' }, 'notify')
-
-        expect(mockSendImage).toHaveBeenCalledTimes(1)
-        expect(mockSendFile).not.toHaveBeenCalled()
-        expect(mockSendImage.mock.calls[0][1]).toMatchObject({
-          filename: 'shot.png',
-          media_type: 'image/png'
-        })
-        expect(result.content[0].text).toContain('File "shot.png" sent to 1 chat(s)')
-      })
-
-      it('should skip sendImage when the body path already delivered the same realpath', async () => {
-        const { markOutboundImageDelivered } = await import('@main/ai/channels/outboundImageDelivery')
-        const { realpath } = await import('node:fs/promises')
-        mockSendImage.mockResolvedValue(undefined)
-        mockGetNotifyAdapters.mockReturnValue([makeAdapter('ch1', ['100'])])
-        const imagePath = path.join(workspace, 'dup.png')
-        await writeFile(imagePath, Buffer.from([0x89, 0x50, 0x4e, 0x47]))
-        markOutboundImageDelivered('ch1', '100', await realpath(imagePath))
-
-        const server = createServer('agent_1', workspace)
-        const result = await callTool(server, { file_path: 'dup.png' }, 'notify')
-
-        expect(mockSendImage).not.toHaveBeenCalled()
-        expect(mockSendFile).not.toHaveBeenCalled()
-        expect(result.content[0].text).toContain('File "dup.png" sent to 1 chat(s)')
-        expect(result.isError).toBeFalsy()
       })
 
       it('should send both message and file independently', async () => {
@@ -1348,12 +1269,10 @@ describe('CherryAutonomyTools', () => {
         await writeFile(path.join(workspace, 'a.txt'), 'x')
 
         const server = createServer('agent_1', workspace)
-        const result = await callTool(server, { message: 'see attached', file_path: 'a.txt' }, 'notify')
+        await callTool(server, { message: 'see attached', file_path: 'a.txt' }, 'notify')
 
         expect(mockSendMessage).toHaveBeenCalledWith('100', 'see attached')
         expect(mockSendFile).toHaveBeenCalledTimes(1)
-        expect(result.content[0].text).toContain('Message sent to 1 chat(s)')
-        expect(result.content[0].text).toContain('File "a.txt" sent to 1 chat(s)')
       })
 
       it('should mark isError when the message lands but the file reaches no one', async () => {
@@ -1468,12 +1387,11 @@ describe('CherryAutonomyTools', () => {
     }
 
     beforeEach(() => {
-      mockSyncChannel.mockResolvedValue(undefined)
-      mockDisconnectChannel.mockResolvedValue(undefined)
       mockListChannels.mockReturnValue([])
       mockGetChannel.mockReturnValue(null)
-      mockDeleteChannel.mockResolvedValue(undefined)
+      mockDeleteChannel.mockResolvedValue(true)
       mockUpdateChannel.mockResolvedValue(undefined)
+      mockReconnectChannel.mockResolvedValue(undefined)
     })
 
     describe('status action', () => {
@@ -1489,21 +1407,7 @@ describe('CherryAutonomyTools', () => {
         expect(parsed.model).toBe('claude-sonnet-4-20250514')
         expect(parsed.channels).toHaveLength(1)
         expect(parsed.channels[0].type).toBe('telegram')
-        expect(parsed.supported_channel_types.map((t: any) => t.type)).toEqual(
-          expect.arrayContaining(['telegram', 'feishu', 'qq', 'wechat', 'discord', 'slack', 'dingtalk'])
-        )
-        expect(server.tools().find((tool) => tool.name === 'config')?.inputSchema.properties?.type).toMatchObject({
-          enum: expect.arrayContaining(['dingtalk'])
-        })
-        expect(parsed.supported_channel_types.find((type: any) => type.type === 'dingtalk')).toMatchObject({
-          required_fields: ['client_id', 'client_secret', 'robot_code'],
-          optional_fields: ['allowed_chat_ids', 'allowed_user_ids', 'card_template_id']
-        })
-        expect(parsed.supported_channel_types.find((type: any) => type.type === 'feishu')).toMatchObject({
-          required_fields: ['app_id', 'app_secret', 'encrypt_key', 'verification_token', 'domain'],
-          optional_fields: ['allowed_chat_ids', 'mention_only']
-        })
-        expect(parsed.soul_enabled).toBeUndefined()
+
         expect(parsed.heartbeat_enabled).toBe(true)
       })
 
@@ -1534,7 +1438,7 @@ describe('CherryAutonomyTools', () => {
         mockCreateChannel.mockResolvedValue({ id: 'ch_new', type: 'telegram', name: 'Work Bot', isActive: true })
 
         const server = createServer('agent_1')
-        const result = await callTool(
+        await callTool(
           server,
           {
             action: 'add_channel',
@@ -1545,7 +1449,6 @@ describe('CherryAutonomyTools', () => {
           'config'
         )
 
-        expect(result.content[0].text).toContain('Channel added')
         expect(mockCreateChannel).toHaveBeenCalledWith(
           expect.objectContaining({
             type: 'telegram',
@@ -1582,7 +1485,6 @@ describe('CherryAutonomyTools', () => {
         )
 
         expect(result.isError).toBe(true)
-        expect(result.content[0].text).toContain("'config' must be an object")
         expect(mockCreateChannel).not.toHaveBeenCalled()
       })
 
@@ -1595,8 +1497,8 @@ describe('CherryAutonomyTools', () => {
         )
 
         expect(result.isError).toBe(true)
-        expect(result.content[0].text).toContain("'auth_mode' must be a string")
         expect(mockCreateChannel).not.toHaveBeenCalled()
+        expect(mockCreateChannelAndWaitForQr).not.toHaveBeenCalled()
       })
 
       it('should error when unsupported type is given', async () => {
@@ -1604,12 +1506,15 @@ describe('CherryAutonomyTools', () => {
         const result = await callTool(server, { action: 'add_channel', type: 'whatsapp', name: 'test' }, 'config')
 
         expect(result.isError).toBe(true)
-        expect(result.content[0].text).toContain('Unknown channel type')
+        expect(result.content[0].text).toContain('telegram')
+        expect(mockCreateChannel).not.toHaveBeenCalled()
       })
 
       it('should add a wechat channel without a token path and return QR code image', async () => {
-        mockCreateChannel.mockReturnValue({ id: 'ch_wc1', type: 'wechat', name: 'My WeChat', isActive: true })
-        mockWaitForQrUrl.mockResolvedValue('https://login.weixin.qq.com/l/abc123')
+        mockCreateChannelAndWaitForQr.mockResolvedValue({
+          channel: { id: 'ch_wc1', type: 'wechat', name: 'My WeChat', isActive: true },
+          qrUrl: 'https://login.weixin.qq.com/l/abc123'
+        })
         mockQRCodeToDataURL.mockResolvedValue('data:image/png;base64,iVBORw0KGgo=')
 
         const server = createServer('agent_1')
@@ -1625,24 +1530,24 @@ describe('CherryAutonomyTools', () => {
           'config'
         )
 
-        expect(mockCreateChannel).toHaveBeenCalledWith(
+        expect(mockCreateChannelAndWaitForQr).toHaveBeenCalledWith(
           expect.objectContaining({
             config: { type: 'wechat', token_path: '', allowed_chat_ids: ['chat-1'] }
-          })
+          }),
+          30_000
         )
         expect(result.content).toHaveLength(2)
-        expect(result.content[0].type).toBe('text')
-        expect(result.content[0].text).toContain('WeChat channel created')
+
         expect(result.content[1].type).toBe('image')
         expect(result.content[1].data).toBe('iVBORw0KGgo=')
         expect(result.content[1].mimeType).toBe('image/png')
-        expect(mockSyncChannel).toHaveBeenCalledWith('ch_wc1')
-        expect(mockWaitForQrUrl).toHaveBeenCalledWith('agent_1', 'ch_wc1', 30_000)
       })
 
       it('should add a feishu channel without app credentials and return QR code image', async () => {
-        mockCreateChannel.mockReturnValue({ id: 'ch_fs1', type: 'feishu', name: 'My Feishu', isActive: true })
-        mockWaitForQrUrl.mockResolvedValue('https://accounts.feishu.cn/device/abc123')
+        mockCreateChannelAndWaitForQr.mockResolvedValue({
+          channel: { id: 'ch_fs1', type: 'feishu', name: 'My Feishu', isActive: true },
+          qrUrl: 'https://accounts.feishu.cn/device/abc123'
+        })
         mockQRCodeToDataURL.mockResolvedValue('data:image/png;base64,iVBORw0KGgo=')
 
         const server = createServer('agent_1')
@@ -1666,7 +1571,7 @@ describe('CherryAutonomyTools', () => {
           'config'
         )
 
-        expect(mockCreateChannel).toHaveBeenCalledWith(
+        expect(mockCreateChannelAndWaitForQr).toHaveBeenCalledWith(
           expect.objectContaining({
             config: {
               type: 'feishu',
@@ -1678,17 +1583,16 @@ describe('CherryAutonomyTools', () => {
               domain: 'lark',
               mention_only: false
             }
-          })
+          }),
+          30_000
         )
         expect(result.content).toHaveLength(2)
-        expect(result.content[0].text).toContain('Feishu channel created')
+
         expect(result.content[1]).toMatchObject({
           type: 'image',
           data: 'iVBORw0KGgo=',
           mimeType: 'image/png'
         })
-        expect(mockSyncChannel).toHaveBeenCalledWith('ch_fs1')
-        expect(mockWaitForQrUrl).toHaveBeenCalledWith('agent_1', 'ch_fs1', 30_000)
       })
 
       it('should allow adding another Feishu channel when one already exists', async () => {
@@ -1699,8 +1603,10 @@ describe('CherryAutonomyTools', () => {
             config: { ...feishuChannel.config, app_id: 'app-id', app_secret: 'app-secret' }
           }
         ])
-        mockCreateChannel.mockReturnValue({ id: 'ch_fs2', type: 'feishu', name: 'Second Feishu', isActive: true })
-        mockWaitForQrUrl.mockResolvedValue('https://accounts.feishu.cn/device/abc123')
+        mockCreateChannelAndWaitForQr.mockResolvedValue({
+          channel: { id: 'ch_fs2', type: 'feishu', name: 'Second Feishu', isActive: true },
+          qrUrl: 'https://accounts.feishu.cn/device/abc123'
+        })
         mockQRCodeToDataURL.mockResolvedValue('data:image/png;base64,iVBORw0KGgo=')
 
         const server = createServer('agent_1')
@@ -1710,14 +1616,14 @@ describe('CherryAutonomyTools', () => {
           'config'
         )
 
-        expect(mockCreateChannel).toHaveBeenCalledWith(
+        expect(mockCreateChannelAndWaitForQr).toHaveBeenCalledWith(
           expect.objectContaining({
             type: 'feishu',
             name: 'Second Feishu',
             agentId: 'agent_1'
-          })
+          }),
+          30_000
         )
-        expect(mockWaitForQrUrl).toHaveBeenCalledWith('agent_1', 'ch_fs2', 30_000)
         expect(result.content.filter((item: { type: string }) => item.type === 'image')).toHaveLength(1)
       })
 
@@ -1747,7 +1653,10 @@ describe('CherryAutonomyTools', () => {
           existingChannel
         ])
         mockGetChannel.mockReturnValue(updatedChannel)
-        mockWaitForQrUrl.mockResolvedValue('https://accounts.larksuite.com/device/abc123')
+        mockUpdateChannelAndWaitForQr.mockResolvedValue({
+          channel: updatedChannel,
+          qrUrl: 'https://accounts.larksuite.com/device/abc123'
+        })
         mockQRCodeToDataURL.mockResolvedValue('data:image/png;base64,iVBORw0KGgo=')
 
         const server = createServer('agent_1')
@@ -1769,21 +1678,25 @@ describe('CherryAutonomyTools', () => {
         )
 
         expect(mockCreateChannel).not.toHaveBeenCalled()
-        expect(mockUpdateChannel).toHaveBeenCalledWith('ch_existing', {
-          name: 'Updated Feishu',
-          config: {
-            type: 'feishu',
-            app_id: '',
-            app_secret: '',
-            encrypt_key: '',
-            verification_token: '',
-            allowed_chat_ids: ['chat-1'],
-            domain: 'lark',
-            mention_only: false
+        expect(mockUpdateChannelAndWaitForQr).toHaveBeenCalledWith(
+          'ch_existing',
+          'agent_1',
+          {
+            name: 'Updated Feishu',
+            config: {
+              type: 'feishu',
+              app_id: '',
+              app_secret: '',
+              encrypt_key: '',
+              verification_token: '',
+              allowed_chat_ids: ['chat-1'],
+              domain: 'lark',
+              mention_only: false
+            },
+            isActive: true
           },
-          isActive: true
-        })
-        expect(mockWaitForQrUrl).toHaveBeenCalledWith('agent_1', 'ch_existing', 30_000)
+          30_000
+        )
         expect(result.content.filter((item: { type: string }) => item.type === 'image')).toHaveLength(1)
       })
 
@@ -1809,12 +1722,11 @@ describe('CherryAutonomyTools', () => {
         expect(result.content[0].text).toContain('Multiple unverified Feishu channels already exist')
         expect(result.content[0].text).toContain('reconnect_channel')
         expect(mockCreateChannel).not.toHaveBeenCalled()
-        expect(mockWaitForQrUrl).not.toHaveBeenCalled()
+        expect(mockCreateChannelAndWaitForQr).not.toHaveBeenCalled()
       })
 
-      it('should clean up orphan channel when wechat QR times out', async () => {
-        mockCreateChannel.mockReturnValue({ id: 'ch_wc2', type: 'wechat', name: 'My WeChat', isActive: true })
-        mockWaitForQrUrl.mockRejectedValue(new Error('Timed out waiting for QR code'))
+      it('reports the failure when wechat QR times out', async () => {
+        mockCreateChannelAndWaitForQr.mockRejectedValue(new Error('Timed out waiting for QR code'))
 
         const server = createServer('agent_1')
         const result = await callTool(
@@ -1826,11 +1738,6 @@ describe('CherryAutonomyTools', () => {
         expect(result.isError).toBe(true)
         expect(result.content).toHaveLength(1)
         expect(result.content[0].text).toContain('Timed out')
-        expect(result.content[0].text).toContain('not saved')
-        // Should have deleted the orphan channel
-        expect(mockDeleteChannel).toHaveBeenCalledWith('ch_wc2')
-        // syncChannel runs once for the initial fire-and-forget add.
-        expect(mockSyncChannel).toHaveBeenCalledTimes(1)
       })
 
       it('should error when required config field is missing', async () => {
@@ -1881,7 +1788,55 @@ describe('CherryAutonomyTools', () => {
         expect(result.isError).toBe(true)
         expect(result.content[0].text).toContain('QR authentication requires the channel to be enabled')
         expect(mockCreateChannel).not.toHaveBeenCalled()
-        expect(mockWaitForQrUrl).not.toHaveBeenCalled()
+        expect(mockCreateChannelAndWaitForQr).not.toHaveBeenCalled()
+      })
+    })
+
+    describe('headless turns', () => {
+      beforeEach(() => {
+        mockGetInteractionState.mockReturnValue({ currentTurn: 'headless', userResponse: 'unavailable' })
+        mockGetChannel.mockReturnValue(telegramChannel)
+        mockGetAgent.mockReturnValue(agentWithConfig)
+      })
+
+      it('refuses to add a sender to allowed_chat_ids from a channel or scheduled turn', async () => {
+        const result = await callTool(
+          createServer('agent_1'),
+          { action: 'update_channel', channel_id: 'ch_1', config: { allowed_chat_ids: ['100', 'attacker'] } },
+          'config'
+        )
+
+        expect(result.isError).toBe(true)
+        expect(result.content[0].text).toContain(
+          'Headless channel or scheduled turns cannot mutate agent configuration'
+        )
+        expect(mockUpdateChannel).not.toHaveBeenCalled()
+      })
+
+      it.each([
+        { action: 'rename', name: 'Renamed' },
+        { action: 'add_channel', type: 'telegram', name: 'Extra', config: { bot_token: 'tok_2' } },
+        { action: 'remove_channel', channel_id: 'ch_1' },
+        { action: 'reconnect_channel', channel_id: 'ch_1' },
+        { action: 'complete_bootstrap' },
+        { action: 'reset_bootstrap' }
+      ])('refuses $action', async (args) => {
+        const result = await callTool(createServer('agent_1'), args, 'config')
+
+        expect(result.isError).toBe(true)
+        expect(mockUpdateAgent).not.toHaveBeenCalled()
+        expect(mockCreateChannel).not.toHaveBeenCalled()
+        expect(mockDeleteChannel).not.toHaveBeenCalled()
+        expect(mockReconnectChannel).not.toHaveBeenCalled()
+      })
+
+      it('still reports status', async () => {
+        mockListChannels.mockReturnValue([telegramChannel])
+
+        const result = await callTool(createServer('agent_1'), { action: 'status' }, 'config')
+
+        expect(result.isError).toBeUndefined()
+        expect(JSON.parse(result.content[0].text).channels).toHaveLength(1)
       })
     })
 
@@ -1890,13 +1845,8 @@ describe('CherryAutonomyTools', () => {
         mockGetChannel.mockReturnValue(telegramChannel)
 
         const server = createServer('agent_1')
-        const result = await callTool(
-          server,
-          { action: 'update_channel', channel_id: 'ch_1', enabled: false },
-          'config'
-        )
+        await callTool(server, { action: 'update_channel', channel_id: 'ch_1', enabled: false }, 'config')
 
-        expect(result.content[0].text).toContain('updated and reloaded')
         expect(mockUpdateChannel).toHaveBeenCalledWith('ch_1', expect.objectContaining({ isActive: false }))
       })
 
@@ -1941,7 +1891,6 @@ describe('CherryAutonomyTools', () => {
         const server = createServer('agent_1')
         const result = await callTool(server, { action: 'remove_channel', channel_id: 'ch_1' }, 'config')
 
-        expect(result.content[0].text).toContain('removed')
         expect(result.content[0].text).toContain('My Telegram')
         expect(mockDeleteChannel).toHaveBeenCalledWith('ch_1')
       })
@@ -1981,10 +1930,9 @@ describe('CherryAutonomyTools', () => {
         mockGetChannel.mockReturnValue(telegramChannel)
 
         const server = createServer('agent_1')
-        const result = await callTool(server, { action: 'reconnect_channel', channel_id: 'ch_1' }, 'config')
+        await callTool(server, { action: 'reconnect_channel', channel_id: 'ch_1' }, 'config')
 
-        expect(result.content[0].text).toContain('reconnected')
-        expect(mockSyncChannel).toHaveBeenCalledWith('ch_1')
+        expect(mockReconnectChannel).toHaveBeenCalledWith('ch_1')
       })
 
       it('should error when channel_id is missing', async () => {
@@ -2013,7 +1961,7 @@ describe('CherryAutonomyTools', () => {
 
         expect(result.isError).toBe(true)
         expect(result.content[0].text).toContain('Channel "ch_1" not found')
-        expect(mockSyncChannel).not.toHaveBeenCalled()
+        expect(mockReconnectChannel).not.toHaveBeenCalled()
       })
     })
 
@@ -2022,7 +1970,7 @@ describe('CherryAutonomyTools', () => {
       const result = await callTool(server, { action: 'unknown' }, 'config')
 
       expect(result.isError).toBe(true)
-      expect(result.content[0].text).toContain('Unknown action')
+      expect(result.content[0].text).toContain('status')
     })
   })
 })

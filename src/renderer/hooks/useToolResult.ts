@@ -1,6 +1,7 @@
+import useSWRImmutable from 'swr/immutable'
+
 import { ipcApi } from '@renderer/ipc'
 import type { DeferredToolResultRef } from '@shared/ai/transport'
-import useSWRImmutable from 'swr/immutable'
 
 /**
  * Resolves a tool output deferred at the process boundary. SWR supplies the dedup and
@@ -8,9 +9,10 @@ import useSWRImmutable from 'swr/immutable'
  */
 export function useToolResult(ref: DeferredToolResultRef | undefined) {
   const { data, error, isLoading } = useSWRImmutable(
-    ref ? `tool-result:${ref.topicId}\0${ref.messageId}\0${ref.toolCallId}` : null,
+    ref ? `tool-result:${ref.topicId}\0${ref.messageId}\0${ref.toolCallId}\0${ref.revision ?? ''}` : null,
     async () => {
-      const response = await ipcApi.request('ai.tool.get_result', ref!)
+      const { topicId, messageId, toolCallId } = ref!
+      const response = await ipcApi.request('ai.tool.get_result', { topicId, messageId, toolCallId })
       if (!response.found) throw new Error(`Tool result is no longer available: ${ref!.toolCallId}`)
       return response.output
     },

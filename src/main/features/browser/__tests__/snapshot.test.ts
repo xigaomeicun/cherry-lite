@@ -1,5 +1,6 @@
-import { browserRefSchema, snapshotOptionsSchema } from '@main/ai/mcp/browserToolDefinitions'
 import { afterEach, describe, expect, it } from 'vitest'
+
+import { browserRefSchema, snapshotOptionsSchema } from '@main/ai/mcp/browserToolDefinitions'
 
 import { GuestSession } from '../session/GuestSession'
 import { buildSnapshotTree } from '../snapshot/buildSnapshotTree'
@@ -82,8 +83,7 @@ function fixture(): RawSnapshot {
             backendNodeId: [1, 2, 3, 4, 5, 6],
             parentIndex: [-1, -1, -1, -1, 3, -1],
             nodeName: [3, 1, 2, 1, 3, 2],
-            attributes: [[], [], [], [4, 5], [], []],
-            isClickable: { index: [] }
+            attributes: [[], [], [], [4, 5], [], []]
           },
           layout: {
             nodeIndex: [0, 1, 2, 3, 4, 5],

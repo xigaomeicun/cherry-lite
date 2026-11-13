@@ -1,7 +1,8 @@
-import type { DanglingState, FileEntryOrigin } from '@shared/data/types/file'
-import type { FileType } from '@shared/types/file'
 import { File, FileCode, FileText, Image as ImageIcon, Music, Video } from 'lucide-react'
 import type { FC } from 'react'
+
+import type { DanglingState, FileEntryOrigin } from '@shared/data/types/file'
+import type { FileType } from '@shared/types/file'
 
 type FileItemCore = {
   id: string
@@ -14,6 +15,8 @@ type FileItemCore = {
   trashed: boolean
   danglingState?: DanglingState
   isMissing?: boolean
+  /** Filesystem or external path used to distinguish same-name rows. Not a preview URL. */
+  sourcePath?: string
 }
 
 type InternalFileItemFields = {
@@ -49,6 +52,9 @@ export function getFormatLabel(format: string): string {
     pdf: 'PDF',
     doc: 'DOC',
     docx: 'DOCX',
+    odt: 'ODT',
+    rtf: 'RTF',
+    epub: 'EPUB',
     py: 'Python',
     ts: 'TypeScript',
     tsx: 'TSX',
@@ -58,11 +64,18 @@ export function getFormatLabel(format: string): string {
     mp3: 'MP3',
     mp4: 'MP4',
     md: 'Markdown',
+    markdown: 'Markdown',
+    mdx: 'Markdown',
     txt: 'Text',
+    text: 'Text',
     xls: 'Excel',
     xlsx: 'Excel',
+    ods: 'Excel',
+    csv: 'CSV',
+    tsv: 'TSV',
     ppt: 'PPT',
     pptx: 'PPT',
+    odp: 'PPT',
     bin: 'Binary'
   }
   return map[format] || format.toUpperCase()

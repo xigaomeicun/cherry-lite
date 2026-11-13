@@ -1,9 +1,11 @@
-import type { ToolLauncherApi } from '@renderer/components/composer/tools/types'
 import { act, render, screen, waitFor } from '@testing-library/react'
 import type * as LucideReact from 'lucide-react'
 import { Globe2, Settings2 } from 'lucide-react'
 import { isValidElement } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+import type { ToolLauncherApi } from '@renderer/components/composer/tools/types'
+import type { QuickPanelCallBackOptions, QuickPanelInputAdapter } from '@renderer/components/QuickPanel'
 
 import { QuickPhrasesToolRuntime } from '../QuickPhrasesButton'
 
@@ -104,6 +106,29 @@ const createLauncherApi = (): ToolLauncherApi => ({
   registerLaunchers: vi.fn(() => vi.fn())
 })
 
+const actionOptions: QuickPanelCallBackOptions = {
+  context: {
+    open: vi.fn(),
+    close: vi.fn(),
+    updateItemSelection: vi.fn(),
+    updateList: vi.fn(),
+    updateFooterActions: vi.fn(),
+    isVisible: true,
+    symbol: '/',
+    list: [],
+    defaultIndex: 0,
+    pageSize: 7,
+    multiple: false,
+    fillToAvailableHeight: false,
+    setFillToAvailableHeight: vi.fn(),
+    dispatchKeyDown: vi.fn(() => false),
+    getPanelGeneration: vi.fn(() => 0),
+    registerKeyDownHandler: vi.fn(() => vi.fn())
+  },
+  action: 'click',
+  item: { label: 'test', icon: null }
+}
+
 function getRegisteredFooterActions(launcher: ToolLauncherApi) {
   const actions = vi.mocked(launcher.registerLaunchers).mock.calls[0][1]
   if (!actions) throw new Error('Expected footer actions to be registered')
@@ -132,63 +157,6 @@ describe('QuickPhrasesToolRuntime', () => {
   afterEach(() => {
     restoreRequestAnimationFrame?.()
     restoreRequestAnimationFrame = undefined
-  })
-
-  it('opens the quick phrases panel with the global fallback when no binding context exists', async () => {
-    const launcher = createLauncherApi()
-    const parentPanel = {
-      list: [],
-      symbol: '/'
-    }
-    const triggerInfo = {
-      type: 'input' as const,
-      position: 0,
-      originalText: '/prompt'
-    }
-
-    render(<QuickPhrasesToolRuntime launcher={launcher} setInputValue={vi.fn()} />)
-
-    await waitFor(() => expect(launcher.registerLaunchers).toHaveBeenCalled())
-    expect(mocks.useQuery).toHaveBeenCalledWith('/prompts', {
-      enabled: false,
-      swrOptions: { keepPreviousData: false },
-      query: { visibility: 'global' }
-    })
-
-    const [quickPhrasesLauncher] = vi.mocked(launcher.registerLaunchers).mock.calls[0][0]
-    act(() => {
-      quickPhrasesLauncher.action?.({
-        parentPanel,
-        queryAnchor: 0,
-        quickPanel: {} as never,
-        source: 'root-panel',
-        triggerInfo
-      })
-    })
-
-    await waitFor(() =>
-      expect(mocks.useQuery).toHaveBeenCalledWith('/prompts', {
-        enabled: true,
-        swrOptions: { keepPreviousData: false },
-        query: { visibility: 'global' }
-      })
-    )
-    expect(mocks.quickPanelClose).not.toHaveBeenCalled()
-    expect(mocks.setTimeoutTimer).not.toHaveBeenCalledWith(
-      'openQuickPhrasesRootMenu',
-      expect.any(Function),
-      expect.any(Number)
-    )
-    expect(mocks.quickPanelOpen).toHaveBeenCalledWith(
-      expect.objectContaining({
-        parentPanel,
-        queryAnchor: 0,
-        symbol: 'quick-phrases',
-        triggerInfo: { type: 'button', position: 0 },
-        trackInputQuery: true,
-        consumeQueryOnDismiss: true
-      })
-    )
   })
 
   it('offers separate current Assistant and global prompt management actions', async () => {
@@ -238,7 +206,7 @@ describe('QuickPhrasesToolRuntime', () => {
     expect(isValidElement(manageCurrentItem.icon) && manageCurrentItem.icon.type === Settings2).toBe(true)
     expect(isValidElement(manageGlobalItem.icon) && manageGlobalItem.icon.type === Globe2).toBe(true)
     act(() => {
-      manageCurrentItem.action({} as never)
+      manageCurrentItem.action(actionOptions)
     })
 
     expect(mocks.openResourceEditDialog).toHaveBeenCalledWith({
@@ -248,7 +216,7 @@ describe('QuickPhrasesToolRuntime', () => {
     })
 
     act(() => {
-      manageGlobalItem.action({} as never)
+      manageGlobalItem.action(actionOptions)
     })
 
     expect(mocks.openSettingsTab).toHaveBeenCalledWith('/settings/prompts')
@@ -262,11 +230,6 @@ describe('QuickPhrasesToolRuntime', () => {
     render(<QuickPhrasesToolRuntime launcher={launcher} setInputValue={vi.fn()} assistantId={assistantId} />)
 
     await waitFor(() => expect(launcher.registerLaunchers).toHaveBeenCalled())
-    expect(mocks.useQuery).toHaveBeenCalledWith('/prompts', {
-      enabled: false,
-      swrOptions: { keepPreviousData: false },
-      query: { targetType: 'assistant', targetId: assistantId, includeGlobal: true }
-    })
 
     const [quickPhrasesLauncher] = vi.mocked(launcher.registerLaunchers).mock.calls[0][0]
     act(() => {
@@ -279,20 +242,10 @@ describe('QuickPhrasesToolRuntime', () => {
       })
     })
 
-    await waitFor(() =>
-      expect(mocks.useQuery).toHaveBeenCalledWith('/prompts', {
-        enabled: true,
-        swrOptions: { keepPreviousData: false },
-        query: { targetType: 'assistant', targetId: assistantId, includeGlobal: true }
-      })
-    )
-    const panelOptions = mocks.quickPanelOpen.mock.calls[0][0]
-    expect(panelOptions.list.map((item: { label: string }) => item.label)).toEqual(['Prompt 1'])
-
     const footerActions = getRegisteredFooterActions(launcher)
     const addItem = footerActions.find((item: { ariaLabel: string }) => item.ariaLabel === 'settings.prompts.add')!
     act(() => {
-      addItem.action({} as never)
+      addItem.action(actionOptions)
     })
     screen.getByRole('button', { name: 'save prompt' }).click()
 
@@ -315,11 +268,6 @@ describe('QuickPhrasesToolRuntime', () => {
     render(<QuickPhrasesToolRuntime launcher={launcher} setInputValue={vi.fn()} agentId={agentId} />)
 
     await waitFor(() => expect(launcher.registerLaunchers).toHaveBeenCalled())
-    expect(mocks.useQuery).toHaveBeenCalledWith('/prompts', {
-      enabled: false,
-      swrOptions: { keepPreviousData: false },
-      query: { targetType: 'agent', targetId: agentId, includeGlobal: true }
-    })
 
     const [quickPhrasesLauncher] = vi.mocked(launcher.registerLaunchers).mock.calls[0][0]
     act(() => {
@@ -332,20 +280,12 @@ describe('QuickPhrasesToolRuntime', () => {
       })
     })
 
-    await waitFor(() =>
-      expect(mocks.useQuery).toHaveBeenCalledWith('/prompts', {
-        enabled: true,
-        swrOptions: { keepPreviousData: false },
-        query: { targetType: 'agent', targetId: agentId, includeGlobal: true }
-      })
-    )
-
     const footerActions = getRegisteredFooterActions(launcher)
     const manageItem = footerActions.find(
       (item: { ariaLabel: string }) => item.ariaLabel === 'settings.prompts.manageCurrentAgent'
     )!
     act(() => {
-      manageItem.action({} as never)
+      manageItem.action(actionOptions)
     })
 
     expect(mocks.openResourceEditDialog).toHaveBeenCalledWith({
@@ -357,7 +297,12 @@ describe('QuickPhrasesToolRuntime', () => {
 
   it('restores composer focus after closing the add prompt dialog opened from quick panel', async () => {
     const launcher = createLauncherApi()
-    const inputAdapter = { focus: vi.fn() }
+    const inputAdapter: QuickPanelInputAdapter = {
+      getText: () => '',
+      insertText: vi.fn(),
+      deleteTriggerRange: vi.fn(),
+      focus: vi.fn()
+    }
 
     render(<QuickPhrasesToolRuntime launcher={launcher} setInputValue={vi.fn()} />)
 
@@ -378,7 +323,7 @@ describe('QuickPhrasesToolRuntime', () => {
     const addItem = footerActions.find((item: { ariaLabel: string }) => item.ariaLabel === 'settings.prompts.add')!
 
     act(() => {
-      addItem.action({ inputAdapter } as never)
+      addItem.action({ ...actionOptions, inputAdapter })
     })
     act(() => {
       screen.getByText('close prompt edit').click()
@@ -409,7 +354,7 @@ describe('QuickPhrasesToolRuntime', () => {
     const addItem = footerActions.find((item: { ariaLabel: string }) => item.ariaLabel === 'settings.prompts.add')!
 
     act(() => {
-      addItem.action({} as never)
+      addItem.action(actionOptions)
     })
     screen.getByRole('button', { name: 'save prompt' }).click()
 

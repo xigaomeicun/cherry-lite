@@ -1,3 +1,8 @@
+import dayjs from 'dayjs'
+import { FolderOpen, RefreshCw, Save, Trash2 } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
+
 import { Button, Input, RowFlex, Switch, WarnTooltip } from '@cherrystudio/ui'
 import { usePreference } from '@data/hooks/usePreference'
 import { loggerService } from '@logger'
@@ -17,10 +22,6 @@ import { useTheme } from '@renderer/hooks/useTheme'
 import { ipcApi } from '@renderer/ipc'
 import { toast } from '@renderer/services/toast'
 import type { AppInfo } from '@renderer/types/app'
-import dayjs from 'dayjs'
-import { FolderOpen, RefreshCw, Save, Trash2 } from 'lucide-react'
-import { useEffect, useState } from 'react'
-import { useTranslation } from 'react-i18next'
 
 const logger = loggerService.withContext('LocalBackupSettings')
 const SYNC_STATUS_COLOR = 'var(--muted-foreground)'
@@ -227,6 +228,7 @@ const LocalBackupSettings: React.FC = () => {
       <SettingRow>
         <SettingRowTitle>{t('settings.data.local.autoSync.label')}</SettingRowTitle>
         <Selector
+          aria-label={t('settings.data.local.autoSync.label')}
           size={14}
           value={localBackupSyncInterval}
           onChange={onSyncIntervalChange}
@@ -249,6 +251,7 @@ const LocalBackupSettings: React.FC = () => {
       <SettingRow>
         <SettingRowTitle>{t('settings.data.local.maxBackups.label')}</SettingRowTitle>
         <Selector
+          aria-label={t('settings.data.local.maxBackups.label')}
           size={14}
           value={localBackupMaxBackups}
           onChange={onMaxBackupsChange}

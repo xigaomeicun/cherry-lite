@@ -1,9 +1,10 @@
+import { useCallback, useMemo } from 'react'
+
 import { cacheService } from '@data/CacheService'
 import type { MessageListActions } from '@renderer/components/chat/messages/types'
 import type { ErrorDetailContentProps } from '@renderer/components/ErrorDetailModal'
 import { openRoute } from '@renderer/services/mainWindowNavigation'
 import type { DoctorSubjectRef } from '@shared/types/doctor'
-import { useCallback, useMemo } from 'react'
 
 import type { MessageListItem } from '../types'
 import { getMessageListItemModel } from '../utils/messageListItem'
@@ -49,6 +50,7 @@ export function useMessageErrorActions(options: MessageErrorActionOptions): Mess
       showErrorDetailPopup({
         error: input.error,
         subject: getDoctorSubject(input.message),
+        incident: { topicId: input.message.topicId, messageId: input.message.id },
         diagnosisContext: { providerId: model?.provider, modelId: model?.id },
         localizedErrorMessage: input.localizedErrorMessage,
         diagnosticReport

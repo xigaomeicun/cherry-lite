@@ -1,5 +1,6 @@
 import CodeViewer from '@renderer/components/CodeViewer'
 import { getLanguageByFilePath } from '@renderer/utils/codeLanguage'
+import { getFilePreviewFileName } from '@renderer/utils/filePreview'
 
 import { AgentToolsType, type WriteToolInput, type WriteToolOutput } from '../shared/agentToolTypes'
 import { ClickableFilePath } from '../shared/ClickableFilePath'
@@ -15,10 +16,8 @@ export function WriteTool({
   output?: WriteToolOutput
   hasError?: boolean
 }): ToolDisclosureItem {
-  const rawInput = input as unknown as Record<string, unknown> | undefined
-  const filePath = typeof rawInput?.file_path === 'string' ? rawInput.file_path : typeof rawInput?.path === 'string' ? rawInput.path : undefined
-  const filename = filePath?.split('/').pop()
-  const language = getLanguageByFilePath(filePath ?? '')
+  const filename = input?.file_path ? getFilePreviewFileName(input.file_path) : undefined
+  const language = getLanguageByFilePath(input?.file_path ?? '')
   // A Write creates the file: keep the path inert until the call finishes
   // successfully (output present and no error). While streaming the file may
   // not exist yet, and a failed write never created it — so neither is clickable.
@@ -33,8 +32,8 @@ export function WriteTool({
         params={
           <SkeletonValue
             value={
-              filePath ? (
-                <ClickableFilePath path={filePath} displayName={filename} interactive={fileWritten} />
+              input?.file_path ? (
+                <ClickableFilePath path={input.file_path} displayName={filename} interactive={fileWritten} />
               ) : undefined
             }
             width="200px"

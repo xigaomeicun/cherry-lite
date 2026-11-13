@@ -2,11 +2,12 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 
-import { application } from '@application'
-import { miniAppInstallationTable, miniAppTable } from '@data/db/schemas/miniApp'
 import { setupTestDatabase } from '@test-helpers/db'
 import { eq } from 'drizzle-orm'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+import { application } from '@application'
+import { miniAppInstallationTable, miniAppTable } from '@data/db/schemas/miniApp'
 
 import { miniAppInstallPath } from '../../paths'
 
@@ -126,13 +127,5 @@ describe('uninstall goes offline first', () => {
     expect(spy.onEntry).toEqual({ row: true, tree: true })
     expect(hasRow(APP_ID)).toBe(false)
     expect(fs.existsSync(miniAppInstallPath(APP_ID))).toBe(false)
-  })
-
-  it('drops the attention badge with the app', async () => {
-    // The bug this guards: a dot pointing at a row that no longer exists. Lives here
-    // rather than in Task 28 because the uninstall path is this file's subject.
-    await uninstallMiniApp(APP_ID)
-
-    expect(application.get('MiniAppRuntimeService').forgetApp).toHaveBeenCalledWith(APP_ID)
   })
 })

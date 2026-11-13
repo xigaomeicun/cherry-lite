@@ -1,18 +1,17 @@
-import type { PaneManualToggleSignal } from '@renderer/types/conversationLayout'
 import { useCallback, useState } from 'react'
+
+import type { PaneManualToggleSignal } from '@renderer/types/conversationLayout'
 
 import { useWindowFrame } from './useWindowFrame'
 
 interface UseConversationShellPaneStateOptions {
   persistedPaneOpen: boolean
   setPersistedPaneOpen: (open: boolean) => void | Promise<unknown>
-  onManualPaneOpen?: () => void
 }
 
 export function useConversationShellPaneState({
   persistedPaneOpen,
-  setPersistedPaneOpen,
-  onManualPaneOpen
+  setPersistedPaneOpen
 }: UseConversationShellPaneStateOptions) {
   const isWindowFrame = useWindowFrame().mode === 'window'
   const [detachedPaneOpen, setDetachedPaneOpen] = useState(false)
@@ -42,10 +41,8 @@ export function useConversationShellPaneState({
   )
 
   const toggleShellPane = useCallback(() => {
-    const nextOpen = !shellPaneOpen
-    setShellPaneOpenManually(nextOpen)
-    if (nextOpen) onManualPaneOpen?.()
-  }, [onManualPaneOpen, setShellPaneOpenManually, shellPaneOpen])
+    setShellPaneOpenManually(!shellPaneOpen)
+  }, [setShellPaneOpenManually, shellPaneOpen])
 
   const handlePaneAutoCollapseChange = useCallback((collapsed: boolean) => {
     setAutoCollapsedPane(collapsed)

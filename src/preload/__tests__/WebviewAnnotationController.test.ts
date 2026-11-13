@@ -1,11 +1,12 @@
 // @vitest-environment jsdom
 
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
 import {
   WEBVIEW_ANNOTATION_LIMITS,
   type WebviewAnnotationGuestEvent,
   WebviewAnnotationGuestEventSchema
 } from '@shared/types/webviewAnnotation'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
   buildWebviewElementSelector,

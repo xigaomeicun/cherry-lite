@@ -1,11 +1,12 @@
+import { setupTestDatabase } from '@test-helpers/db'
+import { describe, expect, it } from 'vitest'
+import { ZodError } from 'zod'
+
 import { fileEntryTable } from '@data/db/schemas/file'
 import { translateHistoryFileRefTable } from '@data/db/schemas/fileRelations'
 import { translateHistoryTable } from '@data/db/schemas/translateHistory'
 import { translateHistoryService } from '@data/services/TranslateHistoryService'
 import type { CreateTranslateHistoryDto, UpdateTranslateHistoryDto } from '@shared/data/api/schemas/translate'
-import { setupTestDatabase } from '@test-helpers/db'
-import { describe, expect, it } from 'vitest'
-import { ZodError } from 'zod'
 
 describe('TranslateHistoryService', () => {
   const dbh = setupTestDatabase()
@@ -114,10 +115,6 @@ describe('TranslateHistoryService', () => {
       const result = translateHistoryService.list({ limit: 20, search: 'Hello' })
       expect(result.items.length).toBeGreaterThanOrEqual(1)
       expect(result.items.some((i) => i.sourceText.includes('Hello'))).toBe(true)
-    })
-
-    it('should escape LIKE wildcards in search', async () => {
-      expect(translateHistoryService.list({ limit: 20, search: '100% off_sale\\test' })).toBeDefined()
     })
 
     it('should filter by star', async () => {

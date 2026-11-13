@@ -1,9 +1,10 @@
-import { CommandContextKeyProvider } from '@renderer/components/command/CommandContextKeyProvider'
-import { CommandProvider } from '@renderer/components/command/CommandProvider'
 import { MockUsePreferenceUtils } from '@test-mocks/renderer/usePreference'
 import { cleanup, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+import { CommandContextKeyProvider } from '@renderer/components/command/CommandContextKeyProvider'
+import { CommandProvider } from '@renderer/components/command/CommandProvider'
 
 import { ComposerFocusShortcut } from '../ComposerFocusShortcut'
 
@@ -11,7 +12,7 @@ const state = vi.hoisted(() => ({ active: true }))
 
 vi.mock('@renderer/hooks/tab', () => ({ useIsActiveTab: () => state.active }))
 
-function mount(editable = true, composerEmpty = true) {
+function mount(editable = true) {
   const view = render(
     <CommandContextKeyProvider>
       <CommandProvider>
@@ -19,7 +20,6 @@ function mount(editable = true, composerEmpty = true) {
         <ComposerFocusShortcut
           focus={() => screen.getByRole('textbox', { name: 'Message' }).focus()}
           editable={editable}
-          composerEmpty={composerEmpty}
         />
       </CommandProvider>
     </CommandContextKeyProvider>

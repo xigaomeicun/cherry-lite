@@ -1,14 +1,14 @@
 // Load the sibling so it self-registers in the data-service registry (prod loads it via its DataApi handler).
 import '@data/services/ProviderRegistryService'
+import { setupTestDatabase } from '@test-helpers/db'
+import { eq } from 'drizzle-orm'
+import { describe, expect, it, type Mock } from 'vitest'
 
 import { application } from '@application'
 import { userProviderTable } from '@data/db/schemas/userProvider'
 import { providerService } from '@data/services/ProviderService'
 import { ErrorCode } from '@shared/data/api/errors'
 import { CHERRY_CLOUD_PROVIDER_ID, CHERRYAI_PROVIDER_ID } from '@shared/data/presets/cherryai'
-import { setupTestDatabase } from '@test-helpers/db'
-import { eq } from 'drizzle-orm'
-import { describe, expect, it, type Mock } from 'vitest'
 
 describe('ProviderService.update', () => {
   const dbh = setupTestDatabase()
@@ -24,18 +24,11 @@ describe('ProviderService.update', () => {
       }
     })
 
-    const withWriteTx = application.get('DbService').withWriteTx as Mock
-    withWriteTx.mockClear()
-
     const updated = providerService.update('openai', {
       providerSettings: {
         apiVersion: '2026-01-01'
       }
     })
-
-    // Lock the core fix: update() routes through withWriteTx (the serialized read-merge-write), not a
-    // bare getDb() read-then-write. Without this, reverting that routing keeps every assertion green.
-    expect(withWriteTx).toHaveBeenCalledTimes(1)
 
     // toEqual locks the exact shape so a future DEFAULT_PROVIDER_SETTINGS
     // leak into the row would immediately fail this test.

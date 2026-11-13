@@ -1,6 +1,12 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
 import { parseTranslateLangCode } from '@shared/data/preference/preferenceTypes'
 import type { TranslateLanguage } from '@shared/data/types/translate'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+interface IpcMock {
+  request: (route: string, input: unknown) => unknown
+  on: (event: string, callback: (payload: unknown) => void) => () => void
+}
 
 vi.mock('i18next', () => ({
   t: (key: string) => `t(${key})`
@@ -9,10 +15,10 @@ vi.mock('i18next', () => ({
 // AI stream calls go through ipcApi.request('ai.stream_*') / ipcApi.on('ai.stream_*') and
 // `translate.open` now goes through ipcApi.request('translate.open', …). `ipcMock` is re-pointed
 // at the fresh per-test mock in beforeEach.
-const { ipcMock } = vi.hoisted(() => ({
+const { ipcMock } = vi.hoisted((): { ipcMock: IpcMock } => ({
   ipcMock: {
-    request: (() => undefined) as (route: string, input: unknown) => unknown,
-    on: (() => () => {}) as (event: string, cb: (p: unknown) => void) => () => void
+    request: () => undefined,
+    on: () => () => {}
   }
 }))
 vi.mock('@renderer/ipc', () => ({
@@ -108,11 +114,11 @@ function createMocks(): {
   const on = (event: string, cb: (p: unknown) => void): (() => void) => {
     switch (event) {
       case 'ai.stream.chunk':
-        return ai.onStreamChunk(cb as never)
+        return ai.onStreamChunk(cb)
       case 'ai.stream.done':
-        return ai.onStreamDone(cb as never)
+        return ai.onStreamDone(cb)
       case 'ai.stream.error':
-        return ai.onStreamError(cb as never)
+        return ai.onStreamError(cb)
       default:
         return () => {}
     }

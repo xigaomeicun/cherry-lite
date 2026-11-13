@@ -1,18 +1,19 @@
-import { mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+
+import { mockMainLoggerService } from '@test-mocks/MainLoggerService'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { application } from '@application'
 import { SystemSpeechError } from '@cherrystudio/system-speech/contracts'
 import { UtilityProcessError } from '@main/core/utilityProcess/UtilityProcessError'
 import { APPLE_ASR_MODEL_ID, APPLE_TTS_MODEL_ID } from '@shared/ai/localVoice'
 import { SpeechInputKind, SpeechOutputKind } from '@shared/ai/voice'
-import { mockMainLoggerService } from '@test-mocks/MainLoggerService'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { startSpeech } from '../../execution'
 import { getLocalVoiceStatus } from '../../localAdapters'
-import { createAppleSpeechModel, createAppleTranscriptionModel } from '../apple'
+import { createAppleTranscriptionModel, createAppleSpeechModel } from '../apple'
 import { installAppleAsrAsset, listAppleAsrLocales } from '../apple'
 
 const mocks = vi.hoisted(() => ({ nativeRequest: vi.fn(), nativeStream: vi.fn(), decode: vi.fn() }))

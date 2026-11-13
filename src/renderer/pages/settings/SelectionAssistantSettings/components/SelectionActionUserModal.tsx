@@ -1,4 +1,12 @@
+import { CircleHelp, Dices, ExternalLink, OctagonX } from 'lucide-react'
+import { DynamicIcon, iconNames } from 'lucide-react/dynamic'
+import type React from 'react'
+import type { FC } from 'react'
+import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
+
 import {
+  Alert,
   Button,
   Dialog,
   DialogContent,
@@ -21,18 +29,16 @@ import CopyButton from '@renderer/components/CopyButton'
 import { useAssistants } from '@renderer/hooks/useAssistant'
 import { useDefaultModel } from '@renderer/hooks/useModel'
 import { cn } from '@renderer/utils/style'
-import type { SelectionActionItem } from '@shared/data/preference/preferenceTypes'
-import { CircleHelp, Dices, ExternalLink, OctagonX } from 'lucide-react'
-import { DynamicIcon, iconNames } from 'lucide-react/dynamic'
-import type React from 'react'
-import type { FC } from 'react'
-import { useEffect, useState } from 'react'
-import { useTranslation } from 'react-i18next'
+import { AGENT_WORKSPACE_TYPE } from '@shared/data/api/schemas/agentWorkspaces'
+import { SELECTION_ACTION_RUNNER, type SelectionActionRunner } from '@shared/data/preference/preferenceTypes'
+import type { CustomSelectionAction } from '@shared/types/selection'
+
+import { SelectionAgentPicker, SelectionWorkspacePicker } from './selectionAgentPickers'
 
 interface SelectionActionUserModalProps {
   isModalOpen: boolean
-  editingAction: SelectionActionItem | null
-  onOk: (data: SelectionActionItem) => void
+  editingAction: CustomSelectionAction | null
+  onOk: (data: CustomSelectionAction) => void
   onCancel: () => void
 }
 
@@ -48,8 +54,9 @@ const SelectionActionUserModal: FC<SelectionActionUserModalProps> = ({
   const assistantOptions = userPredefinedAssistants
   const firstAssistantId = assistantOptions[0]?.id
 
-  const [formData, setFormData] = useState<Partial<SelectionActionItem>>({})
-  const [errors, setErrors] = useState<Partial<Record<keyof SelectionActionItem, string>>>({})
+  const [formData, setFormData] = useState<Partial<CustomSelectionAction>>({})
+  const [errors, setErrors] = useState<Partial<Record<keyof CustomSelectionAction, string>>>({})
+  const runner = formData.runner ?? SELECTION_ACTION_RUNNER.DEFAULT
 
   useEffect(() => {
     if (isModalOpen) {
@@ -59,7 +66,8 @@ const SelectionActionUserModal: FC<SelectionActionUserModalProps> = ({
           name: '',
           prompt: '',
           icon: '',
-          assistantId: ''
+          assistantId: '',
+          runner: SELECTION_ACTION_RUNNER.DEFAULT
         }
       )
       setErrors({})
@@ -67,7 +75,7 @@ const SelectionActionUserModal: FC<SelectionActionUserModalProps> = ({
   }, [isModalOpen, editingAction])
 
   const validateForm = (): boolean => {
-    const newErrors: Partial<Record<keyof SelectionActionItem, string>> = {}
+    const newErrors: Partial<Record<keyof CustomSelectionAction, string>> = {}
 
     if (!formData.name?.trim()) {
       newErrors.name = t('selection.settings.user_modal.name.hint')
@@ -75,6 +83,10 @@ const SelectionActionUserModal: FC<SelectionActionUserModalProps> = ({
 
     if (formData.icon && !iconNames.includes(formData.icon as any)) {
       newErrors.icon = t('selection.settings.user_modal.icon.error')
+    }
+
+    if (runner === SELECTION_ACTION_RUNNER.AGENT && !formData.agentId) {
+      newErrors.agentId = t('selection.settings.user_modal.agent.hint')
     }
 
     setErrors(newErrors)
@@ -87,20 +99,23 @@ const SelectionActionUserModal: FC<SelectionActionUserModalProps> = ({
     }
 
     // 构建完整的 ActionItem
-    const actionItem: SelectionActionItem = {
+    const actionItem: CustomSelectionAction = {
       id: editingAction?.id || `user-${Date.now()}`,
       name: formData.name || 'USER',
       enabled: editingAction?.enabled || false,
-      isBuiltIn: editingAction?.isBuiltIn || false,
+      isBuiltIn: false,
       icon: formData.icon,
       prompt: formData.prompt,
-      assistantId: formData.assistantId
+      runner,
+      assistantId: formData.assistantId,
+      agentId: formData.agentId,
+      agentWorkspace: formData.agentWorkspace
     }
 
     onOk(actionItem)
   }
 
-  const handleInputChange = (field: keyof SelectionActionItem, value: string) => {
+  const handleInputChange = (field: keyof CustomSelectionAction, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }))
     // Clear error when user starts typing
     if (errors[field]) {
@@ -149,7 +164,7 @@ const SelectionActionUserModal: FC<SelectionActionUserModalProps> = ({
                     href="https://lucide.dev/icons/"
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 text-link text-xs">
+                    className="inline-flex items-center gap-1 text-xs text-link">
                     {t('selection.settings.user_modal.icon.view_all')}
                     <ExternalLink size={12} />
                   </a>
@@ -195,24 +210,31 @@ const SelectionActionUserModal: FC<SelectionActionUserModalProps> = ({
                 </ModalSectionTitle>
               </div>
               <RadioGroup
-                value={formData.assistantId ? 'assistant' : 'default'}
-                onValueChange={(value) =>
-                  handleInputChange('assistantId', value === 'default' ? '' : (firstAssistantId ?? ''))
-                }
+                value={runner}
+                onValueChange={(value) => {
+                  setFormData((prev) => ({ ...prev, runner: value as SelectionActionRunner }))
+                  if (value === SELECTION_ACTION_RUNNER.ASSISTANT && !formData.assistantId) {
+                    handleInputChange('assistantId', firstAssistantId ?? '')
+                  }
+                }}
                 className="flex flex-row gap-4">
                 <label className="flex items-center gap-2 text-sm">
-                  <RadioGroupItem value="default" />
+                  <RadioGroupItem value={SELECTION_ACTION_RUNNER.DEFAULT} />
                   {t('selection.settings.user_modal.model.default')}
                 </label>
                 <label className="flex items-center gap-2 text-sm">
-                  <RadioGroupItem value="assistant" />
+                  <RadioGroupItem value={SELECTION_ACTION_RUNNER.ASSISTANT} />
                   {t('selection.settings.user_modal.model.assistant')}
+                </label>
+                <label className="flex items-center gap-2 text-sm">
+                  <RadioGroupItem value={SELECTION_ACTION_RUNNER.AGENT} />
+                  {t('selection.settings.user_modal.model.agent')}
                 </label>
               </RadioGroup>
             </div>
           </ModalSection>
 
-          {formData.assistantId && (
+          {runner === SELECTION_ACTION_RUNNER.ASSISTANT && (
             <ModalSection>
               <ModalSectionTitle>
                 <ModalSectionTitleLabel>{t('selection.settings.user_modal.assistant.label')}</ModalSectionTitleLabel>
@@ -248,6 +270,33 @@ const SelectionActionUserModal: FC<SelectionActionUserModalProps> = ({
               </Select>
             </ModalSection>
           )}
+          {runner === SELECTION_ACTION_RUNNER.AGENT && (
+            <>
+              <ModalSection>
+                <ModalSectionTitle>
+                  <ModalSectionTitleLabel>{t('selection.settings.user_modal.agent.label')}</ModalSectionTitleLabel>
+                </ModalSectionTitle>
+                <SelectionAgentPicker
+                  value={formData.agentId || null}
+                  onChange={(agentId) => handleInputChange('agentId', agentId ?? '')}
+                  invalid={!!errors.agentId}
+                />
+                {errors.agentId && <ErrorText>{errors.agentId}</ErrorText>}
+              </ModalSection>
+              <ModalSection>
+                <ModalSectionTitle>
+                  <ModalSectionTitleLabel>{t('selection.settings.user_modal.workspace.label')}</ModalSectionTitleLabel>
+                </ModalSectionTitle>
+                <SelectionWorkspacePicker
+                  value={formData.agentWorkspace ?? { type: AGENT_WORKSPACE_TYPE.SYSTEM }}
+                  onChange={(agentWorkspace) => setFormData((prev) => ({ ...prev, agentWorkspace }))}
+                />
+              </ModalSection>
+              <ModalSection>
+                <Alert type="info" message={t('selection.settings.user_modal.agent.notice')} />
+              </ModalSection>
+            </>
+          )}
           <ModalSection>
             <ModalSectionTitle>
               <ModalSectionTitleLabel>{t('selection.settings.user_modal.prompt.label')}</ModalSectionTitleLabel>
@@ -255,7 +304,7 @@ const SelectionActionUserModal: FC<SelectionActionUserModalProps> = ({
                 <QuestionIcon size={14} />
               </Tooltip>
               <Spacer />
-              <div className="flex select-text items-center gap-1 text-muted-foreground text-xs">
+              <div className="flex items-center gap-1 text-xs text-muted-foreground select-text">
                 {t('selection.settings.user_modal.prompt.placeholder_text')} {'{{text}}'}
                 <CopyButton
                   tooltip={t('selection.settings.user_modal.prompt.copy_placeholder')}
@@ -292,7 +341,7 @@ const ModalSectionTitle = ({ className, ...props }: React.ComponentPropsWithoutR
 )
 
 const ModalSectionTitleLabel = ({ className, ...props }: React.ComponentPropsWithoutRef<'div'>) => (
-  <div className={cn('text-foreground text-sm', className)} {...props} />
+  <div className={cn('text-sm text-foreground', className)} {...props} />
 )
 
 const QuestionIcon = ({ className, ...props }: React.ComponentPropsWithoutRef<typeof CircleHelp>) => (
@@ -300,7 +349,7 @@ const QuestionIcon = ({ className, ...props }: React.ComponentPropsWithoutRef<ty
 )
 
 const ErrorText = ({ className, ...props }: React.ComponentPropsWithoutRef<'div'>) => (
-  <div className={cn('text-destructive text-xs', className)} {...props} />
+  <div className={cn('text-xs text-destructive', className)} {...props} />
 )
 
 const Spacer = ({ className, ...props }: React.ComponentPropsWithoutRef<'div'>) => (
@@ -319,7 +368,7 @@ const IconPreview = ({ className, ...props }: React.ComponentPropsWithoutRef<'di
 
 const AssistantItem = ({ className, ...props }: React.ComponentPropsWithoutRef<'div'>) => (
   <div
-    className={cn('flex h-7 w-full min-w-0 max-w-full flex-row items-center gap-2 overflow-hidden', className)}
+    className={cn('flex h-7 w-full max-w-full min-w-0 flex-row items-center gap-2 overflow-hidden', className)}
     {...props}
   />
 )

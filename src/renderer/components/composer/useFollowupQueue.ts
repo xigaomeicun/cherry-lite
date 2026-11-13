@@ -1,6 +1,7 @@
+import { useCallback, useEffect, useRef, useState } from 'react'
+
 import { cacheService } from '@data/CacheService'
 import type { ComposerQueuedMessagePayload, TopicStreamStatus } from '@shared/ai/transport'
-import { useCallback, useEffect, useRef, useState } from 'react'
 
 import type { ComposerSerializedDraft } from './tokens'
 
@@ -45,10 +46,19 @@ interface UseFollowupQueueParams {
   /** Stream completion is independent of the conversation list read receipt. */
   status: TopicStreamStatus | undefined
   lastCompletedAt: number | null
-  /** Send a payload (busy → backend steer; idle → normal send). Resolves to whether it was sent. */
+  /** Resolves to whether the submission was accepted; execution completes separately. */
   onDrain: (payload: ComposerQueuedMessagePayload) => Promise<boolean>
   /** Called when a send fails and leaves the queued draft paused for retry. */
   onDrainFailed?: () => void
+}
+
+export interface FollowupEditOptions {
+  /** The composer holds a message edit rather than a queued draft, so nothing is swapped back. */
+  editingMessage: boolean
+  getDraft: () => ComposerSerializedDraft
+  buildPayload: (draft: ComposerSerializedDraft) => ComposerQueuedMessagePayload | null
+  hasFiles: boolean
+  restore: (item: FollowupQueueItem) => void
 }
 
 export interface FollowupQueueController {
@@ -61,6 +71,8 @@ export interface FollowupQueueController {
     id: string,
     captureOutgoing: (taken: FollowupQueueItem) => Pick<FollowupQueueItem, 'draft' | 'payload'> | null
   ): FollowupQueueItem | null
+  /** Moves a queued item into the composer, returning any draft already taken to its queue slot. */
+  editItem(id: string, options: FollowupEditOptions): void
   releaseEdit(): void
   paused: boolean
   setPaused: (paused: boolean) => void
@@ -111,27 +123,9 @@ export function useFollowupQueue({
     [scopeKey]
   )
 
-  // cherry-lite: an item taken out for editing is volatile, so when the scope changes or the
-  // composer unmounts it is written back to its original slot in the scope's persisted queue
-  // instead of being dropped.
-  const returnTakenToCache = useCallback(() => {
-    const taken = takenRef.current
-    takenRef.current = null
-    if (!taken) return
-    const current = loadQueue(taken.scopeKey)
-    if (current.some((item) => item.id === taken.item.id)) return
-    const next = [...current]
-    next.splice(Math.min(taken.slot, next.length), 0, taken.item)
-    cacheService.setCasual(keyFor(taken.scopeKey), next, QUEUE_TTL)
-  }, [])
-
-  useEffect(() => returnTakenToCache, [returnTakenToCache])
-
   // The casual cache owns the queue across mounts, including sends finishing after a topic switch.
   useEffect(() => {
-    if (takenRef.current?.scopeKey !== scopeKey) {
-      returnTakenToCache()
-    }
+    if (takenRef.current?.scopeKey !== scopeKey) takenRef.current = null
     const reload = () => {
       const next = readState()
       reconcileEdit(next.items)
@@ -153,7 +147,7 @@ export function useFollowupQueue({
       unsubscribePaused()
       unsubscribeCompletion()
     }
-  }, [readState, reconcileEdit, returnTakenToCache, scopeKey])
+  }, [readState, reconcileEdit, scopeKey])
 
   const persist = useCallback(
     (next: FollowupQueueItem[]) => cacheService.setCasual(keyFor(scopeKey), next, QUEUE_TTL),
@@ -199,6 +193,27 @@ export function useFollowupQueue({
       return incoming
     },
     [persist, reconcileEdit, scopeKey]
+  )
+
+  const editItem = useCallback<FollowupQueueController['editItem']>(
+    (id, { editingMessage, getDraft, buildPayload, hasFiles, restore }) => {
+      if (editingMessage) {
+        releaseEdit()
+        const item = loadQueue(scopeKey).find((entry) => entry.id === id)
+        if (!item) return
+        restore(item)
+        removeId(id)
+        return
+      }
+      const incoming = takeForEdit(id, (taken) => {
+        const draft = getDraft()
+        const payload = buildPayload(draft)
+        if (payload) return { draft, payload: { ...payload, chatTarget: taken.payload.chatTarget } }
+        return !draft.text.trim() && !hasFiles ? { draft: taken.draft, payload: taken.payload } : null
+      })
+      if (incoming) restore(incoming)
+    },
+    [releaseEdit, removeId, scopeKey, takeForEdit]
   )
 
   const sendItem = useCallback(
@@ -267,6 +282,7 @@ export function useFollowupQueue({
     removeId,
     reorder: persist,
     takeForEdit,
+    editItem,
     releaseEdit,
     paused: state.paused,
     setPaused

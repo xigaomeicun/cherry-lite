@@ -1,6 +1,9 @@
-import { application } from '@application'
+import { resolve } from 'node:path'
+
 import { app } from 'electron'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+import { application } from '@application'
 
 const preboot = vi.hoisted(() => ({
   isUsableDataDir: vi.fn(),
@@ -100,7 +103,7 @@ describe('storage-userdata-location', () => {
   })
 
   it('passes when the configured directory is the one in use', async () => {
-    bootConfig.get.mockReturnValue({ '/Applications/Cherry': '/mock/app.userdata' })
+    bootConfig.get.mockReturnValue({ '/Applications/Cherry': resolve('/mock/app.userdata') })
     await expect(userDataLocation.run(ctx)).resolves.toEqual({ status: 'pass' })
   })
 
@@ -111,12 +114,12 @@ describe('storage-userdata-location', () => {
       status: 'warn',
       detail: { variant: 'fallback_to_default' },
       actions: [
-        { kind: 'open_path', path: '/mock/app.userdata' },
+        { kind: 'open_path', path: resolve('/mock/app.userdata') },
         { kind: 'navigate', target: '/settings/data' }
       ],
       evidence: [
         { key: 'configured', value: '/Volumes/External/Cherry', dataClass: 'local_only' },
-        { key: 'actual', value: '/mock/app.userdata', dataClass: 'local_only' },
+        { key: 'actual', value: resolve('/mock/app.userdata'), dataClass: 'local_only' },
         { key: 'configuredUsableNow', value: false, dataClass: 'public' }
       ]
     })

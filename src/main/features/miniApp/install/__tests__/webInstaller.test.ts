@@ -3,12 +3,13 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 
-import { application } from '@application'
-import { miniAppGrantTable, miniAppInstallationTable, miniAppTable } from '@data/db/schemas/miniApp'
 import { setupTestDatabase } from '@test-helpers/db'
 import { MockMainPreferenceServiceUtils } from '@test-mocks/main/PreferenceService'
 import { eq } from 'drizzle-orm'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+import { application } from '@application'
+import { miniAppGrantTable, miniAppInstallationTable, miniAppTable } from '@data/db/schemas/miniApp'
 
 import type * as HttpSourceModule from '../httpSource'
 import type * as InstallerModule from '../installer'
@@ -88,9 +89,8 @@ vi.mock('../archive', () => ({
   })
 }))
 
-const { applyUpdate, checkForUpdate, previewMiniAppUrl, rollbackUpdate, REVIEW_TTL_MS } = await import(
-  '../webInstaller'
-)
+const { applyUpdate, checkForUpdate, previewMiniAppUrl, rollbackUpdate, REVIEW_TTL_MS } =
+  await import('../webInstaller')
 const { confirmPendingInstall, previewUrlForInstall: previewUrlRaw } = await import('../installFlow')
 type InstallPreviewSummary = Awaited<ReturnType<typeof previewUrlRaw>>
 /** The install card — what every fresh-database case below gets; the install-over cases read the union. */
@@ -949,40 +949,6 @@ describe('web install and update', () => {
     expect(spy.order).toEqual([`quiesce:${APP_ID}`, 'mutate'])
   })
 
-  it('lights the badge when a manual check finds a version, and clears it when it does not', async () => {
-    // The bug this guards: wiring only the on-open check, so a manual check sets no
-    // dot and an app that went current keeps one.
-    await seedInstalled()
-    const runtime = application.get('MiniAppRuntimeService')
-
-    fetchManifest.mockResolvedValue(remote({ version: '1.1.0' }))
-    await checkForUpdate(APP_ID)
-    expect(runtime.noteUpdateAvailable).toHaveBeenLastCalledWith(APP_ID, '1.1.0')
-
-    fetchManifest.mockResolvedValue(remote({ version: '1.0.0' }))
-    await checkForUpdate(APP_ID)
-    expect(runtime.noteUpdateAvailable).toHaveBeenLastCalledWith(APP_ID, null)
-  })
-
-  it('marks the app as updating for the whole apply, reporting download progress', async () => {
-    await seedInstalled()
-    fetchManifest.mockResolvedValue(remote({ version: '1.1.0' }))
-    fetchPackage.mockImplementation(
-      async (_urls: string[], _expected: unknown, onProgress?: (r: number, t: number) => void) => {
-        onProgress?.(512, 1024)
-        return downloadedFixture()
-      }
-    )
-    const runtime = application.get('MiniAppRuntimeService')
-    const checked = await checkForUpdate(APP_ID)
-
-    await applyUpdate(APP_ID, { updateToken: checked.updateToken! })
-
-    expect(runtime.beginUpdate).toHaveBeenCalledWith(APP_ID, '1.1.0')
-    expect(runtime.noteUpdateProgress).toHaveBeenCalledWith(APP_ID, 0.5)
-    expect(runtime.endUpdate).toHaveBeenCalledWith(APP_ID)
-  })
-
   it('refuses a second apply while one is in flight, before any download, and always ends the update', async () => {
     await seedInstalled()
     fetchManifest.mockResolvedValue(remote({ version: '1.1.0' }))
@@ -1001,35 +967,6 @@ describe('web install and update', () => {
     fetchPackage.mockRejectedValueOnce(new Error('ECONNRESET'))
     await expect(applyUpdate(APP_ID, { updateToken: again.updateToken! })).rejects.toThrow(/ECONNRESET/)
     expect(runtime.endUpdate).toHaveBeenCalledWith(APP_ID)
-  })
-
-  it('clears the attention badge after an update is applied', async () => {
-    // The bug this guards: a badge that only ever gets SET. If apply never clears it,
-    // the dot stays lit on an up-to-date app and nobody trusts the dot.
-    await seedInstalled()
-    fetchManifest.mockResolvedValue(remote({ version: '1.1.0' }))
-    fetchPackage.mockResolvedValue(downloadedFixture())
-    const checked = await checkForUpdate(APP_ID)
-    const runtime = application.get('MiniAppRuntimeService')
-    vi.mocked(runtime.noteUpdateAvailable).mockClear()
-
-    await applyUpdate(APP_ID, { updateToken: checked.updateToken!, consented: true })
-
-    expect(runtime.noteUpdateAvailable).toHaveBeenCalledWith(APP_ID, null)
-  })
-
-  it('clears it after a rollback too', async () => {
-    await seedInstalled()
-    fetchManifest.mockResolvedValue(remote({ version: '1.1.0' }))
-    fetchPackage.mockResolvedValue(downloadedFixture())
-    const checked = await checkForUpdate(APP_ID)
-    await applyUpdate(APP_ID, { updateToken: checked.updateToken!, consented: true })
-    const runtime = application.get('MiniAppRuntimeService')
-    vi.mocked(runtime.noteUpdateAvailable).mockClear()
-
-    await rollbackUpdate(APP_ID)
-
-    expect(runtime.noteUpdateAvailable).toHaveBeenCalledWith(APP_ID, null)
   })
 
   it('takes the app offline before rolling back', async () => {

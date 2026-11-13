@@ -1,8 +1,9 @@
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
 import ApiHost from '@renderer/pages/settings/ProviderSettings/ConnectionSettings/ApiHost'
 import { toast } from '@renderer/services/toast'
 import { ENDPOINT_TYPE } from '@shared/data/types/model'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const useProviderMock = vi.fn()
 const useProviderMutationsMock = vi.fn()
@@ -125,12 +126,12 @@ describe('ApiHost', () => {
 
     render(<ApiHost providerId="openai" />)
 
-    fireEvent.click(screen.getByRole('button', { name: /^复制$|^Copy$/ }))
+    const copyButton = screen.getByRole('button', { name: /^复制$|^Copy$/ })
+    fireEvent.click(copyButton)
 
-    await waitFor(() => {
-      expect(navigator.clipboard.writeText).toHaveBeenCalledWith('https://api.example.com')
-      expect(toast.success).toHaveBeenCalled()
-    })
+    await waitFor(() => expect(copyButton.querySelector('.lucide-check')).toBeInTheDocument())
+    expect(navigator.clipboard.writeText).toHaveBeenCalledWith('https://api.example.com')
+    expect(toast.success).not.toHaveBeenCalled()
     expect(screen.queryByTestId('request-config-drawer')).not.toBeInTheDocument()
   })
 

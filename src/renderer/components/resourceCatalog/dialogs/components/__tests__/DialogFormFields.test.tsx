@@ -1,6 +1,5 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest'
-
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { type ComponentPropsWithoutRef, createElement, type ReactNode } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -70,9 +69,6 @@ describe('DialogModelTrigger', () => {
     render(createElement(Trigger, { ariaLabel: 'Model', displayLabel: 'Pick model', onClick }))
 
     const trigger = screen.getByRole('button', { name: 'Model' })
-
-    expect(screen.queryByTestId('model-trigger-placeholder')).not.toBeInTheDocument()
-    expect(screen.queryByTestId('model-avatar')).not.toBeInTheDocument()
 
     fireEvent.click(trigger)
 

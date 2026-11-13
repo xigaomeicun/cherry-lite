@@ -2,14 +2,17 @@ import fs from 'node:fs'
 import fsp from 'node:fs/promises'
 import path from 'node:path'
 
+import { app } from 'electron'
+import * as z from 'zod'
+
 import { application } from '@application'
 import { loggerService } from '@logger'
 import { canonicalizeUserDataPath, getNormalizedExecutablePath } from '@main/core/preboot/userDataLocation'
 import { bootConfigService } from '@main/data/bootConfig'
+import { isPathInside } from '@main/utils/file'
 import type { RelocationProgress } from '@shared/types/userDataRelocation'
-import { app } from 'electron'
-import * as z from 'zod'
 
+import { retargetSkillExports } from './skillExports'
 import type { FailedRelocation, PendingRelocation, RelocationState } from './types'
 import {
   assertEffectiveSeparation,
@@ -18,7 +21,6 @@ import {
   assertUserDataRelocationRequest,
   invalid,
   isErrno,
-  isPathInside,
   normalizeForCompare,
   pathEntryExists,
   relocationArtifactPaths,
@@ -68,24 +70,36 @@ const relocationOwnerSchema = z.object({
  * to do and startup continues.
  */
 export async function runUserDataRelocation(): Promise<'handled' | 'skipped'> {
-  let relocation = readUserDataRelocationState()
-  if (!relocation) return 'skipped'
+  const requestedRelocation = readUserDataRelocationState()
+  if (!requestedRelocation) return 'skipped'
 
   // Only a pending copy isolates sessionData — the copy is what needs the
   // source tree quiescent. A switch never reads the source tree and a
   // failed-state launch just shows the error window, so neither may depend on
   // the temp filesystem: a broken environment must not block a pure pointer
   // switch or the error explanation.
-  if (relocation.status === 'pending' && relocation.copy) {
-    relocation = prepareIsolatedSessionData(relocation)
-  }
+  const relocation =
+    requestedRelocation.status === 'pending' && requestedRelocation.copy
+      ? prepareIsolatedSessionData(requestedRelocation)
+      : requestedRelocation
 
   await app.whenReady()
 
   let currentProgress: RelocationProgress | null = null
-  function restart() {
-    if (currentProgress?.stage === 'failed') clearRelocationState()
+  async function restart() {
+    if (currentProgress?.stage === 'failed') {
+      try {
+        if (relocation.copy) await recoverInterruptedCopy(relocation)
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
+        persistFailedRelocation(relocation, message)
+        publish(makeProgress('failed', relocation, 0, 0, message))
+        return false
+      }
+      clearRelocationState()
+    }
     application.relaunch()
+    return true
   }
   const relocationWindow: UserDataRelocationWindow = openUserDataRelocationWindow({
     getProgress: () => currentProgress,
@@ -100,7 +114,7 @@ export async function runUserDataRelocation(): Promise<'handled' | 'skipped'> {
 
   if (relocation.status === 'failed') {
     publish(makeProgress('failed', relocation, 0, 0, relocation.error))
-    if (relocationWindow.isUnavailable()) restart()
+    if (relocationWindow.isUnavailable()) await restart()
     return 'handled'
   }
 
@@ -116,7 +130,7 @@ export async function runUserDataRelocation(): Promise<'handled' | 'skipped'> {
       to: relocation.to,
       copy: relocation.copy
     })
-    if (relocationWindow.isUnavailable() || !relocationWindow.hasWindow()) restart()
+    if (relocationWindow.isUnavailable() || !relocationWindow.hasWindow()) await restart()
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     logger.error('userData relocation failed; keeping previous location', {
@@ -128,7 +142,7 @@ export async function runUserDataRelocation(): Promise<'handled' | 'skipped'> {
     // failed, that failure is part of the message).
     persistFailedRelocation(relocation, message)
     publish(makeProgress('failed', relocation, 0, 0, message))
-    if (relocationWindow.isUnavailable() || !relocationWindow.hasWindow()) restart()
+    if (relocationWindow.isUnavailable() || !relocationWindow.hasWindow()) await restart()
   }
 
   return 'handled'
@@ -158,7 +172,7 @@ function prepareIsolatedSessionData(pending: PendingRelocation): RelocationState
   }
 }
 
-function persistFailedRelocation(pending: PendingRelocation, message: string): FailedRelocation {
+function persistFailedRelocation(pending: PendingRelocation | FailedRelocation, message: string): FailedRelocation {
   const failed: FailedRelocation = {
     status: 'failed',
     taskId: pending.taskId,
@@ -207,10 +221,6 @@ async function executeRelocation(
   commit: () => void
 ): Promise<void> {
   if (pending.copy) {
-    assertRelocationPaths(pending.from, pending.to, {
-      allowRelocationArtifacts: true,
-      taskId: pending.taskId
-    })
     await recoverInterruptedCopy(pending)
   }
   assertUserDataRelocationRequest(pending)
@@ -229,6 +239,7 @@ async function executeRelocation(
   const dataResetMarkerBasename = path.basename(application.getPath('feature.data_reset.marker_file'))
   let asideCreated = false
   let promoted = false
+  let restoreSkillExports: (() => Promise<void>) | undefined
 
   try {
     // The source scan can take minutes. Revalidate immediately before claiming
@@ -339,8 +350,15 @@ async function executeRelocation(
     promoted = true
     await fsp.rm(path.join(workPath, RELOCATION_OWNER_MARKER), { force: true })
     await fsp.rmdir(workPath)
+    restoreSkillExports = await retargetSkillExports(pending.from, pending.to)
     commit()
   } catch (error) {
+    try {
+      if (restoreSkillExports) await restoreSkillExports()
+      else if (promoted) await retargetSkillExports(pending.to, pending.from)
+    } catch (recoveryError) {
+      throw new AggregateError([error, recoveryError], 'Failed to roll back relocated skill exports')
+    }
     const rollbackError = await rollbackCopy({
       target: pending.to,
       workPath,
@@ -405,13 +423,17 @@ function commitUserDataRelocation(targetPath: string): void {
  * Anything unowned is preserved and fails the relocation safely; without a
  * matching marker at most an empty directory is ever removed.
  */
-async function recoverInterruptedCopy(pending: PendingRelocation): Promise<void> {
+async function recoverInterruptedCopy(pending: PendingRelocation | FailedRelocation): Promise<void> {
   const target = pending.to
   const { workPath, asidePath } = relocationArtifactPaths(target, pending.taskId)
   const hasWork = pathEntryExists(workPath)
   const hasAside = pathEntryExists(asidePath)
   const targetOwned = isOwnedByRelocation(target, pending.taskId)
   if (!hasWork && !hasAside && !targetOwned) return
+  assertRelocationPaths(pending.from, pending.to, {
+    allowRelocationArtifacts: true,
+    taskId: pending.taskId
+  })
 
   logger.warn('Recovering interrupted userData relocation copy', {
     taskId: pending.taskId,
@@ -420,7 +442,10 @@ async function recoverInterruptedCopy(pending: PendingRelocation): Promise<void>
     asidePath
   })
   if (hasWork) await removeOwnedRelocationTree(workPath, pending.taskId)
-  if (targetOwned) await fsp.rm(target, { recursive: true, force: true })
+  if (targetOwned) {
+    await retargetSkillExports(pending.to, pending.from)
+    await fsp.rm(target, { recursive: true, force: true })
+  }
 
   if (!hasAside) return
   assertEmptyDirectory(asidePath, 'relocation aside is no longer empty')

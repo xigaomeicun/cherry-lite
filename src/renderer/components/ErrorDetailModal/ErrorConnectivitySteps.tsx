@@ -1,3 +1,6 @@
+import { Loader2 } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
+
 import { AccordionContent, AccordionItem, AccordionTrigger, Badge, Button } from '@cherrystudio/ui'
 import { DoctorCheckActions } from '@renderer/components/doctor'
 import type { DoctorController } from '@renderer/hooks/doctor'
@@ -5,8 +8,6 @@ import { DOCTOR_STATUS_LABEL_KEYS, doctorCheckDetailParams } from '@renderer/uti
 import type { DoctorCheckId, DoctorCheckResult, DoctorNavigateTarget, DoctorPendingCheck } from '@shared/types/doctor'
 import { DOCTOR_CONNECTIVITY_CHECK_IDS } from '@shared/types/doctorConnectivity'
 import { doctorCheckDetailKey, doctorCheckTitleKey } from '@shared/utils/doctor'
-import { Loader2 } from 'lucide-react'
-import { useTranslation } from 'react-i18next'
 
 type DoctorRow = DoctorController['viewModel']['rows'][number]
 

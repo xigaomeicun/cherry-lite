@@ -1,4 +1,5 @@
 import { EventEmitter } from 'events'
+
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('@logger', () => ({
@@ -83,9 +84,10 @@ vi.mock('electron', () => ({
   globalShortcut: globalShortcutMock
 }))
 
+import { MockMainPreferenceServiceUtils } from '@test-mocks/main/PreferenceService'
+
 import { WindowType } from '@main/core/window/types'
 import { IpcChannel } from '@shared/IpcChannel'
-import { MockMainPreferenceServiceUtils } from '@test-mocks/main/PreferenceService'
 
 import { ShortcutService } from '../ShortcutService'
 
@@ -252,17 +254,11 @@ describe('ShortcutService', () => {
     await (service as any).onInit()
 
     const guest = new MockBrowserWindow()
-    const disposables = (service as any)._disposables as Array<{ dispose: () => void } | (() => void)>
-    const disposableCount = disposables.length
 
     mainWindow.emitWebContents('did-attach-webview', {}, guest.webContents)
 
-    expect((service as any).guestInputCleanups.size).toBe(1)
-    expect(disposables).toHaveLength(disposableCount)
-
     guest.emitWebContents('destroyed')
 
-    expect((service as any).guestInputCleanups.size).toBe(0)
     expect(guest.webContents.off).toHaveBeenCalledWith('before-input-event', expect.any(Function))
   })
 

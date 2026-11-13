@@ -1,5 +1,6 @@
-import { connectionMethods, remoteAuthorizationSchema, remoteFailureSchema } from '@cherrystudio/remote-protocol'
 import { describe, expect, it } from 'vitest'
+
+import { connectionMethods, remoteAuthorizationSchema, remoteFailureSchema } from '@cherrystudio/remote-protocol'
 
 import { RemoteRpcError, RemoteRpcServer } from '../src/index'
 

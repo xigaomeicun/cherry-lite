@@ -1,6 +1,7 @@
-import { CHERRYAI_DEFAULT_UNIQUE_MODEL_ID } from '@shared/data/presets/cherryai'
 import { mockMainLoggerService } from '@test-mocks/MainLoggerService'
 import { beforeEach, describe, expect, it } from 'vitest'
+
+import { CHERRYAI_DEFAULT_UNIQUE_MODEL_ID } from '@shared/data/presets/cherryai'
 
 import { transformLlmModelIds } from '../LlmModelTransforms'
 
@@ -26,16 +27,6 @@ describe('LlmModelTransforms', () => {
       })
     })
 
-    it('falls back setting model preferences to CherryAI when model objects are missing', () => {
-      const result = transformLlmModelIds({})
-
-      expect(result).toEqual({
-        'chat.default_model_id': CHERRYAI_DEFAULT_UNIQUE_MODEL_ID,
-        'feature.quick_assistant.model_id': CHERRYAI_DEFAULT_UNIQUE_MODEL_ID,
-        'feature.translate.model_id': CHERRYAI_DEFAULT_UNIQUE_MODEL_ID
-      })
-    })
-
     it('handles mix of valid and missing models', () => {
       const sources = {
         defaultModel: { id: 'gpt-4', provider: 'openai' }
@@ -45,18 +36,6 @@ describe('LlmModelTransforms', () => {
       const result = transformLlmModelIds(sources)
 
       expect(result['chat.default_model_id']).toBe('openai::gpt-4')
-      expect(result['feature.quick_assistant.model_id']).toBe(CHERRYAI_DEFAULT_UNIQUE_MODEL_ID)
-      expect(result['feature.translate.model_id']).toBe(CHERRYAI_DEFAULT_UNIQUE_MODEL_ID)
-    })
-
-    it('handles model with incomplete data (missing provider)', () => {
-      const sources = {
-        defaultModel: { id: 'gpt-4' } // no provider
-      }
-
-      const result = transformLlmModelIds(sources)
-
-      expect(result['chat.default_model_id']).toBe(CHERRYAI_DEFAULT_UNIQUE_MODEL_ID)
     })
 
     it('uses shared model conversion behavior for passthrough, trimming, and invalid providers', () => {

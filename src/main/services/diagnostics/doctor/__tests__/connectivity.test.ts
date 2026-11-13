@@ -2,6 +2,11 @@ import { createServer, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import path from 'node:path'
 
+import { setupTestDatabase } from '@test-helpers/db'
+import { MockMainPreferenceServiceUtils } from '@test-mocks/main/PreferenceService'
+import { eq } from 'drizzle-orm'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
 import { application } from '@application'
 import { agentTable } from '@data/db/schemas/agent'
 import { userModelTable } from '@data/db/schemas/userModel'
@@ -15,10 +20,6 @@ import { ENDPOINT_TYPE, MODEL_CAPABILITY } from '@shared/data/types/model'
 import { DOCTOR_REPORT_TTL_MS, type DoctorCheckId, type DoctorExecutionSnapshot } from '@shared/types/doctor'
 import type { DoctorConnectivitySubject } from '@shared/types/doctorConnectivity'
 import { doctorStateCacheKey } from '@shared/utils/doctor'
-import { setupTestDatabase } from '@test-helpers/db'
-import { MockMainPreferenceServiceUtils } from '@test-mocks/main/PreferenceService'
-import { eq } from 'drizzle-orm'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { DoctorService } from '../DoctorService'
 

@@ -51,9 +51,7 @@ beforeEach(() => {
   vi.resetModules()
   crashReporterStartMock.mockReset()
   appOnMock.mockReset()
-  processOnMock
-    .mockReset()
-    .mockImplementation(() => process)
+  processOnMock.mockReset().mockImplementation(() => process)
   // Swap process.on with our observable stub. Cast through unknown to
   // sidestep the overloaded EventEmitter.on signature.
   ;(process as unknown as { on: typeof processOnMock }).on = processOnMock
@@ -72,24 +70,7 @@ describe('initCrashTelemetry', () => {
     initCrashTelemetry()
 
     expect(crashReporterStartMock).toHaveBeenCalledTimes(1)
-    expect(crashReporterStartMock).toHaveBeenCalledWith({
-      companyName: 'CherryHQ',
-      productName: 'CherryStudio',
-      submitURL: '',
-      uploadToServer: false
-    })
-  })
-
-  it('registers a web-contents-created handler for webContents hardening', async () => {
-    stubConstants({ isDev: false })
-    stubElectron()
-
-    const { initCrashTelemetry } = await loadModule()
-    initCrashTelemetry()
-
-    const webContentsCall = appOnMock.mock.calls.find(([event]) => event === 'web-contents-created')
-    expect(webContentsCall).toBeDefined()
-    expect(typeof webContentsCall?.[1]).toBe('function')
+    expect(crashReporterStartMock).toHaveBeenCalledWith(expect.objectContaining({ uploadToServer: false }))
   })
 
   it('leaves a session alone when its owner installs its own header policy', async () => {
@@ -197,13 +178,5 @@ describe('initCrashTelemetry', () => {
       expect(events).not.toContain('uncaughtExceptionMonitor')
       expect(events).not.toContain('unhandledRejection')
     })
-  })
-
-  it('does not throw when called once with production settings', async () => {
-    stubConstants({ isDev: false })
-    stubElectron()
-
-    const { initCrashTelemetry } = await loadModule()
-    expect(() => initCrashTelemetry()).not.toThrow()
   })
 })

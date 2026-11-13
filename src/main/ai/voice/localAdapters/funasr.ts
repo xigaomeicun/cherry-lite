@@ -2,6 +2,7 @@ import { writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
 import type { TranscriptionModelV3 } from '@ai-sdk/provider'
+
 import { application } from '@application'
 import type { TranscriptionOptions } from '@cherrystudio/ai-core'
 import { loggerService } from '@logger'
@@ -9,7 +10,7 @@ import { UtilityProcessError } from '@main/core/utilityProcess/UtilityProcessErr
 import { regionService } from '@main/services/RegionService'
 import { FUNASR_SUPPORTED_PLATFORM_KEYS } from '@shared/ai/localVoice'
 import { LOCAL_VOICE_MODELS, VoiceModelSupport, VoiceResourceOperation } from '@shared/ai/localVoice'
-import { FUNASR_BUNDLE_ID, FUNASR_MODEL_ID } from '@shared/ai/localVoice'
+import { FUNASR_MODEL_ID, FUNASR_BUNDLE_ID } from '@shared/ai/localVoice'
 import { LOCAL_MODEL_STATUS_CACHE_KEY } from '@shared/data/presets/localModel'
 
 import type { TranscriptionModelDefinition } from '../voiceModelTypes'
@@ -22,6 +23,10 @@ import { withScratch } from './scratch'
 import { completeTranscriptionOperation } from './sdkOperations'
 
 const ASR_INFERENCE_TIMEOUT_MS = 120_000
+// Deadline ceiling for recordings longer than the fixed floor: twice the audio
+// duration, so a slow machine still finishes instead of failing with a retry
+// that can never succeed.
+const ASR_INFERENCE_REALTIME_FACTOR = 2
 const logger = loggerService.withContext('FunAsrAdapter')
 
 function normalizeFailure(error: unknown, signal?: AbortSignal): VoiceRuntimeError {
@@ -101,7 +106,13 @@ export function createFunAsrTranscriptionModel(options: TranscriptionOptions): T
           checkAbort(input.abortSignal)
           const inputPath = join(directory, 'input.wav')
           await writeFile(inputPath, wavBytes, { mode: 0o600 })
-          const inferenceTimeout = AbortSignal.timeout(ASR_INFERENCE_TIMEOUT_MS)
+          // Inference is chunked CPU work whose cost scales with the recording;
+          // the fixed floor only covers short clips, so longer recordings get
+          // realtime-factor headroom instead of a deadline they cannot meet.
+          // AbortSignal.timeout rejects fractional milliseconds.
+          const inferenceTimeout = AbortSignal.timeout(
+            Math.max(ASR_INFERENCE_TIMEOUT_MS, Math.ceil(durationSeconds * 1_000 * ASR_INFERENCE_REALTIME_FACTOR))
+          )
           const inferenceSignal = input.abortSignal
             ? AbortSignal.any([input.abortSignal, inferenceTimeout])
             : inferenceTimeout

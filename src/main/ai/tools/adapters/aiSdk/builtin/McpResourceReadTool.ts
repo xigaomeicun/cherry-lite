@@ -1,6 +1,8 @@
-/** Read published or conversation-embedded resources with bounded text pages and image delivery. */
+/** Read published resources/templates or conversation-embedded resources with bounded pages and image delivery. */
 
 import { type ToolResultOutput } from '@ai-sdk/provider-utils'
+import { tool } from 'ai'
+
 import { application } from '@application'
 import { mcpToolResourceKey } from '@main/ai/messages/mcpToolResources'
 import { isPathInside, openReadableFileSnapshot, realpath } from '@main/utils/file'
@@ -13,7 +15,6 @@ import {
   type McpResourceSavedBlob
 } from '@shared/ai/builtinTools'
 import { AbsoluteFilePathSchema } from '@shared/types/file'
-import { tool } from 'ai'
 
 import { getToolCallContext } from '../context'
 import { isMcpResourceReadForcePrompt, resolveMcpResourceServers } from '../mcp/resolveAssistantMcpTools'
@@ -22,7 +23,7 @@ import type { ToolEntry } from '../types'
 
 export const MCP_RESOURCE_READ_DESCRIPTION =
   'Read the content of an MCP resource. Pass the serverId and uri exactly as returned by ' +
-  'mcp_resource_list, a resource the user attached, or an MCP tool result. Long resources come back one ' +
+  'mcp_resource_list, expanded from that server’s uriTemplate, a resource the user attached, or an MCP tool result. Long resources come back one ' +
   'page at a time — continue with the returned nextOffset. Binary blobs are decoded to temporary ' +
   'files and returned as blobSavedTo paths, never as base64.'
 
@@ -98,7 +99,14 @@ const mcpResourceReadTool = tool({
       embeddedResources: request.mcpToolResources,
       offset,
       charCap: request.toolOutputCharCap ?? MCP_RESOURCE_READ_CHAR_CAP,
-      signal: request.abortSignal
+      signal: request.abortSignal,
+      interactionContext: {
+        windowId: request.windowId,
+        topicId: request.topicId,
+        requestId: options.toolCallId,
+        model: request.model,
+        roots: request.roots
+      }
     })
   }
 })

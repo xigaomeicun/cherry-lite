@@ -30,6 +30,7 @@ vi.mock('@cherrystudio/ui', async (importOriginal) => {
 })
 
 const baseProps = {
+  providerId: 'openai',
   hasNoModels: false,
   searchText: '',
   setSearchText: vi.fn(),
@@ -49,24 +50,14 @@ describe('ModelListHeader', () => {
     }
   })
 
-  it('renders the model list title, collapsed search action, and external action slot', () => {
-    render(<ModelListHeader {...baseProps} actions={<button type="button">external-action</button>} />)
+  it('disables billing and filtering together when the provider has no models', () => {
+    const { rerender } = render(<ModelListHeader {...baseProps} hasNoModels />)
+    expect(screen.getByRole('button', { name: 'settings.models.filter.label' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'settings.provider.billing.title' })).toBeDisabled()
 
-    expect(screen.getByText('settings.models.list_title')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'settings.models.collapse_all' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'common.search' })).toBeInTheDocument()
-    expect(screen.queryByPlaceholderText('models.search.placeholder')).not.toBeInTheDocument()
-    expect(screen.getByText('external-action')).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'settings.models.bulk_enable' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'settings.models.bulk_disable' })).not.toBeInTheDocument()
-  })
-
-  it('toggles all model groups from the header action', () => {
-    render(<ModelListHeader {...baseProps} />)
-
-    fireEvent.click(screen.getByRole('button', { name: 'settings.models.collapse_all' }))
-
-    expect(baseProps.onToggleGroupsExpanded).toHaveBeenCalledTimes(1)
+    rerender(<ModelListHeader {...baseProps} />)
+    expect(screen.getByRole('button', { name: 'settings.models.filter.label' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'settings.provider.billing.title' })).toBeEnabled()
   })
 
   it('renders provider documentation links when websites are available', () => {

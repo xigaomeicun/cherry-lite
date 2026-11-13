@@ -1,3 +1,9 @@
+import { Loader2, TriangleAlert } from 'lucide-react'
+import { useCallback, useState } from 'react'
+import { useHotkeys } from 'react-hotkeys-hook'
+import { useTranslation } from 'react-i18next'
+
+import { ScrollArea } from '@cherrystudio/ui'
 import { Button, Kbd, Textarea } from '@cherrystudio/ui'
 import { loggerService } from '@logger'
 import { getToolGroupIcon, getToolGroupSemanticTitle } from '@renderer/components/chat/messages/blocks/ToolBlockGroup'
@@ -7,14 +13,9 @@ import { ToolArgsTable } from '@renderer/components/chat/messages/tools/shared/A
 import { ToolDisclosure, type ToolDisclosureItem } from '@renderer/components/chat/messages/tools/shared/ToolDisclosure'
 import type { ToolResponseLike } from '@renderer/components/chat/messages/tools/toolResponse'
 import type { MessageToolApprovalInput } from '@renderer/components/chat/messages/types'
-import Scrollbar from '@renderer/components/Scrollbar'
 import { toast } from '@renderer/services/toast'
 import type { McpToolResponse, NormalToolResponse } from '@renderer/types/mcpTool'
 import { cn } from '@renderer/utils/style'
-import { Loader2, TriangleAlert } from 'lucide-react'
-import { useCallback, useState } from 'react'
-import { useHotkeys } from 'react-hotkeys-hook'
-import { useTranslation } from 'react-i18next'
 
 import type { ComposerOverride } from '../ComposerContext'
 import type { PermissionRequestComposerRequest } from './permissionRequestComposerRequest'
@@ -46,7 +47,7 @@ function isMcpToolResponse(toolResponse: ToolResponseLike): toolResponse is McpT
 
 function normalizeArgs(args: ToolResponseLike['arguments']): Record<string, unknown> | unknown[] | null {
   if (args === undefined || args === null) return null
-  if (typeof args === 'object') return args as Record<string, unknown> | unknown[]
+  if (typeof args === 'object') return args
   return { value: args }
 }
 
@@ -66,9 +67,11 @@ function renderBuiltinPreviewChildren(toolName: string, children: ToolDisclosure
   }
 
   return (
-    <Scrollbar className="max-h-60 overflow-x-hidden" data-testid="permission-builtin-body-scroll">
+    <ScrollArea
+      viewportProps={{ className: 'overflow-x-hidden', 'data-testid': 'permission-builtin-body-scroll' }}
+      className="max-h-60">
       {children}
-    </Scrollbar>
+    </ScrollArea>
   )
 }
 
@@ -121,9 +124,11 @@ function McpPermissionPreview({ toolResponse }: { toolResponse: McpToolResponse 
     <div className="px-3 py-2">
       <PermissionPreviewHeader toolName={toolResponse.tool.name} description={toolResponse.tool.description} />
       {args ? (
-        <Scrollbar className="max-h-60 overflow-x-hidden" data-testid="permission-mcp-args-scroll">
+        <ScrollArea
+          viewportProps={{ className: 'overflow-x-hidden', 'data-testid': 'permission-mcp-args-scroll' }}
+          className="max-h-60">
           <ToolArgsTable args={args} title={t('message.tools.sections.input')} />
-        </Scrollbar>
+        </ScrollArea>
       ) : (
         <div className="py-2 text-muted-foreground text-xs">{t('message.tools.noData')}</div>
       )}
@@ -234,7 +239,7 @@ export default function PermissionRequestComposer({ request, onRespond, classNam
 
   const deny = useCallback(async () => {
     if (isSubmitting) return
-    const reason = rejectionReason.trim() || t('agent.toolPermission.defaultDenyMessage')
+    const reason = rejectionReason.trim() || undefined
     await respond(
       {
         match: request.match,
@@ -243,7 +248,7 @@ export default function PermissionRequestComposer({ request, onRespond, classNam
       },
       'deny'
     )
-  }, [isSubmitting, rejectionReason, request.match, respond, t])
+  }, [isSubmitting, rejectionReason, request.match, respond])
 
   useHotkeys(
     'enter',

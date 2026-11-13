@@ -1,14 +1,13 @@
-import { existsSync } from 'node:fs'
+import { eq } from 'drizzle-orm'
+import { describe, expect, it } from 'vitest'
 
 import { application } from '@application'
 import { messageTable } from '@data/db/schemas/message'
 import { topicTable } from '@data/db/schemas/topic'
 import type { MessageData } from '@shared/data/types/message'
-import { eq } from 'drizzle-orm'
-import { afterAll, describe, expect, it } from 'vitest'
 
-import { withRoot } from '../messageTree'
 import { truncateAll } from '../internal/truncate'
+import { withRoot } from '../messageTree'
 import { setupTestDatabase } from '../testDatabase'
 
 function mainText(content: string): MessageData {
@@ -167,30 +166,5 @@ describe('setupTestDatabase — production code routing via MockMainDbService', 
     // Read using the DB instance obtained via the production access pattern.
     const rows = await fromApp.select().from(topicTable).where(eq(topicTable.id, 'topic-routing'))
     expect(rows).toHaveLength(1)
-  })
-})
-
-// This last test runs after all describes; it simply observes that the
-// harness does not obviously leak tmpdirs. It cannot be exhaustive within
-// a single test file (we only see our own tmpdirs), so we just smoke-test
-// that no cs-test-db-* directory appears under a non-existent path.
-describe('setupTestDatabase — cleanup smoke check', () => {
-  const dbh = setupTestDatabase()
-
-  let dbPathAtSetup: string | null = null
-  it('records the db path during setup', () => {
-    // Our harness does not expose the db `path`, so we skip a strict path check
-    // and just assert the raw connection handle is available now.
-    dbPathAtSetup = '<recorded>'
-    expect(dbh.sqlite).toBeDefined()
-  })
-
-  afterAll(() => {
-    // Minimal smoke test — real leak detection is done by the full suite +
-    // `find /tmp -name 'cs-test-db-*'` step in the plan's verification
-    // section. Here we just ensure the recording completed.
-    expect(dbPathAtSetup).toBe('<recorded>')
-    // Reassure linter that `existsSync` is still imported for future use.
-    void existsSync
   })
 })

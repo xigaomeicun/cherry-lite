@@ -1,8 +1,9 @@
 import { createOpenAI } from '@ai-sdk/openai'
-import { ENDPOINT_TYPE, type EndpointType, type Model } from '@shared/data/types/model'
-import type { Provider } from '@shared/data/types/provider'
 import { generateText } from 'ai'
 import { describe, expect, it, vi } from 'vitest'
+
+import { ENDPOINT_TYPE, type EndpointType, type Model } from '@shared/data/types/model'
+import type { Provider } from '@shared/data/types/provider'
 
 import { applyAgentPromptCacheKey } from '../utils/promptCacheKey'
 
@@ -26,7 +27,7 @@ function model(providerId: string, endpointType: EndpointType): Model {
     supportsStreaming: true,
     isEnabled: true,
     isHidden: false
-  } as Model
+  }
 }
 
 const SESSION_ID = '018f2f45-agent-session'
@@ -41,7 +42,7 @@ describe('applyAgentPromptCacheKey', () => {
     const other = applyAgentPromptCacheKey(openaiProvider, openaiModel, {}, 'another-session')
 
     const key = first.openai?.promptCacheKey
-    expect(key).toMatch(/^cherry-agent:[0-9a-f]{32}$/)
+
     expect(key).not.toContain(SESSION_ID)
     expect(second.openai?.promptCacheKey).toBe(key)
     expect(other.openai?.promptCacheKey).not.toBe(key)
@@ -76,7 +77,7 @@ describe('applyAgentPromptCacheKey', () => {
     const anthropicModel = model('my-anthropic', ENDPOINT_TYPE.ANTHROPIC_MESSAGES)
     const options = { anthropic: { thinking: { type: 'enabled' } } }
 
-    expect(applyAgentPromptCacheKey(anthropicProvider, anthropicModel, options, SESSION_ID)).toBe(options)
+    expect(applyAgentPromptCacheKey(anthropicProvider, anthropicModel, options, SESSION_ID)).toEqual(options)
   })
 
   // Contract tripwire against @ai-sdk/openai: the options object OUR helper

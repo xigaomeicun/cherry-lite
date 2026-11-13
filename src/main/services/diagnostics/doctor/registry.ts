@@ -1,5 +1,5 @@
 import { bootConfigValid, hardwareAcceleration } from './checks/config'
-import { modelConversation, modelEndpoint, modelList } from './checks/connectivity'
+import { modelEndpoint, modelList, modelConversation } from './checks/connectivity'
 import {
   installArchitectureMatch,
   installNativeModules,

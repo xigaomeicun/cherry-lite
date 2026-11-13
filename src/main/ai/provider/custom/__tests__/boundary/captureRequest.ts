@@ -5,6 +5,7 @@ import type { ImageGenerationSubmitInput, ImageGenerationTransport } from '../..
 export interface CapturedRequest {
   url: string
   method: string
+  headers: Headers
   /** JSON bodies are parsed; FormData is normalized to a plain inspectable record. */
   body: unknown
 }
@@ -29,17 +30,22 @@ function makeCapturingFetch() {
   let captured: { url: string; init?: RequestInit } | undefined
   // The canned `{}` 200 response is lenient enough that every caller's response
   // parser yields nothing *without throwing* — we only care about what went out.
-  const fetch = ((url: RequestInfo | URL, init?: RequestInit) => {
+  const fetch = (url: RequestInfo | URL, init?: RequestInit) => {
     captured = { url: String(url), init }
     return Promise.resolve(new Response('{}', { status: 200 }))
-  }) as typeof globalThis.fetch
+  }
 
   return {
     fetch,
     wasCaptured: () => captured !== undefined,
     result(): CapturedRequest {
       if (!captured) throw new Error('no fetch request was made')
-      return { url: captured.url, method: captured.init?.method ?? 'GET', body: normalizeBody(captured.init?.body) }
+      return {
+        url: captured.url,
+        method: captured.init?.method ?? 'GET',
+        headers: new Headers(captured.init?.headers),
+        body: normalizeBody(captured.init?.body)
+      }
     }
   }
 }

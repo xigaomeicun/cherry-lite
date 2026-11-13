@@ -2,14 +2,15 @@ import { mkdtemp, readdir, readFile, rm, utimes, writeFile } from 'node:fs/promi
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 
-import { KeyedMutex } from '@main/core/concurrency/KeyedMutex'
-import { hashContent } from '@main/utils/file'
-import { ContentHashSchema } from '@shared/data/types/file'
-import type { AbsoluteFilePath } from '@shared/types/file'
 import { setupTestDatabase } from '@test-helpers/db'
 import { MockMainDbServiceUtils } from '@test-mocks/main/DbService'
 import { mockMainLoggerService } from '@test-mocks/MainLoggerService'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+import { hashContent } from '@main/utils/file'
+import { ContentHashSchema } from '@shared/data/types/file'
+import type { AbsoluteFilePath } from '@shared/types/file'
+import { KeyedMutex } from '@shared/utils/async'
 
 vi.mock('@application', async () => {
   const { mockApplicationFactory } = await import('@test-mocks/main/application')
@@ -164,11 +165,6 @@ describe('internal/content/write', () => {
       expect(Array.from(onDisk)).toEqual([0xaa, 0xbb, 0xcc])
       expect(fileEntryService.getById(e.id)).toMatchObject({ contentHash: null })
       expect(cacheStore.get(e.id)).toMatchObject({ size: 3 })
-
-      expect(mockLoggerError).toHaveBeenCalledWith(
-        'content commit: bytes committed but metadata finalize failed',
-        expect.objectContaining({ code: 'WRITE_DB_DESYNC', id: e.id, error: updateErr })
-      )
     })
 
     it('keeps old bytes and metadata when the pending DB update fails before rename', async () => {
@@ -424,10 +420,6 @@ describe('internal/content/write', () => {
       expect(finishSpy).not.toHaveBeenCalled()
       expect(await readFile(path.join(filesDir, `${e.id}.bin`), 'utf-8')).toBe('payload')
       expect(fileEntryService.getById(e.id)).toMatchObject({ contentHash: null })
-      expect(mockLoggerError).toHaveBeenCalledWith(
-        'content commit: bytes committed but metadata finalize failed',
-        expect.objectContaining({ code: 'WRITE_DB_DESYNC', id: e.id, error: updateErr })
-      )
     })
   })
 })

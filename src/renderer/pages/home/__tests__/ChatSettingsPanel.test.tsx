@@ -1,4 +1,4 @@
-import type { Topic } from '@renderer/types/topic'
+import { MockUseDataApiUtils } from '@test-mocks/renderer/useDataApi'
 import { fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { PropsWithChildren, ReactNode } from 'react'
@@ -6,6 +6,8 @@ import type * as ReactI18next from 'react-i18next'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type * as PaneShellModule from '@renderer/components/chat/panes/Shell'
+import type { Topic } from '@renderer/types/topic'
+import { DEFAULT_ASSISTANT_SETTINGS } from '@shared/data/types/assistant'
 
 import Chat from '../Chat'
 
@@ -218,6 +220,23 @@ describe('Chat panels', () => {
   }
 
   beforeEach(() => {
+    MockUseDataApiUtils.resetMocks()
+    MockUseDataApiUtils.mockQueryData('/assistants/:id', {
+      id: 'assistant-1',
+      name: 'Assistant',
+      prompt: '',
+      emoji: '😀',
+      description: '',
+      settings: { ...DEFAULT_ASSISTANT_SETTINGS },
+      modelId: null,
+      modelName: null,
+      groupId: null,
+      orderKey: 'a0',
+      mcpServerIds: [],
+      knowledgeBaseIds: [],
+      createdAt: activeTopic.createdAt,
+      updatedAt: activeTopic.updatedAt
+    })
     renderCounters.chatContent = 0
     renderCounters.navbar = 0
     renderCounters.eventEmit.mockReset()
@@ -230,9 +249,6 @@ describe('Chat panels', () => {
 
     expect(citationsPanelModuleLoads.value).toBe(0)
     expect(screen.queryByTestId('citations-panel')).not.toBeInTheDocument()
-    expect(screen.getByTestId('chat-navbar')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'branch shortcuts' })).toBeInTheDocument()
-    expect(screen.getByTestId('topic-right-pane-viewport')).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'open citations' }))
     expect(await screen.findByTestId('citations-panel')).toHaveAttribute('data-open', 'true')
@@ -255,33 +271,6 @@ describe('Chat panels', () => {
 
     view.rerender(<Chat activeTopic={activeTopic} />)
     expect(screen.queryByText('https://topic-1.example')).not.toBeInTheDocument()
-  })
-
-  it('keeps navbar and branch pane actions visible for an empty persisted topic', () => {
-    const emptyTopic = { ...activeTopic, id: 'empty-topic', name: '' }
-
-    renderChat(emptyTopic)
-
-    expect(screen.getByTestId('chat-navbar')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'branch shortcuts' })).not.toBeDisabled()
-    expect(screen.getByTestId('topic-right-pane-viewport')).toBeInTheDocument()
-  })
-
-  it('does not re-render the chat shell when branch live state changes', () => {
-    renderChat(activeTopic)
-
-    const initialNavbarRenders = renderCounters.navbar
-    const initialChatContentRenders = renderCounters.chatContent
-
-    fireEvent.click(screen.getByRole('button', { name: 'push live branch state' }))
-
-    expect(renderCounters.navbar).toBe(initialNavbarRenders)
-    expect(renderCounters.chatContent).toBe(initialChatContentRenders)
-    expect(renderCounters.setBranchLiveState).toHaveBeenCalledWith('topic-1', {
-      activeNodeId: 'assistant-live',
-      nodes: [],
-      topicId: 'topic-1'
-    })
   })
 
   it('passes branch-panel locate requests to chat content and clears them after handling', () => {

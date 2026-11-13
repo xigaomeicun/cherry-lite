@@ -22,7 +22,7 @@
  * unaffected — the rule is specifically "do not point writes at the internal
  * storage tree".
  *
- * See `docs/references/file/architecture.md §5.2` for the full rationale.
+ * See `docs/dev/references/file/architecture.md §5.2` for the full rationale.
  */
 
 import { randomUUID } from 'node:crypto'
@@ -46,10 +46,11 @@ import path from 'node:path'
 import { addAbortSignal, Readable, Writable } from 'node:stream'
 import { finished, pipeline } from 'node:stream/promises'
 
+import mime from 'mime'
+
 import { loggerService } from '@logger'
 import type { ContentHash } from '@shared/data/types/file'
 import { type AbsoluteFilePath, AbsoluteFilePathSchema } from '@shared/types/file'
-import mime from 'mime'
 
 import { createContentHasher } from './contentHash'
 
@@ -186,16 +187,23 @@ function tmpNameFor(target: string): string {
 /**
  * Whether an errno from a directory-fsync attempt should be silently
  * swallowed instead of warn-logged. Only codes that mean "this FS semantically
- * rejects directory fsync" qualify — EINVAL / EISDIR / ENOTSUP all come from
- * Windows, FUSE, or network mounts that don't expose dir-handle sync. EPERM /
- * EACCES intentionally do NOT qualify: those usually mean the userData
+ * rejects directory fsync" qualify — EINVAL / EISDIR / ENOTSUP come from
+ * POSIX systems, FUSE, or network mounts that don't expose dir-handle sync.
+ * On Windows, fsync on a directory handle always fails with EPERM
+ * (FlushFileBuffers on a directory handle → ERROR_ACCESS_DENIED → Node maps
+ * to EPERM), so EPERM / EACCES additionally qualify there. On other platforms
+ * EPERM / EACCES intentionally do NOT qualify: those usually mean the userData
  * directory's ACL drifted (sandbox containment shift, SELinux/AppArmor
  * tightening, manual chown), and silently skipping the dashboard signal would
  * mask the regression. Exported for direct unit coverage of the classification.
  * @internal
  */
-export function shouldSilenceFsyncDirError(code: string | undefined): boolean {
-  return code === 'EINVAL' || code === 'EISDIR' || code === 'ENOTSUP'
+export function shouldSilenceFsyncDirError(
+  code: string | undefined,
+  platform: NodeJS.Platform = process.platform
+): boolean {
+  if (code === 'EINVAL' || code === 'EISDIR' || code === 'ENOTSUP') return true
+  return platform === 'win32' && (code === 'EPERM' || code === 'EACCES')
 }
 
 /**
@@ -274,7 +282,7 @@ async function bestEffortUnlinkTmp(tmp: string): Promise<void> {
  * Atomic write: tmp + fsync + rename + fsync(dir).
  *
  * Follows the POSIX atomic flow documented in
- * `docs/references/file/file-manager-architecture.md §5.1`:
+ * `docs/dev/references/file/file-manager-architecture.md §5.1`:
  * 1. open `{target}.tmp-{uuid}` in the same directory
  * 2. write data, fsync the tmp fd
  * 3. rename(tmp, target) — atomic replacement on POSIX
@@ -701,7 +709,7 @@ export async function assertPathVersionUnchanged(
     throw new PathStaleVersionError(target, expected, current)
   }
   const ambiguousMtime = current.mtime % 1000 === 0 && expected.mtime % 1000 === 0
-  if (ambiguousMtime && expectedContentHash !== undefined) {
+  if (expectedContentHash !== undefined) {
     const actualHash = await hash(target)
     if (actualHash !== expectedContentHash) {
       throw new PathStaleVersionError(target, expected, current)
@@ -841,6 +849,12 @@ export async function mkdir(target: AbsoluteFilePath): Promise<void> {
 
 /** Ensure a directory exists, creating any missing ancestors. Idempotent. */
 export async function ensureDir(target: AbsoluteFilePath): Promise<void> {
+  const resolved = path.resolve(target)
+  if (resolved === path.parse(resolved).root) {
+    // Windows rejects recursive mkdir on volume roots, even when they exist.
+    await fsStat(resolved)
+    return
+  }
   await fsMkdirPromise(target, { recursive: true })
 }
 

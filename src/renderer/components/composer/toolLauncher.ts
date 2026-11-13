@@ -1,3 +1,5 @@
+import type { ReactElement, ReactNode } from 'react'
+
 import type {
   QuickPanelContextType,
   QuickPanelFooterAction,
@@ -6,7 +8,6 @@ import type {
   QuickPanelOpenOptions,
   QuickPanelTriggerInfo
 } from '@renderer/components/QuickPanel'
-import type { ReactElement, ReactNode } from 'react'
 
 export type ComposerToolLauncherKind = 'command' | 'panel' | 'dialog' | 'group'
 
@@ -42,6 +43,7 @@ export interface ComposerToolLauncher {
   rootPanelPlacement?: 'trailing'
   order?: number
   label: ReactNode | string
+  shortcut?: string
   description?: ReactNode | string
   tooltip?: ReactNode | string
   tooltipAnchor?: ReactElement

@@ -1,5 +1,6 @@
-import type { BasicPreviewHandles, BasicPreviewProps } from '@renderer/components/Preview/types'
 import { type ComponentType, lazy, type RefObject } from 'react'
+
+import type { BasicPreviewHandles, BasicPreviewProps } from '@renderer/components/Preview/types'
 
 type SpecialViewProps = BasicPreviewProps & { ref?: RefObject<BasicPreviewHandles | null> }
 

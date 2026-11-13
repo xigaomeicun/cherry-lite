@@ -1,3 +1,7 @@
+import { Check, Download, ExternalLink, Loader2, Star } from 'lucide-react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
+
 import {
   Button,
   Center,
@@ -19,9 +23,6 @@ import { useSkillInstall, useSkillSearch } from '@renderer/hooks/useSkills'
 import { toast } from '@renderer/services/toast'
 import type { SkillSearchResult, SkillSearchSource } from '@shared/types/skill'
 import { buildGithubSkillResult } from '@shared/utils/skillMarketplace'
-import { Check, Download, ExternalLink, Loader2, Star } from 'lucide-react'
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
-import { useTranslation } from 'react-i18next'
 
 import { ResourceCatalogSearchInput } from '../../ResourceCatalogSearchInput'
 
@@ -326,7 +327,7 @@ function SkillSearchBody({
       overscan={6}
       getItemKey={getResultKey}
       role="list"
-      className="[&::-webkit-scrollbar]:!w-0.75 box-border px-6 pt-1 pb-1 [&::-webkit-scrollbar-thumb]:rounded-full">
+      className="box-border px-6 pt-1 pb-1">
       {(result, index) => (
         <SkillSearchResultRow
           result={result}

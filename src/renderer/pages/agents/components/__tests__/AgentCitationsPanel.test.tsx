@@ -1,10 +1,10 @@
-import '@renderer/components/chat/citations/CitationsPanel'
-
-import { CommandSharedPreferencesContext } from '@renderer/hooks/command'
-import { ipcApi } from '@renderer/ipc'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { Suspense } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+import { CommandSharedPreferencesContext } from '@renderer/hooks/command'
+import { ipcApi } from '@renderer/ipc'
+import '@renderer/components/chat/citations/CitationsPanel'
 
 import AgentCitationsPanel from '../AgentCitationsPanel'
 

@@ -1,8 +1,5 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest'
-
-import { dataApiService } from '@data/DataApiService'
-import en from '@renderer/i18n/locales/en-us.json'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { WebviewTag } from 'electron'
@@ -10,6 +7,9 @@ import { createInstance } from 'i18next'
 import { I18nextProvider } from 'react-i18next'
 import { SWRConfig } from 'swr'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
+
+import { dataApiService } from '@data/DataApiService'
+import en from '@renderer/i18n/locales/en-us.json'
 
 import { WebviewNavigation } from '../WebviewNavigation'
 
@@ -102,6 +102,15 @@ describe('Browser address history', () => {
     expect(loadURL).not.toHaveBeenCalled()
     await user.keyboard('{Enter}')
     expect(loadURL).toHaveBeenCalledWith('http://localhost:3000/new')
+  })
+
+  it('navigates to a bare IPv6 loopback address', async () => {
+    const user = userEvent.setup()
+    const { address, loadURL } = setup(false)
+    await user.click(address)
+    await user.clear(address)
+    await user.type(address, '::1/status{Enter}')
+    expect(loadURL).toHaveBeenCalledWith('http://[::1]/status')
   })
 
   it('dismisses suggestions with Escape and restores the current address without navigation', async () => {

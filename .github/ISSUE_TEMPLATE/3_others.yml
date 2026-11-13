@@ -1,12 +1,12 @@
 name: 🤔 Other Questions
 description: Submit questions that don't fit into bug reports or feature requests
-title: '[Other]: '
+title: "[Other]: "
 body:
   - type: markdown
     attributes:
       value: |
         Thank you for taking the time to ask a question!
-        Before submitting this issue, please make sure you've reviewed the [FAQ](https://docs.cherry-ai.com/question-contact/questions) and [Knowledge Base](https://docs.cherry-ai.com/question-contact/knowledge)
+        Before submitting this issue, please make sure you've reviewed the [FAQ](https://cherryai.com/docs/en/question-contact/questions/) and [Knowledge Base](https://cherryai.com/docs/en/question-contact/knowledge/)
 
   - type: checkboxes
     id: checklist

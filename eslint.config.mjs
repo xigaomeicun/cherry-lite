@@ -1,18 +1,18 @@
 import fs from 'node:fs'
+import { builtinModules } from 'node:module'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import tseslint from '@electron-toolkit/eslint-config-ts'
-import eslint from '@eslint/js'
 import eslintReact from '@eslint-react/eslint-plugin'
-import { defineConfig } from 'eslint/config'
+import eslint from '@eslint/js'
 import { createTypeScriptImportResolver } from 'eslint-import-resolver-typescript'
 import importX from 'eslint-plugin-import-x'
 import importZod from 'eslint-plugin-import-zod'
 import oxlint from 'eslint-plugin-oxlint'
 import reactHooks from 'eslint-plugin-react-hooks'
-import simpleImportSort from 'eslint-plugin-simple-import-sort'
 import unusedImports from 'eslint-plugin-unused-imports'
+import { defineConfig } from 'eslint/config'
 
 // --- renderer dependency-direction boundary gate (import-x/no-restricted-paths) ---
 const RENDERER_DIRNAME = path.dirname(fileURLToPath(import.meta.url))
@@ -47,10 +47,7 @@ const serviceBarrelZones = serviceTopics.map((topic) => ({
     `src/renderer/services/!(${topic})/**/*`, // sibling topic dirs
     `src/renderer/services/*` // flat files at the services/ root
   ],
-  from: [
-    `src/renderer/services/${topic}/!(index).{ts,tsx,js,jsx}`,
-    `src/renderer/services/${topic}/!(index)/**/*`
-  ],
+  from: [`src/renderer/services/${topic}/!(index).{ts,tsx,js,jsx}`, `src/renderer/services/${topic}/!(index)/**/*`],
   message: `services/${topic}/ is a topic barrel — import @renderer/services/${topic} (its index.ts), not its internals. architecture/renderer.md §3.1/§5.`
 }))
 
@@ -82,7 +79,7 @@ const PAGE_SIBLING = process.env.RENDERER_PAGE_SIBLING_ERROR ? 'error' : 'warn'
 const BAN_RENDERER_FROM_MAIN = {
   group: ['@renderer', '@renderer/**', '**/renderer/**'],
   message:
-    'Main/preload must not import renderer code. Use `@shared` for cross-process types, or `src/main` for main-only types. See docs/references/architecture/shared-layer.md.'
+    'Main/preload must not import renderer code. Use `@shared` for cross-process types, or `src/main` for main-only types. See docs/dev/references/architecture/shared-layer.md.'
 }
 // Only reaches src/main + src/preload (below). `tests/**` is globally ignored by this
 // config, so the out-of-src harness is not covered — it goes through applyMigrations by
@@ -92,13 +89,125 @@ const BAN_DRIZZLE_MIGRATOR = {
   message:
     "Do not call drizzle's migrate() directly — its transaction makes drizzle-kit's `PRAGMA foreign_keys=OFF` a no-op, so any table-recreate migration silently cascades child rows away. Use applyMigrations() from @data/db/applyMigrations."
 }
+// MCP SDK v1 stays installed only as the Claude Agent SDK's type peer; app code uses v2.
+const BAN_MCP_SDK_V1 = {
+  group: ['@modelcontextprotocol/sdk', '@modelcontextprotocol/sdk/**'],
+  message:
+    'MCP SDK v1 is only a type peer of the Claude Agent SDK. Use @modelcontextprotocol/client, @modelcontextprotocol/server, or @modelcontextprotocol/core.'
+}
+
+const BAN_WEB_SEARCH_INTERNALS = {
+  group: ['**/packages/web-search/src/**', '@cherrystudio/web-search/src/**', '@cherrystudio/web-search/dist/**'],
+  message: 'Use the public @cherrystudio/web-search entries instead of importing package internals.'
+}
+
+// File preview is a portable package: host-app modules are off-limits to its source.
+const FILE_PREVIEW_HOST_IMPORTS = [
+  '@renderer',
+  '@renderer/**',
+  '@shared',
+  '@shared/**',
+  '@data',
+  '@data/**',
+  '@test-mocks',
+  '@test-mocks/**',
+  '@logger',
+  'electron',
+  '**/src/renderer/**',
+  '**/src/shared/**',
+  '**/src/main/**'
+]
+
+// Agent behavior must run unchanged on coding-agent, Durable and the fake (packages/agent-behavior/README.md).
+const AGENT_BEHAVIOR_PORTABLE =
+  'Agent behavior is harness-neutral: no Pi, Node, Electron, host, logger or AI SDK modules.'
+const AGENT_BEHAVIOR_IMPORTS = {
+  paths: [
+    {
+      name: '@cherrystudio/agent-runtime',
+      allowTypeImports: true,
+      message: 'Agent behavior imports only types from @cherrystudio/agent-runtime.'
+    },
+    ...['ai', 'electron', '@logger', '@application', ...builtinModules].map((name) => ({
+      name,
+      message: AGENT_BEHAVIOR_PORTABLE
+    }))
+  ],
+  patterns: [
+    BAN_MCP_SDK_V1,
+    BAN_WEB_SEARCH_INTERNALS,
+    {
+      group: [
+        'node:*',
+        'electron/**',
+        '@earendil-works/*',
+        '@earendil-works/**',
+        'ai/**',
+        '@ai-sdk/*',
+        '@ai-sdk/**',
+        '@main/**',
+        '@shared/**',
+        '@renderer/**',
+        '@data/**',
+        '@cherrystudio/agent-runtime-pi',
+        '@cherrystudio/agent-runtime-pi/**',
+        '@cherrystudio/agent-runtime-pi-durable',
+        '@cherrystudio/agent-runtime-pi-durable/**',
+        '**/src/main/**',
+        '**/src/shared/**',
+        '**/src/renderer/**'
+      ],
+      message: AGENT_BEHAVIOR_PORTABLE
+    }
+  ]
+}
+// One import rule per layer: flat config replaces a rule wholesale, so each layer repeats the package bans.
+const agentBehaviorLayer = (regex, message) => [
+  'error',
+  { ...AGENT_BEHAVIOR_IMPORTS, patterns: [...AGENT_BEHAVIOR_IMPORTS.patterns, { regex, message }] }
+]
+const AGENT_RUNTIME_TYPE_NAMES =
+  /^(?:RuntimeId|BackendId|ThreadId|InputId|ItemId|DelegationId|NativeInputId|JsonValue|ContentPart)$/
+const AGENT_RUNTIME_SELECTORS = [
+  {
+    selector: `ImportDeclaration[source.value='@cherrystudio/agent-runtime'] > ImportSpecifier[imported.name!=${AGENT_RUNTIME_TYPE_NAMES}]`,
+    message:
+      'Take only ids, JsonValue and ContentPart from @cherrystudio/agent-runtime; observation items are not history.'
+  },
+  {
+    selector:
+      "ImportDeclaration[source.value='@cherrystudio/agent-runtime'] > :matches(ImportNamespaceSpecifier, ImportDefaultSpecifier)",
+    message: 'Import named id types from @cherrystudio/agent-runtime.'
+  }
+]
+const KEY_MINT_SELECTORS = [
+  {
+    selector: "TSAsExpression[typeAnnotation.typeName.name='Key'], TSTypeAssertion[typeAnnotation.typeName.name='Key']",
+    message: 'Keys come only from core/keys.ts.'
+  }
+]
+const CORE_SYNC_SELECTORS = [
+  { selector: ':function[async=true]', message: 'Core is synchronous so it can run inside a commit.' },
+  { selector: 'AwaitExpression', message: 'Core is synchronous so it can run inside a commit.' },
+  { selector: 'YieldExpression', message: 'Core is synchronous so it can run inside a commit.' },
+  { selector: 'Identifier[name=/^Promise/]', message: 'Core is synchronous so it can run inside a commit.' }
+]
+const CORE_ENVIRONMENT = 'Core does not touch the environment; take time and ids as facts.'
+const AGENT_BEHAVIOR_TIMERS = [
+  'setTimeout',
+  'setInterval',
+  'setImmediate',
+  'clearTimeout',
+  'clearInterval',
+  'queueMicrotask'
+]
 
 // Utility-process child code (protocol/runtime, entries, smoke entries) is bundled for a
 // separate process that has no lifecycle container, no logger, and no database. Importing a
 // main-only singleton there fails at runtime — or silently drags winston/Drizzle into the
 // child bundle. A resolved-path zone, so relative and aliased specifiers are judged alike;
 // the smoke build's entry-graph guard (scripts/utility-process-smoke/hermeticEntryGuardPlugin.ts)
-// is the transitive backstop (docs/references/utility-process/README.md).
+// is the transitive backstop (docs/dev/references/utility-process/README.md).
 const UTILITY_CHILD_FILES = [
   'src/main/core/utilityProcess/protocol/**/*.ts',
   'src/main/core/utilityProcess/runtime/**/*.ts',
@@ -159,8 +268,16 @@ const collectIndexTs = (dir, out = []) => {
   }
   return out
 }
+const RUNTIME_PACKAGES = [
+  'agent-runtime',
+  'agent-behavior',
+  'agent-runtime-pi',
+  'agent-runtime-pi-durable',
+  'agent-runtime-claude-code'
+]
+const RUNTIME_SOURCE_DIRS = RUNTIME_PACKAGES.map((name) => path.join(RENDERER_DIRNAME, 'packages', name, 'src'))
 const BARREL_DIRS = new Set()
-for (const idx of collectIndexTs(SRC_DIR)) {
+for (const idx of [SRC_DIR, ...RUNTIME_SOURCE_DIRS].flatMap((dir) => collectIndexTs(dir))) {
   try {
     if (isPureReexportIndex(fs.readFileSync(idx, 'utf8'))) BARREL_DIRS.add(path.dirname(idx))
   } catch {}
@@ -183,7 +300,7 @@ const BARREL_RESOLVE_CACHE = new Map()
 // Unresolved specs are skipped — misses only, never false positives. Deliberately unresolved:
 // `@logger` (single-file target, cannot hide a deep import), `@application` (bare-only usage,
 // zero `@application/` deep paths in src), `@test-helpers`/`@test-mocks` (tests are exempt),
-// `@cherrystudio/*` (packages/*, outside src).
+// `@cherrystudio/*` except the explicitly sealed runtime packages.
 const resolveBarrelSpec = (spec, fromFile) => {
   const key = `${fromFile}\0${spec}`
   if (BARREL_RESOLVE_CACHE.has(key)) return BARREL_RESOLVE_CACHE.get(key)
@@ -193,7 +310,16 @@ const resolveBarrelSpec = (spec, fromFile) => {
   else if (spec.startsWith('@renderer/')) base = path.join(SRC_DIR, 'renderer', spec.slice(10))
   else if (spec.startsWith('@main/')) base = path.join(SRC_DIR, 'main', spec.slice(6))
   else if (spec.startsWith('@shared/')) base = path.join(SRC_DIR, 'shared', spec.slice(8))
-  else if (spec.startsWith('@data/')) base = path.join(SRC_DIR, proc === 'main' ? 'main' : 'renderer', 'data', spec.slice(6))
+  else if (spec.startsWith('@data/'))
+    base = path.join(SRC_DIR, proc === 'main' ? 'main' : 'renderer', 'data', spec.slice(6))
+  else {
+    for (const name of RUNTIME_PACKAGES) {
+      const prefix = `@cherrystudio/${name}`
+      if (spec === prefix) base = path.join(RENDERER_DIRNAME, 'packages', name, 'src')
+      else if (spec.startsWith(`${prefix}/`))
+        base = path.join(RENDERER_DIRNAME, 'packages', name, 'src', spec.slice(prefix.length + 1))
+    }
+  }
   let resolved = null
   if (base) {
     for (const c of [`${base}.ts`, `${base}.tsx`, path.join(base, 'index.ts'), path.join(base, 'index.tsx'), base]) {
@@ -218,7 +344,11 @@ const barrelPlugin = {
       create(ctx) {
         return {
           ExportAllDeclaration(node) {
-            if (node.source) ctx.report({ node, message: 'No `export *` — use explicit named re-exports (naming-conventions.md §6.4 rule 1).' })
+            if (node.source)
+              ctx.report({
+                node,
+                message: 'No `export *` — use explicit named re-exports (naming-conventions.md §6.4 rule 1).'
+              })
           }
         }
       }
@@ -233,20 +363,41 @@ const barrelPlugin = {
         return {
           Program(node) {
             const stmt = node.body.find((s) => !/^(?:Import|Export)/.test(s.type))
-            if (stmt) ctx.report({ node: stmt, message: 'A barrel is pure re-export — no top-level statements; move logic to a named file (naming-conventions.md §6.4 rule 1).' })
+            if (stmt)
+              ctx.report({
+                node: stmt,
+                message:
+                  'A barrel is pure re-export — no top-level statements; move logic to a named file (naming-conventions.md §6.4 rule 1).'
+              })
           },
           ImportDeclaration(node) {
             if (!node.specifiers.length)
-              ctx.report({ node, message: 'A barrel is pure re-export — no side-effect imports; registration belongs in a named module (naming-conventions.md §6.4 rule 1).' })
+              ctx.report({
+                node,
+                message:
+                  'A barrel is pure re-export — no side-effect imports; registration belongs in a named module (naming-conventions.md §6.4 rule 1).'
+              })
           },
           ExportDefaultDeclaration(node) {
-            ctx.report({ node, message: 'A barrel is pure re-export — no `export default` implementation; use a named file (naming-conventions.md §6.4).' })
+            ctx.report({
+              node,
+              message:
+                'A barrel is pure re-export — no `export default` implementation; use a named file (naming-conventions.md §6.4).'
+            })
           },
           ExportNamedDeclaration(node) {
             if (node.declaration)
-              ctx.report({ node, message: 'A barrel is pure re-export — no local declarations; move implementation to a named file (naming-conventions.md §6.4).' })
+              ctx.report({
+                node,
+                message:
+                  'A barrel is pure re-export — no local declarations; move implementation to a named file (naming-conventions.md §6.4).'
+              })
             else if (!node.source && node.specifiers.length)
-              ctx.report({ node, message: 'A barrel re-exports from other modules — it must not export local bindings (naming-conventions.md §6.4).' })
+              ctx.report({
+                node,
+                message:
+                  'A barrel re-exports from other modules — it must not export local bindings (naming-conventions.md §6.4).'
+              })
           }
         }
       }
@@ -260,7 +411,11 @@ const barrelPlugin = {
         if (!/[\\/]index\.tsx$/.test(f)) return {}
         return {
           Program(node) {
-            ctx.report({ node, message: 'No `index.tsx` — a barrel is `index.ts` (re-export has no JSX); a component uses a named file; a TanStack index route uses the flat dot form `<segment>.index.tsx` (naming-conventions.md §6.4).' })
+            ctx.report({
+              node,
+              message:
+                'No `index.tsx` — a barrel is `index.ts` (re-export has no JSX); a component uses a named file; a TanStack index route uses the flat dot form `<segment>.index.tsx` (naming-conventions.md §6.4).'
+            })
           }
         }
       }
@@ -276,13 +431,17 @@ const barrelPlugin = {
             if (!node.source) return
             for (const s of node.specifiers)
               if (s.exported && s.exported.name === 'default')
-                ctx.report({ node: s, message: 'A barrel exposes named exports — name it (`export { default as Foo } from`), do not forward a bare default (naming-conventions.md §6.4 rule 1).' })
+                ctx.report({
+                  node: s,
+                  message:
+                    'A barrel exposes named exports — name it (`export { default as Foo } from`), do not forward a bare default (naming-conventions.md §6.4 rule 1).'
+                })
           }
         }
       }
     },
     // 2 — closed boundary: outside code must import a barrel's index, never its internals.
-    'closed': {
+    closed: {
       meta: { type: 'problem', schema: [] },
       create(ctx) {
         const f = barrelFilename(ctx)
@@ -291,7 +450,10 @@ const barrelPlugin = {
           if (!tgt) return
           const d = outermostCrossedBarrelDir(tgt, f)
           if (!d || tgt === path.join(d, 'index.ts')) return
-          ctx.report({ node, message: `Deep import into barrel \`${path.relative(SRC_DIR, d)}\` — import its index, not its internals (naming-conventions.md §6.4 rule 2).` })
+          ctx.report({
+            node,
+            message: `Deep import into barrel \`${path.relative(SRC_DIR, d)}\` — import its index, not its internals (naming-conventions.md §6.4 rule 2).`
+          })
         }
         return {
           ImportDeclaration(node) {
@@ -321,7 +483,10 @@ const barrelPlugin = {
           if (!tgt) return
           const d2 = innermostBarrelDir(tgt)
           if (!d2 || d2 === db) return
-          ctx.report({ node, message: `A barrel must not re-export another barrel \`${path.relative(SRC_DIR, d2)}\` — let each unit own its door (naming-conventions.md §6.4 rule 3).` })
+          ctx.report({
+            node,
+            message: `A barrel must not re-export another barrel \`${path.relative(SRC_DIR, d2)}\` — let each unit own its door (naming-conventions.md §6.4 rule 3).`
+          })
         }
         return {
           ExportNamedDeclaration(node) {
@@ -343,7 +508,11 @@ const barrelPlugin = {
         if (!BARREL_BUCKET_ROOT_RE.test(barrelFilename(ctx))) return {}
         return {
           Program(node) {
-            ctx.report({ node, message: 'Bucket roots (types/utils/services) carry no barrel — import the specific file/topic (naming-conventions.md §6.4 rule 3 / §4.8).' })
+            ctx.report({
+              node,
+              message:
+                'Bucket roots (types/utils/services) carry no barrel — import the specific file/topic (naming-conventions.md §6.4 rule 3 / §4.8).'
+            })
           }
         }
       }
@@ -369,13 +538,61 @@ const isModuleFileStem = (s) => {
 const NAMING_EXEMPT_DIRS = new Set(['__tests__', '__mocks__', '__snapshots__'])
 // First matching prefix wins; unmanaged zones bail before the generic renderer/src zones.
 const NAMING_ZONES = [
-  { prefix: 'packages/ui/', root: 2, label: 'packages/ui', dir: isKebabName, dirExpect: 'kebab-case', file: isKebabName, fileExpect: 'kebab-case' },
-  { prefix: 'src/renderer/routes/', root: 3, label: 'routes', dir: (s) => isKebabName(s) || isRouteToken(s), dirExpect: 'kebab-case', file: (s) => isKebabName(s) || isRouteToken(s), fileExpect: 'kebab-case' },
+  {
+    prefix: 'packages/ui/',
+    root: 2,
+    label: 'packages/ui',
+    dir: isKebabName,
+    dirExpect: 'kebab-case',
+    file: isKebabName,
+    fileExpect: 'kebab-case'
+  },
+  {
+    prefix: 'src/renderer/routes/',
+    root: 3,
+    label: 'routes',
+    dir: (s) => isKebabName(s) || isRouteToken(s),
+    dirExpect: 'kebab-case',
+    file: (s) => isKebabName(s) || isRouteToken(s),
+    fileExpect: 'kebab-case'
+  },
   { prefix: 'src/renderer/assets/', unmanaged: true },
-  { prefix: 'src/renderer/', root: 2, label: 'src/renderer', dir: (s) => isCamelName(s) || isPascalName(s), dirExpect: 'camelCase (module) or PascalCase (component)', file: isModuleFileStem, fileExpect: 'camelCase or PascalCase' },
-  { prefix: 'src/main/', root: 2, label: 'src/main', dir: isCamelName, dirExpect: 'camelCase', file: isModuleFileStem, fileExpect: 'camelCase or PascalCase' },
-  { prefix: 'src/shared/', root: 2, label: 'src/shared', dir: isCamelName, dirExpect: 'camelCase', file: isModuleFileStem, fileExpect: 'camelCase or PascalCase' },
-  { prefix: 'src/preload/', root: 2, label: 'src/preload', dir: isCamelName, dirExpect: 'camelCase', file: isModuleFileStem, fileExpect: 'camelCase or PascalCase' }
+  {
+    prefix: 'src/renderer/',
+    root: 2,
+    label: 'src/renderer',
+    dir: (s) => isCamelName(s) || isPascalName(s),
+    dirExpect: 'camelCase (module) or PascalCase (component)',
+    file: isModuleFileStem,
+    fileExpect: 'camelCase or PascalCase'
+  },
+  {
+    prefix: 'src/main/',
+    root: 2,
+    label: 'src/main',
+    dir: isCamelName,
+    dirExpect: 'camelCase',
+    file: isModuleFileStem,
+    fileExpect: 'camelCase or PascalCase'
+  },
+  {
+    prefix: 'src/shared/',
+    root: 2,
+    label: 'src/shared',
+    dir: isCamelName,
+    dirExpect: 'camelCase',
+    file: isModuleFileStem,
+    fileExpect: 'camelCase or PascalCase'
+  },
+  {
+    prefix: 'src/preload/',
+    root: 2,
+    label: 'src/preload',
+    dir: isCamelName,
+    dirExpect: 'camelCase',
+    file: isModuleFileStem,
+    fileExpect: 'camelCase or PascalCase'
+  }
 ]
 const namingReportedDirs = new Set()
 
@@ -399,12 +616,18 @@ const namingPlugin = {
               const dirRel = parts.slice(0, zone.root + i + 1).join('/')
               if (namingReportedDirs.has(dirRel)) continue
               namingReportedDirs.add(dirRel)
-              ctx.report({ node, message: `Directory \`${dirRel}\`: segment \`${seg}\` must be ${zone.dirExpect} under ${zone.label} (naming-conventions.md §4).` })
+              ctx.report({
+                node,
+                message: `Directory \`${dirRel}\`: segment \`${seg}\` must be ${zone.dirExpect} under ${zone.label} (naming-conventions.md §4).`
+              })
             }
             if (/^index\.tsx?$/.test(fileName) || /\.d\.ts$/.test(fileName)) return // index.* owned by barrel/*; *.d.ts by §3.5
             const stem = fileName.split('.')[0]
             if (!stem || zone.file(stem)) return
-            ctx.report({ node, message: `File \`${fileName}\`: name \`${stem}\` must be ${zone.fileExpect} under ${zone.label} (naming-conventions.md §3).` })
+            ctx.report({
+              node,
+              message: `File \`${fileName}\`: name \`${stem}\` must be ${zone.fileExpect} under ${zone.label} (naming-conventions.md §3).`
+            })
           }
         }
       }
@@ -416,10 +639,16 @@ export default defineConfig([
   eslint.configs.recommended,
   tseslint.configs.recommended,
   eslintReact.configs['recommended-typescript'],
-  reactHooks.configs['recommended-latest'],
+  // The v7 presets also enable React Compiler rules; this app does not use the compiler.
+  {
+    plugins: { 'react-hooks': reactHooks },
+    rules: {
+      'react-hooks/rules-of-hooks': 'error',
+      'react-hooks/exhaustive-deps': 'warn'
+    }
+  },
   {
     plugins: {
-      'simple-import-sort': simpleImportSort,
       'unused-imports': unusedImports,
       'import-zod': importZod
     },
@@ -427,8 +656,6 @@ export default defineConfig([
       '@typescript-eslint/explicit-function-return-type': 'off',
       '@typescript-eslint/no-explicit-any': 'off',
       '@typescript-eslint/no-non-null-asserted-optional-chain': 'off',
-      'simple-import-sort/imports': 'error',
-      'simple-import-sort/exports': 'error',
       'unused-imports/no-unused-imports': 'error',
       '@eslint-react/no-prop-types': 'error',
       'import-zod/prefer-zod-namespace': 'error'
@@ -471,8 +698,9 @@ export default defineConfig([
       'src/renderer/ui/**',
       'src/renderer/routeTree.gen.ts',
       'packages/**/dist',
+      'native/system-speech/dist',
       'packages/**/storybook-static/**',
-      'v2-refactor-temp/**'
+      'scripts/data-classify/**'
     ]
   },
   // turn off oxlint supported rules.
@@ -480,7 +708,7 @@ export default defineConfig([
   ...oxlint.configs['flat/typescript'],
   ...oxlint.configs['flat/unicorn'],
   // Custom rules should be after oxlint to overwrite
-  // LoggerService Custom Rules - only apply to src directory
+  // LoggerService and lifecycle Emitter Custom Rules - only apply to src directory
   {
     files: ['src/**/*.{ts,tsx,js,jsx}'],
     ignores: ['src/**/__tests__/**', 'src/**/__mocks__/**', 'src/**/*.test.*', 'src/preload/**'],
@@ -489,8 +717,41 @@ export default defineConfig([
         process.env.CI ? 'error' : 'warn',
         {
           selector: 'CallExpression[callee.object.name="console"]',
+          message: '❗CherryStudio uses unified LoggerService: 📖 docs/dev/references/logging/README.md\n\n'
+        },
+        {
+          selector: 'CallExpression[callee.property.name="registerDisposable"] > NewExpression[callee.name="Emitter"]',
           message:
-            '❗CherryStudio uses unified LoggerService: 📖 docs/references/logging/README.md\n\n'
+            '❗Do not registerDisposable() an Emitter the service owns: stop would dispose it for good. Dispose it in onDestroy(): 📖 docs/dev/references/lifecycle/lifecycle-usage.md\n\n'
+        }
+      ]
+    }
+  },
+  // Seeder write integrity — a seeder runs again whenever its `version` changes
+  // (SeedRunner journal), so an overwrite-style upsert silently rewrites data
+  // the user or a later seeder already established. This is how the legacy
+  // web-search preference upgrade clobbered `chat.web_search.model_tools_
+  // preferred` (fixed in #20686): `onConflictDoUpdate` force-wrote `!legacy`
+  // over the renamed key on every re-run. Seeders must insert-if-absent, guard
+  // on absence, or scope the conflict with `setWhere`. Sanctioned overwrites
+  // are exempted inline with a reason.
+  {
+    files: ['src/main/data/db/seeding/**/*.ts'],
+    ignores: ['src/main/data/db/seeding/**/__tests__/**', 'src/main/data/db/seeding/**/*.test.ts'],
+    rules: {
+      'no-restricted-syntax': [
+        process.env.CI ? 'error' : 'warn',
+        // Flat-config rule arrays replace the earlier src-wide entry instead of
+        // merging, so the LoggerService restriction is restated here to keep
+        // applying to production seeder files.
+        {
+          selector: 'CallExpression[callee.object.name="console"]',
+          message: '❗CherryStudio uses unified LoggerService: 📖 docs/dev/references/logging/README.md\n\n'
+        },
+        {
+          selector: 'CallExpression[callee.property.name="onConflictDoUpdate"]',
+          message:
+            '❗A seeder must not overwrite existing rows — use insert-if-absent (onConflictDoNothing) or scope the conflict with setWhere. If an overwrite is genuinely intended, exempt it inline with a reason.\n\n'
         }
       ]
     }
@@ -537,12 +798,7 @@ export default defineConfig([
   // rather than routing through validation.
   {
     files: ['src/**/*.{ts,tsx}'],
-    ignores: [
-      'src/main/services/file/tree/**',
-      'src/**/__tests__/**',
-      'src/**/__mocks__/**',
-      'src/**/*.test.*'
-    ],
+    ignores: ['src/main/services/file/tree/**', 'src/**/__tests__/**', 'src/**/__mocks__/**', 'src/**/*.test.*'],
     plugins: {
       'filepath-brand': {
         rules: {
@@ -556,7 +812,7 @@ export default defineConfig([
               },
               messages: {
                 noAsFilePath:
-                  '`as AbsoluteFilePath` forges the brand, skipping AbsoluteFilePathSchema\'s absolute-path validation. Build it with AbsoluteFilePathSchema.parse(value) instead. If this is a deliberate raw-path regime, move it under an exempted path or justify with an eslint-disable + reason.',
+                  "`as AbsoluteFilePath` forges the brand, skipping AbsoluteFilePathSchema's absolute-path validation. Build it with AbsoluteFilePathSchema.parse(value) instead. If this is a deliberate raw-path regime, move it under an exempted path or justify with an eslint-disable + reason.",
                 noAsCanonicalFilePath:
                   '`as CanonicalFilePath` forges the brand, skipping canonicalization — a non-canonical value silently becomes a ghost-duplicate dedup key. Build it with canonicalizeFilePath(value) instead, or justify the sanctioned producer with an eslint-disable + reason.'
               }
@@ -611,7 +867,7 @@ export default defineConfig([
               },
               messages: {
                 restricted:
-                  'Quit-related APIs and events are managed by the Application lifecycle. Do not use "{{name}}" directly. See docs/references/lifecycle/application-overview.md'
+                  'Quit-related APIs and events are managed by the Application lifecycle. Do not use "{{name}}" directly. See docs/dev/references/lifecycle/application-overview.md'
               }
             },
             create(context) {
@@ -668,6 +924,148 @@ export default defineConfig([
     },
     rules: {
       'lifecycle/no-direct-quit': 'warn'
+    }
+  },
+  // Transaction callers keep their database handle through same-class helpers.
+  // Registry resolution accepts explicit context and is covered by the no-global-DB regressions.
+  {
+    files: ['src/main/**/*.{ts,tsx}'],
+    ignores: ['src/main/**/__tests__/**', 'src/main/**/__mocks__/**', 'src/main/**/*.test.*'],
+    plugins: {
+      'tx-boundary': {
+        rules: {
+          'no-ambient-db-in-tx': {
+            meta: {
+              type: 'problem',
+              schema: [
+                {
+                  type: 'object',
+                  properties: {
+                    followHelpers: { type: 'boolean' },
+                    databaseFreeMethods: { type: 'array', items: { type: 'string' } }
+                  },
+                  additionalProperties: false
+                }
+              ],
+              docs: {
+                description: 'Disallow ambient database access in transaction methods and their same-class helpers.'
+              },
+              messages: {
+                ambientDb:
+                  '"{{name}}" is reachable from `{{fn}}` and depends on DbService being ready. Use the `tx` parameter.',
+                contextLookup: '`{{fn}}` must resolve supplied context without looking up another data service.',
+                serviceEscape:
+                  '`{{name}}` is reachable from `{{fn}}`. Use a `*Tx` method or an explicit-context resolver.'
+              }
+            },
+            create(context) {
+              const { followHelpers = false, databaseFreeMethods = [] } = context.options[0] ?? {}
+              const functions = new Map()
+              const scopes = []
+              const declaredName = (node) => {
+                const parent = node.parent
+                if (parent?.type === 'MethodDefinition' || parent?.type === 'Property') {
+                  return parent.key?.type === 'Identifier' ? parent.key.name : null
+                }
+                if (parent?.type === 'VariableDeclarator') {
+                  return parent.id?.type === 'Identifier' ? parent.id.name : null
+                }
+                return node.id?.type === 'Identifier' ? node.id.name : null
+              }
+              const enter = (node) => {
+                const parent = scopes.at(-1)
+                const classBody = node.parent?.type === 'MethodDefinition' ? node.parent.parent : parent?.classBody
+                const scope = { name: declaredName(node), classBody, calls: [], members: [], children: [] }
+                if (parent && parent.classBody === classBody) parent.children.push(scope)
+                functions.set(node, scope)
+                scopes.push(scope)
+              }
+              const exit = () => scopes.pop()
+
+              const inspectCall = (node, fn) => {
+                const { callee } = node
+                if (
+                  callee.type === 'Identifier' &&
+                  callee.name === 'getDataService' &&
+                  databaseFreeMethods.includes(fn)
+                ) {
+                  return { node, messageId: 'contextLookup', data: { fn } }
+                }
+                if (callee.type !== 'MemberExpression' || callee.property.type !== 'Identifier') return
+                const method = callee.property.name
+                if (method === 'getDb') {
+                  return { node, messageId: 'ambientDb', data: { name: 'getDb()', fn } }
+                }
+                if (callee.object.type !== 'Identifier') return
+                const receiver = callee.object.name
+                if (receiver === 'application' && method === 'get' && node.arguments[0]?.value === 'DbService') {
+                  return { node, messageId: 'ambientDb', data: { name: "application.get('DbService')", fn } }
+                }
+                if (receiver === 'providerRegistryService' && method === 'resolveModel') return
+                if (receiver.endsWith('Service') && !method.endsWith('Tx')) {
+                  return { node, messageId: 'serviceEscape', data: { name: `${receiver}.${method}()`, fn } }
+                }
+              }
+
+              return {
+                FunctionDeclaration: enter,
+                'FunctionDeclaration:exit': exit,
+                FunctionExpression: enter,
+                'FunctionExpression:exit': exit,
+                ArrowFunctionExpression: enter,
+                'ArrowFunctionExpression:exit': exit,
+                CallExpression(node) {
+                  scopes.at(-1)?.calls.push(node)
+                },
+                MemberExpression(node) {
+                  if (node.object.type === 'ThisExpression' && node.property.type === 'Identifier') {
+                    scopes.at(-1)?.members.push(node.property.name)
+                  }
+                },
+                'Program:exit'() {
+                  const reported = new Set()
+                  for (const root of functions.values()) {
+                    if (!root.name?.endsWith('Tx') && !databaseFreeMethods.includes(root.name)) continue
+                    const visited = new Set()
+                    const visit = (scope) => {
+                      if (!scope || visited.has(scope)) return
+                      visited.add(scope)
+                      for (const call of scope.calls) {
+                        const diagnostic = inspectCall(call, root.name)
+                        if (diagnostic && !reported.has(call)) {
+                          context.report(diagnostic)
+                          reported.add(call)
+                        }
+                      }
+                      for (const child of scope.children) visit(child)
+                      if (!followHelpers) return
+                      for (const name of scope.members) {
+                        const method = scope.classBody?.body.find(
+                          (member) =>
+                            member.type === 'MethodDefinition' &&
+                            member.key.type === 'Identifier' &&
+                            member.key.name === name
+                        )
+                        if (method) visit(functions.get(method.value))
+                      }
+                    }
+                    visit(root)
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    rules: {
+      'tx-boundary/no-ambient-db-in-tx': 'error'
+    }
+  },
+  {
+    files: ['src/main/data/services/ModelService.ts', 'src/main/data/services/ProviderRegistryService.ts'],
+    rules: {
+      'tx-boundary/no-ambient-db-in-tx': ['error', { followHelpers: true, databaseFreeMethods: ['resolveModel'] }]
     }
   },
   // i18n
@@ -728,6 +1126,8 @@ export default defineConfig([
         'error',
         {
           patterns: [
+            BAN_MCP_SDK_V1,
+            BAN_WEB_SEARCH_INTERNALS,
             {
               group: ['@shared/ipc/schemas', '@shared/ipc/schemas/*'],
               allowTypeImports: true,
@@ -735,6 +1135,29 @@ export default defineConfig([
                 'Renderer may only `import type` from @shared/ipc/schemas — a value import pulls the entire zod schema set into the renderer bundle.'
             }
           ]
+        }
+      ]
+    }
+  },
+  {
+    files: ['src/shared/**/*.{ts,tsx,js,jsx}'],
+    rules: {
+      '@typescript-eslint/no-restricted-imports': [
+        'error',
+        {
+          patterns: [BAN_MCP_SDK_V1, BAN_WEB_SEARCH_INTERNALS]
+        }
+      ]
+    }
+  },
+  {
+    // Renderer tests are excluded from the bundle-value guard above, but still must not use MCP v1.
+    files: ['src/renderer/**/*.test.*', 'src/renderer/**/__tests__/**', 'src/renderer/**/__mocks__/**'],
+    rules: {
+      '@typescript-eslint/no-restricted-imports': [
+        'error',
+        {
+          patterns: [BAN_MCP_SDK_V1, BAN_WEB_SEARCH_INTERNALS]
         }
       ]
     }
@@ -749,7 +1172,12 @@ export default defineConfig([
     // catalog data read it from disk (fs) rather than importing it.
     files: ['src/main/**/*.{ts,tsx,js,jsx}', 'src/preload/**/*.{ts,tsx,js,jsx}'],
     rules: {
-      '@typescript-eslint/no-restricted-imports': ['error', { patterns: [BAN_RENDERER_FROM_MAIN, BAN_DRIZZLE_MIGRATOR] }]
+      '@typescript-eslint/no-restricted-imports': [
+        'error',
+        {
+          patterns: [BAN_MCP_SDK_V1, BAN_WEB_SEARCH_INTERNALS, BAN_RENDERER_FROM_MAIN, BAN_DRIZZLE_MIGRATOR]
+        }
+      ]
     }
   },
   {
@@ -760,8 +1188,226 @@ export default defineConfig([
     plugins: { 'import-x': importX },
     settings: mainBoundarySettings,
     rules: {
-      '@typescript-eslint/no-restricted-imports': ['error', { patterns: [BAN_RENDERER_FROM_MAIN, BAN_DRIZZLE_MIGRATOR] }],
+      '@typescript-eslint/no-restricted-imports': [
+        'error',
+        { patterns: [BAN_WEB_SEARCH_INTERNALS, BAN_RENDERER_FROM_MAIN, BAN_DRIZZLE_MIGRATOR] }
+      ],
       'import-x/no-restricted-paths': ['error', { basePath: RENDERER_DIRNAME, zones: [UTILITY_CHILD_ZONE] }]
+    }
+  },
+  {
+    // Workspace packages and repository scripts follow the same MCP v1 ban as src/.
+    files: [
+      'packages/**/*.{ts,tsx}',
+      'native/system-speech/**/*.{ts,tsx}',
+      'scripts/**/*.{ts,tsx}',
+      'tests/**/*.{ts,tsx}',
+      'v2-refactor-temp/**/*.{ts,tsx}'
+    ],
+    rules: {
+      '@typescript-eslint/no-restricted-imports': [
+        'error',
+        {
+          patterns: [BAN_MCP_SDK_V1, BAN_WEB_SEARCH_INTERNALS]
+        }
+      ]
+    }
+  },
+  {
+    files: ['packages/web-search/src/**/*.ts'],
+    ignores: ['packages/web-search/src/**/__tests__/**'],
+    rules: {
+      '@typescript-eslint/no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            BAN_MCP_SDK_V1,
+            {
+              group: [
+                'node:*',
+                'electron',
+                'electron/**',
+                'react',
+                'react-native',
+                'react-native/**',
+                'expo',
+                'expo-*',
+                '@application',
+                '@logger',
+                '@main/**',
+                '@renderer/**',
+                '@shared/**',
+                '@data/**',
+                '@test-mocks/**',
+                '**/src/main/**',
+                '**/src/renderer/**',
+                '**/src/shared/**',
+                '**/src/backend/**'
+              ],
+              message: 'Web search protocols must use portable dependencies and host-injected transport.'
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    files: ['packages/file-preview/src/**/*.{ts,tsx}'],
+    rules: {
+      '@typescript-eslint/no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            BAN_MCP_SDK_V1,
+            BAN_WEB_SEARCH_INTERNALS,
+            {
+              group: FILE_PREVIEW_HOST_IMPORTS,
+              message: 'File preview must use its portable source and host callbacks.'
+            }
+          ]
+        }
+      ],
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: 'MemberExpression[object.name="window"][property.name="api"]',
+          message: 'File preview must not access the Electron preload bridge.'
+        },
+        {
+          selector: 'MemberExpression[object.name="window"][property.value="api"]',
+          message: 'File preview must not access the Electron preload bridge.'
+        }
+      ]
+    }
+  },
+  {
+    files: ['packages/file-preview/src/{core,source,selection,documentAnchor,officeZipPreflight}.ts'],
+    rules: {
+      '@typescript-eslint/no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            BAN_MCP_SDK_V1,
+            BAN_WEB_SEARCH_INTERNALS,
+            {
+              group: [
+                ...FILE_PREVIEW_HOST_IMPORTS,
+                'react',
+                'react-dom',
+                'react-dom/**',
+                '@cherrystudio/ui',
+                '@cherrystudio/ui/**',
+                './plugins/**',
+                './Preview',
+                './react'
+              ],
+              message: 'The preview core has no DOM or React dependencies.'
+            }
+          ]
+        }
+      ],
+      'no-restricted-globals': ['error', 'window', 'document', 'Worker']
+    }
+  },
+  {
+    files: ['packages/agent-behavior/src/**/*.ts'],
+    rules: {
+      '@typescript-eslint/no-restricted-imports': ['error', AGENT_BEHAVIOR_IMPORTS],
+      'no-restricted-syntax': ['error', ...AGENT_RUNTIME_SELECTORS]
+    }
+  },
+  {
+    files: ['packages/agent-behavior/src/core/**/*.ts'],
+    rules: {
+      '@typescript-eslint/no-restricted-imports': agentBehaviorLayer(
+        '(?:^|/)(?:ports|orchestration|fake|contract|index)(?:[./]|$)|^(?:\\.\\./)*\\.\\.?/?$',
+        'core/ imports only core/.'
+      ),
+      'no-restricted-syntax': [
+        'error',
+        ...AGENT_RUNTIME_SELECTORS,
+        ...KEY_MINT_SELECTORS,
+        ...CORE_SYNC_SELECTORS,
+        {
+          selector: 'MemberExpression[property.name=/^(?:localeCompare|toLocale)/]',
+          message: 'Core does not depend on the host locale.'
+        }
+      ],
+      'no-restricted-globals': [
+        'error',
+        ...['Date', 'Intl', 'crypto', 'performance', 'process', 'fetch', 'globalThis', ...AGENT_BEHAVIOR_TIMERS].map(
+          (name) => ({
+            name,
+            message: CORE_ENVIRONMENT
+          })
+        )
+      ],
+      'no-restricted-properties': ['error', { object: 'Math', property: 'random', message: CORE_ENVIRONMENT }]
+    }
+  },
+  {
+    files: ['packages/agent-behavior/src/ports/**/*.ts'],
+    rules: {
+      '@typescript-eslint/no-restricted-imports': agentBehaviorLayer(
+        '(?:^|/)(?:orchestration|fake|contract|index)(?:[./]|$)|^(?:\\.\\./)*\\.\\.?/?$',
+        'ports/ depends only on core/ types.'
+      ),
+      'no-restricted-syntax': [
+        'error',
+        ...AGENT_RUNTIME_SELECTORS,
+        {
+          selector:
+            ':matches(FunctionDeclaration, ClassDeclaration, VariableDeclaration, TSEnumDeclaration, ExpressionStatement)',
+          message: 'ports/ holds interfaces and TSDoc only.'
+        },
+        { selector: "ImportDeclaration[importKind='value']", message: 'ports/ imports types only.' }
+      ]
+    }
+  },
+  {
+    files: ['packages/agent-behavior/src/orchestration/**/*.ts'],
+    rules: {
+      '@typescript-eslint/no-restricted-imports': agentBehaviorLayer(
+        '(?:^|/)(?:fake|contract|index)(?:[./]|$)|^(?:\\.\\./)*\\.\\.?/?$',
+        'Orchestration never depends on the fake or the contract.'
+      ),
+      'no-restricted-syntax': [
+        'error',
+        ...AGENT_RUNTIME_SELECTORS,
+        ...KEY_MINT_SELECTORS,
+        {
+          selector:
+            "Program > VariableDeclaration[kind!='const'], Program > ExportNamedDeclaration > VariableDeclaration[kind!='const']",
+          message: 'Orchestration keeps no module state.'
+        },
+        { selector: "NewExpression[callee.name='Promise']", message: 'Orchestration waits only through ports.' },
+        {
+          selector:
+            "Program > VariableDeclaration > VariableDeclarator[init.type='NewExpression'], Program > ExportNamedDeclaration > VariableDeclaration > VariableDeclarator[init.type='NewExpression'], Program > VariableDeclaration > VariableDeclarator[init.type='TSAsExpression'][init.expression.type='NewExpression'], Program > ExportNamedDeclaration > VariableDeclaration > VariableDeclarator[init.type='TSAsExpression'][init.expression.type='NewExpression']",
+          message: 'Orchestration keeps no module state.'
+        },
+        {
+          selector: ':matches(ClassDeclaration, ClassExpression)',
+          message: 'Orchestration keeps no instance state; write functions over ports.'
+        },
+        {
+          selector: "MemberExpression[object.name='Promise'][property.name='withResolvers']",
+          message: 'Orchestration waits only through ports.'
+        }
+      ],
+      'no-restricted-globals': [
+        'error',
+        ...AGENT_BEHAVIOR_TIMERS.map((name) => ({ name, message: 'Orchestration waits only through ports.' }))
+      ]
+    }
+  },
+  {
+    files: ['packages/agent-behavior/src/contract/**/*.ts'],
+    rules: {
+      '@typescript-eslint/no-restricted-imports': agentBehaviorLayer(
+        '(?:^|/)(?:orchestration|fake|index)(?:[./]|$)|^(?:\\.\\./)*\\.\\.?/?$',
+        'contract/ depends only on core/ and ports/.'
+      )
     }
   },
   // Renderer boundary block L: layer edges into shared buckets — Zone A (shared→pages/windows) + Zone C (utils impurity).
@@ -778,19 +1424,21 @@ export default defineConfig([
           basePath: RENDERER_DIRNAME,
           zones: [
             {
-              target: [
-                'src/renderer/components',
-                'src/renderer/hooks',
-                'src/renderer/services',
-                'src/renderer/utils'
-              ],
+              target: ['src/renderer/components', 'src/renderer/hooks', 'src/renderer/services', 'src/renderer/utils'],
               from: ['src/renderer/pages', 'src/renderer/windows'],
               message: 'Shared buckets must not import pages/windows (reverse layer edge). architecture/renderer.md §7.'
             },
             {
+              target: ['src/renderer/hooks', 'src/renderer/services'],
+              from: 'src/renderer/components',
+              message:
+                'hooks/ and services/ sit below components/ and must not import them (reverse layer edge); move the module into components/ or push the shared piece down. architecture/renderer.md §3.'
+            },
+            {
               target: 'src/renderer/utils',
               from: ['src/renderer/components', 'src/renderer/hooks'],
-              message: 'utils/ is stateless and may call downward infra (data/ipc) but must not import components/hooks or any higher app layer. architecture/renderer.md §3.'
+              message:
+                'utils/ is stateless and may call downward infra (data/ipc) but must not import components/hooks or any higher app layer. architecture/renderer.md §3.'
             },
             // @logger is a §2 primitive that physically lives under services/; keep it out of the restricted glob.
             {
@@ -853,7 +1501,7 @@ export default defineConfig([
   },
   // Barrel / module-boundary rules (naming-conventions.md §6.4) — inline custom plugin, all error.
   {
-    files: ['src/**/*.{ts,tsx}'],
+    files: ['src/**/*.{ts,tsx}', ...RUNTIME_PACKAGES.map((name) => `packages/${name}/src/**/*.ts`)],
     // tests are exempt by design: white-box tests may deep-import a barrel's internals
     ignores: ['src/**/*.test.*', 'src/**/__tests__/**', 'src/**/__mocks__/**'],
     plugins: { barrel: barrelPlugin },
@@ -866,6 +1514,12 @@ export default defineConfig([
       'barrel/no-nesting': 'error',
       'barrel/no-bucket-root': 'error'
     }
+  },
+  {
+    files: ['packages/*/src/**/*.{ts,tsx}', 'native/system-speech/src/**/*.{ts,tsx}'],
+    ignores: [...RUNTIME_PACKAGES.map((name) => `packages/${name}/**`), '**/*.test.*', '**/__tests__/**'],
+    plugins: { barrel: barrelPlugin },
+    rules: { 'barrel/closed': 'error' }
   },
   // Directory & file naming rules (naming-conventions.md §3–§4, §6.6) — inline custom plugin.
   // Not tests-exempt (test file names follow the convention too); the __tests__/__mocks__/__snapshots__
@@ -1013,5 +1667,42 @@ export default defineConfig([
     rules: {
       'data-schema-key/valid-key': 'error'
     }
+  },
+  {
+    files: ['src/renderer/**/*.{ts,tsx}', 'packages/ui/src/**/*.{ts,tsx}'],
+    ignores: [
+      'packages/ui/src/lib/code-highlight/**',
+      'packages/ui/src/code-highlight.ts',
+      'packages/ui/src/lib/code-block/**',
+      'packages/ui/src/code-block.ts'
+    ],
+    plugins: {
+      'highlight-boundary': {
+        rules: {
+          'public-entry': {
+            meta: {
+              type: 'problem',
+              schema: [],
+              messages: {
+                private:
+                  'Import highlighting APIs through @cherrystudio/ui/code-highlight or @cherrystudio/ui/code-block.'
+              }
+            },
+            create(context) {
+              return {
+                ImportDeclaration(node) {
+                  if (
+                    typeof node.source.value === 'string' &&
+                    /lib\/(code-highlight|code-block)/.test(node.source.value)
+                  )
+                    context.report({ node, messageId: 'private' })
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    rules: { 'highlight-boundary/public-entry': 'error' }
   }
 ])

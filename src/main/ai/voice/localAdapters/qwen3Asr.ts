@@ -1,11 +1,12 @@
 import type { TranscriptionModelV3 } from '@ai-sdk/provider'
+
 import { application } from '@application'
 import type { TranscriptionOptions } from '@cherrystudio/ai-core'
 import { loggerService } from '@logger'
 import { UtilityProcessError } from '@main/core/utilityProcess/UtilityProcessError'
 import { regionService } from '@main/services/RegionService'
 import { LOCAL_VOICE_MODELS, VoiceResourceOperation } from '@shared/ai/localVoice'
-import { QWEN3_ASR_BUNDLE_ID, QWEN3_ASR_MODEL_ID } from '@shared/ai/localVoice'
+import { QWEN3_ASR_MODEL_ID, QWEN3_ASR_BUNDLE_ID } from '@shared/ai/localVoice'
 import { TranscriptionInputKind, TranscriptionOutputKind } from '@shared/ai/voice'
 import { LOCAL_MODEL_STATUS_CACHE_KEY } from '@shared/data/presets/localModel'
 

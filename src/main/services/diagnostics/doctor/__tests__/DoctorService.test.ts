@@ -1,3 +1,11 @@
+import { resolve } from 'node:path'
+
+import { setupTestDatabase } from '@test-helpers/db'
+import { MockMainCacheServiceUtils } from '@test-mocks/main/CacheService'
+import { MockMainPreferenceServiceUtils } from '@test-mocks/main/PreferenceService'
+import { eq } from 'drizzle-orm'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
 import { application } from '@application'
 import { agentTable } from '@data/db/schemas/agent'
 import { agentMcpServerTable } from '@data/db/schemas/assistantRelations'
@@ -7,11 +15,6 @@ import { userProviderTable } from '@data/db/schemas/userProvider'
 import { BaseService } from '@main/core/lifecycle'
 import type { DoctorScopeKey } from '@shared/types/doctor'
 import { doctorStateCacheKey } from '@shared/utils/doctor'
-import { setupTestDatabase } from '@test-helpers/db'
-import { MockMainCacheServiceUtils } from '@test-mocks/main/CacheService'
-import { MockMainPreferenceServiceUtils } from '@test-mocks/main/PreferenceService'
-import { eq } from 'drizzle-orm'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { DoctorContext } from '../types'
 
@@ -217,7 +220,7 @@ describe('DoctorService.run', () => {
     expect(outcome.report.basics).toMatchObject({
       edition: 'global',
       channel: 'latest',
-      userDataPath: '/mock/app.userdata'
+      userDataPath: resolve('/mock/app.userdata')
     })
     expect(new Date(outcome.report.expiresAt).getTime()).toBeGreaterThan(new Date(outcome.report.finishedAt).getTime())
     expect(state()).toEqual({ status: 'completed', report: outcome.report })

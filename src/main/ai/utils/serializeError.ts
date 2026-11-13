@@ -1,8 +1,9 @@
+import { APICallError, JSONParseError, RetryError, TypeValidationError } from 'ai'
+
 import { getSafeProviderErrorMessage, serializeNestedProviderError } from '@shared/ai/providerError'
 import type { SerializedError } from '@shared/types/error'
 import type { Serializable } from '@shared/types/serializable'
 import { isErrorCategory } from '@shared/utils/errorCategory'
-import { APICallError, RetryError } from 'ai'
 
 /** Lenient JSON serialization with circular-reference safety.
  *  Returns null for absent values so callers can preserve the `string | null`
@@ -34,7 +35,9 @@ function toSerializable(value: unknown): Serializable {
  *  so every `SerializedAiSdkErrorUnion` shape carries its discriminant
  *  fields and the renderer's type guards match. */
 export function serializeError(error: unknown): SerializedError {
-  if (APICallError.isInstance(error)) return serializeNestedProviderError(error) as SerializedError
+  if (APICallError.isInstance(error) || JSONParseError.isInstance(error) || TypeValidationError.isInstance(error)) {
+    return serializeNestedProviderError(error) as SerializedError
+  }
   if (error instanceof Error) {
     const e = error as unknown as Record<string, unknown>
     const isRetryError = RetryError.isInstance(error)
@@ -74,7 +77,7 @@ export function serializeError(error: unknown): SerializedError {
     if ('reason' in e) serialized.reason = e.reason as string
     if ('lastError' in e) serialized.lastError = serializeNestedProviderError(e.lastError)
     if ('errors' in e) serialized.errors = (e.errors as unknown[]).map(serializeNestedProviderError)
-    if ('originalError' in e) serialized.originalError = serializeError(e.originalError) as Serializable
+    if ('originalError' in e) serialized.originalError = serializeError(e.originalError)
     if ('functionality' in e) serialized.functionality = e.functionality as string
     if ('provider' in e) serialized.provider = e.provider as string
     if ('responses' in e) serialized.responses = e.responses as string[]

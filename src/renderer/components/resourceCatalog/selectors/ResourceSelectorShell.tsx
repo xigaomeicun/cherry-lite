@@ -1,17 +1,3 @@
-import { Checkbox, EmptyState, type EmptyStatePreset } from '@cherrystudio/ui'
-import { cn } from '@cherrystudio/ui/lib/utils'
-import {
-  MODEL_SELECTOR_ROW_CHECKBOX_CLASS,
-  ModelSelectorRow,
-  ModelSelectorRowActionButton
-} from '@renderer/components/ModelSelector'
-import Scrollbar from '@renderer/components/Scrollbar'
-import {
-  DEFAULT_SELECTOR_CONTENT_HEIGHT,
-  SelectorShell,
-  type SelectorShellMountStrategy,
-  type SelectorShellProps
-} from '@renderer/components/SelectorShell'
 import { Pin, Plus, SquarePen } from 'lucide-react'
 import {
   type KeyboardEvent as ReactKeyboardEvent,
@@ -26,10 +12,28 @@ import {
   useState
 } from 'react'
 
+import { ScrollArea } from '@cherrystudio/ui'
+import { Checkbox, EmptyState, type EmptyStatePreset } from '@cherrystudio/ui'
+import { cn } from '@cherrystudio/ui/lib/utils'
+import { AssistantAvatarImage } from '@renderer/components/Avatar/AssistantAvatarImage'
+import {
+  MODEL_SELECTOR_ROW_CHECKBOX_CLASS,
+  ModelSelectorRow,
+  ModelSelectorRowActionButton
+} from '@renderer/components/ModelSelector'
+import {
+  DEFAULT_SELECTOR_CONTENT_HEIGHT,
+  SelectorShell,
+  type SelectorShellMountStrategy,
+  type SelectorShellProps
+} from '@renderer/components/SelectorShell'
+import { matchesSearchText } from '@renderer/utils/pinyin'
+
 export type ResourceSelectorShellItem = {
   id: string
   name: string
   emoji?: string
+  avatarSrc?: string
   description?: string
   groupId?: string
   groupName?: string
@@ -255,7 +259,14 @@ function ResourceSelectorOptionRowComponent<T extends ResourceSelectorShellItem>
             />
           ) : null
         }
-        leading={leading}
+        leading={
+          <AssistantAvatarImage
+            src={item.avatarSrc}
+            alt={item.name}
+            className="size-5 shrink-0 rounded-full object-cover"
+            fallback={leading}
+          />
+        }
         trailing={trailing}
         actions={
           <>
@@ -405,7 +416,7 @@ export function ResourceSelectorShell<T extends ResourceSelectorShellItem>(props
     if (query) {
       filtered = filtered.filter(
         (item) =>
-          item.name.toLowerCase().includes(query) ||
+          matchesSearchText(item.name, query) ||
           (item.description ? item.description.toLowerCase().includes(query) : false)
       )
     }
@@ -468,9 +479,9 @@ export function ResourceSelectorShell<T extends ResourceSelectorShellItem>(props
         if (isItemType) {
           const byId = new Map<string, T>(items.map((item) => [item.id, item]))
           const mapped = ids.map((id) => byId.get(id)).filter(Boolean) as T[]
-          ;(props.onChange as (value: T[]) => void)(mapped)
+          props.onChange(mapped)
         } else {
-          ;(props.onChange as (value: string[]) => void)(ids)
+          props.onChange(ids)
         }
         return
       }
@@ -478,9 +489,9 @@ export function ResourceSelectorShell<T extends ResourceSelectorShellItem>(props
       const id = ids[0] ?? null
       if (isItemType) {
         const item = id ? (items.find((candidate) => candidate.id === id) ?? null) : null
-        ;(props.onChange as (value: T | null) => void)(item)
+        props.onChange(item)
       } else {
-        ;(props.onChange as (value: string | null) => void)(id)
+        props.onChange(id)
       }
     },
     [isItemType, isMulti, items, props.onChange]
@@ -645,9 +656,9 @@ export function ResourceSelectorShell<T extends ResourceSelectorShellItem>(props
       const firstId = valueIds[0]
       if (isItemType) {
         const firstItem = items.find((item) => item.id === firstId) ?? null
-        ;(props.onChange as (value: T[]) => void)(firstItem ? [firstItem] : [])
+        props.onChange(firstItem ? [firstItem] : [])
       } else {
-        ;(props.onChange as (value: string[]) => void)([firstId])
+        props.onChange([firstId])
       }
     },
     [isItemType, isMulti, items, props.onChange, valueIds]
@@ -763,16 +774,20 @@ export function ResourceSelectorShell<T extends ResourceSelectorShellItem>(props
         const listHeight = availableListHeight ?? DEFAULT_MIN_LIST_HEIGHT
 
         return (
-          <Scrollbar
-            ref={listRef}
-            id={listboxId}
-            role="listbox"
-            aria-multiselectable={multiEnabled}
-            tabIndex={-1}
-            className="min-h-0 flex-1 scroll-pt-1.5 px-1 py-1 outline-none"
+          <ScrollArea
+            contentProps={{ className: 'px-1 py-1' }}
+            viewportProps={{
+              ref: listRef,
+              id: listboxId,
+              role: 'listbox',
+              'aria-multiselectable': multiEnabled,
+              tabIndex: -1,
+              className: 'scroll-pt-1.5 outline-none'
+            }}
+            className="min-h-0 flex-1"
             style={{ height: listHeight }}>
             {listContent}
-          </Scrollbar>
+          </ScrollArea>
         )
       }}
     </SelectorShell>

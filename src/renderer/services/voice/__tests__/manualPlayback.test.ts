@@ -1,7 +1,8 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
 import { openSettingsTab } from '@renderer/services/mainWindowNavigation'
 import { popup } from '@renderer/services/popup'
 import { toast } from '@renderer/services/toast'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import * as voice from '../index'
 import { speechPlaybackService } from '../SpeechPlaybackService'

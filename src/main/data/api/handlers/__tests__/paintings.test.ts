@@ -6,6 +6,7 @@ const {
   getPaintingByIdMock,
   updatePaintingMock,
   deletePaintingMock,
+  restorePaintingMock,
   reorderPaintingMock,
   reorderPaintingBatchMock
 } = vi.hoisted(() => ({
@@ -14,6 +15,7 @@ const {
   getPaintingByIdMock: vi.fn(),
   updatePaintingMock: vi.fn(),
   deletePaintingMock: vi.fn(),
+  restorePaintingMock: vi.fn(),
   reorderPaintingMock: vi.fn(),
   reorderPaintingBatchMock: vi.fn()
 }))
@@ -25,12 +27,13 @@ vi.mock('@data/services/PaintingService', () => ({
     getById: getPaintingByIdMock,
     update: updatePaintingMock,
     delete: deletePaintingMock,
+    restore: restorePaintingMock,
     reorder: reorderPaintingMock,
     reorderBatch: reorderPaintingBatchMock
   }
 }))
 
-import { PAINTINGS_DEFAULT_LIMIT, PAINTINGS_MAX_LIMIT } from '@shared/data/api/schemas/paintings'
+import { PAINTINGS_MAX_LIMIT } from '@shared/data/api/schemas/paintings'
 
 import { paintingHandlers } from '../paintings'
 
@@ -41,27 +44,13 @@ describe('paintingHandlers', () => {
     vi.clearAllMocks()
   })
 
-  it('applies default cursor pagination when query is missing', async () => {
-    listPaintingsMock.mockResolvedValueOnce({
-      items: [],
-      total: 0,
-      nextCursor: undefined
-    })
-
-    await paintingHandlers['/paintings'].GET({})
-
-    expect(listPaintingsMock).toHaveBeenCalledWith({
-      limit: PAINTINGS_DEFAULT_LIMIT
-    })
-  })
-
   it('rejects invalid list query before calling the service', async () => {
     await expect(
       paintingHandlers['/paintings'].GET({
         query: {
           limit: PAINTINGS_MAX_LIMIT + 1
-        } as never
-      } as never)
+        }
+      })
     ).rejects.toHaveProperty('name', 'ZodError')
 
     expect(listPaintingsMock).not.toHaveBeenCalled()
@@ -72,8 +61,8 @@ describe('paintingHandlers', () => {
       paintingHandlers['/paintings'].GET({
         query: {
           [legacyParentFieldKey]: 'painting-parent'
-        } as never
-      } as never)
+        }
+      })
     ).rejects.toHaveProperty('name', 'ZodError')
 
     await expect(
@@ -102,7 +91,7 @@ describe('paintingHandlers', () => {
         body: {
           [legacyParentFieldKey]: null
         }
-      } as never)
+      })
     ).rejects.toHaveProperty('name', 'ZodError')
 
     expect(listPaintingsMock).not.toHaveBeenCalled()
@@ -121,12 +110,12 @@ describe('paintingHandlers', () => {
         prompt: 'hello',
         files: { output: [], input: [] }
       }
-    } as never)
+    })
 
     await paintingHandlers['/paintings/:id/order'].PATCH({
       params: { id: 'painting-2' },
       body: { after: 'painting-1' }
-    } as never)
+    })
 
     await paintingHandlers['/paintings/order:batch'].PATCH({
       body: {
@@ -161,7 +150,7 @@ describe('paintingHandlers', () => {
       paintingHandlers['/paintings/:id'].PATCH({
         params: { id: 'painting-1' },
         body: { prompt: 'updated' }
-      } as never)
+      })
     ).resolves.toEqual({
       id: 'painting-1',
       prompt: 'updated'
@@ -174,6 +163,56 @@ describe('paintingHandlers', () => {
 
     expect(getPaintingByIdMock).toHaveBeenCalledWith('painting-1')
     expect(updatePaintingMock).toHaveBeenCalledWith('painting-1', { prompt: 'updated' })
-    expect(deletePaintingMock).toHaveBeenCalledWith('painting-1')
+    expect(deletePaintingMock).toHaveBeenCalledWith('painting-1', {})
+  })
+
+  it('forwards inTrash to the service on list', async () => {
+    listPaintingsMock.mockResolvedValueOnce({ items: [], total: 0, nextCursor: undefined })
+
+    await paintingHandlers['/paintings'].GET({ query: { inTrash: true, limit: 5 } })
+
+    expect(listPaintingsMock).toHaveBeenCalledWith({
+      inTrash: true,
+      limit: 5
+    })
+  })
+
+  it('parses the delete query and forwards permanent', async () => {
+    deletePaintingMock.mockReturnValue(undefined)
+
+    await paintingHandlers['/paintings/:id'].DELETE({
+      params: { id: 'painting-1' },
+      query: { permanent: true }
+    })
+
+    expect(deletePaintingMock).toHaveBeenCalledWith('painting-1', { permanent: true })
+  })
+
+  it('rejects an invalid delete query before calling the service', async () => {
+    await expect(
+      paintingHandlers['/paintings/:id'].DELETE({
+        params: { id: 'painting-1' },
+        query: { permanent: 'yes' } as never
+      })
+    ).rejects.toHaveProperty('name', 'ZodError')
+
+    await expect(
+      paintingHandlers['/paintings/:id'].DELETE({
+        params: { id: 'painting-1' },
+        query: { cascade: true } as never
+      })
+    ).rejects.toHaveProperty('name', 'ZodError')
+
+    expect(deletePaintingMock).not.toHaveBeenCalled()
+  })
+
+  it('delegates restore by id', async () => {
+    restorePaintingMock.mockReturnValueOnce({ id: 'painting-1' })
+
+    await expect(paintingHandlers['/paintings/:id/restore'].POST({ params: { id: 'painting-1' } })).resolves.toEqual({
+      id: 'painting-1'
+    })
+
+    expect(restorePaintingMock).toHaveBeenCalledWith('painting-1')
   })
 })

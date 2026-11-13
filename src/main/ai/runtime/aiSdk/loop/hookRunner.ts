@@ -1,7 +1,8 @@
+import type { ToolSet } from 'ai'
+
 import { loggerService } from '@logger'
 import { chatErrorContext } from '@main/ai/utils/chatErrorContext'
 import { redactToShape } from '@main/ai/utils/redactToShape'
-import type { ToolSet } from 'ai'
 
 import type { AgentLoopHooks, ToolExecutionStartEvent } from './types'
 

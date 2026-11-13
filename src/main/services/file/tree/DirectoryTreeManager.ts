@@ -29,6 +29,8 @@
 
 import { randomUUID } from 'node:crypto'
 
+import type { WebContents } from 'electron'
+
 import { application } from '@application'
 import { loggerService } from '@logger'
 import { BaseService, DependsOn, type Disposable, Injectable, Phase, ServicePhase } from '@main/core/lifecycle'
@@ -36,7 +38,6 @@ import type { WindowId } from '@shared/ipc/types'
 import { IpcChannel } from '@shared/IpcChannel'
 import type { CreateTreeIpcResult, DirectoryTreeOptions, TreeMutationPushPayload } from '@shared/utils/file'
 import { DirectoryTreeOptionsSchema } from '@shared/utils/file'
-import type { WebContents } from 'electron'
 
 import { createDirectoryTree, type DirectoryTreeBuilder } from './builder'
 

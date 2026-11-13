@@ -2,24 +2,24 @@ import { preferenceService } from '@renderer/data/PreferenceService'
 import i18n from '@renderer/i18n/resolver'
 import { ipcApi } from '@renderer/ipc'
 import {
-  isSpeechModelId,
   isTranscriptionModelId,
-  type LocalSpeechModelId,
-  type LocalTranscriptionModelId,
-  type LocalVoiceModelId,
+  isSpeechModelId,
+  TranscriptionLanguageSource,
   MAX_SPEECH_SPEED,
   MIN_SPEECH_SPEED,
-  TranscriptionLanguageSource
+  type LocalSpeechModelId,
+  type LocalVoiceModelId,
+  type LocalTranscriptionModelId
 } from '@shared/ai/localVoice'
-import type { SpeechPcmChunk, TranscriptRevision } from '@shared/ai/voice'
-import type { SpeechStreamEvent, SpeechStreamIdentity } from '@shared/ai/voice'
 import { TranscriptionInputKind, TranscriptionOutputKind } from '@shared/ai/voice'
+import type { TranscriptRevision, SpeechPcmChunk } from '@shared/ai/voice'
+import type { SpeechStreamEvent, SpeechStreamIdentity } from '@shared/ai/voice'
 import { IpcError } from '@shared/ipc/errors/IpcError'
 import { voiceErrorCodes, type VoiceErrorReason } from '@shared/ipc/errors/voice'
 import type { voiceRequestSchemas, VoiceSessionEvent, VoiceSessionState } from '@shared/ipc/schemas/voice'
 import type { EventPayload, InputFor, OutputFor } from '@shared/ipc/types'
 
-import { enumerateMicrophones, type MicrophoneDevice, microphoneErrorReason } from './microphoneDevices'
+import { enumerateMicrophones, microphoneErrorReason, type MicrophoneDevice } from './microphoneDevices'
 import { getDefaultVoiceLanguage } from './voiceLanguage'
 
 type VoiceRoute = keyof typeof voiceRequestSchemas

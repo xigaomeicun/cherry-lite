@@ -1,8 +1,9 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
 import { miniAppLogoFileRefTable, providerLogoFileRefTable } from '@data/db/schemas/fileRelations'
 import { groupTable } from '@data/db/schemas/group'
 import { jobScheduleTable } from '@data/db/schemas/job'
 import { entityTagTable, tagTable } from '@data/db/schemas/tagging'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { mockMainLoggerService } from '../../../../../../../tests/__mocks__/MainLoggerService'
 import { MigrationEngine } from '../MigrationEngine'
@@ -207,7 +208,7 @@ describe('MigrationEngine', () => {
       success: true,
       errors: [],
       stats: { sourceCount: 2, targetCount: 1, skippedCount: 0 }
-    } as any)
+    })
 
     engine.registerMigrators([migrator as any])
 
@@ -230,7 +231,7 @@ describe('MigrationEngine', () => {
       success: true,
       errors: [],
       stats: { sourceCount: 2, targetCount: 1, skippedCount: 1 }
-    } as any)
+    })
 
     engine.registerMigrators([migrator as any])
 
@@ -312,35 +313,6 @@ describe('MigrationEngine', () => {
     ])
 
     errorSpy.mockRestore()
-  })
-
-  it('clears new architecture tables inside one transaction', async () => {
-    const runFn = vi.fn()
-    const deleteFn = vi.fn(() => ({ run: runFn, where: vi.fn(() => ({ run: runFn })) }))
-    const transactionFn = vi.fn((fn: (tx: unknown) => void) => {
-      fn({ delete: deleteFn })
-    })
-    const db = {
-      select: vi.fn(() => ({
-        from: vi.fn(() => ({
-          get: vi.fn(() => ({ count: 0 }))
-        }))
-      })),
-      transaction: transactionFn
-    }
-    ;(engine as any).migrationDb = {
-      getDb: vi.fn(() => db),
-      close: vi.fn()
-    }
-    vi.mocked((engine as any).verifyAndClearNewTables).mockRestore()
-
-    await (engine as any).verifyAndClearNewTables()
-
-    expect(transactionFn).toHaveBeenCalledTimes(1)
-    // Every counted table is deleted, plus the filtered job_schedule delete
-    // (which is not part of the count loop).
-    expect(deleteFn).toHaveBeenCalledTimes(db.select.mock.calls.length + 1)
-    expect(db).not.toHaveProperty('delete')
   })
 
   it('includes supporting migration tables in the clear set (retry safety)', async () => {

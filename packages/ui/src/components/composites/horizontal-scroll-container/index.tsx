@@ -1,10 +1,10 @@
-// Original: src/renderer/components/horizontal-scroll-container/index.tsx
-import { cn } from '@cherrystudio/ui/lib/utils'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import * as React from 'react'
 
+// Original: src/renderer/components/horizontal-scroll-container/index.tsx
+import { cn } from '@cherrystudio/ui/lib/utils'
+
 import { Button } from '../../primitives/button'
-import Scrollbar from '../scrollbar'
 
 const SCROLL_POSITION_TOLERANCE = 1
 
@@ -111,8 +111,9 @@ const HorizontalScrollContainer: React.FC<HorizontalScrollContainerProps> = ({
         className
       )}
       onClick={expandable ? handleContainerClick : undefined}>
-      <Scrollbar
+      <div
         ref={scrollRef}
+        data-horizontal-scroll-viewport=""
         className="flex min-w-0 flex-1 overflow-y-hidden"
         style={{
           gap,
@@ -122,7 +123,7 @@ const HorizontalScrollContainer: React.FC<HorizontalScrollContainerProps> = ({
           scrollbarWidth: 'none'
         }}>
         {children}
-      </Scrollbar>
+      </div>
       {canScrollLeft && !isExpanded && (
         <Button
           type="button"

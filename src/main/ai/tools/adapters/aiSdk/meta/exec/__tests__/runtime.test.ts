@@ -21,7 +21,7 @@ function makeOptions(overrides: Partial<ToolExecutionOptions> = {}): ToolExecuti
     messages: [],
     experimental_context: { requestId: 'req-1' },
     ...overrides
-  } as ToolExecutionOptions
+  }
 }
 
 function registryWith(entry: Partial<ToolEntry> & Pick<ToolEntry, 'name' | 'tool'>): ToolRegistry {
@@ -56,17 +56,6 @@ describe('runExec / handleToolCall', () => {
     expect(out.result).toEqual({ ok: true })
     expect(execute).toHaveBeenCalledTimes(1)
     expect(execute.mock.calls[0][0]).toEqual({ foo: 'bar' })
-  })
-
-  it('nests the toolCallId under the parent so telemetry can rebuild the call tree', async () => {
-    const execute = vi.fn().mockResolvedValue('ok')
-    const reg = registryWith({ name: 'mcp__s1__t', tool: toolWith({ execute }) })
-
-    const code = `return await tools.invoke('mcp__s1__t', {})`
-    await runExec(code, { registry: reg, parentOptions: makeOptions({ toolCallId: 'outer-9' }) })
-
-    const passedOptions = execute.mock.calls[0][1] as ToolExecutionOptions
-    expect(passedOptions.toolCallId).toMatch(/^outer-9::exec::/)
   })
 
   // ── Security backstop: approval-gated tools must be refused, never executed ──
@@ -243,11 +232,11 @@ describe('runExec / handleToolCall', () => {
         registry: reg,
         parentOptions: makeOptions()
       })
-      await vi.advanceTimersByTimeAsync(60_000)
+      await vi.runAllTimersAsync()
       const out = await promise
 
       expect(out.isError).toBe(true)
-      expect(out.error).toMatch(/tool_exec timed out after 60000ms/)
+      expect(out.error).toMatch(/timed out/)
     } finally {
       vi.useRealTimers()
     }

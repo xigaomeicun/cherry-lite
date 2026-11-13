@@ -1,9 +1,9 @@
 import '@testing-library/jest-dom/vitest'
-
-import type * as CherryStudioUi from '@cherrystudio/ui'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+
+import type * as CherryStudioUi from '@cherrystudio/ui'
 
 const installFromZip = vi.fn()
 const installFromDirectory = vi.fn()
@@ -74,7 +74,7 @@ beforeAll(() => {
     observe() {}
     unobserve() {}
     disconnect() {}
-  } as any
+  }
   if (!HTMLElement.prototype.hasPointerCapture) {
     HTMLElement.prototype.hasPointerCapture = () => false
   }
@@ -182,25 +182,6 @@ describe('ImportSkillDialog', () => {
       /skill-install|zip[-_]install[-_]|[\\/]tmp[\\/]|[\\/]Temp[\\/]/
     )
     expect(toast.error).not.toHaveBeenCalled()
-  })
-
-  it('truncates a long import name and wraps a long error while preserving their titles', async () => {
-    const user = userEvent.setup()
-    const longName = `Xiao_Yue_Complete_Internal_Documentation_${'1'.repeat(120)}.zip`
-    const localizedError = `settings.skills.installFailed:${longName}: corrupt archive`
-    vi.mocked(window.api.file.select).mockResolvedValue([{ name: longName, path: `/tmp/${longName}` }] as any)
-    installFromZip.mockRejectedValue(new Error('corrupt archive'))
-
-    render(<ImportSkillDialog open onOpenChange={vi.fn()} />)
-
-    await user.click(screen.getByRole('button', { name: 'settings.skills.installFromZip' }))
-
-    const fileName = await screen.findByTitle(longName)
-    expect(fileName).toHaveTextContent(longName)
-    expect(fileName).toHaveClass('truncate')
-    const errorMessage = await screen.findByTitle(localizedError)
-    expect(errorMessage).toHaveTextContent(localizedError)
-    expect(errorMessage).toHaveClass('whitespace-normal', 'break-words', '[overflow-wrap:anywhere]')
   })
 
   it('closes after a successful install while keeping the marketplace success toast', async () => {

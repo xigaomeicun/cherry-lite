@@ -12,9 +12,10 @@ import type { OpenAIProvider, OpenAIProviderSettings } from '@ai-sdk/openai'
 import type { OpenAICompatibleProviderSettings } from '@ai-sdk/openai-compatible'
 import type { ProviderV3, RerankingModelV3 } from '@ai-sdk/provider'
 import type { XaiProvider, XaiProviderSettings } from '@ai-sdk/xai'
-import type { CherryInProvider, CherryInProviderSettings } from '@cherrystudio/ai-sdk-provider'
 import type { OpenRouterProvider, OpenRouterProviderSettings } from '@openrouter/ai-sdk-provider'
 import { customProvider, type LanguageModel } from 'ai'
+
+import type { CherryInProvider, CherryInProviderSettings } from '@cherrystudio/ai-sdk-provider'
 
 import type {
   ExtensionConfigToIdResolutionMap,
@@ -77,12 +78,14 @@ const AzureExtension = ProviderExtension.create({
   create: async (settings): Promise<ProviderV3> => {
     const provider = (await import('@ai-sdk/azure')).createAzure(settings)
     // Default to chat mode (AI SDK defaults to responses API)
-    return customProvider({
+    const wrapper = customProvider({
       fallbackProvider: {
         ...provider,
         languageModel: (modelId: string) => provider.chat(modelId)
       }
     })
+    // customProvider drops the SDK provider's `.tools`, but toolFactories need it
+    return Object.assign(wrapper, { tools: provider.tools })
   },
   toolFactories: {
     webSearch:
@@ -238,6 +241,14 @@ const OpenRouterExtension = ProviderExtension.create({
   name: 'openrouter',
   supportsImageGeneration: true,
   create: async (settings) => (await import('@openrouter/ai-sdk-provider')).createOpenRouter(settings),
+  createRerankingModel: (modelId, settings) =>
+    createLazyOpenAICompatibleRerankingModel(modelId, {
+      name: 'openrouter',
+      baseURL: settings?.baseURL ?? settings?.baseUrl ?? 'https://openrouter.ai/api/v1',
+      apiKey: settings?.apiKey,
+      headers: settings?.headers,
+      fetch: settings?.fetch
+    }),
   toolFactories: {
     webSearch:
       (provider: OpenRouterProvider) =>

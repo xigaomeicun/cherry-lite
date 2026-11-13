@@ -1,12 +1,12 @@
 import type {
   DoctorCheckId,
-  DoctorCheckOutcome,
-  DoctorConfirmation,
   DoctorConfirmationCheckId,
+  DoctorConfirmation,
+  DoctorSubject,
+  DoctorCheckOutcome,
   DoctorEvidenceItem,
   DoctorFixId,
   DoctorFixTarget,
-  DoctorSubject,
   DoctorSubjectFor
 } from '@shared/types/doctor'
 
@@ -23,9 +23,8 @@ export interface DoctorContext extends DoctorContextBase {
 }
 
 /** Checks that read no facts (`scope: 'global' | 'any'`) get no `subject` to read. */
-type DoctorSubjectSlot<Id extends DoctorCheckId> = DoctorSubjectFor<Id> extends undefined
-  ? { readonly subject?: undefined }
-  : { readonly subject: DoctorSubjectFor<Id> }
+type DoctorSubjectSlot<Id extends DoctorCheckId> =
+  DoctorSubjectFor<Id> extends undefined ? { readonly subject?: undefined } : { readonly subject: DoctorSubjectFor<Id> }
 
 /** What a check's `run` sees: `subject` narrowed to the facts its catalog `scope` declared. */
 export type DoctorCheckContext<Id extends DoctorCheckId> = DoctorContextBase & DoctorSubjectSlot<Id>

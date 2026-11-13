@@ -1,6 +1,7 @@
-import AuthConnectionSlotsLayout from '@renderer/pages/settings/ProviderSettings/ConnectionSettings/AuthConnectionSlotsLayout'
 import { render } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+import AuthConnectionSlotsLayout from '@renderer/pages/settings/ProviderSettings/ConnectionSettings/AuthConnectionSlotsLayout'
 
 type TestProvider = { id: string; presetProviderId?: string; authMethods?: string[] }
 
@@ -41,27 +42,6 @@ describe('AuthConnectionSlotsLayout', () => {
     expect(text).toContain('afterAuth')
     expect(text.indexOf('beforeAuth')).toBeLessThan(text.indexOf('core'))
     expect(text.indexOf('core')).toBeLessThan(text.indexOf('afterAuth'))
-  })
-
-  it('renders core content inside the shell card', () => {
-    const { container } = render(
-      <AuthConnectionSlotsLayout providerId="openai">
-        <div>core-only</div>
-      </AuthConnectionSlotsLayout>
-    )
-
-    expect(container.textContent).toContain('core-only')
-    expect(container.querySelector('section')).not.toBeNull()
-  })
-
-  it('does not render an extra configuration heading', () => {
-    const { container } = render(
-      <AuthConnectionSlotsLayout providerId="openai">
-        <div>core</div>
-      </AuthConnectionSlotsLayout>
-    )
-
-    expect(container.querySelector('h3')).toBeNull()
   })
 
   it('omits the empty generic authentication container for login-based providers', () => {

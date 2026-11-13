@@ -1,6 +1,7 @@
-import { SkillsSettings } from '@renderer/pages/settings/SkillsSettings'
 import { createFileRoute } from '@tanstack/react-router'
 import * as z from 'zod'
+
+import { SkillsSettings } from '@renderer/pages/settings/SkillsSettings'
 
 // Keeps the active tab (all/system/builtin) in the URL so that returning from
 // the detail route restores the tab the user was browsing instead of resetting to "all".

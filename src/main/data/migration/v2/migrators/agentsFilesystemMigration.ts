@@ -3,6 +3,9 @@ import { type BigIntStats, constants, createReadStream } from 'node:fs'
 import { copyFile, cp, link, lstat, mkdir, readdir, readlink, realpath, rename, rmdir, unlink } from 'node:fs/promises'
 import path from 'node:path'
 
+import PQueue from 'p-queue'
+import { validate as isUuid } from 'uuid'
+
 import { loggerService } from '@logger'
 import {
   agentDataDirectoryPath,
@@ -12,9 +15,7 @@ import {
   resolveRealOrNearestExistingPath
 } from '@main/ai/agents/agentDataDirectory'
 import { isMac, isWin } from '@main/core/platform'
-import { isPathInside, isSameOrInside } from '@main/utils/file'
-import PQueue from 'p-queue'
-import { validate as isUuid } from 'uuid'
+import { isOutsidePath, isPathInside, isSameOrInside } from '@main/utils/file'
 
 const logger = loggerService.withContext('AgentsFilesystemMigration')
 const IDENTITY_ENTRY_NAMES = new Set(['soul.md', 'user.md', 'memory'])
@@ -199,10 +200,6 @@ async function lstatBigIntIfExists(targetPath: string): Promise<BigIntStats | un
   }
 }
 
-function isPathInsideOrEqual(childPath: string, parentPath: string): boolean {
-  return path.normalize(childPath) === path.normalize(parentPath) || isPathInside(childPath, parentPath)
-}
-
 async function realpathIfExists(targetPath: string): Promise<string | undefined> {
   try {
     return await realpath(targetPath)
@@ -276,7 +273,7 @@ export async function isManagedLegacyAgentWorkspace(
   const rootStat = await lstatIfExists(agentsDataRoot)
   if (!rootStat?.isDirectory() || rootStat.isSymbolicLink()) return false
   const [realRoot, realWorkspace] = await Promise.all([realpath(agentsDataRoot), realpath(expected)])
-  return isPathInsideOrEqual(realWorkspace, realRoot)
+  return !isOutsidePath(path.relative(realRoot, realWorkspace))
 }
 
 async function findCaseInsensitiveEntry(dir: string, name: string): Promise<string | undefined> {

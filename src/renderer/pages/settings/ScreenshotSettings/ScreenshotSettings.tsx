@@ -1,7 +1,12 @@
+import { Link } from '@tanstack/react-router'
+import { TriangleAlert } from 'lucide-react'
+import type { FC } from 'react'
+import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
+
 import { Badge, Button, DescriptionSwitch, NormalTooltip } from '@cherrystudio/ui'
 import { usePreference } from '@data/hooks/usePreference'
 import { loggerService } from '@logger'
-import LocalModelDownloadPopup from '@renderer/components/popups/LocalModelDownloadPopup'
 import {
   SettingDivider,
   SettingGroup,
@@ -11,16 +16,11 @@ import {
 import { useLocalModel } from '@renderer/hooks/useLocalModel'
 import { useTheme } from '@renderer/hooks/useTheme'
 import { ipcApi } from '@renderer/ipc'
-import { isMac } from '@renderer/utils/platform'
+import { isMac, isWin } from '@renderer/utils/platform'
 import { DEFAULT_LOCAL_MODEL_BUNDLE_BY_CAPABILITY } from '@shared/data/presets/localModel'
 import type { OutputFor } from '@shared/ipc/types'
 import { commandShortcutPreferenceKey } from '@shared/utils/command'
 import { formatShortcutDisplay } from '@shared/utils/shortcut'
-import { Link } from '@tanstack/react-router'
-import { TriangleAlert } from 'lucide-react'
-import type { FC } from 'react'
-import { useEffect, useState } from 'react'
-import { useTranslation } from 'react-i18next'
 
 const logger = loggerService.withContext('ScreenshotSettings')
 
@@ -124,7 +124,8 @@ const ScreenshotSettings: FC = () => {
   }
 
   const permissionView = resolvePermissionView(permissionStatus, restartRequired, promptUnavailable)
-  const ocrReady = ocrModel.status === 'ready'
+  const systemOcrAvailable = isMac || isWin
+  const ocrReady = systemOcrAvailable || ocrModel.status === 'ready'
 
   return (
     <SettingsContentColumn theme={theme}>
@@ -221,7 +222,9 @@ const ScreenshotSettings: FC = () => {
         />
 
         <div className="mt-2 px-2">
-          {ocrReady ? (
+          {systemOcrAvailable ? (
+            <Badge variant="secondary">{t('provider.system')}</Badge>
+          ) : ocrReady ? (
             <Badge variant="secondary">{t('settings.screenshot.ocr.model.ready')}</Badge>
           ) : ocrModel.status === 'downloading' ? (
             <div className="flex items-center justify-between gap-3 text-muted-foreground text-xs">
@@ -233,17 +236,9 @@ const ScreenshotSettings: FC = () => {
               <span className="text-muted-foreground text-xs leading-5">
                 {t('settings.screenshot.ocr.model.unavailable')}
               </span>
-              <button
-                type="button"
-                className="shrink-0 cursor-pointer text-link text-xs hover:underline"
-                onClick={() =>
-                  void LocalModelDownloadPopup.show({
-                    id: DEFAULT_LOCAL_MODEL_BUNDLE_BY_CAPABILITY.ocr,
-                    description: t('settings.dependencies.localModels.ocr.subtitle')
-                  })
-                }>
-                {t('settings.dependencies.localModels.download')}
-              </button>
+              <Link to="/settings/local-models" className="shrink-0 text-link text-xs hover:underline">
+                {t('settings.screenshot.ocr.model.link')}
+              </Link>
             </div>
           )}
         </div>

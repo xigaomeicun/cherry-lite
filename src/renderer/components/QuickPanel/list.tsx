@@ -1,8 +1,9 @@
-import { Button, Kbd, NormalTooltip } from '@cherrystudio/ui'
-import { cn } from '@cherrystudio/ui/lib/utils'
 import { t } from 'i18next'
 import { Check, ChevronRight } from 'lucide-react'
 import { type ReactElement, type ReactNode, type Ref, useState } from 'react'
+
+import { Button, Kbd, NormalTooltip } from '@cherrystudio/ui'
+import { cn } from '@cherrystudio/ui/lib/utils'
 
 import { QUICK_PANEL_ROW_HEIGHT } from './heights'
 import type { QuickPanelFooterAction } from './types'
@@ -13,6 +14,7 @@ const QUICK_PANEL_KBD_CLASS =
 export interface QuickPanelRowData {
   id?: string
   label: ReactNode | string
+  shortcut?: string
   description?: ReactNode | string
   tooltip?: ReactNode | string
   /** In-row element used as the controlled Tooltip trigger. */
@@ -317,6 +319,7 @@ export function QuickPanelRow<T extends QuickPanelRowData>({
           </span>
         ) : null}
         <span className="min-w-0 flex-1 truncate text-[13px] leading-4">{item.label}</span>
+        {item.shortcut ? <Kbd className={cn(QUICK_PANEL_KBD_CLASS, 'shrink-0')}>{item.shortcut}</Kbd> : null}
       </div>
       <div
         className={cn(

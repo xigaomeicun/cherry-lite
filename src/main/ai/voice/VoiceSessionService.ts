@@ -1,38 +1,39 @@
 import { mkdir, rm } from 'node:fs/promises'
 
+import type { WebContents } from 'electron'
+import { session as electronSession } from 'electron'
+
 import { application } from '@application'
 import { loggerService } from '@logger'
 import { BaseService, DependsOn, type Disposable, Injectable, Phase, ServicePhase } from '@main/core/lifecycle'
 import { isAppRendererUrl } from '@main/core/security/validateSender'
 import { WindowType } from '@main/core/window/types'
 import { MediaKind } from '@main/services/mediaProtocol'
-import type { LocalSpeechModelId, LocalTranscriptionModelId } from '@shared/ai/localVoice'
+import type { LocalTranscriptionModelId, LocalSpeechModelId } from '@shared/ai/localVoice'
 import { type LocalVoiceModelId, type VoiceSessionSource, type VoiceSessionTrigger } from '@shared/ai/localVoice'
 import { SpeechInputKind, SpeechOutputKind, TranscriptionInputKind, TranscriptionOutputKind } from '@shared/ai/voice'
 import type { FileEntryId, InternalFileEntry } from '@shared/data/types/file'
 import type { VoiceErrorReason } from '@shared/ipc/errors/voice'
 import type { VoiceSessionCommand, VoiceSessionPhase, VoiceSessionState } from '@shared/ipc/schemas/voice'
 import type { InputFor, OutputFor } from '@shared/ipc/types'
-import type { WebContents } from 'electron'
-import { session as electronSession } from 'electron'
 
 import { startSpeech, startTranscription } from './execution'
 import type { VoiceExecution } from './executionTypes'
 import {
-  cancelVoiceModelDownload,
-  describeVoiceModel,
-  downloadVoiceModel,
   getLocalVoiceStatus,
-  getVoiceAdapterId,
   installVoiceLocale,
+  describeVoiceModel,
+  listVoiceModels,
+  resolveTranscriptionConfiguration,
+  resolveSpeechConfiguration,
+  getVoiceAdapterId,
+  resolveTranscriptionRequest,
+  resolveSpeechRequest,
+  downloadVoiceModel,
+  cancelVoiceModelDownload,
+  removeVoiceModel,
   listLocalAsrLocales,
   listLocalVoices,
-  listVoiceModels,
-  removeVoiceModel,
-  resolveSpeechConfiguration,
-  resolveSpeechRequest,
-  resolveTranscriptionConfiguration,
-  resolveTranscriptionRequest,
   voiceAudioProcess
 } from './localAdapters'
 import {
@@ -40,12 +41,12 @@ import {
   applyPlaybackReport,
   beginPlaybackSynthesis,
   completePlaybackSynthesis,
+  readyPlaybackOutput,
   createPlaybackSnapshot,
   createPlaybackState,
   failPlayback,
   playbackPhase,
-  type PlaybackState,
-  readyPlaybackOutput
+  type PlaybackState
 } from './playbackState'
 import { VoiceInputStream } from './VoiceInputStream'
 import { getMicrophoneStatus, openMicrophoneSettings, openSystemVoiceSettings } from './voicePlatform'
@@ -1114,6 +1115,18 @@ export class VoiceSessionService extends BaseService {
           : error instanceof VoiceRuntimeError
             ? error
             : new VoiceRuntimeError('operation_failed')
+        if (!controller.signal.aborted) {
+          logger.warn('Voice operation failed', {
+            sessionId: session.id,
+            requestId,
+            operation,
+            modelId,
+            adapter: session.resolvedAdapter,
+            reason: normalized.reason,
+            durationMs: Date.now() - startedAt,
+            ...options.log
+          })
+        }
         if (!session.closed && session.playback) {
           session.playback = failPlayback(session.playback, 'synthesis', normalized.reason)
           this.clearPlaybackTimeout(session)
@@ -1405,7 +1418,13 @@ export class VoiceSessionService extends BaseService {
     this.powerEpoch += 1
     const event = { type: 'interruption' as const, revision: ++this.revision }
     const ipc = application.get('IpcApiService')
-    for (const type of [WindowType.Main, WindowType.SubWindow, WindowType.QuickAssistant, WindowType.SelectionAction]) {
+    for (const type of [
+      WindowType.Main,
+      WindowType.SubWindow,
+      WindowType.QuickAssistant,
+      WindowType.SelectionAction,
+      WindowType.SelectionAgent
+    ]) {
       ipc.broadcastToType(type, 'ai.voice.session_event', event)
     }
     const session = this.lease

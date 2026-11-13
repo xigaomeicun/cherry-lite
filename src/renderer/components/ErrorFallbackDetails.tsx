@@ -1,16 +1,25 @@
+import { ChevronRight, Copy } from 'lucide-react'
+import type { FC } from 'react'
+
 import { Button } from '@cherrystudio/ui'
 import i18n from '@renderer/i18n/resolver'
 import { toast } from '@renderer/services/toast'
 import { formatErrorDetails } from '@renderer/utils/errorDetails'
-import { Copy } from 'lucide-react'
-import type { FC } from 'react'
 
 interface ErrorFallbackDetailsProps {
   error: unknown
 }
 
 const ErrorFallbackDetails: FC<ErrorFallbackDetailsProps> = ({ error }) => (
-  <pre className="selectable whitespace-pre-wrap break-words font-sans">{formatErrorDetails(error)}</pre>
+  <details className="group min-w-0 text-muted-foreground">
+    <summary className="flex cursor-pointer list-none items-center gap-1 rounded-md py-1 text-xs outline-none focus-visible:bg-accent [&::-webkit-details-marker]:hidden">
+      <ChevronRight className="size-3 shrink-0 group-open:rotate-90" />
+      {i18n.t('error.boundary.details')}
+    </summary>
+    <pre className="selectable mt-2 max-h-48 overflow-auto whitespace-pre-wrap font-mono text-xs leading-5 [overflow-wrap:anywhere]">
+      {formatErrorDetails(error)}
+    </pre>
+  </details>
 )
 
 const ErrorFallbackCopyButton: FC<ErrorFallbackDetailsProps> = ({ error }) => {

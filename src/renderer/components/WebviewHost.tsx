@@ -1,7 +1,3 @@
-import { loggerService } from '@logger'
-import { usePreference } from '@renderer/data/hooks/usePreference'
-import { ipcApi } from '@renderer/ipc'
-import { WEBVIEW_KEYDOWN_CHANNEL, type WebviewKeyPayload } from '@shared/utils/webviewKey'
 import type {
   DidFailLoadEvent,
   DidNavigateEvent,
@@ -14,6 +10,11 @@ import type {
 } from 'electron'
 import type { CSSProperties } from 'react'
 import { useCallback, useEffect, useEffectEvent, useRef, useState } from 'react'
+
+import { loggerService } from '@logger'
+import { usePreference } from '@renderer/data/hooks/usePreference'
+import { ipcApi } from '@renderer/ipc'
+import { WEBVIEW_KEYDOWN_CHANNEL, type WebviewKeyPayload } from '@shared/utils/webviewKey'
 
 const logger = loggerService.withContext('WebviewHost')
 
@@ -201,7 +202,6 @@ export function WebviewHost({
       webview.removeEventListener('page-favicon-updated', handleFaviconUpdated)
       if (readyWebviewRef.current === webview) readyWebviewRef.current = null
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- This lint version does not recognize React 19.2 Effect Events.
   }, [webview])
 
   useEffect(() => {

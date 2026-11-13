@@ -1,10 +1,11 @@
-import { useInvalidateCache } from '@data/hooks/useDataApi'
-import type { CreateMcpServerDto } from '@shared/data/api/schemas/mcpServers'
-import type { McpServer } from '@shared/data/types/mcpServer'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ComponentProps } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+import { useInvalidateCache } from '@data/hooks/useDataApi'
+import type { CreateMcpServerDto } from '@shared/data/api/schemas/mcpServers'
+import type { McpServer } from '@shared/data/types/mcpServer'
 
 import AddMcpServerModal from '../AddMcpServerModal'
 
@@ -21,12 +22,15 @@ vi.mock('@cherrystudio/ui', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
 
   return {
-    ...actual,
-    CodeEditor: ({ value, onChange }: ComponentProps<'textarea'> & { onChange: (value: string) => void }) => (
-      <textarea aria-label="server config" value={value} onChange={(event) => onChange(event.target.value)} />
-    )
+    ...actual
   }
 })
+
+vi.mock('@renderer/components/LazyCodeEditor', () => ({
+  LazyCodeEditor: ({ value, onChange }: ComponentProps<'textarea'> & { onChange: (value: string) => void }) => (
+    <textarea aria-label="server config" value={value} onChange={(event) => onChange(event.target.value)} />
+  )
+}))
 
 vi.mock('@data/DataApiService', () => ({
   dataApiService: {

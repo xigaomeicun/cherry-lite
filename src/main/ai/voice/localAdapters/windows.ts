@@ -2,6 +2,7 @@ import { readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
 import type { SpeechModelV3, TranscriptionModelV3 } from '@ai-sdk/provider'
+
 import type { SpeechOptions, TranscriptionOptions } from '@cherrystudio/ai-core'
 import { LOCAL_VOICE_MODELS, VoiceModelSupport } from '@shared/ai/localVoice'
 import {
@@ -13,7 +14,7 @@ import {
   WINDOWS_TTS_MODEL_ID
 } from '@shared/ai/localVoice'
 
-import type { SpeechModelDefinition, TranscriptionModelDefinition } from '../voiceModelTypes'
+import type { TranscriptionModelDefinition, SpeechModelDefinition } from '../voiceModelTypes'
 import type { LocalVoiceStatus } from '../voiceModelTypes'
 import { getVoiceEnvironment, type VoiceEnvironment } from '../voicePlatform'
 import { checkAbort, VoiceRuntimeError } from '../VoiceRuntimeError'

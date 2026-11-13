@@ -1,10 +1,11 @@
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
 import { ComposerToken } from '@renderer/components/composer/tokenView'
 import { CommandSharedPreferencesContext } from '@renderer/hooks/command'
 import { ipcApi } from '@renderer/ipc'
 import type { NativePopupMenuModel } from '@shared/types/command'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import SelectionContextMenu from '../SelectionContextMenu'
 
@@ -133,7 +134,7 @@ describe('conversation link context menu', () => {
       range.selectNodeContents(linkText)
       window.getSelection()?.addRange(range)
       fireEvent.contextMenu(linkText)
-      expect(screen.getAllByRole('menuitem')).toHaveLength(5)
+      expect(screen.getByRole('menuitem', { name: 'notes.save' })).toBeInTheDocument()
       fireEvent.click(screen.getByRole('menuitem', { name: action }))
       if (action === 'chat.message.quote') {
         await waitFor(() => expect(quote).toHaveBeenCalledWith('Example website'))

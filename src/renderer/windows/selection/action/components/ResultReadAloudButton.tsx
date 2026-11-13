@@ -1,9 +1,10 @@
-import { Button } from '@cherrystudio/ui'
-import { useIpcOn } from '@renderer/ipc'
-import { readTextAloud } from '@renderer/services/voice'
 import { Volume2 } from 'lucide-react'
 import { useEffect, useLayoutEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
+
+import { Button } from '@cherrystudio/ui'
+import { useIpcOn } from '@renderer/ipc'
+import { readTextAloud } from '@renderer/services/voice'
 
 export function ResultReadAloudButton({ text, sourceEntityId }: { text: string; sourceEntityId: string }) {
   const { t } = useTranslation()

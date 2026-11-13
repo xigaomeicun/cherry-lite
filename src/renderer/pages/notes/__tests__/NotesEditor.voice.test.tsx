@@ -1,9 +1,10 @@
-import { VoiceTargetManager } from '@renderer/services/voice/VoiceTargetManager'
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import i18n from 'i18next'
 import { type MutableRefObject, useImperativeHandle, useRef } from 'react'
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+
+import { VoiceTargetManager } from '@renderer/services/voice/VoiceTargetManager'
 
 vi.unmock('@cherrystudio/ui')
 
@@ -72,7 +73,7 @@ vi.mock('@renderer/components/Selector', () => ({
     </select>
   )
 }))
-vi.mock('@renderer/hooks/useCodeStyle', () => ({ useCmTheme: () => 'light' }))
+vi.mock('@renderer/hooks/useCodeStyle', () => ({ useCodeStyle: () => ({ isCodeThemeDark: false }) }))
 vi.mock('@renderer/hooks/useNotesSettings', () => ({
   useNotesSettings: () => ({
     settings: {

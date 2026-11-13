@@ -1,10 +1,11 @@
+import { AudioLines, Pause, Play, RotateCcw, Square, X } from 'lucide-react'
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { useTranslation } from 'react-i18next'
+
 import { BarVisualizer, Button, Tooltip } from '@cherrystudio/ui'
 import { toast } from '@renderer/services/toast'
 import { speechPlaybackService, VoiceDomainError, voiceService } from '@renderer/services/voice'
 import type { VoicePlaybackControl, VoiceSessionPhase } from '@shared/ipc/schemas/voice'
-import { AudioLines, Pause, Play, RotateCcw, Square, X } from 'lucide-react'
-import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
-import { useTranslation } from 'react-i18next'
 
 export interface VoicePlaybackBarProps {
   readonly phase: Exclude<VoiceSessionPhase, 'idle'>

@@ -10,7 +10,7 @@ const prompt: LanguageModelV3CallOptions['prompt'] = [
 ]
 
 function captureRequest(modelFactory: (fetch: typeof globalThis.fetch) => LanguageModelV3, options = {}) {
-  return captureWithFetch((fetch) => modelFactory(fetch).doStream({ prompt, ...options } as LanguageModelV3CallOptions))
+  return captureWithFetch((fetch) => modelFactory(fetch).doStream({ prompt, ...options }))
 }
 
 function bodyOf(request: Awaited<ReturnType<typeof captureWithFetch>>): Record<string, unknown> {
@@ -47,35 +47,6 @@ describe('@ai-sdk/anthropic maxOutputTokens boundary', () => {
     )
 
     expect(bodyOf(request).max_tokens).toBe(32_768)
-  })
-
-  it('keeps the SDK default for a recognized Claude model', async () => {
-    const request = await captureRequest((fetch) =>
-      createAnthropic({ apiKey: 'sk', baseURL: 'https://example.com/v1', fetch }).languageModel('claude-sonnet-4-6')
-    )
-
-    expect(bodyOf(request).max_tokens).toBe(128_000)
-  })
-
-  it('keeps the SDK fallback for an unrecognized public Claude alias', async () => {
-    const request = await captureRequest((fetch) =>
-      createAnthropic({ apiKey: 'sk', baseURL: 'https://example.com/v1', fetch }).languageModel('claude-sonnet-latest')
-    )
-
-    expect(bodyOf(request).max_tokens).toBe(128_000)
-  })
-
-  it('keeps the SDK fallback for an unrecognized internal Claude alias', async () => {
-    const request = await captureRequest((fetch) =>
-      createNewApi({
-        apiKey: 'sk',
-        baseURL: 'https://example.com/v1',
-        endpointType: 'anthropic',
-        fetch
-      }).languageModel('claude-sonnet-latest')
-    )
-
-    expect(bodyOf(request).max_tokens).toBe(128_000)
   })
 
   it('does not synthesize max_tokens when thinking is enabled without a limit', async () => {

@@ -41,6 +41,11 @@
 
 import fs from 'node:fs/promises'
 import path from 'node:path'
+import { pathToFileURL } from 'node:url'
+
+import type { SourceUrlUIPart } from 'ai'
+import mime from 'mime'
+import { v7 as uuidv7 } from 'uuid'
 
 import { fileEntryTable } from '@data/db/schemas/file'
 import type { DbType } from '@data/db/types'
@@ -48,7 +53,6 @@ import { loggerService } from '@logger'
 import type { FileMetadata } from '@shared/data/types/legacyFile'
 import type {
   CherryMessagePart,
-  CitationReference,
   CitationType,
   ContentReference,
   DataUIPart,
@@ -65,9 +69,6 @@ import type {
 import type { CherryDataPartTypes, CherryToolMeta } from '@shared/data/types/uiParts'
 import { createClearContextPart, withCherryMeta } from '@shared/data/types/uiParts'
 import { AbsoluteFilePathSchema, type Base64String } from '@shared/types/file'
-import type { SourceUrlUIPart } from 'ai'
-import mime from 'mime'
-import { v7 as uuidv7 } from 'uuid'
 
 import { legacyModelToUniqueId } from '../transformers/ModelTransformers'
 
@@ -923,7 +924,7 @@ async function transformSingleBlockToPart(
       const basePart: FileUIPart = {
         type: 'file',
         mediaType: inferMediaType(block.file.ext, 'application/octet-stream'),
-        url: block.file.path ? `file://${block.file.path}` : '',
+        url: block.file.path ? pathToFileURL(block.file.path).href : '',
         ...(block.file.origin_name ? { filename: block.file.origin_name } : {})
       }
       const part = block.file.id ? withCherryMeta(basePart, { fileEntryId: block.file.id }) : basePart
@@ -1076,7 +1077,7 @@ async function promoteBase64ToFileEntry(
     const basePart: FileUIPart = {
       type: 'file',
       mediaType: mimeType,
-      url: `file://${physicalPath}`,
+      url: pathToFileURL(physicalPath).href,
       filename: ext ? `${MIGRATED_IMAGE_NAME}.${ext}` : MIGRATED_IMAGE_NAME
     }
     return withCherryMeta(basePart, { fileEntryId: id })
@@ -1124,7 +1125,7 @@ async function collectImageFileParts(block: OldImageBlock, deps?: ChatMappingDep
     const basePart: FileUIPart = {
       type: 'file',
       mediaType: inferMediaType(block.file.ext, 'image/png'),
-      url: block.file.path ? `file://${block.file.path}` : '',
+      url: block.file.path ? pathToFileURL(block.file.path).href : '',
       ...(block.file.origin_name ? { filename: block.file.origin_name } : {})
     }
     parts.push(block.file.id ? withCherryMeta(basePart, { fileEntryId: block.file.id }) : basePart)
@@ -1231,7 +1232,7 @@ export function extractCitationReferences(citationBlock: OldCitationBlock): Cont
         results: citationBlock.response.results,
         source: citationBlock.response.source
       }
-    } as CitationReference)
+    })
   }
 
   // Knowledge base citations
@@ -1247,7 +1248,7 @@ export function extractCitationReferences(citationBlock: OldCitationBlock): Cont
         file: k.file,
         metadata: k.metadata
       }))
-    } as CitationReference)
+    })
   }
 
   // Memory citations
@@ -1264,7 +1265,7 @@ export function extractCitationReferences(citationBlock: OldCitationBlock): Cont
         score: m.score,
         metadata: m.metadata
       }))
-    } as CitationReference)
+    })
   }
 
   return references

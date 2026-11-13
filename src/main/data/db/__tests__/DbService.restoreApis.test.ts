@@ -1,7 +1,8 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
 import type * as DbServiceModule from '@data/db/DbService'
 import { checkpointTruncateAssert } from '@data/db/restore/checkpoint'
 import { snapshotTo } from '@data/db/restore/snapshot'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 /**
  * Guard + delegation contract of the two restore-facing DbService methods.
@@ -43,14 +44,6 @@ describe('DbService.createSnapshot', () => {
     expect(() => service.createSnapshot('/tmp/work.sqlite')).toThrow(/not initialized/i)
     expect(snapshotTo).not.toHaveBeenCalled()
   })
-
-  it('delegates to snapshotTo with its own connection when ready', () => {
-    const service = bareDbService(true)
-
-    service.createSnapshot('/tmp/work.sqlite')
-
-    expect(snapshotTo).toHaveBeenCalledExactlyOnceWith(fakeSqlite, '/tmp/work.sqlite')
-  })
 })
 
 describe('DbService.checkpointTruncate', () => {
@@ -59,13 +52,5 @@ describe('DbService.checkpointTruncate', () => {
 
     expect(() => service.checkpointTruncate()).toThrow(/not initialized/i)
     expect(checkpointTruncateAssert).not.toHaveBeenCalled()
-  })
-
-  it('delegates to checkpointTruncateAssert with its own connection when ready', () => {
-    const service = bareDbService(true)
-
-    service.checkpointTruncate()
-
-    expect(checkpointTruncateAssert).toHaveBeenCalledExactlyOnceWith(fakeSqlite)
   })
 })

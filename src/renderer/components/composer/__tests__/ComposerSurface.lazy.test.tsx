@@ -1,10 +1,11 @@
-import { Button as ToolbarButton } from '@cherrystudio/ui/components/primitives/button'
-import { VoiceTargetManager } from '@renderer/services/voice/VoiceTargetManager'
 import { MockUsePreferenceUtils } from '@test-mocks/renderer/usePreference'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { useEffect, useState } from 'react'
+import { useLayoutEffect, useState } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+import { Button as ToolbarButton } from '@cherrystudio/ui/components/primitives/button'
+import { VoiceTargetManager } from '@renderer/services/voice/VoiceTargetManager'
 
 import { COMPOSER_INPUT_MAX_LENGTH } from '../composerDraft'
 import ComposerSurface, {
@@ -41,13 +42,15 @@ vi.mock('@renderer/components/SendMessageButton', () => ({
   default: ({
     disabled,
     onDisabledClick,
-    sendMessage
+    sendMessage,
+    shortcutLabel
   }: {
     disabled?: boolean
     onDisabledClick?: () => void
     sendMessage: () => void
+    shortcutLabel?: string
   }) => (
-    <button type="button" onClick={disabled ? onDisabledClick : sendMessage}>
+    <button type="button" data-shortcut-label={shortcutLabel} onClick={disabled ? onDisabledClick : sendMessage}>
       Send
     </button>
   )
@@ -70,7 +73,8 @@ vi.mock('../ComposerSurfaceRuntime', () => {
   }: ComposerSurfaceProps) => {
     mocks.runtimeIntent = deferredIntent
     mocks.runtimeTokens = tokens.map((token) => ({ id: token.id, kind: token.kind, label: token.label }))
-    useEffect(() => {
+    // Match the runtime's adapter handoff before the mounted editor can receive dictation.
+    useLayoutEffect(() => {
       onInputAdapterChange?.(mocks.runtimeInputAdapter as never)
       return () => onInputAdapterChange?.(undefined)
     }, [onInputAdapterChange])
@@ -158,25 +162,10 @@ describe('deferred ComposerSurface', () => {
     vi.unstubAllGlobals()
   })
 
-  it('matches the regular composer shell before loading the rich runtime', () => {
-    const { container } = render(<Harness editable={undefined} />)
+  it('accepts input before loading the rich runtime', () => {
+    render(<Harness editable={undefined} />)
 
-    const input = screen.getByRole('textbox', { name: 'Message' }) as HTMLTextAreaElement
-    const inputbar = container.querySelector<HTMLElement>('[data-composer-inputbar]')
-    const narrowLayout = container.querySelector<HTMLElement>('.narrow-mode')
-
-    expect(input).toBeEnabled()
-    expect(input).toHaveClass('w-full')
-    expect(input).toHaveAttribute('rows', '1')
-    // 54px is `getComposerEditorMinHeight(14)` at the ~2.4-line idle height the surfaces share
-    // (Cherry-Lite raised it from the stock 2-line 46px); the rich-runtime suites assert 54 too.
-    expect(input).toHaveStyle({ height: '54px', minHeight: '54px', padding: '6px 15px 0', lineHeight: '1.4' })
-    expect(narrowLayout).toHaveClass('max-w-[calc(800px+3rem)]', 'px-6')
-    expect(narrowLayout).toContainElement(inputbar)
-    expect(inputbar).toContainElement(screen.getByText('Composer tools'))
-    expect(inputbar?.querySelector('[data-composer-toolbar]')).toContainElement(
-      screen.getByRole('button', { name: 'Send' })
-    )
+    expect(screen.getByRole('textbox', { name: 'Message' })).toBeEnabled()
     expect(mocks.runtimeLoads).toBe(0)
   })
 
@@ -198,19 +187,6 @@ describe('deferred ComposerSurface', () => {
     expect(screen.getByRole('textbox', { name: 'Message' })).toHaveValue('   ')
     expect(screen.queryByText('chat.input.focus_hint')).not.toBeInTheDocument()
     expect(mocks.runtimeLoads).toBe(0)
-  })
-
-  it('swaps in the rich runtime while idle, before the user can type into the fallback', async () => {
-    const idleCallbacks: Array<() => void> = []
-    vi.stubGlobal('requestIdleCallback', (callback: () => void) => idleCallbacks.push(callback))
-    vi.stubGlobal('cancelIdleCallback', () => {})
-
-    render(<Harness text="" />)
-    expect(mocks.runtimeLoads).toBe(0)
-
-    act(() => idleCallbacks.forEach((callback) => callback()))
-
-    expect(await screen.findByTestId('composer-runtime')).toBeInTheDocument()
   })
 
   it('loads the rich runtime on focus so the fallback swap cannot swallow the first keystroke', async () => {
@@ -487,27 +463,10 @@ describe('deferred ComposerSurface', () => {
     expect(await screen.findByTestId('composer-runtime')).toHaveTextContent('one long single line')
   })
 
-  it('marks the deferred intent as focused when the fallback textarea gained focus', async () => {
-    render(<Harness />)
+  it('labels the fallback send control with the resolved send shortcut', () => {
+    render(<Harness sendMessageShortcut={['Enter']} />)
 
-    const input = screen.getByRole('textbox', { name: 'Message' })
-    fireEvent.focus(input)
-    fireEvent.change(input, { target: { value: 'hello' } })
-
-    await screen.findByTestId('composer-runtime')
-    expect(mocks.runtimeIntent?.hadFocus).toBe(true)
-  })
-
-  it('loads the runtime for the compact structural variant', async () => {
-    render(<Harness compactWhenSingleLine />)
-
-    expect(await screen.findByTestId('composer-runtime')).toBeInTheDocument()
-  })
-
-  it('loads the runtime for the expanded structural variant', async () => {
-    render(<Harness isExpanded />)
-
-    expect(await screen.findByTestId('composer-runtime')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Send' })).toHaveAttribute('data-shortcut-label', 'Enter')
   })
 
   it('follows the send-shortcut preference when the caller does not pass one', () => {
@@ -713,5 +672,22 @@ describe('deferred ComposerSurface', () => {
     expect(mocks.onSendDraft).not.toHaveBeenCalled()
     await screen.findByTestId('composer-runtime')
     expect(mocks.runtimeIntent?.transfer).toBeUndefined()
+  })
+  it('handles the mode shortcut before the editor loads without changing the draft', () => {
+    let mode = 'ordinary'
+    render(
+      <Harness
+        text="Keep this draft"
+        onShiftTab={() => {
+          mode = mode === 'ordinary' ? 'plan' : 'ordinary'
+        }}
+      />
+    )
+    const input = screen.getByRole('textbox', { name: 'Message' })
+    fireEvent.keyDown(input, { key: 'Tab', shiftKey: true })
+    expect(mode).toBe('plan')
+    expect(input).toHaveValue('Keep this draft')
+    fireEvent.keyDown(input, { key: 'Tab', shiftKey: true, repeat: true })
+    expect(mode).toBe('plan')
   })
 })

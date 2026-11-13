@@ -5,6 +5,7 @@ import type {
   LocalModelDownloadResult,
   LocalModelErrorCode,
   LocalModelStatus,
+  LocalModelStatusHintCode,
   LocalModelStatusSnapshot
 } from '@shared/data/presets/localModel'
 
@@ -84,7 +85,7 @@ export class BundleInstaller {
   }
 
   /** {@link getStatus} plus why an `error` status arose, for the cards' notice text. */
-  getStatusInfo(): { status: LocalModelStatus; errorCode?: LocalModelErrorCode } {
+  getStatusInfo(): { status: LocalModelStatus; errorCode?: LocalModelErrorCode; hintCode?: LocalModelStatusHintCode } {
     if (!localModelStorageService.isBundleSupported(this.bundle)) return { status: 'unsupported' }
     if (this.attempt) return { status: 'downloading' }
     if (this.lastDownloadFailed) return { status: 'error', errorCode: 'download_failed' }
@@ -96,7 +97,9 @@ export class BundleInstaller {
         // error: Download re-fetches only the missing runtime, so the card must offer it
         // rather than a failure the user cannot act on.
         this.incompleteLogged = false
-        return this.artifactsReady() ? { status: 'ready' } : { status: 'not_downloaded' }
+        return this.artifactsReady()
+          ? { status: 'ready' }
+          : { status: 'not_downloaded', hintCode: 'missing_shared_runtime' }
       case 'incomplete':
         if (!this.incompleteLogged) {
           logger.warn('local model files are incomplete', { bundle: this.bundle.id, missing: state.missingFiles })
@@ -172,7 +175,7 @@ export class BundleInstaller {
       }
     } else {
       const error = failure?.error ?? new Error(`Local model bundle ${this.bundle.id} is incomplete after download.`)
-      logger.error(`local ${this.bundle.capability} model download failed`, error as Error)
+      logger.error(`local ${this.bundle.capability} model download failed`, error)
       outcome = {
         kind: 'error',
         error,

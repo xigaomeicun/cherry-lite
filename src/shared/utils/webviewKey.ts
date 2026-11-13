@@ -9,7 +9,6 @@ import {
 
 /** `sendToHost` channel the shared webview preload uses to reach its host window. */
 export const WEBVIEW_KEYDOWN_CHANNEL = 'webview:keydown'
-export const MINI_APP_KEYDOWN_CHANNEL = WEBVIEW_KEYDOWN_CHANNEL
 
 /** Keyboard data forwarded from a webview guest, shaped for `new KeyboardEvent()`. */
 export type WebviewKeyPayload = {
@@ -22,7 +21,6 @@ export type WebviewKeyPayload = {
   repeat: boolean
   isTrusted: boolean
 }
-export type MiniAppKeyPayload = WebviewKeyPayload
 
 // The host owns find/print/save inside webviews, so the guest page must not also
 // run the browser default for them.
@@ -57,4 +55,3 @@ export const toWebviewKeyPayload = (event: KeyboardEvent): WebviewKeyPayload => 
   repeat: event.repeat,
   isTrusted: event.isTrusted
 })
-export const toMiniAppKeyPayload = toWebviewKeyPayload

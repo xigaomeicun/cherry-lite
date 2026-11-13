@@ -1,6 +1,7 @@
-import { loggerService } from '@logger'
 import pako from 'pako'
 import React, { memo, useCallback, useEffect } from 'react'
+
+import { loggerService } from '@logger'
 
 import { useDebouncedRender } from './hooks/useDebouncedRender'
 import ImagePreviewLayout from './ImagePreviewLayout'
@@ -129,7 +130,10 @@ const PlantUmlPreview = ({
       ref={ref}
       imageRef={containerRef}
       source="plantuml">
-      <ShadowWhiteContainer ref={containerRef} className="plantuml-preview special-preview" />
+      <ShadowWhiteContainer
+        ref={containerRef}
+        className="plantuml-preview special-preview flex items-center justify-center"
+      />
     </ImagePreviewLayout>
   )
 }

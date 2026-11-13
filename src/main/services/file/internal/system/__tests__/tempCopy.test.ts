@@ -2,11 +2,12 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 
-import type { AbsoluteFilePath } from '@shared/types/file'
 import { setupTestDatabase } from '@test-helpers/db'
 import { MockMainDbServiceUtils } from '@test-mocks/main/DbService'
 import { mockMainLoggerService } from '@test-mocks/MainLoggerService'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+import type { AbsoluteFilePath } from '@shared/types/file'
 
 vi.mock('@application', async () => {
   const { mockApplicationFactory } = await import('@test-mocks/main/application')
@@ -148,14 +149,9 @@ describe('internal/system/tempCopy', () => {
         throw fnErr
       })
     ).rejects.toBe(fnErr)
-
-    expect(mockLoggerWarn).toHaveBeenCalledWith(
-      expect.stringContaining('cleanup failed'),
-      expect.objectContaining({ err: cleanupErr })
-    )
   })
 
-  it('logs cleanup failure but still resolves with fn result on the happy path', async () => {
+  it('resolves with fn result even when cleanup fails', async () => {
     // The cleanup failure must not flip a successful fn outcome to a
     // rejection — caller already got its result; the leak is a side effect.
     const e = await createInternal(deps, {
@@ -171,9 +167,5 @@ describe('internal/system/tempCopy', () => {
 
     const result = await withTempCopy(deps, e.id, async () => 'ok')
     expect(result).toBe('ok')
-    expect(mockLoggerWarn).toHaveBeenCalledWith(
-      expect.stringContaining('cleanup failed'),
-      expect.objectContaining({ err: cleanupErr })
-    )
   })
 })

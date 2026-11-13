@@ -1,6 +1,7 @@
-import type { ImageGenerationMode } from '@shared/data/types/model'
 import { describe, expect, it, vi } from 'vitest'
 import * as z from 'zod'
+
+import type { ImageGenerationMode } from '@shared/data/types/model'
 
 import { createDashScopeProvider } from '../../dashscope/dashscopeProvider'
 import { createDashScopeTransport } from '../../dashscope/dashscopeTransport'
@@ -51,7 +52,7 @@ const CASES: Case[] = [
       seed: 42,
       modelDescriptor: descriptor('qwen-image', 'generate'),
       providerParams: {}
-    } as ImageGenerationSubmitInput,
+    },
     schema: z.strictObject({
       model: z.string(),
       input: z.strictObject({ prompt: z.string() }),
@@ -67,7 +68,7 @@ const CASES: Case[] = [
       files: file([1, 2, 3]),
       modelDescriptor: descriptor('qwen-image-edit', 'edit'),
       providerParams: {}
-    } as ImageGenerationSubmitInput,
+    },
     schema: z.strictObject({
       model: z.string(),
       input: z.strictObject({
@@ -85,7 +86,7 @@ const CASES: Case[] = [
       size: '1328x1328',
       modelDescriptor: descriptor('qwen-image-3.0', 'generate'),
       providerParams: { addWatermark: false, negativePrompt: 'blurry', promptExtend: true }
-    } as ImageGenerationSubmitInput,
+    },
     schema: z.strictObject({
       model: z.string(),
       input: z.strictObject({
@@ -98,6 +99,23 @@ const CASES: Case[] = [
         prompt_extend: z.literal(true),
         watermark: z.literal(false)
       })
+    })
+  },
+  {
+    name: 'chat-like (canonical qwen-image-3-0) → same family as the dotted apiModelId',
+    input: {
+      ...base,
+      modelId: 'qwen-image-3.0',
+      prompt: 'a fox',
+      modelDescriptor: descriptor('qwen-image-3-0', 'generate'),
+      providerParams: {}
+    },
+    schema: z.strictObject({
+      model: z.string(),
+      input: z.strictObject({
+        messages: z.array(z.strictObject({ role: z.literal('user'), content: z.array(messagePart) }))
+      }),
+      parameters: z.unknown().optional()
     })
   },
   {
@@ -115,7 +133,7 @@ const CASES: Case[] = [
         refStrength: 0.5,
         refMode: 'repaint'
       }
-    } as ImageGenerationSubmitInput,
+    },
     schema: z.strictObject({
       model: z.string(),
       input: z.strictObject({ prompt: z.string(), ref_image: z.string() }),
@@ -141,7 +159,7 @@ const CASES: Case[] = [
       ] as ImageGenerationSubmitInput['files'],
       modelDescriptor: descriptor('wan2.5-i2i-preview', 'edit'),
       providerParams: {}
-    } as ImageGenerationSubmitInput,
+    },
     schema: z.strictObject({
       model: z.string(),
       input: z.strictObject({ prompt: z.string(), images: z.array(z.string()) }),
@@ -157,7 +175,7 @@ const CASES: Case[] = [
       files: file([4, 5, 6]),
       modelDescriptor: descriptor('qwen-mt-image', 'generate'),
       providerParams: { sourceLang: 'auto', targetLang: 'en' }
-    } as ImageGenerationSubmitInput,
+    },
     schema: z.strictObject({
       model: z.string(),
       input: z.strictObject({ image_url: z.string(), source_lang: z.string(), target_lang: z.string() })
@@ -177,7 +195,7 @@ const CASES: Case[] = [
         upscaleFactor: 2,
         addWatermark: true
       }
-    } as ImageGenerationSubmitInput,
+    },
     schema: z.strictObject({
       model: z.string(),
       input: z.strictObject({ function: z.string(), prompt: z.string(), base_image_url: z.string() }),
@@ -197,6 +215,36 @@ describe('DashScope request boundary', () => {
       expect(req.body).toMatchSnapshot()
     })
   }
+
+  it('honors the injected proxy-aware fetch and provider extra headers', async () => {
+    const fetchSpy = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(JSON.stringify({ output: { task_id: 't-1', task_status: 'PENDING' } }), { status: 200 })
+      )
+    const proxiedTransport = createDashScopeTransport({
+      apiKey: 'ds-key',
+      imageBaseURL: host,
+      fetch: fetchSpy,
+      headers: { 'X-Custom': 'on' }
+    })
+
+    const submit = await proxiedTransport.submit({
+      ...base,
+      modelId: 'qwen-image-3.0',
+      prompt: 'a fox',
+      modelDescriptor: descriptor('qwen-image-3.0', 'generate'),
+      providerParams: {}
+    })
+
+    expect(submit).toEqual({ taskId: 't-1' })
+    expect(fetchSpy).toHaveBeenCalledTimes(1)
+    const [url, init] = fetchSpy.mock.calls[0]
+    expect(String(url)).toBe(`${host}/api/v1/services/aigc/image`)
+    const headers = new Headers(init.headers as HeadersInit)
+    expect(headers.get('authorization')).toBe('Bearer ds-key')
+    expect(headers.get('x-custom')).toBe('on')
+  })
 
   it.each([
     {

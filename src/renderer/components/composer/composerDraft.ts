@@ -1,3 +1,6 @@
+import type { Editor, JSONContent } from '@tiptap/core'
+import type { Node as ProseMirrorNode } from '@tiptap/pm/model'
+
 import { isComposerInputTokenKind, isComposerMessageTokenKind } from '@renderer/utils/composerTokenPolicy'
 import type { CherryMessagePart } from '@shared/data/types/message'
 import type {
@@ -7,10 +10,11 @@ import type {
   ComposerMessageTokenPayload
 } from '@shared/data/types/uiParts'
 import { FileTypeSchema } from '@shared/types/file'
-import type { Editor, JSONContent } from '@tiptap/core'
 
+import { createComposerLineParagraphs } from './composerTokenMarkers'
 import { COMPOSER_TOKEN_NODE_NAME } from './ComposerTokenNode'
 import { createPromptVariableContent } from './promptVariables'
+import { getComposerInputLeafText } from './quickPanel'
 import type { ComposerDraftToken, ComposerSerializedDraft, ComposerSerializedToken } from './tokens'
 import { normalizeComposerTokenAttrs } from './tokens'
 
@@ -40,6 +44,10 @@ function getRestoredTextSuffix(payload: unknown): string {
   const restoredTextSuffix = (payload as Record<string, unknown>).restoredTextSuffix
   return typeof restoredTextSuffix === 'string' ? restoredTextSuffix : ''
 }
+
+/** The serialized text a composer token contributes: its prompt text plus any restored suffix. */
+const composerTokenText = (token: ComposerDraftToken): string =>
+  (token.promptText ?? '') + getRestoredTextSuffix(token.payload)
 
 function readPayloadObject(payload: unknown): Record<string, unknown> | undefined {
   if (typeof payload !== 'object' || payload === null || Array.isArray(payload)) return undefined
@@ -116,10 +124,7 @@ function createComposerContent(
 
   if (!tokens.length) {
     appendTextContent(nodes, text)
-    return {
-      type: 'doc',
-      content: [{ type: 'paragraph', ...(nodes.length > 0 && { content: nodes }) }]
-    }
+    return { type: 'doc', content: createComposerLineParagraphs(nodes) }
   }
 
   let cursor = 0
@@ -148,10 +153,7 @@ function createComposerContent(
     appendTextContent(nodes, text.slice(cursor))
   }
 
-  return {
-    type: 'doc',
-    content: [{ type: 'paragraph', ...(nodes.length > 0 && { content: nodes }) }]
-  }
+  return { type: 'doc', content: createComposerLineParagraphs(nodes) }
 }
 
 export function createComposerDocumentContent(text: string, composer?: ComposerMessageSnapshot): JSONContent {
@@ -160,12 +162,37 @@ export function createComposerDocumentContent(text: string, composer?: ComposerM
 
 export function createComposerDraftContent(
   draft: { text: string; tokens: readonly ComposerSerializedToken[] },
-  options: { tokenizeVariables?: boolean } = {}
+  options: { tokenizeVariables?: boolean; literalFencedCode?: boolean } = {}
 ): JSONContent {
   const inputTokens = draft.tokens.filter((token) => isComposerInputTokenKind(token.kind))
-  if (!inputTokens.length && options.tokenizeVariables !== false) return createPromptVariableContent(draft.text)
+  if (!inputTokens.length && options.tokenizeVariables !== false) {
+    return createPromptVariableContent(draft.text, { literalFencedCode: options.literalFencedCode })
+  }
 
   return createComposerContent(draft.text, inputTokens, isComposerInputTokenKind)
+}
+
+/**
+ * Tokens for rebuilding editor content from `text`. `draftTokens` is the persisted seed, but it is
+ * only read once at mount, so a rebuilt editor can hold the current text — which already embeds a
+ * live token's folded prompt text — with an empty seed, materializing that prompt text as plain
+ * prose. Live tokens whose prompt text is present in the text fill the gap where it appears.
+ */
+export function resolveComposerRestoreTokens(
+  text: string,
+  draftTokens: readonly ComposerSerializedToken[] | undefined,
+  liveTokens: readonly ComposerDraftToken[]
+): ComposerSerializedToken[] {
+  if (draftTokens?.length) return [...draftTokens]
+
+  const resolved: ComposerSerializedToken[] = []
+  liveTokens.forEach((token) => {
+    if (!token.promptText) return
+    const textOffset = text.indexOf(token.promptText)
+    if (textOffset < 0) return
+    resolved.push({ ...token, index: resolved.length, textOffset })
+  })
+  return resolved
 }
 
 export function serializeComposerDocument(source: ComposerSerializableSource): ComposerSerializedDraft {
@@ -186,14 +213,12 @@ export function serializeComposerDocument(source: ComposerSerializableSource): C
 
     if (node.type === COMPOSER_TOKEN_NODE_NAME) {
       const token = normalizeComposerTokenAttrs(node.attrs ?? {})
-      const restoredTextSuffix = getRestoredTextSuffix(token.payload)
       tokens.push({
         ...token,
         index: tokens.length,
         textOffset: text.length
       })
-      text += token.promptText ?? ''
-      text += restoredTextSuffix
+      text += composerTokenText(token)
       return
     }
 
@@ -213,6 +238,19 @@ export function serializeComposerDocument(source: ComposerSerializableSource): C
   visitNode(json)
 
   return { text, tokens }
+}
+
+/**
+ * The text `serializeComposerDocument` attributes to a leaf node. For any length measured
+ * against the serialized draft — a replacement budget over a selection — a token atom must
+ * count by its prompt text; the plain leaf callback counts it as empty and undercharges the
+ * text the replacement removes.
+ */
+export function getComposerSerializedLeafText(node: ProseMirrorNode): string {
+  if (node.type.name === COMPOSER_TOKEN_NODE_NAME) {
+    return composerTokenText(normalizeComposerTokenAttrs(node.attrs ?? {}))
+  }
+  return getComposerInputLeafText(node)
 }
 
 /**
@@ -299,6 +337,19 @@ function getComposerLineRanges(text: string): ComposerLineRange[] {
 }
 
 /**
+ * Removes blank lines only at the boundaries of a plain text run, keeping whitespace inside the
+ * first and last meaningful lines — a code block's indentation and a Markdown hard break's trailing
+ * spaces both survive, unlike `String.trim`.
+ */
+export function trimTextBoundaryBlankLines(text: string): string {
+  const lines = getComposerLineRanges(text)
+  const meaningfulLines = lines.filter((line) => text.slice(line.start, line.contentEnd).trim().length > 0)
+  const first = meaningfulLines[0]
+  const last = meaningfulLines.at(-1)
+  return first && last ? text.slice(first.start, last.contentEnd) : ''
+}
+
+/**
  * Removes token-free blank lines only at the document boundaries. Whitespace
  * inside the first and last meaningful lines, plus all internal blank lines,
  * remains untouched.
@@ -363,7 +414,7 @@ export function createComposerMessageSnapshot(draft: ComposerSerializedDraft): C
 }
 
 function createComposerTextPart(text: string, composer?: ComposerMessageSnapshot): CherryMessagePart {
-  if (!composer) return { type: 'text', text } as CherryMessagePart
+  if (!composer) return { type: 'text', text }
 
   const cherry: CherryProviderMetadata = { composer }
   return {

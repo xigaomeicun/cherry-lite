@@ -35,6 +35,14 @@
  * @see {@link https://swr.vercel.app SWR Documentation}
  */
 
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import type { Cache, KeyedMutator, ScopedMutator, SWRConfiguration } from 'swr'
+import useSWR, { preload, unstable_serialize, useSWRConfig } from 'swr'
+import type { SWRInfiniteConfiguration, SWRInfiniteKeyedMutator } from 'swr/infinite'
+import useSWRInfinite, { unstable_serialize as unstable_serialize_infinite } from 'swr/infinite'
+import type { SWRMutationConfiguration } from 'swr/mutation'
+import useSWRMutation from 'swr/mutation'
+
 import { dataApiService } from '@data/DataApiService'
 import { loggerService } from '@logger'
 import { resolveTemplate } from '@renderer/data/utils/dataApiPath'
@@ -54,13 +62,6 @@ import {
   type OffsetPaginationResponse,
   type PaginationResponse
 } from '@shared/data/api/types'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { Cache, KeyedMutator, ScopedMutator, SWRConfiguration } from 'swr'
-import useSWR, { preload, unstable_serialize, useSWRConfig } from 'swr'
-import type { SWRInfiniteConfiguration, SWRInfiniteKeyedMutator } from 'swr/infinite'
-import useSWRInfinite, { unstable_serialize as unstable_serialize_infinite } from 'swr/infinite'
-import type { SWRMutationConfiguration } from 'swr/mutation'
-import useSWRMutation from 'swr/mutation'
 
 export { useDataChange } from './useDataChange'
 export { resolveTemplate } from '@renderer/data/utils/dataApiPath'
@@ -296,6 +297,7 @@ function createInfiniteQueryKeyGetter(
  * @property reset - Reset to page 1
  */
 export interface UsePaginatedQueryResult<T> {
+  goToPage: (page: number) => void
   items: readonly T[]
   total: number
   page: number
@@ -358,9 +360,7 @@ export function useQuery<TPath extends ApiPath>(
   }
 ): UseQueryResult<TPath> {
   const isEnabled = options?.enabled !== false
-  const resolvedPath = isEnabled
-    ? resolveTemplate(path, options?.params as Record<string, string | number> | undefined)
-    : null
+  const resolvedPath = isEnabled ? resolveTemplate(path, options?.params) : null
   const key =
     isEnabled && resolvedPath ? buildSWRKey(resolvedPath, options?.query as Record<string, any> | undefined) : null
 
@@ -712,7 +712,7 @@ export function prefetch<TPath extends ApiPath>(
     query?: QueryParamsForPath<TPath, 'GET'>
   }
 ): Promise<ResponseForPath<TPath, 'GET'>> {
-  const resolvedPath = resolveTemplate(path, options?.params as Record<string, string | number> | undefined)
+  const resolvedPath = resolveTemplate(path, options?.params)
   const key = buildSWRKey(resolvedPath, options?.query as Record<string, any> | undefined)
   return preload(key, getFetcher)
 }
@@ -729,6 +729,7 @@ export function prefetch<TPath extends ApiPath>(
  * where re-rendering on cache change is explicitly undesirable (e.g.
  * {@link useMutation} callbacks, drag-and-drop optimistic writes). For
  * reactive access, use {@link useQuery} instead.
+ * Pass `infinite: { limit }` as the third reader argument to read aggregate pages.
  *
  * This hook is the ONLY sanctioned place in the codebase to reach for SWR's
  * internal key serialization (`unstable_serialize`) and raw cache API — any
@@ -750,10 +751,15 @@ export function useReadCache() {
   return useCallback(
     <TResponse = unknown>(
       path: ConcreteApiPaths | TemplateApiPaths,
-      query?: Record<string, unknown>
+      query?: Record<string, unknown>,
+      infinite?: { limit: number }
     ): TResponse | undefined => {
       const hasQuery = query !== undefined && Object.keys(query).length > 0
-      const serialized = hasQuery ? unstable_serialize([path, query]) : unstable_serialize([path])
+      const serialized = infinite
+        ? unstable_serialize_infinite(createInfiniteQueryKeyGetter(path, query, infinite.limit))
+        : hasQuery
+          ? unstable_serialize([path, query])
+          : unstable_serialize([path])
       const entry = cache.get(serialized)
       return entry?.data as TResponse | undefined
     },
@@ -877,7 +883,7 @@ export function useInfiniteQuery<TPath extends ApiPath>(
 
   // Resolve template once per render; key dependencies include the resolved
   // value so identity changes propagate to SWR cache keys.
-  const resolvedPath = resolveTemplate(path as string, options?.params as Record<string, string | number> | undefined)
+  const resolvedPath = resolveTemplate(path, options?.params)
 
   const getKey = useMemo(
     () => createInfiniteQueryKeyGetter(resolvedPath, options?.query, limit, enabled),
@@ -1206,6 +1212,10 @@ export function usePaginatedQuery<TPath extends ApiPath>(
     setCurrentPage(1)
   }, [])
 
+  const goToPage = useCallback((page: number) => {
+    if (Number.isInteger(page) && page > 0) setCurrentPage(page)
+  }, [])
+
   return {
     items,
     total,
@@ -1218,7 +1228,8 @@ export function usePaginatedQuery<TPath extends ApiPath>(
     prevPage,
     nextPage,
     refresh: refetch,
-    reset
+    reset,
+    goToPage
   }
 }
 

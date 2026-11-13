@@ -1,3 +1,16 @@
+import { Loader2 } from 'lucide-react'
+import {
+  type KeyboardEvent as ReactKeyboardEvent,
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState
+} from 'react'
+
+import { ScrollArea } from '@cherrystudio/ui'
 import {
   Badge,
   Command,
@@ -12,18 +25,7 @@ import {
   DialogTitle
 } from '@cherrystudio/ui'
 import { loggerService } from '@logger'
-import Scrollbar from '@renderer/components/Scrollbar'
-import { Loader2 } from 'lucide-react'
-import {
-  type KeyboardEvent as ReactKeyboardEvent,
-  type ReactNode,
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState
-} from 'react'
+import { matchesPinyinInitials } from '@renderer/utils/pinyin'
 
 const logger = loggerService.withContext('ConversationPickerDialog')
 
@@ -83,7 +85,10 @@ function itemMatchesQuery(item: ConversationPickerItem, query: string) {
   const keyword = query.trim().toLowerCase()
   if (!keyword) return true
 
-  return [item.name, item.searchText].filter(Boolean).some((text) => text?.toLowerCase().includes(keyword))
+  return (
+    [item.name, item.searchText].some((text) => text?.toLowerCase().includes(keyword)) ||
+    matchesPinyinInitials(item.name, keyword)
+  )
 }
 
 export function ConversationPickerDialog<T extends ConversationPickerItem>({
@@ -215,8 +220,8 @@ export function ConversationPickerDialog<T extends ConversationPickerItem>({
           value={activeValue}
           onValueChange={handleActiveValueChange}
           onKeyDownCapture={handleNavigationKeyDown}
-          className="min-h-0 flex-1 bg-card [&_[data-slot=command-input-wrapper]>svg]:size-8 [&_[data-slot=command-input-wrapper]>svg]:rounded-full [&_[data-slot=command-input-wrapper]>svg]:bg-secondary [&_[data-slot=command-input-wrapper]>svg]:p-2 [&_[data-slot=command-input-wrapper]>svg]:text-foreground-tertiary [&_[data-slot=command-input-wrapper]>svg]:opacity-100 [&_[data-slot=command-input-wrapper]]:h-[38px] [&_[data-slot=command-input-wrapper]]:flex-1 [&_[data-slot=command-input-wrapper]]:gap-2.5 [&_[data-slot=command-input-wrapper]]:border-b-0 [&_[data-slot=command-input-wrapper]]:px-3 [&_[data-slot=command-input]]:h-full [&_[data-slot=command-input]]:py-0 [&_[data-slot=command-input]]:text-foreground [&_[data-slot=command-input]]:text-sm">
-          <div className="flex items-center gap-2 border-border border-b py-1 pr-3">
+          className="min-h-0 flex-1 bg-card [&_[data-slot=command-input-wrapper]]:h-[38px] [&_[data-slot=command-input-wrapper]]:flex-1 [&_[data-slot=command-input-wrapper]]:gap-2.5 [&_[data-slot=command-input-wrapper]]:border-b-0 [&_[data-slot=command-input-wrapper]]:px-3 [&_[data-slot=command-input-wrapper]>svg]:size-8 [&_[data-slot=command-input-wrapper]>svg]:rounded-full [&_[data-slot=command-input-wrapper]>svg]:bg-secondary [&_[data-slot=command-input-wrapper]>svg]:p-2 [&_[data-slot=command-input-wrapper]>svg]:text-foreground-tertiary [&_[data-slot=command-input-wrapper]>svg]:opacity-100 [&_[data-slot=command-input]]:h-full [&_[data-slot=command-input]]:py-0 [&_[data-slot=command-input]]:text-sm [&_[data-slot=command-input]]:text-foreground">
+          <div className="flex items-center gap-2 border-b border-border py-1 pr-3">
             <CommandInput
               autoFocus
               value={query}
@@ -226,7 +231,10 @@ export function ConversationPickerDialog<T extends ConversationPickerItem>({
             />
             {toolbar ? <div className="flex shrink-0 items-center">{toolbar}</div> : null}
           </div>
-          <Scrollbar ref={scrollRef} onScroll={handleScroll} className="min-h-0 flex-1 px-2.5 py-3 pt-2">
+          <ScrollArea
+            contentProps={{ className: 'px-2.5 py-3 pt-2' }}
+            viewportProps={{ ref: scrollRef, onScroll: handleScroll }}
+            className="min-h-0 flex-1">
             {/* Scrollbar is the scroll viewport; the cmdk list itself must not scroll so keyboard
                 navigation's scroll-into-view bubbles up to the styled Scrollbar instead. */}
             <CommandList
@@ -251,7 +259,7 @@ export function ConversationPickerDialog<T extends ConversationPickerItem>({
                     <span className="flex size-6 shrink-0 items-center justify-center rounded-lg text-muted-foreground group-hover:text-foreground group-focus-visible:text-foreground group-data-[selected=true]:text-foreground [&_svg]:size-4 [&_svg]:shrink-0">
                       {createRow.icon}
                     </span>
-                    <span className="min-w-0 flex-1 truncate font-medium text-foreground text-sm leading-5">
+                    <span className="min-w-0 flex-1 truncate text-sm leading-5 font-medium text-foreground">
                       {createRow.title}
                     </span>
                     {createRow.tag ? (
@@ -268,7 +276,7 @@ export function ConversationPickerDialog<T extends ConversationPickerItem>({
               {isLoading ? (
                 <div
                   role="status"
-                  className="flex min-h-48 items-center justify-center gap-2 text-foreground-tertiary text-sm">
+                  className="flex min-h-48 items-center justify-center gap-2 text-sm text-foreground-tertiary">
                   <Loader2 className="size-4 animate-spin" />
                   <span>{labels.loadingText}</span>
                 </div>
@@ -289,19 +297,19 @@ export function ConversationPickerDialog<T extends ConversationPickerItem>({
                       <span className="flex size-6 shrink-0 items-center justify-center rounded-lg text-muted-foreground group-hover:text-foreground group-focus-visible:text-foreground group-data-[selected=true]:text-foreground [&_svg]:size-4 [&_svg]:shrink-0">
                         {item.icon}
                       </span>
-                      <span className="min-w-0 flex-1 truncate font-medium text-foreground text-sm leading-5">
+                      <span className="min-w-0 flex-1 truncate text-sm leading-5 font-medium text-foreground">
                         {item.name}
                       </span>
                     </CommandItem>
                   ))}
                 </CommandGroup>
               ) : showEmptyText ? (
-                <div className="flex min-h-48 items-center justify-center text-foreground-tertiary text-sm">
+                <div className="flex min-h-48 items-center justify-center text-sm text-foreground-tertiary">
                   {labels.emptyText}
                 </div>
               ) : null}
             </CommandList>
-          </Scrollbar>
+          </ScrollArea>
         </Command>
       </DialogContent>
     </Dialog>

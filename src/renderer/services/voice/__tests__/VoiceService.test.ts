@@ -1,13 +1,14 @@
+import i18n from 'i18next'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
 import {
+  TranscriptionLanguageSource,
   APPLE_ASR_MODEL_ID,
   APPLE_TTS_MODEL_ID,
   FUNASR_MODEL_ID,
-  QWEN3_TTS_MODEL_ID,
-  TranscriptionLanguageSource
+  QWEN3_TTS_MODEL_ID
 } from '@shared/ai/localVoice'
 import { IpcError } from '@shared/ipc/errors/IpcError'
-import i18n from 'i18next'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { VoiceDomainError, VoiceService } from '../VoiceService'
 

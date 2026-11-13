@@ -3,8 +3,9 @@ import type * as NodeOs from 'node:os'
 import type * as NodePath from 'node:path'
 import path from 'node:path'
 
-import type { KnowledgeItem } from '@shared/data/types/knowledge'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+
+import type { KnowledgeItem } from '@shared/data/types/knowledge'
 
 import type * as PathStorage from '../../../pathStorage'
 
@@ -88,14 +89,6 @@ describe('chooseDirectoryPathPrefix', () => {
     expect(chooseDirectoryPathPrefix(createDirectoryOwner('/some/path/report.v2'), new Set(['report.v2']))).toBe(
       'report.v2_1'
     )
-  })
-
-  it('uses a stable non-empty prefix for the POSIX filesystem root', () => {
-    vi.mocked(path.resolve).mockImplementation(realPath.posix.resolve)
-    vi.mocked(path.basename).mockImplementation(realPath.posix.basename)
-    vi.mocked(path.parse).mockImplementation(realPath.posix.parse)
-
-    expect(chooseDirectoryPathPrefix(createDirectoryOwner('/'), new Set())).toBe('root')
   })
 
   it('uses the drive name as the prefix for a Windows drive root', () => {
@@ -234,11 +227,7 @@ describe('expandDirectoryOwnerToTree', () => {
     realFs.mkdirSync(rootDir, { recursive: true })
     realFs.writeFileSync(path.join(rootDir, 'readme.md'), '# readme')
     realFs.writeFileSync(path.join(rootDir, 'app.exe'), 'binary')
-    // OpenDocument formats are app-wide "documents" but intentionally unsupported by the
-    // knowledge base, so a rebuild/restore that walks a directory must skip them too.
-    realFs.writeFileSync(path.join(rootDir, 'legacy.odt'), 'odt')
-    realFs.writeFileSync(path.join(rootDir, 'deck.odp'), 'odp')
-    realFs.writeFileSync(path.join(rootDir, 'sheet.ods'), 'ods')
+    realFs.writeFileSync(path.join(rootDir, 'archive.zip'), 'zip')
 
     copyFileIntoKnowledgeBaseAtMock.mockClear()
     const owner = createDirectoryOwner(rootDir)

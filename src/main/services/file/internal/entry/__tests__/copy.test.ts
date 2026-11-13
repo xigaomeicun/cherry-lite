@@ -2,11 +2,13 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 
-import { fileEntryTable } from '@data/db/schemas/file'
-import type { AbsoluteFilePath } from '@shared/types/file'
 import { setupTestDatabase } from '@test-helpers/db'
 import { MockMainDbServiceUtils } from '@test-mocks/main/DbService'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+import { fileEntryTable } from '@data/db/schemas/file'
+import type { AbsoluteFilePath } from '@shared/types/file'
+import { KeyedMutex } from '@shared/utils/async'
 
 vi.mock('@application', async () => {
   const { mockApplicationFactory } = await import('@test-mocks/main/application')
@@ -53,7 +55,7 @@ describe('internal/entry/copy', () => {
         clear: vi.fn()
       },
       versionCache: { get: vi.fn(), set: vi.fn(), invalidate: vi.fn(), clear: vi.fn() },
-      contentWriteLock: {} as FileManagerDeps['contentWriteLock']
+      contentWriteLock: new KeyedMutex()
     }
   })
 

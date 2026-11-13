@@ -1,6 +1,10 @@
-import { MenuItem, MenuList, Popover, PopoverContent, PopoverTrigger } from '@cherrystudio/ui'
+import { Bot, Check, Filter, Plus } from 'lucide-react'
+import { useCallback, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
+
+import { EmojiIcon, MenuItem, MenuList, Popover, PopoverContent, PopoverTrigger } from '@cherrystudio/ui'
 import { loggerService } from '@logger'
-import EmojiIcon from '@renderer/components/EmojiIcon'
+import { AssistantAvatarImage } from '@renderer/components/Avatar/AssistantAvatarImage'
 import {
   getResourceCreateDefaultAvatar,
   ResourceCreateWizard,
@@ -13,9 +17,6 @@ import type { Assistant } from '@renderer/types/assistant'
 import { buildCreateAssistantDto } from '@renderer/utils/resourceCatalog'
 import { cn } from '@renderer/utils/style'
 import { isNonChatModel } from '@shared/utils/model'
-import { Bot, Check, Filter, Plus } from 'lucide-react'
-import { useCallback, useMemo, useState } from 'react'
-import { useTranslation } from 'react-i18next'
 
 const logger = loggerService.withContext('AssistantConversationPickerDialog')
 
@@ -65,12 +66,21 @@ export function AssistantConversationPickerDialog({
       assistants.map((assistant) => ({
         id: `assistant:${assistant.id}`,
         name: assistant.name,
-        icon: assistant.emoji ? (
-          <EmojiIcon emoji={assistant.emoji} size={24} fontSize={14} className="mr-0" />
-        ) : (
-          <span className="flex size-6 items-center justify-center rounded-full bg-sidebar-accent">
-            <Bot size={14} />
-          </span>
+        icon: (
+          <AssistantAvatarImage
+            src={assistant.avatarSrc}
+            alt={assistant.name}
+            className="size-6 rounded-full object-cover"
+            fallback={
+              assistant.emoji ? (
+                <EmojiIcon emoji={assistant.emoji} size={24} />
+              ) : (
+                <span className="flex size-6 items-center justify-center rounded-full bg-sidebar-accent">
+                  <Bot size={14} />
+                </span>
+              )
+            }
+          />
         ),
         searchText: assistant.description,
         selection: { type: 'assistant' as const, assistantId: assistant.id }
@@ -83,7 +93,7 @@ export function AssistantConversationPickerDialog({
       presets.map((preset) => ({
         id: `catalog:${preset.id}`,
         name: preset.name,
-        icon: <EmojiIcon emoji={preset.emoji || '🤖'} size={24} fontSize={14} className="mr-0" />,
+        icon: <EmojiIcon emoji={preset.emoji || '🤖'} size={24} />,
         searchText: [preset.description, preset.prompt].filter(Boolean).join(' '),
         selection: { type: 'catalog' as const, preset }
       })),
@@ -195,14 +205,7 @@ export function AssistantConversationPickerDialog({
                 row: (query) =>
                   query
                     ? {
-                        icon: (
-                          <EmojiIcon
-                            emoji={getResourceCreateDefaultAvatar('assistant')}
-                            size={24}
-                            fontSize={14}
-                            className="mr-0"
-                          />
-                        ),
+                        icon: <EmojiIcon emoji={getResourceCreateDefaultAvatar('assistant')} size={24} />,
                         title: query,
                         tag: t('selector.assistant.create_tag')
                       }

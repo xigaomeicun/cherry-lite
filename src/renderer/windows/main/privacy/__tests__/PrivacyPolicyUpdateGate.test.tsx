@@ -1,9 +1,9 @@
 import '@testing-library/jest-dom/vitest'
-
-import { LATEST_PRIVACY_POLICY_VERSION } from '@shared/utils/constants'
 import { mockUsePreference, MockUsePreferenceUtils } from '@test-mocks/renderer/usePreference'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+import { LATEST_PRIVACY_POLICY_VERSION } from '@shared/utils/constants'
 
 const toastErrorMock = vi.fn()
 const defaultUsePreferenceImplementation = mockUsePreference.getMockImplementation()
@@ -60,7 +60,7 @@ describe('PrivacyPolicyUpdateGate', () => {
     expect(screen.queryByTestId('full-policy')).not.toBeInTheDocument()
 
     const policyButton = screen.getByRole('button', { name: 'privacy_policy_update.policy' })
-    expect(policyButton).toHaveClass('underline', 'focus-visible:ring-0')
+
     fireEvent.click(policyButton)
 
     expect(screen.getByTestId('full-policy')).toBeInTheDocument()

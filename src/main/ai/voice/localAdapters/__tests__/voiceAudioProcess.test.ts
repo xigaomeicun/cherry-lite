@@ -1,6 +1,8 @@
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 
+import { describe, expect, it } from 'vitest'
+
 import { createRecordingLogger, rejectionOf } from '@main/core/utilityProcess/__tests__/hostTestUtils'
 import {
   createMemoryProcessAdapter,
@@ -8,7 +10,6 @@ import {
   waitUntil
 } from '@main/core/utilityProcess/__tests__/memoryProcessAdapter'
 import { ProcessHost } from '@main/core/utilityProcess/host/ProcessHost'
-import { describe, expect, it } from 'vitest'
 
 import { decodeWebm } from '../decodeWebm'
 import { type VoiceAudioContract, voiceAudioProcess } from '../voiceAudioProcess'

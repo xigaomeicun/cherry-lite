@@ -1,3 +1,7 @@
+import { LoaderCircle } from 'lucide-react'
+import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
+
 import {
   Button,
   Checkbox,
@@ -9,10 +13,8 @@ import {
   DialogTitle,
   Label
 } from '@cherrystudio/ui'
+import { cacheService } from '@renderer/data/CacheService'
 import { ipcApi } from '@renderer/ipc'
-import { LoaderCircle } from 'lucide-react'
-import { useState } from 'react'
-import { useTranslation } from 'react-i18next'
 
 const categories = [
   { kind: 'history', label: 'settings.browser.history', help: 'settings.browser.clearHistoryHelp' },
@@ -54,9 +56,14 @@ function BrowserClearContent({
     setBusy(true)
     setError(false)
     try {
+      let rememberedPagesCleared = false
       for (const { kind } of categories) {
         if (!selected[kind]) continue
         await ipcApi.request('browser.data.clear', { kind })
+        if (!rememberedPagesCleared && (kind === 'history' || kind === 'site_data')) {
+          cacheService.setPersist('ui.browser.last_urls', {})
+          rememberedPagesCleared = true
+        }
         setSelected((current) => ({ ...current, [kind]: false }))
       }
       onDone()

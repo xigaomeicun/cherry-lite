@@ -1,8 +1,8 @@
 import '@renderer/assets/styles/index.css'
 import '@renderer/assets/styles/tailwind.css'
+import { createRoot } from 'react-dom/client'
 
 import { prepareWindow } from '@renderer/windows/prepareWindow'
-import { createRoot } from 'react-dom/client'
 
 import QuickAssistantApp from './QuickAssistantApp'
 
@@ -18,6 +18,7 @@ await prepareWindow({
     'chat.default_model_id',
     'feature.quick_assistant.read_clipboard_at_startup',
     'feature.voice.dictation.hold_shortcut',
+    'feature.voice.dictation.mouse_hold_enabled',
     'feature.voice.dictation.toggle_shortcut'
   ]
 })

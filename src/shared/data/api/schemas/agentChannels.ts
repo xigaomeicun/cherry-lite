@@ -1,6 +1,8 @@
 import { DingTalkChannelConfigSchema, WeComChannelConfigSchema } from '@shared/data/types/channel'
 import * as z from 'zod'
 
+import { DingTalkChannelConfigSchema, WeComChannelConfigSchema } from '@shared/data/types/channel'
+
 import { AgentPermissionModeSchema } from './agents'
 import { AgentSessionWorkspaceSourceSchema } from './agentWorkspaces'
 
@@ -252,25 +254,12 @@ export type AgentChannelSchemas = {
       query?: AgentChannelListQuery
       response: AgentChannelEntity[]
     }
-    POST: {
-      body: CreateAgentChannelDto
-      response: AgentChannelEntity
-    }
   }
 
   '/agent-channels/:channelId': {
     GET: {
       params: { channelId: string }
       response: AgentChannelEntity
-    }
-    PATCH: {
-      params: { channelId: string }
-      body: UpdateAgentChannelDto
-      response: AgentChannelEntity
-    }
-    DELETE: {
-      params: { channelId: string }
-      response: void
     }
   }
 }

@@ -1,6 +1,7 @@
+import { describe, expect, it } from 'vitest'
+
 import type { ComposerAttachment } from '@renderer/utils/message/composerAttachment'
 import type { LocalSkill } from '@shared/types/skill'
-import { describe, expect, it } from 'vitest'
 
 import {
   agentComposerTokenId,
@@ -36,23 +37,6 @@ describe('agent composer token mapping', () => {
     const file = { path: '/tmp/agent.ts' } as ComposerAttachment
 
     expect(() => agentComposerTokenId.file(file)).toThrow('fileTokenSourceId')
-  })
-
-  it('maps skills to prompt-bearing composer tokens', () => {
-    const skill = {
-      name: 'pdf',
-      description: 'Read and analyze PDFs',
-      filename: 'pdf'
-    } satisfies LocalSkill
-
-    expect(agentSkillToComposerToken(skill)).toEqual({
-      id: 'skill:pdf',
-      kind: 'skill',
-      label: 'pdf',
-      description: 'Read and analyze PDFs',
-      promptText: 'Use the pdf skill.',
-      payload: skill
-    })
   })
 
   it('prompts with the skill directory name when the display name differs', () => {

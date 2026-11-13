@@ -4,10 +4,10 @@ import {
   applyPlaybackCommand,
   applyPlaybackReport,
   beginPlaybackSynthesis,
+  readyPlaybackOutput,
   completePlaybackSynthesis,
   createPlaybackSnapshot,
-  createPlaybackState,
-  readyPlaybackOutput
+  createPlaybackState
 } from '../playbackState'
 
 const sessionId = '00000000-0000-4000-8000-000000000001'

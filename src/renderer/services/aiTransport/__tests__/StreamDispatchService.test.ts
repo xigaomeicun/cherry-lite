@@ -1,7 +1,8 @@
+import { afterEach, describe, expect, it, vi } from 'vitest'
+
 import i18n from '@renderer/i18n/resolver'
 import { toast } from '@renderer/services/toast'
 import type { AiStreamOpenRequest, AiStreamOpenResponse } from '@shared/ai/transport'
-import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { streamDispatchService } from '../StreamDispatchService'
 
@@ -23,8 +24,6 @@ afterEach(() => {
   vi.clearAllMocks()
 })
 
-const flush = () => new Promise((r) => setTimeout(r, 0))
-
 describe('StreamDispatchService', () => {
   it('routes a resolved ack to subscribers', async () => {
     const ack: AiStreamOpenResponse = {
@@ -34,8 +33,7 @@ describe('StreamDispatchService', () => {
     const seen: unknown[] = []
     const off = streamDispatchService.subscribe(TOPIC, (r) => seen.push(r))
 
-    streamDispatchService.dispatch(TOPIC, req)
-    await flush()
+    await streamDispatchService.dispatch(TOPIC, req)
 
     expect(streamOpen).toHaveBeenCalledWith(req)
     expect(seen).toEqual([{ ok: true, topicId: TOPIC, ack }])
@@ -47,8 +45,7 @@ describe('StreamDispatchService', () => {
     const seen: Array<{ ok: boolean }> = []
     const off = streamDispatchService.subscribe(TOPIC, (r) => seen.push(r))
 
-    streamDispatchService.dispatch(TOPIC, req)
-    await flush()
+    await streamDispatchService.dispatch(TOPIC, req)
 
     expect(seen).toHaveLength(1)
     expect(seen[0]).toMatchObject({ ok: false, topicId: TOPIC })
@@ -63,8 +60,7 @@ describe('StreamDispatchService', () => {
       message: 'Workspace path for session session-1 is not accessible: /missing'
     } satisfies AiStreamOpenResponse)
 
-    streamDispatchService.dispatch(TOPIC, req)
-    await flush()
+    await streamDispatchService.dispatch(TOPIC, req)
 
     expect(toast.error).toHaveBeenCalledWith('Workspace path for session session-1 is not accessible: /missing')
   })
@@ -75,8 +71,7 @@ describe('StreamDispatchService', () => {
       reason: 'paused'
     } satisfies AiStreamOpenResponse)
 
-    streamDispatchService.dispatch(TOPIC, req)
-    await flush()
+    await streamDispatchService.dispatch(TOPIC, req)
 
     expect(toast.error).toHaveBeenCalledWith(i18n.t('restore.messages_paused'))
   })
@@ -86,8 +81,7 @@ describe('StreamDispatchService', () => {
     const seen: unknown[] = []
     const off = streamDispatchService.subscribe(TOPIC, (r) => seen.push(r))
     off()
-    streamDispatchService.dispatch(TOPIC, req)
-    await flush()
+    await streamDispatchService.dispatch(TOPIC, req)
     expect(seen).toHaveLength(0)
   })
 })

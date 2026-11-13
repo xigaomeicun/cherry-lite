@@ -1,5 +1,10 @@
+import { ArrowLeft, History } from 'lucide-react'
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
+
 import { Button, Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@cherrystudio/ui'
 import { cn } from '@cherrystudio/ui/lib/utils'
+import { DiagnosticHistoryDialog } from '@renderer/components/feedback/DiagnosticHistoryDialog'
 import {
   DiagnosticUploadPanel,
   type DiagnosticUploadPanelHandle
@@ -9,9 +14,6 @@ import { openSettingsTab } from '@renderer/services/mainWindowNavigation'
 import { POPUP_EXIT_MS, type PopupInjectedProps } from '@renderer/services/popup'
 import type { DoctorNavigateTarget, DoctorRunTier } from '@shared/types/doctor'
 import type { DoctorPanel } from '@shared/utils/doctor'
-import { ArrowLeft } from 'lucide-react'
-import { lazy, Suspense, useCallback, useEffect, useRef } from 'react'
-import { useTranslation } from 'react-i18next'
 
 import { DoctorChecksPanel } from './DoctorChecksPanel'
 
@@ -39,6 +41,7 @@ export function DoctorDialog({ initialDescription, initialPanel, initialRunTier,
   const { t } = useTranslation()
   const reportPanelRef = useRef<DiagnosticUploadPanelHandle>(null)
   const panelHeadingRef = useRef<HTMLDivElement>(null)
+  const [historyOpen, setHistoryOpen] = useState(false)
   const canReturnToChecks = initialPanel === 'checks'
 
   const finishHandoff = useCallback(
@@ -135,7 +138,20 @@ export function DoctorDialog({ initialDescription, initialPanel, initialRunTier,
             </Button>
           ) : null}
           <div ref={panelHeadingRef} tabIndex={-1} className="min-w-0 flex-1 space-y-1">
-            <DialogTitle>{panelTitle}</DialogTitle>
+            <div className="flex items-center gap-1">
+              <DialogTitle>{panelTitle}</DialogTitle>
+              {controller.session.activePanel === 'report' ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label={t('settings.about.feedback.history.title')}
+                  title={t('settings.about.feedback.history.title')}
+                  onClick={() => setHistoryOpen(true)}>
+                  <History className="size-4 text-muted-foreground!" aria-hidden />
+                </Button>
+              ) : null}
+            </div>
             {isExportPanel ? <DialogDescription>{panelDescription}</DialogDescription> : null}
           </div>
         </DialogHeader>
@@ -164,6 +180,7 @@ export function DoctorDialog({ initialDescription, initialPanel, initialRunTier,
           />
         ) : null}
       </DialogContent>
+      <DiagnosticHistoryDialog open={historyOpen} onOpenChange={setHistoryOpen} />
     </Dialog>
   )
 }

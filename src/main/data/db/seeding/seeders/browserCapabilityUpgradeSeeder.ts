@@ -1,10 +1,11 @@
+import { and, eq, inArray } from 'drizzle-orm'
+
 import { agentTable } from '@data/db/schemas/agent'
 import { assistantTable } from '@data/db/schemas/assistant'
 import { agentMcpServerTable, assistantMcpServerTable } from '@data/db/schemas/assistantRelations'
 import { mcpServerTable } from '@data/db/schemas/mcpServer'
 import { BROWSER_TOOL_GROUP } from '@shared/ai/browserTools'
 import { BuiltinMcpServerNames } from '@shared/utils/mcp'
-import { and, eq, inArray } from 'drizzle-orm'
 
 import type { DbType, ISeeder } from '../../types'
 

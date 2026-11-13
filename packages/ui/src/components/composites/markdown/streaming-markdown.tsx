@@ -22,6 +22,10 @@ export interface StreamingMarkdownProps {
   parseMarkdownIntoBlocksFn?: (source: string) => string[]
   /** Preserve local file hrefs for a custom anchor while retaining URL hardening. */
   preserveFileLinkHrefs?: boolean
+  /** Extra href schemes permitted by the caller. */
+  additionalLinkProtocols?: readonly string[]
+  /** Preserve relative image destinations for a custom image renderer. */
+  preserveRelativeImageSrcs?: boolean
 }
 
 const DEFAULT_ANIMATED: AnimateOptions = {
@@ -45,7 +49,9 @@ export function StreamingMarkdown({
   animated,
   parseIncompleteMarkdown = true,
   parseMarkdownIntoBlocksFn,
-  preserveFileLinkHrefs
+  preserveFileLinkHrefs,
+  additionalLinkProtocols,
+  preserveRelativeImageSrcs
 }: StreamingMarkdownProps): ReactElement {
   // Stable reference so Streamdown's internal memo on JSON.stringify(animated)
   // sees the same identity across renders.
@@ -73,7 +79,9 @@ export function StreamingMarkdown({
         .filter(Boolean)
         .join(' ')}
       footnoteLabel={footnoteLabel}
-      preserveFileLinkHrefs={preserveFileLinkHrefs}>
+      preserveFileLinkHrefs={preserveFileLinkHrefs}
+      additionalLinkProtocols={additionalLinkProtocols}
+      preserveRelativeImageSrcs={preserveRelativeImageSrcs}>
       {children}
     </MarkdownCore>
   )

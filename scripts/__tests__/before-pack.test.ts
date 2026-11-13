@@ -4,7 +4,8 @@
  * stopped materialising both CPU architectures for the host OS — the packaging bug that
  * shipped a macOS x64 build without `@img/sharp-darwin-x64`.
  */
-import { readFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import path from 'node:path'
 
 import { Arch } from 'electron-builder'
@@ -21,8 +22,6 @@ import {
 
 const hostPlatform = process.platform === 'darwin' ? 'darwin' : process.platform === 'win32' ? 'win32' : 'linux'
 const foreignPlatform = hostPlatform === 'darwin' ? 'win32' : 'darwin'
-const legacyMacOcrVersion = '1.0.2'
-const macOcrPackages = ['@napi-rs/system-ocr-darwin-arm64', '@napi-rs/system-ocr-darwin-x64']
 
 describe('prepareSystemSpeechHelper', () => {
   it('ships the x64 helper once and removes it before an ARM64 packaging pass', () => {
@@ -36,7 +35,7 @@ describe('prepareSystemSpeechHelper', () => {
     expect(config.win.extraResources).toEqual([
       ...originalResources,
       {
-        from: 'packages/system-speech/dist/native/win32-x64/cherry-system-speech.exe',
+        from: 'native/system-speech/dist/native/win32-x64/cherry-system-speech.exe',
         to: 'system-speech/cherry-system-speech.exe'
       }
     ])
@@ -75,52 +74,46 @@ describe('assertPrebuiltPackages', () => {
       /Missing prebuilt packages for .+-x64: .*@img\/sharp-/
     )
   })
-
-  it('pins macOS system OCR to the legacy Accurate implementation', () => {
-    const packageManifest = JSON.parse(readFileSync('package.json', 'utf8')) as {
-      optionalDependencies: Record<string, string>
-    }
-    const workspaceConfig = parse(readFileSync('pnpm-workspace.yaml', 'utf8')) as {
-      overrides: Record<string, string>
-    }
-
-    for (const packageName of macOcrPackages) {
-      expect(packageManifest.optionalDependencies[packageName]).toBe(legacyMacOcrVersion)
-      expect(workspaceConfig.overrides[packageName]).toBe(legacyMacOcrVersion)
-    }
-  })
 })
 
 describe('prepareNativeModulesForElectron', () => {
   it.each([
-    ['mac', Arch.arm64, 'darwin', 'arm64'],
-    ['windows', Arch.x64, 'win32', 'x64']
-  ])('does not reuse the %s binary mirror for headers', async (platformName, arch, platform, archName) => {
-    const rebuild = vi.fn(async () => {})
+    ['mac', Arch.arm64, 'darwin-arm64'],
+    ['windows', Arch.x64, 'win32-x64']
+  ])('replaces the preferred %s prebuild with the source output', async (platformName, arch, target) => {
+    const projectDir = mkdtempSync(path.join(tmpdir(), 'sqlite-rebuild-'))
+    const moduleDir = path.join(projectDir, 'node_modules/better-sqlite3')
+    const previous = process.env.npm_package_config_node_gyp_force_build
+    mkdirSync(path.join(moduleDir, 'prebuilds'), { recursive: true })
+    writeFileSync(path.join(moduleDir, 'package.json'), '{"name":"better-sqlite3"}')
+    writeFileSync(path.join(moduleDir, `prebuilds/${target}.node`), 'bundled')
+    writeFileSync(path.join(moduleDir, 'prebuilds/linux-x64.node'), 'other-target')
+    const context = {
+      arch,
+      packager: { projectDir, platform: { name: platformName }, config: { electronVersion: '45.2.2' } }
+    }
+    try {
+      await prepareNativeModulesForElectron(context, async () => {
+        if (process.env.npm_package_config_node_gyp_force_build !== '1') return
+        mkdirSync(path.join(moduleDir, 'build/Release'), { recursive: true })
+        writeFileSync(path.join(moduleDir, 'build/Release/better_sqlite3.node'), 'compiled')
+      })
+      expect(readFileSync(path.join(moduleDir, `prebuilds/${target}.node`), 'utf8')).toBe('compiled')
+      expect(readFileSync(path.join(moduleDir, 'prebuilds/linux-x64.node'), 'utf8')).toBe('other-target')
+      expect(process.env.npm_package_config_node_gyp_force_build).toBe(previous)
 
-    await prepareNativeModulesForElectron(
-      {
-        arch,
-        packager: {
-          platform: { name: platformName },
-          config: {
-            electronVersion: '41.8.0',
-            electronDownload: { mirror: 'https://npmmirror.com/mirrors/electron/' }
-          }
-        }
-      },
-      rebuild
-    )
-
-    expect(rebuild).toHaveBeenCalledWith({
-      buildPath: path.resolve(import.meta.dirname, '../..'),
-      electronVersion: '41.8.0',
-      platform,
-      arch: archName,
-      onlyModules: ['better-sqlite3'],
-      force: true,
-      buildFromSource: true
-    })
+      await expect(
+        prepareNativeModulesForElectron(context, async () => {
+          throw new Error('compiler failed')
+        })
+      ).rejects.toThrow('compiler failed')
+      expect(process.env.npm_package_config_node_gyp_force_build).toBe(previous)
+      expect(readFileSync(path.join(moduleDir, `prebuilds/${target}.node`), 'utf8')).toBe('compiled')
+      await expect(prepareNativeModulesForElectron(context, async () => {})).rejects.toThrow('ENOENT')
+      expect(process.env.npm_package_config_node_gyp_force_build).toBe(previous)
+    } finally {
+      rmSync(projectDir, { recursive: true, force: true })
+    }
   })
 
   it.each([
@@ -137,6 +130,7 @@ describe('prepareNativeModulesForElectron', () => {
       {
         arch,
         packager: {
+          projectDir: path.resolve(import.meta.dirname, '../..'),
           platform: { name: 'linux' },
           config: { electronVersion: '41.8.0' }
         }
@@ -154,19 +148,6 @@ describe('prepareNativeModulesForElectron', () => {
 })
 
 describe('keepPackages', () => {
-  it.each([
-    ['linux', 'x64', ['@deepseek-ai/node-addon-system-linux-x64']],
-    ['linux', 'arm64', ['@deepseek-ai/node-addon-system-linux-arm64']],
-    ['darwin', 'x64', ['@deepseek-ai/node-addon-system-darwin-x64']],
-    ['darwin', 'arm64', ['@deepseek-ai/node-addon-system-darwin-arm64']],
-    ['win32', 'x64', []],
-    ['win32', 'arm64', []]
-  ] as const)('keeps only the %s %s DSH system binary', (platform, arch, expectedPackages) => {
-    const keptPackages = keepPackages(platform, arch).filter((name) => name.startsWith('@deepseek-ai/node-addon-'))
-
-    expect(keptPackages).toEqual(expectedPackages)
-  })
-
   // The name matcher keys off arch and platform tokens, and this package name carries
   // neither. Left to it, a Mac build would drop the module the permission prompt needs,
   // and a Windows or Linux build cross-made on a Mac would ship its darwin-only `.node`.

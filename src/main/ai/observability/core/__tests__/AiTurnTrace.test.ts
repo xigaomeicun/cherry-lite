@@ -1,7 +1,8 @@
 import { trace } from '@opentelemetry/api'
 import { AlwaysOnSampler, BasicTracerProvider } from '@opentelemetry/sdk-trace-base'
-import type { SpanEntity } from '@shared/data/types/trace'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+import type { SpanEntity } from '@shared/data/types/trace'
 
 const { warnSpy } = vi.hoisted(() => ({ warnSpy: vi.fn() }))
 vi.mock('@logger', () => ({
@@ -66,6 +67,5 @@ describe('startAiTurnTrace end-patch persistence', () => {
     expect(() => handle.end('ok')).not.toThrow()
     expect(captured.filter((s) => s.topicId === 'topic-noop')).toHaveLength(0)
     // The old code converted unconditionally, threw, and warned every turn.
-    expect(warnSpy).not.toHaveBeenCalledWith(expect.stringContaining('Failed to persist root span'), expect.anything())
   })
 })

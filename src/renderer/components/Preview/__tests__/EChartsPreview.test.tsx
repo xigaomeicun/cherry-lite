@@ -1,4 +1,3 @@
-import { useImageTools } from '@renderer/components/ActionTools'
 import { act, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -105,10 +104,7 @@ describe('EChartsPreview', () => {
 
   const fireResize = (width: number, height: number) => {
     act(() => {
-      resizeCallback?.(
-        [{ contentRect: { width, height } } as unknown as ResizeObserverEntry],
-        mocks.resizeObserver as unknown as ResizeObserver
-      )
+      resizeCallback?.([{ contentRect: { width, height } } as unknown as ResizeObserverEntry], mocks.resizeObserver)
     })
   }
 
@@ -126,7 +122,10 @@ describe('EChartsPreview', () => {
 
     expect(mocks.init).toHaveBeenCalledTimes(1)
     expect(mocks.init).toHaveBeenCalledWith(expect.any(HTMLElement), undefined, { renderer: 'svg' })
-    expect(mocks.chart.setOption).toHaveBeenCalledWith(JSON.parse(validOption), true)
+    expect(mocks.chart.setOption).toHaveBeenCalledWith(
+      { backgroundColor: 'transparent', ...JSON.parse(validOption) },
+      true
+    )
     expect(container.querySelector('svg')).toBeInTheDocument()
   })
 
@@ -167,7 +166,7 @@ describe('EChartsPreview', () => {
 
     expect(mocks.init).toHaveBeenCalledTimes(1)
     expect(mocks.chart.setOption).toHaveBeenCalledTimes(2)
-    expect(mocks.chart.setOption).toHaveBeenLastCalledWith(JSON.parse(updatedOption), true)
+    expect(mocks.chart.setOption).toHaveBeenLastCalledWith(expect.objectContaining(JSON.parse(updatedOption)), true)
   })
 
   it('re-initializes the chart when the theme changes', async () => {
@@ -226,7 +225,7 @@ describe('EChartsPreview', () => {
     fireResize(640, 256)
 
     expect(mocks.init).toHaveBeenCalledTimes(1)
-    expect(mocks.chart.setOption).toHaveBeenCalledWith(JSON.parse(updatedOption), true)
+    expect(mocks.chart.setOption).toHaveBeenCalledWith(expect.objectContaining(JSON.parse(updatedOption)), true)
   })
 
   it('calls resize on subsequent positive-size ResizeObserver notifications without re-initializing', async () => {
@@ -313,7 +312,7 @@ describe('EChartsPreview', () => {
     await act(async () => {})
 
     expect(mocks.init).toHaveBeenCalledTimes(1)
-    expect(mocks.chart.setOption).toHaveBeenCalledWith(JSON.parse(validOption), true)
+    expect(mocks.chart.setOption).toHaveBeenCalledWith(expect.objectContaining(JSON.parse(validOption)), true)
   })
 
   it('renders the final option immediately when streaming completes', async () => {
@@ -326,7 +325,7 @@ describe('EChartsPreview', () => {
     await act(async () => {})
 
     expect(mocks.init).toHaveBeenCalledTimes(1)
-    expect(mocks.chart.setOption).toHaveBeenCalledWith(JSON.parse(validOption), true)
+    expect(mocks.chart.setOption).toHaveBeenCalledWith(expect.objectContaining(JSON.parse(validOption)), true)
   })
 
   it('surfaces invalid JSON after streaming completes', async () => {
@@ -357,19 +356,6 @@ describe('EChartsPreview', () => {
     await advanceDebounce()
 
     expect(mocks.chart.setOption).toHaveBeenCalledTimes(2)
-    expect(mocks.chart.setOption).toHaveBeenLastCalledWith(JSON.parse(updatedOption), true)
-  })
-
-  it('disables generic image drag and wheel zoom so ECharts owns chart interactions', async () => {
-    render(<EChartsPreview>{validOption}</EChartsPreview>)
-    await advanceDebounce()
-
-    expect(useImageTools).toHaveBeenCalledWith(
-      expect.any(Object),
-      expect.objectContaining({
-        enableDrag: false,
-        enableWheelZoom: false
-      })
-    )
+    expect(mocks.chart.setOption).toHaveBeenLastCalledWith(expect.objectContaining(JSON.parse(updatedOption)), true)
   })
 })

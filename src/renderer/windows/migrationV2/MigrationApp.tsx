@@ -1,36 +1,4 @@
 import {
-  Alert,
-  Button,
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-  error as showErrorToast,
-  Scrollbar,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-  success as showSuccessToast,
-  Tooltip
-} from '@cherrystudio/ui'
-import { cn } from '@cherrystudio/ui/lib/utils'
-import { DIALOG_UNMOUNT_DELAY_MS } from '@cherrystudio/ui/utils'
-import AppLogo from '@renderer/assets/images/logo.png'
-import ToastHost from '@renderer/components/ToastHost'
-import { loggerService } from '@renderer/services/LoggerService'
-import { isMac } from '@renderer/utils/platform'
-import {
-  MigrationIpcChannels,
-  type MigrationStage,
-  type PreparedMigrationExportPaths
-} from '@shared/data/migration/v2/types'
-import {
   AlertTriangle,
   ArrowRight,
   Check,
@@ -52,6 +20,40 @@ import {
 } from 'lucide-react'
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+
+import {
+  Alert,
+  Button,
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  error as showErrorToast,
+  ScrollArea,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+  success as showSuccessToast,
+  Tooltip
+} from '@cherrystudio/ui'
+import { cn } from '@cherrystudio/ui/lib/utils'
+import { DIALOG_UNMOUNT_DELAY_MS } from '@cherrystudio/ui/utils'
+import AppLogo from '@renderer/assets/images/logo.png'
+import ToastHost from '@renderer/components/ToastHost'
+import { useExitPresence } from '@renderer/hooks/useExitPresence'
+import { loggerService } from '@renderer/services/LoggerService'
+import { isMac } from '@renderer/utils/platform'
+import {
+  MigrationIpcChannels,
+  type MigrationStage,
+  type PreparedMigrationExportPaths
+} from '@shared/data/migration/v2/types'
 
 import {
   CloseMigrationDialog,
@@ -368,6 +370,7 @@ const MigrationApp: React.FC = () => {
   const [moreOptionsOpen, setMoreOptionsOpen] = useState(false)
   const [diagnosticExportOpen, setDiagnosticExportOpen] = useState(false)
   const [diagnosticResult, setDiagnosticResult] = useState<'included' | 'not_included' | null>(null)
+  const resultDialog = useExitPresence(diagnosticResult)
   const [warningsDialogOpen, setWarningsDialogOpen] = useState(false)
   const [closeConfirmOpen, setCloseConfirmOpen] = useState(false)
   // Set when the user confirmed quit but main deferred it because a migration write
@@ -713,7 +716,7 @@ const MigrationApp: React.FC = () => {
                     <DialogTitle>{t('migration.completed.warning_heading', { count: warnings.length })}</DialogTitle>
                     <DialogDescription>{t('migration.completed.warning_description')}</DialogDescription>
                   </DialogHeader>
-                  <Scrollbar className="max-h-[50vh]">
+                  <ScrollArea className="max-h-[50vh]">
                     <ul className="text-foreground text-sm leading-relaxed">
                       {warnings.map((warning, index) => (
                         <li key={index} className="wrap-break-words">
@@ -721,7 +724,7 @@ const MigrationApp: React.FC = () => {
                         </li>
                       ))}
                     </ul>
-                  </Scrollbar>
+                  </ScrollArea>
                   <Button
                     type="button"
                     variant="emphasis"
@@ -905,9 +908,9 @@ const MigrationApp: React.FC = () => {
             <MigrationDiagnosticPanel embedded showPrivacy={false} onSaved={handleDiagnosticSaved} />
           </DialogContent>
         </Dialog>
-        {diagnosticResult && (
+        {resultDialog.value && (
           <Dialog
-            open
+            open={diagnosticResult !== null}
             onOpenChange={(open) => {
               if (!open) setDiagnosticResult(null)
             }}>
@@ -916,7 +919,7 @@ const MigrationApp: React.FC = () => {
                 <DialogTitle>{t('migration.diagnostics.saved_title')}</DialogTitle>
                 <DialogDescription className="sr-only">{t('migration.diagnostics.saved_local')}</DialogDescription>
               </DialogHeader>
-              <MigrationDiagnosticPanel embedded savedLogs={diagnosticResult} showPrivacy={false} />
+              <MigrationDiagnosticPanel embedded savedLogs={resultDialog.value} showPrivacy={false} />
             </DialogContent>
           </Dialog>
         )}

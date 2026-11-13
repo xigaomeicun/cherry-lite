@@ -1,3 +1,6 @@
+import { isFileUIPart } from 'ai'
+import { takeRight } from 'es-toolkit/compat'
+
 /**
  * Renderer helpers that call the AI (`ai.text.generate`) to produce short text:
  * generic text generation plus topic/note auto-naming. Stateless request/response.
@@ -14,11 +17,9 @@ import { getErrorMessage } from '@renderer/utils/error'
 import { purifyMarkdownImages } from '@renderer/utils/markdownLight'
 import { getNamingTextContent } from '@renderer/utils/message/find'
 import { readDefaultModel, readQuickModel } from '@renderer/utils/model'
-import { removeSpecialCharactersForTopicName } from '@renderer/utils/naming'
+import { normalizeGeneratedNoteName, removeSpecialCharactersForTopicName } from '@renderer/utils/naming'
 import { containsSupportedVariables, replacePromptVariables } from '@renderer/utils/prompt'
 import type { Model } from '@shared/data/types/model'
-import { isFileUIPart } from 'ai'
-import { takeRight } from 'es-toolkit/compat'
 
 const logger = loggerService.withContext('aiGeneration')
 
@@ -68,8 +69,13 @@ export async function fetchMessagesSummary({
   }
 }
 
-export async function fetchNoteSummary({ content }: { content: string; assistant?: Assistant }) {
-  let prompt = (await preferenceService.get('topic.naming_prompt')) || i18n.t('prompts.title')
+export async function fetchNoteSummary({
+  content
+}: {
+  content: string
+  assistant?: Assistant
+}): Promise<string | null> {
+  let prompt = i18n.t('prompts.note_title')
   // Note summarisation always uses the quick-assistant model. The optional
   // assistant parameter was a v1 escape hatch (read assistant.model); in v2 the
   // assistant has no embedded model, so we go straight to the user's quick
@@ -91,7 +97,7 @@ export async function fetchNoteSummary({ content }: { content: string; assistant
       system: prompt,
       prompt: purifiedContent
     })
-    return removeSpecialCharactersForTopicName(text) || null
+    return normalizeGeneratedNoteName(text)
   } catch (error: any) {
     return null
   }

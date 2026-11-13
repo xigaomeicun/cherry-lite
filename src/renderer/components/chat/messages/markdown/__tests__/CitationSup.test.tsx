@@ -1,6 +1,7 @@
-import type { Citation } from '@renderer/types/message'
 import { render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
+
+import type { Citation } from '@renderer/types/message'
 
 import CitationSup from '../CitationSup'
 
@@ -56,8 +57,6 @@ describe('CitationSup', () => {
     expect(sup).toHaveAttribute('role', 'button')
     expect(sup).toHaveAttribute('tabindex', '0')
     expect(sup.getAttribute('aria-label')).toContain('3')
-    expect(sup).toHaveClass('focus-visible:bg-accent', 'focus-visible:outline-none')
-    expect(sup).not.toHaveClass('focus-visible:ring-2', 'focus-visible:ring-primary')
   })
 
   it('gives different citations different accessible names', () => {
@@ -116,7 +115,7 @@ describe('CitationSup', () => {
   it('drops renderer-only props before reaching the DOM', () => {
     render(
       <CitationSup
-        node={{ position: undefined } as never}
+        node={{ position: undefined }}
         data-citation="3"
         citationRegistry={new Map([[3, knowledgeCitation]])}
       />

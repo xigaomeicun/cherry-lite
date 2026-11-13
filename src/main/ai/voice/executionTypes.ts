@@ -1,14 +1,14 @@
 import type { SpeechOptions, SpeechResult, TranscriptionOptions, TranscriptionResult } from '@cherrystudio/ai-core'
 import type { LocalSpeechModelId, LocalTranscriptionModelId } from '@shared/ai/localVoice'
 import type {
+  SpeechTextEvent,
+  TranscriptRevision,
   SpeechInputKind,
   SpeechOutputKind,
-  SpeechPcmChunk,
   SpeechPcmFormat,
-  SpeechTextEvent,
+  SpeechPcmChunk,
   TranscriptionInputKind,
-  TranscriptionOutputKind,
-  TranscriptRevision
+  TranscriptionOutputKind
 } from '@shared/ai/voice'
 
 export interface VoiceExecution {

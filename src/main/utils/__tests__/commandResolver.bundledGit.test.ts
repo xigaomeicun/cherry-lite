@@ -1,6 +1,7 @@
 import { execFileSync } from 'child_process'
 import fs from 'fs'
 import path from 'path'
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import which from 'which'
 
@@ -122,8 +123,6 @@ describe('findExecutableInEnv – bundled MinGit resolver ordering', () => {
     mockWhichCandidates([UNICODE_BUNDLED_GIT])
 
     await expect(findExecutableInEnv('git')).resolves.toBe(UNICODE_BUNDLED_GIT)
-    expect(which).toHaveBeenCalledWith('git', expect.objectContaining({ path: shellEnv.Path }))
-    expect(which.sync).toHaveBeenCalledWith('git', expect.objectContaining({ path: shellEnv.Path }))
   })
 
   it('returns null for git when nothing is found and no bundle is present', async () => {

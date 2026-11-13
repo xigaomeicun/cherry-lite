@@ -1,17 +1,20 @@
+import { app } from 'electron'
+
 import { application } from '@application'
 import type { LanguageVarious } from '@shared/data/preference/preferenceTypes'
 import { defaultLanguage } from '@shared/utils/languages'
-import { app } from 'electron'
 
 import deDE from './locales/de-de.json'
 import elGR from './locales/el-gr.json'
 import EnUs from './locales/en-us.json'
 import esES from './locales/es-es.json'
 import frFR from './locales/fr-fr.json'
+import itIT from './locales/it-it.json'
 import JaJP from './locales/ja-jp.json'
 import ptPT from './locales/pt-pt.json'
 import roRO from './locales/ro-ro.json'
 import RuRu from './locales/ru-ru.json'
+import ThTH from './locales/th-th.json'
 import trTR from './locales/tr-tr.json'
 import viVN from './locales/vi-vn.json'
 import ZhCn from './locales/zh-cn.json'
@@ -30,8 +33,10 @@ const locales = Object.fromEntries(
     ['fr-FR', frFR],
     ['pt-PT', ptPT],
     ['ro-RO', roRO],
+    ['th-TH', ThTH],
     ['vi-VN', viVN],
-    ['tr-TR', trTR]
+    ['tr-TR', trTR],
+    ['it-IT', itIT]
   ].map(([locale, translation]) => [locale, { translation }])
 )
 
@@ -62,7 +67,7 @@ export const getAppLanguage = (): LanguageVarious => {
     return language
   }
 
-  return (Object.keys(locales).includes(appLocale) ? appLocale : defaultLanguage) as LanguageVarious
+  return resolveSystemLanguage(appLocale)
 }
 
 /**

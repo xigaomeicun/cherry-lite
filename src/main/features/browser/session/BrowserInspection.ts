@@ -1,5 +1,6 @@
-import { redactUrlParams } from '@shared/utils/redaction'
 import type { Protocol } from 'devtools-protocol'
+
+import { redactUrlParams } from '@shared/utils/redaction'
 
 import { sanitizeSnapshotUrl } from '../snapshot/serializeSnapshot'
 import type { CdpEvent } from './cdpAllowList'

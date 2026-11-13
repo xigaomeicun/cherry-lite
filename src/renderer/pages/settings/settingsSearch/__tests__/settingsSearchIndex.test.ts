@@ -1,11 +1,12 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { resolve } from 'node:path'
 
-import enUS from '@renderer/i18n/locales/en-us.json'
-import zhCN from '@renderer/i18n/locales/zh-cn.json'
 import { describe, expect, it } from 'vitest'
 
-import { settingsMenu } from '../../settingsMenu'
+import { settingsMenu } from '@renderer/components/settingsMenu'
+import enUS from '@renderer/i18n/locales/en-us.json'
+import zhCN from '@renderer/i18n/locales/zh-cn.json'
+
 import { settingsSearchSections } from '../aggregate'
 import { rankEntries } from '../searchEngine'
 import { getSettingDomId } from '../types'
@@ -114,6 +115,30 @@ describe('settings search index', () => {
   })
 
   it.each([
+    { locale: enUS, language: 'en-US', query: 'Interface language' },
+    { locale: zhCN, language: 'zh-CN', query: '界面语言' }
+  ])('finds the interface language on General settings for $language', ({ locale, query }) => {
+    const t = (key: string) => String(lookup(locale, key) ?? key)
+    const results = rankEntries(query, settingsSearchSections, t)
+    expect(results).toContainEqual(
+      expect.objectContaining({ route: '/settings/general', focusId: 'setting-general-display-language' })
+    )
+    expect(results).not.toContainEqual(
+      expect.objectContaining({ route: '/settings/appearance', focusId: 'setting-appearance-display-language' })
+    )
+  })
+
+  it.each([
+    { locale: enUS, language: 'en-US' },
+    { locale: zhCN, language: 'zh-CN' }
+  ])('finds the browser start page row by its translated title in $language', ({ locale }) => {
+    const t = (key: string) => String(lookup(locale, key) ?? key)
+    expect(rankEntries(t('settings.browser.startPage'), settingsSearchSections, t)).toContainEqual(
+      expect.objectContaining({ route: '/settings/browser', focusId: 'setting-browser-start-page' })
+    )
+  })
+
+  it.each([
     { locale: enUS, language: 'en-US', query: 'Expand long user messages by default' },
     { locale: zhCN, language: 'zh-CN', query: '默认展开长用户消息' },
     { locale: enUS, language: 'en-US', query: 'Messages you manually expand or collapse' }
@@ -151,6 +176,10 @@ describe('settings search index aliases', () => {
     ['字体', 'use-serif-font'],
     ['衬线', 'use-serif-font'],
     ['serif', 'use-serif-font'],
+    ['bubble', 'message-style'],
+    ['bubble mode', 'message-style'],
+    ['message style', 'message-style'],
+    ['conversation bubbles', 'message-style'],
     ['serif font', 'use-serif-font'],
     ['message font', 'use-serif-font'],
     ['气泡', 'message-style'],
@@ -165,10 +194,5 @@ describe('settings search index aliases', () => {
   ])('query "%s" hits the indexed row via alias', (query, anchorId) => {
     const focusIds = rankEntries(query, settingsSearchSections, tEnUs).map((r) => r.focusId)
     expect(focusIds).toContain(focusIdOf(anchorId))
-  })
-
-  it('finds Proxy Mode from the TUN explanation', () => {
-    const focusIds = rankEntries('tun', settingsSearchSections, tEnUs).map((result) => result.focusId)
-    expect(focusIds).toContain(focusIdOf('proxy-mode'))
   })
 })

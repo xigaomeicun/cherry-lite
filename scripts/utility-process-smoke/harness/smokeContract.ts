@@ -7,8 +7,8 @@
 import { defineUtilityProcess } from '../../../src/main/core/utilityProcess/defineUtilityProcess'
 import type {
   UtilityProcessMethod,
-  UtilityProcessStreamFrame,
-  UtilityProcessStreamMethod
+  UtilityProcessStreamMethod,
+  UtilityProcessStreamFrame
 } from '../../../src/main/core/utilityProcess/types'
 
 export const streamLimits = { maxFrameBytes: 4096, maxBufferedBytes: 8192, maxBufferedFrames: 3, maxPendingWrites: 2 }

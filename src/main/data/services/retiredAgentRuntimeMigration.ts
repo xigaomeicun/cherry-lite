@@ -1,25 +1,21 @@
 import { randomUUID } from 'node:crypto'
 
+import { asc, eq, like } from 'drizzle-orm'
+
 import { agentTable } from '@data/db/schemas/agent'
 import { agentSessionTable } from '@data/db/schemas/agentSession'
 import { agentSessionMessageTable } from '@data/db/schemas/agentSessionMessage'
 import { agentWorkspaceTable } from '@data/db/schemas/agentWorkspace'
 import { appStateTable } from '@data/db/schemas/appState'
 import type { DbOrTx, DbType } from '@data/db/types'
-import type { RuntimeForkAnchor } from '@main/ai/runtime/fork'
 import { BROWSER_TOOL_GROUP } from '@shared/ai/browserTools'
-import { asc, eq, like } from 'drizzle-orm'
+import { LEGACY_DSH_TOOL_PREFIX } from '@shared/ai/retiredAgentRuntime'
+
+import { agentSessionContextService } from './AgentSessionContextService'
+import type { RuntimeForkAnchor } from './agentSessionForkContract'
+import { ensureAgentSessionRootTx } from './agentSessionMessageTree'
 
 const MIGRATION_KEY_PREFIX = 'agent-runtime-migration:'
-const HISTORY_VERSION_KEY_PREFIX = 'agent-runtime-history-version:'
-const HISTORY_REPAIR_DONE_KEY = 'agent-runtime-history-repair'
-/**
- * v2: imported Pi context keeps post-compaction parts, carries the DSH-retained compaction summary
- * and marks omitted rows. Sessions imported by v1 are rebuilt once (see retiredSessionHistory).
- */
-export const RETIRED_SESSION_HISTORY_VERSION = 2
-/** Private (never published) row marker: the row was left out of the imported Pi context. */
-export const HISTORY_IMPORT_OMITTED_KEY = 'historyImportOmitted'
 const PI_FILE_SHELL_TOOLS = new Set(['read', 'edit', 'write', 'bash'])
 
 export interface RetiredAgentSessionMigration {
@@ -43,9 +39,7 @@ export function queueRetiredAgentRuntimeMigration(db: DbType): void {
               if (PI_FILE_SHELL_TOOLS.has(nativeName)) return [nativeName]
               if (nativeName === 'read_image') return ['read']
               if (nativeName === 'pwsh') return ['bash']
-              // Our Pi connection already resolves DSH-style `mcp__<server>__<tool>` ids (name, id and
-              // Pi-key spellings), so they are carried over verbatim instead of a legacy marker.
-              return name.startsWith('mcp__') ? [name] : []
+              return name.startsWith('mcp__') ? [`${LEGACY_DSH_TOOL_PREFIX}${name}`] : []
             })
           )
         ]
@@ -81,14 +75,6 @@ export function listRetiredAgentSessionMigrations(db: DbOrTx): RetiredAgentSessi
     .map((row) => row.value as RetiredAgentSessionMigration)
 }
 
-export function listAgentSessionIds(db: DbOrTx): string[] {
-  return db
-    .select({ id: agentSessionTable.id })
-    .from(agentSessionTable)
-    .all()
-    .map((row) => row.id)
-}
-
 export function getRetiredAgentSessionMigration(
   db: DbOrTx,
   sessionId: string
@@ -98,60 +84,6 @@ export function getRetiredAgentSessionMigration(
     .from(appStateTable)
     .where(eq(appStateTable.key, `${MIGRATION_KEY_PREFIX}${sessionId}`))
     .get()?.value as RetiredAgentSessionMigration | undefined
-}
-
-export function getRetiredSessionHistoryVersion(db: DbOrTx, sessionId: string): number | undefined {
-  const value = db
-    .select()
-    .from(appStateTable)
-    .where(eq(appStateTable.key, `${HISTORY_VERSION_KEY_PREFIX}${sessionId}`))
-    .get()?.value as { version?: number } | undefined
-  return value?.version
-}
-
-function setRetiredSessionHistoryVersion(tx: DbOrTx, sessionId: string): void {
-  const value = { version: RETIRED_SESSION_HISTORY_VERSION }
-  tx.insert(appStateTable)
-    .values({ key: `${HISTORY_VERSION_KEY_PREFIX}${sessionId}`, value })
-    .onConflictDoUpdate({ target: appStateTable.key, set: { value } })
-    .run()
-}
-
-export function isRetiredSessionHistoryRepairDone(db: DbOrTx): boolean {
-  const value = db.select().from(appStateTable).where(eq(appStateTable.key, HISTORY_REPAIR_DONE_KEY)).get()?.value as
-    | { version?: number }
-    | undefined
-  return (value?.version ?? 0) >= RETIRED_SESSION_HISTORY_VERSION
-}
-
-export function markRetiredSessionHistoryRepairDone(tx: DbOrTx): void {
-  const value = { version: RETIRED_SESSION_HISTORY_VERSION }
-  tx.insert(appStateTable)
-    .values({ key: HISTORY_REPAIR_DONE_KEY, value })
-    .onConflictDoUpdate({ target: appStateTable.key, set: { value } })
-    .run()
-}
-
-/** A session that needs no rebuild (not imported, or nothing to repair) is still marked current. */
-export function markRetiredSessionHistoryCurrent(tx: DbOrTx, sessionId: string): void {
-  setRetiredSessionHistoryVersion(tx, sessionId)
-}
-
-type MessageRowData = typeof agentSessionMessageTable.$inferSelect.data
-
-function withImportState(
-  row: { id: string; data: MessageRowData },
-  anchors: ReadonlyMap<string, RuntimeForkAnchor>,
-  omittedMessageIds: ReadonlySet<string>
-): MessageRowData {
-  const data = { ...row.data } as MessageRowData & Record<string, unknown>
-  delete data.runtimeAnchor
-  delete data.nativeSessionId
-  delete data[HISTORY_IMPORT_OMITTED_KEY]
-  const anchor = anchors.get(row.id)
-  if (anchor) data.runtimeAnchor = anchor
-  else if (omittedMessageIds.has(row.id)) data[HISTORY_IMPORT_OMITTED_KEY] = true
-  return data
 }
 
 export function readRetiredAgentSessionHistory(db: DbOrTx, sessionId: string) {
@@ -176,8 +108,7 @@ export function commitRetiredAgentSessionMigration(
   migration: RetiredAgentSessionMigration,
   anchors: ReadonlyMap<string, RuntimeForkAnchor>,
   expectedHistory: ReturnType<typeof readRetiredAgentSessionHistory>,
-  pendingMessageIds: ReadonlySet<string>,
-  omittedMessageIds: ReadonlySet<string> = new Set()
+  pendingMessageIds: ReadonlySet<string>
 ): void {
   if (getRetiredAgentSessionMigration(tx, migration.sessionId)?.resumeToken !== migration.resumeToken)
     throw new Error('Retired session migration changed')
@@ -188,9 +119,13 @@ export function commitRetiredAgentSessionMigration(
     .from(agentSessionMessageTable)
     .where(eq(agentSessionMessageTable.sessionId, migration.sessionId))
     .all()) {
+    const data = { ...row.data }
+    delete data.runtimeAnchor
+    delete data.nativeSessionId
+    const anchor = anchors.get(row.id)
     tx.update(agentSessionMessageTable)
       .set({
-        data: withImportState(row, anchors, omittedMessageIds),
+        data: { ...data, ...(anchor ? { runtimeAnchor: anchor } : {}) },
         status: pendingMessageIds.has(row.id) ? 'pending' : row.status,
         runtimeResumeToken: migration.resumeToken,
         updatedAt: row.updatedAt
@@ -198,37 +133,24 @@ export function commitRetiredAgentSessionMigration(
       .where(eq(agentSessionMessageTable.id, row.id))
       .run()
   }
+  if (expectedHistory) {
+    const anchorMessageId = ensureAgentSessionRootTx(tx, migration.sessionId)
+    const backend = agentSessionContextService.ensureBackendTx(tx, { version: 1, kind: 'pi' }, 'bound')
+    const context = agentSessionContextService.reserveBranchTx(tx, {
+      sessionId: migration.sessionId,
+      backendId: backend.id,
+      anchorMessageId,
+      nativeThreadId: migration.resumeToken
+    })
+    agentSessionContextService.confirmBranchTx(
+      tx,
+      context.id,
+      migration.sessionId,
+      anchorMessageId,
+      migration.resumeToken
+    )
+  }
   tx.delete(appStateTable)
     .where(eq(appStateTable.key, `${MIGRATION_KEY_PREFIX}${migration.sessionId}`))
     .run()
-  setRetiredSessionHistoryVersion(tx, migration.sessionId)
-}
-
-/**
- * Commit a rebuilt import prefix for an already-migrated session: only the rows that were part of
- * the original import are touched (anchors / omitted marker); statuses, tokens and rows created
- * after the migration are left as they are.
- */
-export function commitRetiredSessionHistoryRepair(
-  tx: DbOrTx,
-  sessionId: string,
-  importedMessageIds: ReadonlySet<string>,
-  anchors: ReadonlyMap<string, RuntimeForkAnchor>,
-  omittedMessageIds: ReadonlySet<string>,
-  expectedHistory: ReturnType<typeof readRetiredAgentSessionHistory>
-): void {
-  if (JSON.stringify(readRetiredAgentSessionHistory(tx, sessionId)) !== JSON.stringify(expectedHistory))
-    throw new Error('Retired session history changed during repair')
-  for (const row of tx
-    .select()
-    .from(agentSessionMessageTable)
-    .where(eq(agentSessionMessageTable.sessionId, sessionId))
-    .all()) {
-    if (!importedMessageIds.has(row.id)) continue
-    tx.update(agentSessionMessageTable)
-      .set({ data: withImportState(row, anchors, omittedMessageIds), updatedAt: row.updatedAt })
-      .where(eq(agentSessionMessageTable.id, row.id))
-      .run()
-  }
-  setRetiredSessionHistoryVersion(tx, sessionId)
 }

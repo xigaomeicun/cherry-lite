@@ -1,8 +1,9 @@
 import { mkdir, rm } from 'node:fs/promises'
 
-import { application } from '@application'
 import { mockMainLoggerService } from '@test-mocks/MainLoggerService'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+import { application } from '@application'
 
 import { VoiceCleanupError, VoiceRuntimeError } from '../../VoiceRuntimeError'
 import { withScratch } from '../scratch'

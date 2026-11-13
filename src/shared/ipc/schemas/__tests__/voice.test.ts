@@ -1,5 +1,6 @@
-import { KOKORO_TTS_MODEL_ID } from '@shared/ai/localVoice'
 import { describe, expect, it } from 'vitest'
+
+import { KOKORO_TTS_MODEL_ID } from '@shared/ai/localVoice'
 
 import { voiceRequestSchemas } from '../voice'
 

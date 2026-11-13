@@ -1,8 +1,9 @@
-import { Button, Tooltip } from '@cherrystudio/ui'
-import { CONVERSATION_ROUTES } from '@shared/utils/conversationRoute'
 import { MousePointerClick } from 'lucide-react'
 import React from 'react'
 import { useTranslation } from 'react-i18next'
+
+import { Button, Tooltip } from '@cherrystudio/ui'
+import { CONVERSATION_ROUTES } from '@shared/utils/conversationRoute'
 
 import { useOptionalMessageListActions } from '../../MessageListProvider'
 import type { ToolResponseLike } from '../toolResponse'

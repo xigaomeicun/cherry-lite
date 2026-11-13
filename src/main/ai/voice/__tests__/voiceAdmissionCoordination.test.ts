@@ -4,6 +4,10 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 
+import { defaultServiceInstances } from '@test-mocks/main/application'
+import { session } from 'electron'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
 import { application } from '@application'
 import { BaseService } from '@main/core/lifecycle'
 import { WindowType } from '@main/core/window/types'
@@ -12,14 +16,11 @@ import { MediaProtocolService } from '@main/services/mediaProtocol'
 import { APPLE_ASR_MODEL_ID, APPLE_TTS_MODEL_ID } from '@shared/ai/localVoice'
 import { voiceRequestSchemas, type VoiceSessionEvent } from '@shared/ipc/schemas/voice'
 import type { InputFor, OutputFor } from '@shared/ipc/types'
-import { defaultServiceInstances } from '@test-mocks/main/application'
-import { session } from 'electron'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type * as LocalAdapters from '../localAdapters'
 import type * as AppleAdapter from '../localAdapters/apple'
 import { VoiceRuntimeError } from '../VoiceRuntimeError'
-import { type VoiceOwner, VoiceSessionService } from '../VoiceSessionService'
+import { VoiceSessionService, type VoiceOwner } from '../VoiceSessionService'
 
 // Pending synthesis takes the inspection lock before admission, so a manual read or
 // dictation never reaches the displacement Main already allows.

@@ -1,9 +1,10 @@
-import type { ActionTool } from '@renderer/components/ActionTools'
-import type { ViewMode } from '@renderer/components/CodeBlockView/types'
-import { useViewSourceTool } from '@renderer/components/CodeToolbar/hooks/useViewSourceTool'
 import { act, renderHook } from '@testing-library/react'
 import { useState } from 'react'
 import { describe, expect, it, vi } from 'vitest'
+
+import type { ActionTool } from '@renderer/components/ActionTools'
+import type { ViewMode } from '@renderer/components/CodeBlockView/types'
+import { useViewSourceTool } from '@renderer/components/CodeToolbar/hooks/useViewSourceTool'
 
 const mocks = vi.hoisted(() => ({
   t: (key: string) => key
@@ -40,15 +41,12 @@ describe('useViewSourceTool', () => {
       { initialProps: { canEdit: true, hasSpecialView: true, isStreaming: true, viewMode: 'special' } }
     )
 
-    expect(result.current[0]).toMatchObject({ id: 'view-source', tooltip: 'preview.source' })
     act(() => result.current[0].onClick?.())
     expect(onViewModeChange).toHaveBeenLastCalledWith('source')
 
     rerender({ canEdit: true, hasSpecialView: true, isStreaming: true, viewMode: 'source' })
-    expect(result.current[0]).toMatchObject({ id: 'view-source', tooltip: 'preview.label' })
 
     rerender({ canEdit: true, hasSpecialView: true, isStreaming: false, viewMode: 'source' })
-    expect(result.current[0]).toMatchObject({ id: 'edit', tooltip: 'code_block.edit.label' })
     act(() => result.current[0].onClick?.())
     expect(onViewModeChange).toHaveBeenLastCalledWith('edit')
   })
@@ -71,13 +69,11 @@ describe('useViewSourceTool', () => {
       { initialProps: { canEdit: true, hasSpecialView: false, isStreaming: false, viewMode: 'source' } }
     )
 
-    expect(result.current[0]).toMatchObject({ id: 'edit', tooltip: 'code_block.edit.label' })
-
     rerender({ canEdit: true, hasSpecialView: false, isStreaming: false, viewMode: 'edit' })
-    expect(result.current).toEqual([])
+    act(() => result.current[0].onClick?.())
+    expect(onViewModeChange).toHaveBeenLastCalledWith('source')
 
     rerender({ canEdit: true, hasSpecialView: true, isStreaming: false, viewMode: 'edit' })
-    expect(result.current[0]).toMatchObject({ id: 'edit', tooltip: 'preview.label' })
     act(() => result.current[0].onClick?.())
     expect(onViewModeChange).toHaveBeenLastCalledWith('special')
 

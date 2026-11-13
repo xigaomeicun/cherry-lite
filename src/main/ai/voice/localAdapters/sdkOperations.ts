@@ -1,9 +1,10 @@
 import type { SpeechModelV3, TranscriptionModelV3 } from '@ai-sdk/provider'
-import { generateSpeech, type SpeechOptions, transcribe, type TranscriptionOptions } from '@cherrystudio/ai-core'
-import { SpeechInputKind, SpeechOutputKind, TranscriptionInputKind, TranscriptionOutputKind } from '@shared/ai/voice'
 import { NoTranscriptGeneratedError } from 'ai'
 
-import type { SpeechOperation, TranscriptionOperation, TranscriptRevision } from '../executionTypes'
+import { generateSpeech, transcribe, type SpeechOptions, type TranscriptionOptions } from '@cherrystudio/ai-core'
+import { SpeechInputKind, SpeechOutputKind, TranscriptionInputKind, TranscriptionOutputKind } from '@shared/ai/voice'
+
+import type { SpeechOperation, TranscriptRevision, TranscriptionOperation } from '../executionTypes'
 import { VoiceCleanupError, VoiceRuntimeError } from '../VoiceRuntimeError'
 
 function completeExecution<T>(work: (signal: AbortSignal) => Promise<T>, signal?: AbortSignal) {

@@ -1,7 +1,7 @@
-import { cn } from '@cherrystudio/ui/lib/utils'
-import Scrollbar from '@renderer/components/Scrollbar'
 import { ChevronRight } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
+
+import { cn } from '@cherrystudio/ui/lib/utils'
 
 /**
  * 水平滚动容器
@@ -84,16 +84,23 @@ const HorizontalScrollContainer: React.FC<HorizontalScrollContainerProps> = ({
       checkScrollability()
     }
 
-    const resizeObserver = new ResizeObserver(checkScrollability)
-    resizeObserver.observe(scrollElement)
+    const resizeObserver = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(checkScrollability)
+
+    if (resizeObserver) {
+      resizeObserver.observe(scrollElement)
+    } else {
+      window.addEventListener('resize', checkScrollability)
+    }
 
     scrollElement.addEventListener('scroll', handleScroll)
-    window.addEventListener('resize', checkScrollability)
 
     return () => {
-      resizeObserver.disconnect()
+      if (resizeObserver) {
+        resizeObserver.disconnect()
+      } else {
+        window.removeEventListener('resize', checkScrollability)
+      }
       scrollElement.removeEventListener('scroll', handleScroll)
-      window.removeEventListener('resize', checkScrollability)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, dependencies)
@@ -101,14 +108,15 @@ const HorizontalScrollContainer: React.FC<HorizontalScrollContainerProps> = ({
   return (
     <div
       className={cn(
-        'group/container relative flex min-w-0 max-w-full flex-1 items-center',
+        'group/container relative flex max-w-full min-w-0 flex-1 items-center',
         expandable ? 'cursor-pointer' : 'cursor-default',
         className,
         classNames?.container
       )}
       onClick={expandable ? handleContainerClick : undefined}>
-      <Scrollbar
+      <div
         ref={scrollRef}
+        data-horizontal-scroll-viewport=""
         className={cn('relative z-0 flex min-w-0 flex-1 overflow-y-hidden', classNames?.content)}
         style={{
           gap,
@@ -118,12 +126,12 @@ const HorizontalScrollContainer: React.FC<HorizontalScrollContainerProps> = ({
           scrollbarWidth: 'none'
         }}>
         {children}
-      </Scrollbar>
+      </div>
       {canScroll && !isExpanded && !isScrolledToEnd && (
         <div
           onClick={handleScrollRight}
           className={cn(
-            'scroll-right-button -translate-y-1/2 absolute top-1/2 right-2 z-10 flex size-6 cursor-pointer items-center justify-center rounded-full bg-background opacity-0 shadow-[0_6px_16px_0_rgba(0,0,0,0.08),0_3px_6px_-4px_rgba(0,0,0,0.12),0_9px_28px_8px_rgba(0,0,0,0.05)] transition-opacity hover:bg-accent',
+            'scroll-right-button absolute top-1/2 right-2 z-10 flex size-6 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full bg-background opacity-0 shadow-[0_6px_16px_0_rgba(0,0,0,0.08),0_3px_6px_-4px_rgba(0,0,0,0.12),0_9px_28px_8px_rgba(0,0,0,0.05)] transition-opacity hover:bg-accent',
             !isScrolledToEnd && 'group-hover/container:opacity-100'
           )}>
           <ChevronRight size={14} className="text-muted-foreground hover:text-foreground" />

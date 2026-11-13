@@ -1,12 +1,13 @@
-import { HoverCard, HoverCardContent, HoverCardTrigger } from '@cherrystudio/ui'
-import { getModelDisplayTags, ModelTag } from '@renderer/components/tags/Model'
-import { deriveThinkingOptions } from '@shared/ai/reasoning'
-import type { Model } from '@shared/data/types/model'
-import type { Provider } from '@shared/data/types/provider'
 import type { TFunction } from 'i18next'
 import type { ComponentPropsWithoutRef, ReactNode } from 'react'
 import { memo, useCallback, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+
+import { HoverCard, HoverCardContent, HoverCardTrigger } from '@cherrystudio/ui'
+import { getModelDisplayTags, ModelTag, type ModelDisplayTag } from '@renderer/components/tags/Model'
+import { deriveThinkingOptions } from '@shared/ai/reasoning'
+import type { Model } from '@shared/data/types/model'
+import type { Provider } from '@shared/data/types/provider'
 
 import type { ModelSelectorModelItem } from './types'
 import { getProviderDisplayName } from './utils'
@@ -124,35 +125,40 @@ function DetailRow({ label, value }: { label: ReactNode; value?: ReactNode }) {
   )
 }
 
-function ModelSelectorDetailCardBody({
-  item,
-  provider,
-  providerName
+export function ModelSelectorDetailCardContent({
+  name,
+  modelIdentifier,
+  providerName,
+  tags,
+  model,
+  description
 }: {
-  item: ModelSelectorModelItem
-  provider: Provider
+  name: string
+  modelIdentifier: string
   providerName: string
+  tags: readonly ModelDisplayTag[]
+  model?: Model
+  description?: ReactNode
 }) {
   const { t } = useTranslation()
-  const { model, modelIdentifier } = item
-  const tags = useMemo(() => getModelDisplayTags(model, undefined, provider), [model, provider])
   const reasoningEfforts = formatReasoningEfforts(
-    deriveThinkingOptions(model)?.filter((option) => option !== 'default'),
+    (model ? deriveThinkingOptions(model) : undefined)?.filter((option) => option !== 'default'),
     t
   )
-  const imageModes = formatImageGenerationModes(model, t)
-  const hasTokenDetails = model.contextWindow != null || model.maxInputTokens != null || model.maxOutputTokens != null
+  const imageModes = model ? formatImageGenerationModes(model, t) : undefined
+  const hasTokenDetails =
+    model && (model.contextWindow != null || model.maxInputTokens != null || model.maxOutputTokens != null)
   const hasCapabilityDetails = Boolean(reasoningEfforts || imageModes)
+  const hasDescription = description != null && description !== '' && typeof description !== 'boolean'
 
   return (
     <div className="max-h-[min(420px,70vh,var(--radix-hover-card-content-available-height,70vh))] overflow-auto p-3">
       <div className="min-w-0 space-y-1">
-        <div className="truncate font-medium text-foreground text-sm" title={model.name}>
-          {model.name}
-        </div>
+        <div className="break-words text-sm font-medium text-foreground">{name}</div>
+        {hasDescription ? <div className="text-muted-foreground text-xs">{description}</div> : null}
       </div>
 
-      <dl className="mt-3 space-y-1.5 border-border border-t pt-3">
+      <dl className="mt-3 space-y-1.5 border-t border-border pt-3">
         <DetailRow label={t('models.detail.provider')} value={providerName} />
         <DetailRow
           label={t('models.detail.model_id')}
@@ -167,13 +173,13 @@ function ModelSelectorDetailCardBody({
       {tags.length > 0 ? (
         <div className="mt-3 flex flex-wrap gap-1.5">
           {tags.map((tag) => (
-            <ModelTag key={`${item.key}-detail-${tag}`} tag={tag} size={10} showLabel showTooltip={false} />
+            <ModelTag key={tag} tag={tag} size={10} showLabel showTooltip={false} />
           ))}
         </div>
       ) : null}
 
-      {hasTokenDetails ? (
-        <dl className="mt-3 space-y-1.5 border-border border-t pt-3">
+      {model && hasTokenDetails ? (
+        <dl className="mt-3 space-y-1.5 border-t border-border pt-3">
           <DetailRow label={t('models.detail.context_window')} value={formatNumber(model.contextWindow)} />
           <DetailRow label={t('models.detail.max_input_tokens')} value={formatNumber(model.maxInputTokens)} />
           <DetailRow label={t('models.detail.max_output_tokens')} value={formatNumber(model.maxOutputTokens)} />
@@ -181,7 +187,7 @@ function ModelSelectorDetailCardBody({
       ) : null}
 
       {hasCapabilityDetails ? (
-        <dl className="mt-3 space-y-1.5 border-border border-t pt-3">
+        <dl className="mt-3 space-y-1.5 border-t border-border pt-3">
           <DetailRow label={t('assistants.settings.reasoning_effort.label')} value={reasoningEfforts} />
           <DetailRow label={t('models.detail.image_modes')} value={imageModes} />
         </dl>
@@ -194,14 +200,48 @@ export const ModelSelectorDetailCard = memo(function ModelSelectorDetailCard({
   item,
   provider,
   portalContainer,
+  description,
+  tags,
   children
 }: {
   item: ModelSelectorModelItem
   provider: Provider
   portalContainer?: HoverCardPortalContainer | null
+  description?: ReactNode
+  tags?: readonly ModelDisplayTag[]
   children: ReactNode
 }) {
-  const providerName = getProviderDisplayName(provider)
+  const resolvedTags = useMemo(
+    () => tags ?? getModelDisplayTags(item.model, undefined, provider),
+    [item.model, provider, tags]
+  )
+  return (
+    <ModelSelectorHoverCard
+      portalContainer={portalContainer}
+      content={
+        <ModelSelectorDetailCardContent
+          name={item.model.name}
+          modelIdentifier={item.modelIdentifier}
+          providerName={getProviderDisplayName(provider)}
+          tags={resolvedTags}
+          model={item.model}
+          description={description}
+        />
+      }>
+      {children}
+    </ModelSelectorHoverCard>
+  )
+})
+
+export function ModelSelectorHoverCard({
+  children,
+  portalContainer,
+  content
+}: {
+  children: ReactNode
+  portalContainer?: HoverCardPortalContainer | null
+  content: ReactNode
+}) {
   const triggerRef = useRef<HTMLElement | null>(null)
   const [side, setSide] = useState<HorizontalHoverCardSide>('right')
   const align = getDetailCardAlign()
@@ -229,8 +269,8 @@ export const ModelSelectorDetailCard = memo(function ModelSelectorDetailCard({
         collisionPadding={DETAIL_CARD_COLLISION_PADDING}
         portalContainer={portalContainer ?? undefined}
         className="w-84 max-w-(--radix-hover-card-content-available-width) p-0">
-        <ModelSelectorDetailCardBody item={item} provider={provider} providerName={providerName} />
+        {content}
       </HoverCardContent>
     </HoverCard>
   )
-})
+}

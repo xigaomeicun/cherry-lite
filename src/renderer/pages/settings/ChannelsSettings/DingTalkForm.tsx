@@ -1,6 +1,7 @@
-import { Input, Label } from '@cherrystudio/ui'
 import { useId } from 'react'
 import { useTranslation } from 'react-i18next'
+
+import { Input, Label } from '@cherrystudio/ui'
 
 import { ChannelQrRegistration } from './ChannelQrRegistration'
 import type { ChannelData, ChannelUpdates } from './channelTypes'

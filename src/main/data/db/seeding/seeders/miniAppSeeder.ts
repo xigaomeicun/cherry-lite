@@ -1,7 +1,8 @@
+import { and, eq, isNotNull } from 'drizzle-orm'
+
 import { type InsertMiniAppRow, miniAppTable } from '@data/db/schemas/miniApp'
 import { generateOrderKeySequence, generateOrderKeySequenceBetween } from '@data/services/utils/orderKey'
 import { PRESETS_MINI_APPS } from '@shared/data/presets/miniApps'
-import { isNotNull } from 'drizzle-orm'
 
 import type { DbType, ISeeder } from '../../types'
 import { hashObject } from '../hashObject'
@@ -29,6 +30,11 @@ export class MiniAppSeeder implements ISeeder {
   }
 
   run(db: DbType): void {
+    // Retire only the bundled entry; custom sites with the same appId remain user-owned.
+    db.delete(miniAppTable)
+      .where(and(eq(miniAppTable.presetMiniAppId, 'baidu-ai-search'), eq(miniAppTable.kind, 'site')))
+      .run()
+
     const insertOrderKeys = this.buildInsertOrderKeys(db)
 
     for (const preset of PRESETS_MINI_APPS) {

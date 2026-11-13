@@ -1,3 +1,11 @@
+import { EditorContent } from '@tiptap/react'
+import Color from 'color'
+import type { WebviewTag } from 'electron'
+import { Copy, Loader2, SquareDashedMousePointer, Trash2 } from 'lucide-react'
+import type { RefObject } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
+
 import { Badge, Button, ConfirmDialog, Popover, PopoverAnchor, PopoverContent, Tooltip } from '@cherrystudio/ui'
 import { cn } from '@cherrystudio/ui/lib/utils'
 import { loggerService } from '@logger'
@@ -14,13 +22,6 @@ import {
   type WebviewAnnotationLocale,
   type WebviewAnnotationTarget
 } from '@shared/types/webviewAnnotation'
-import { EditorContent } from '@tiptap/react'
-import Color from 'color'
-import type { WebviewTag } from 'electron'
-import { Copy, Loader2, SquareDashedMousePointer, Trash2 } from 'lucide-react'
-import type { RefObject } from 'react'
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { useTranslation } from 'react-i18next'
 
 import { useWebviewAnnotationSession, type WebviewAnnotationSavedPayload } from './useWebviewAnnotationSession'
 
@@ -256,7 +257,7 @@ export function WebviewAnnotationControls({
         confirmText={t('webview.annotation.clear')}
         cancelText={t('webview.annotation.cancel')}
         destructive
-        onConfirm={() => void handleClear()}
+        onConfirm={handleClear}
       />
     </>
   )
@@ -283,7 +284,7 @@ function AnnotationCommentEditor({
 }: AnnotationCommentEditorProps) {
   // Captured once: the parent remounts this component per editor request.
   const [initialContent] = useState(() => createComposerDraftContent({ text: initialComment, tokens: [] }))
-  const extensions = useMemo(() => createComposerEditorPreset({ placeholder: placeholder || undefined }), [placeholder])
+  const extensions = useMemo(() => createComposerEditorPreset({ placeholder }), [placeholder])
   const editor = useRichTextEditorKernel({
     extensions,
     content: initialContent,

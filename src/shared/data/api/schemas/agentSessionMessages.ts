@@ -2,7 +2,11 @@
  * Agent session message domain API Schema definitions.
  */
 
+import * as z from 'zod'
+
 import { AgentSessionDeliverySchema } from '@shared/ai/agentSessionDelivery'
+import { agentSessionEditFailureReasons } from '@shared/ai/agentSessionEdit'
+import { AGENT_SESSION_FORK_FAILURE_REASONS } from '@shared/ai/agentSessionFork'
 import {
   ContentMessageRoleSchema,
   MessageDataSchema,
@@ -10,7 +14,6 @@ import {
   MessageStatsSchema,
   MessageStatusSchema
 } from '@shared/data/types/message'
-import * as z from 'zod'
 
 import type { CursorPaginationResponse } from '../types'
 
@@ -48,11 +51,20 @@ const AgentSessionMessageBaseSchema = z.strictObject({
   delivery: AgentSessionDeliverySchema.nullable().optional()
 })
 
+const AgentSessionHistoryActionsSchema = z.strictObject({
+  /** Main permits the action with null; otherwise the value explains why it is unavailable. */
+  fork: z.enum(AGENT_SESSION_FORK_FAILURE_REASONS).nullable(),
+  edit: z.enum(agentSessionEditFailureReasons).nullable()
+})
+export type AgentSessionHistoryActions = z.infer<typeof AgentSessionHistoryActionsSchema>
+
 export const AgentSessionMessageEntitySchema = AgentSessionMessageBaseSchema.extend({
   /** Message ID (UUIDv7) */
   id: z.string(),
   /** Session ID this message belongs to */
   sessionId: z.string(),
+  siblings: z.array(z.string()).optional(),
+  historyActions: AgentSessionHistoryActionsSchema.optional(),
   searchableText: z.string(),
   runtimeResumeToken: z.string().nullable(),
   createdAt: z.iso.datetime(),
@@ -87,7 +99,16 @@ export type UpdateAgentSessionMessageDto = z.infer<typeof UpdateAgentSessionMess
 // API Schema definitions
 // ============================================================================
 
+export const SelectAgentSessionBranchSchema = z.strictObject({ messageId: z.string().min(1) })
+
 export type AgentSessionMessageSchemas = {
+  '/agent-sessions/:sessionId/branch': {
+    PUT: {
+      params: { sessionId: string }
+      body: z.infer<typeof SelectAgentSessionBranchSchema>
+      response: void
+    }
+  }
   '/agent-sessions/:sessionId/messages': {
     GET: {
       params: { sessionId: string }

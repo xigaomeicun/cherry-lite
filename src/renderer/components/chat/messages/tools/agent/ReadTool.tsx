@@ -1,7 +1,9 @@
+import { useTranslation } from 'react-i18next'
+
 import CodeViewer from '@renderer/components/CodeViewer'
 import { getLanguageByFilePath } from '@renderer/utils/codeLanguage'
 import { formatFileSize } from '@renderer/utils/file'
-import { useTranslation } from 'react-i18next'
+import { getFilePreviewFileName } from '@renderer/utils/filePreview'
 
 import type {
   ReadToolInput as ReadToolInputType,
@@ -32,9 +34,10 @@ const normalizeOutputString = (output?: ReadToolOutputType): string | null => {
   if (!output) return null
 
   const toText = (item: TextOutput) => removeSystemReminderTags(item.text)
+  const content = typeof output === 'object' && 'content' in output ? output.content : output
 
-  if (Array.isArray(output)) {
-    return output
+  if (Array.isArray(content)) {
+    return content
       .filter((item): item is TextOutput => item.type === 'text')
       .map(toText)
       .join('')
@@ -74,10 +77,8 @@ export function ReadTool({
   const errorText = hasError ? extractToolErrorText(output) : undefined
   const outputString = errorText ?? normalizeOutputString(output)
   const stats = errorText ? null : getOutputStats(outputString)
-  const rawInput = input as unknown as Record<string, unknown> | undefined
-  const filePath = typeof rawInput?.file_path === 'string' ? rawInput.file_path : typeof rawInput?.path === 'string' ? rawInput.path : undefined
-  const filename = filePath?.split('/').pop()
-  const language = getLanguageByFilePath(filePath ?? '')
+  const filename = input?.file_path ? getFilePreviewFileName(input.file_path) : undefined
+  const language = getLanguageByFilePath(input?.file_path ?? '')
   const { data: truncatedOutput, isTruncated, originalLength } = truncateOutput(outputString)
   const strippedOutput = truncatedOutput ? (errorText ? truncatedOutput : stripLineNumbers(truncatedOutput)) : null
 
@@ -89,7 +90,7 @@ export function ReadTool({
         args={input}
         params={
           <SkeletonValue
-            value={filePath ? <ClickableFilePath path={filePath} displayName={filename} /> : undefined}
+            value={input?.file_path ? <ClickableFilePath path={input.file_path} displayName={filename} /> : undefined}
             width="120px"
           />
         }

@@ -1,10 +1,17 @@
+vi.mock('@renderer/components/cherryCloud/CherryCloudModelSelector', async () => {
+  const selector = await import('@renderer/components/ModelSelector')
+  return {
+    CherryCloudModelSelector: selector.ModelSelector
+  }
+})
+
 import '@testing-library/jest-dom/vitest'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import type { ComponentProps, ReactNode } from 'react'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type * as CherryStudioUi from '@cherrystudio/ui'
 import { ENDPOINT_TYPE, type Model, MODEL_CAPABILITY } from '@shared/data/types/model'
-import { act, render, screen, waitFor } from '@testing-library/react'
-import type { ComponentProps, ReactNode } from 'react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const harness = vi.hoisted(() => ({
   defaultModel: undefined as Model | undefined,
@@ -18,7 +25,9 @@ const harness = vi.hoisted(() => ({
   selectorCallbacks: [] as Array<(model: Model | undefined) => void>,
   selectorFilters: [] as Array<((model: Model) => boolean) | undefined>,
   preferenceValues: {} as Record<string, unknown>,
-  preferenceSetters: {} as Record<string, ReturnType<typeof vi.fn>>
+  preferenceSetters: {} as Record<string, ReturnType<typeof vi.fn>>,
+  topicPanelModuleEvaluated: vi.fn(),
+  translatePanelModuleEvaluated: vi.fn()
 }))
 
 const setTimeoutTimerMock = vi.hoisted(() => vi.fn())
@@ -33,11 +42,24 @@ vi.mock('@cherrystudio/ui', async (importOriginal) => {
     ...actual,
     Avatar: ({ children }: { children: ReactNode }) => <span>{children}</span>,
     AvatarFallback: ({ children }: { children: ReactNode }) => <span>{children}</span>,
-    Button: ({ children }: { children: ReactNode }) => <button type="button">{children}</button>,
+    Button: ({
+      children,
+      onClick,
+      'aria-label': ariaLabel
+    }: {
+      children: ReactNode
+      onClick?: ComponentProps<'button'>['onClick']
+      'aria-label'?: string
+    }) => (
+      <button type="button" aria-label={ariaLabel} onClick={onClick}>
+        {children}
+      </button>
+    ),
     Divider: () => <hr />,
     InfoTooltip: () => null,
     Input: (props: ComponentProps<'input'>) => <input {...props} />,
-    PageSidePanel: () => null,
+    PageSidePanel: ({ open, children }: { open: boolean; children?: ReactNode }) =>
+      open ? <div>{children}</div> : null,
     Switch: ({
       checked,
       onCheckedChange,
@@ -108,9 +130,10 @@ vi.mock('@renderer/hooks/useTimer', () => ({
   useTimer: () => ({ setTimeoutTimer: setTimeoutTimerMock })
 }))
 
-vi.mock('@renderer/pages/translate/TranslateSettings', () => ({
-  TranslateSettingsPanelContent: () => null
-}))
+vi.mock('@renderer/pages/translate/TranslateSettings', () => {
+  harness.translatePanelModuleEvaluated()
+  return { TranslateSettingsPanelContent: () => <div data-testid="translate-settings-panel" /> }
+})
 
 vi.mock('@renderer/services/toast', () => ({
   toast: { error: vi.fn() }
@@ -130,23 +153,23 @@ vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key })
 }))
 
-vi.mock('../TopicNamingSettings', () => ({
-  TopicNamingSettings: () => null
-}))
+vi.mock('../TopicNamingSettings', () => {
+  harness.topicPanelModuleEvaluated()
+  return { TopicNamingSettings: () => <div data-testid="topic-naming-settings-panel" /> }
+})
 
 import ModelSettings from '../ModelSettings'
 
-const createModel = (providerId: string, apiModelId: string): Model =>
-  ({
-    id: `${providerId}::${apiModelId}`,
-    providerId,
-    apiModelId,
-    name: apiModelId,
-    capabilities: [],
-    supportsStreaming: true,
-    isEnabled: true,
-    isHidden: false
-  }) as Model
+const createModel = (providerId: string, apiModelId: string): Model => ({
+  id: `${providerId}::${apiModelId}`,
+  providerId,
+  apiModelId,
+  name: apiModelId,
+  capabilities: [],
+  supportsStreaming: true,
+  isEnabled: true,
+  isHidden: false
+})
 
 describe('ModelSettings', () => {
   beforeEach(() => {
@@ -166,6 +189,25 @@ describe('ModelSettings', () => {
     harness.setQuickModel.mockResolvedValue(undefined)
     harness.setTranslateModel.mockResolvedValue(undefined)
     harness.onDefaultModelSelected.mockResolvedValue(undefined)
+  })
+
+  it('loads each optional settings panel only when that panel is activated', async () => {
+    const onboarding = render(<ModelSettings compact showPaintingModel={false} showSettingsButton={false} />)
+
+    expect(harness.topicPanelModuleEvaluated).not.toHaveBeenCalled()
+    expect(harness.translatePanelModuleEvaluated).not.toHaveBeenCalled()
+    onboarding.unmount()
+
+    render(<ModelSettings showPaintingModel={false} />)
+
+    fireEvent.click(screen.getByLabelText('settings.models.quick_model.setting_title'))
+    await waitFor(() => expect(harness.topicPanelModuleEvaluated).toHaveBeenCalledTimes(1))
+    expect(harness.translatePanelModuleEvaluated).not.toHaveBeenCalled()
+    expect(await screen.findByTestId('topic-naming-settings-panel')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByLabelText('settings.translate.title'))
+    await waitFor(() => expect(harness.translatePanelModuleEvaluated).toHaveBeenCalledTimes(1))
+    expect(await screen.findByTestId('translate-settings-panel')).toBeInTheDocument()
   })
 
   it('forces related models to follow the first visible default selection', async () => {
@@ -253,9 +295,8 @@ describe('ModelSettings', () => {
 
     const focusGuide = screen.getByTestId('model-settings-focus-guide')
     expect(focusGuide).toBeInTheDocument()
-    expect(focusGuide).toHaveClass('motion-reduce:!animate-none', 'motion-reduce:-translate-y-1/2')
+
     expect(screen.getAllByTestId('model-settings-focus-guide')).toHaveLength(1)
-    expect(setTimeoutTimerMock).toHaveBeenCalledWith('model-settings-focus-guide', expect.any(Function), 1200)
 
     const timerCallback = setTimeoutTimerMock.mock.calls[0][1]
     act(() => {

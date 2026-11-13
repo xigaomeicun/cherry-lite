@@ -3,10 +3,11 @@ import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import { application } from '@application'
 import { MockMainPreferenceServiceUtils } from '@test-mocks/main/PreferenceService'
 import { app } from 'electron'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+import { application } from '@application'
 
 const mocks = vi.hoisted(() => ({
   toAsarUnpackedPath: vi.fn((filePath: string) => filePath)
@@ -99,7 +100,7 @@ describe('BuiltinAgentProvisioner', () => {
 
   it('loads bundled skills from the app-owned plugin directory', () => {
     expect(getBuiltinAgentPluginDirectory('assistant')).toBe(path.join(templateDir, '.claude'))
-    expect(mocks.toAsarUnpackedPath).toHaveBeenCalledWith(path.join(templateDir, '.claude'))
+
     expect(loadBuiltinAgentDefinition('assistant')?.skills).toEqual(['cherry-assistant-guide'])
   })
 

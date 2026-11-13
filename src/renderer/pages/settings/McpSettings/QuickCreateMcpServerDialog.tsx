@@ -1,3 +1,8 @@
+import { zodResolver } from '@hookform/resolvers/zod'
+import { type FC, useEffect, useState } from 'react'
+import { useForm } from 'react-hook-form'
+import { useTranslation } from 'react-i18next'
+
 import {
   Accordion,
   AccordionContent,
@@ -11,15 +16,11 @@ import {
   DialogHeader,
   DialogTitle,
   Form,
-  Scrollbar
+  ScrollArea
 } from '@cherrystudio/ui'
-import { zodResolver } from '@hookform/resolvers/zod'
 import { toast } from '@renderer/services/toast'
 import type { CreateMcpServerDto } from '@shared/data/api/schemas/mcpServers'
 import type { McpServer, McpServerType } from '@shared/data/types/mcpServer'
-import { type FC, useEffect, useState } from 'react'
-import { useForm } from 'react-hook-form'
-import { useTranslation } from 'react-i18next'
 
 import {
   buildMcpSchema,
@@ -103,7 +104,10 @@ const QuickCreateMcpServerDialog: FC<Props> = ({ open, onOpenChange, existingSer
           <DialogDescription>{t('settings.mcp.addServer.createDescription')}</DialogDescription>
         </DialogHeader>
 
-        <Scrollbar className="-m-1 max-h-[60vh] p-1 pr-3">
+        <ScrollArea
+          contentProps={{ className: 'p-1 pr-3' }}
+
+          className="-m-1 max-h-[60vh]">
           <Form {...form}>
             <form className="flex flex-col gap-7" id="mcp-quick-create-form">
               <McpIdentityFields {...fieldsProps} />
@@ -125,7 +129,7 @@ const QuickCreateMcpServerDialog: FC<Props> = ({ open, onOpenChange, existingSer
               </Accordion>
             </form>
           </Form>
-        </Scrollbar>
+        </ScrollArea>
 
         <DialogFooter>
           <Button type="button" variant="outline" disabled={submitting} onClick={() => onOpenChange(false)}>

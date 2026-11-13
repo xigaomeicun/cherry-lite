@@ -1,6 +1,6 @@
 // Adapted from ElevenLabs UI's BarVisualizer: https://github.com/elevenlabs/ui
 // MIT license and attribution: packages/ui/licenses/elevenlabs-ui.txt
-import { type HTMLAttributes, useEffect, useRef } from 'react'
+import { useEffect, useRef, type HTMLAttributes } from 'react'
 
 import { cn } from '../../lib/utils'
 

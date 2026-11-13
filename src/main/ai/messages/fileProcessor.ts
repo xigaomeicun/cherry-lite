@@ -10,12 +10,13 @@
  * inlines the bytes as base64 `data:` URLs before they hit the provider.
  *
  * Large-file upload through provider File APIs (Gemini File / OpenAI
- * Files) is not yet wired — see
- * `v2-refactor-temp/docs/ai/large-file-upload-port.md`. Until that
- * lands, large PDFs / media fall back to inline base64 here.
+ * Files) is not yet wired (GitHub issue #19706). Large PDFs / media
+ * currently fall back to inline base64 here.
  */
 
 import { fileURLToPath } from 'node:url'
+
+import mime from 'mime'
 
 import { application } from '@application'
 import { loggerService } from '@logger'
@@ -23,9 +24,12 @@ import { read as fsRead } from '@main/utils/file'
 import type { FileUIPart } from '@shared/data/types/message'
 import { readCherryMeta } from '@shared/data/types/uiParts'
 import { AbsoluteFilePathSchema } from '@shared/types/file'
-import mime from 'mime'
 
 const logger = loggerService.withContext('ai:fileProcessor')
+// Ark documents edges >14 px; 15 also satisfies an inclusive 14 px floor.
+// This is an attachment compatibility target, not a universal provider minimum.
+const MIN_ATTACHMENT_IMAGE_EDGE = 15
+const MAX_ATTACHMENT_IMAGE_PIXELS = 100_000_000
 
 // `type/subtype`, per RFC 6838; `*` in the subtype allows the `image/*`
 // placeholder the ai-sdk gateway converters emit for remote images with no
@@ -119,8 +123,47 @@ export async function materializeNativeFilePart(part: FileUIPart): Promise<FileU
     const sharp = (await import('sharp')).default
     // Metadata/magic alone accepts truncated pixel data. Strict decode also
     // rejects malformed-but-displayable files; persisted attachments stay intact.
-    await sharp(bytes, { failOn: 'error', limitInputPixels: 100_000_000 }).stats()
-    return normalized
+    await sharp(bytes, { failOn: 'error', limitInputPixels: MAX_ATTACHMENT_IMAGE_PIXELS }).stats()
+    try {
+      const animated = /^image\/(?:gif|webp)$/i.test(normalized.mediaType)
+      const metadata = await sharp(bytes, {
+        failOn: 'error',
+        limitInputPixels: MAX_ATTACHMENT_IMAGE_PIXELS,
+        animated
+      }).metadata()
+      const width = metadata.width
+      const height = metadata.pageHeight ?? metadata.height
+      if (!width || !height) throw new Error('Image dimensions are unavailable')
+      const padW = Math.max(width, MIN_ATTACHMENT_IMAGE_EDGE)
+      const padH = Math.max(height, MIN_ATTACHMENT_IMAGE_EDGE)
+      if (padW === width && padH === height) return normalized
+      if (padW * padH * (metadata.pages ?? 1) > MAX_ATTACHMENT_IMAGE_PIXELS) {
+        throw new Error('Padded image exceeds the pixel budget')
+      }
+      const horizontal = padW - width
+      const vertical = padH - height
+      const padded = await sharp(bytes, {
+        failOn: 'error',
+        limitInputPixels: MAX_ATTACHMENT_IMAGE_PIXELS,
+        animated: true
+      })
+        .keepMetadata()
+        .extend({
+          left: Math.floor(horizontal / 2),
+          right: Math.ceil(horizontal / 2),
+          top: Math.floor(vertical / 2),
+          bottom: Math.ceil(vertical / 2),
+          background: { r: 255, g: 255, b: 255, alpha: 1 }
+        })
+        .toBuffer()
+      return { ...normalized, url: `data:${normalized.mediaType};base64,${padded.toString('base64')}` }
+    } catch (error) {
+      logger.warn('Failed to pad image attachment', {
+        filename: normalized.filename,
+        reason: error instanceof Error ? error.message : String(error)
+      })
+      return normalized
+    }
   } catch {
     logger.warn('Unreadable image attachment; using the existing file failure note', {
       filename: normalized.filename,

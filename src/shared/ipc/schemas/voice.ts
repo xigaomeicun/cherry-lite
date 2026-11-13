@@ -1,27 +1,28 @@
+import * as z from 'zod'
+
 import {
   APPLE_ASR_MODEL_ID,
   APPLE_TTS_MODEL_ID,
-  FUNASR_MODEL_ID,
+  QWEN3_TTS_MODEL_ID,
   KOKORO_TTS_MODEL_ID,
+  FUNASR_MODEL_ID,
+  QWEN3_ASR_MODEL_ID,
   LOCAL_VOICE_MODEL_IDS,
   type LocalVoiceModelDescriptor,
+  VoiceModelSupport,
+  TranscriptionLanguageSource,
   MAX_SPEECH_SPEED,
   MIN_SPEECH_SPEED,
-  QWEN3_ASR_MODEL_ID,
-  QWEN3_TTS_MODEL_ID,
-  TranscriptionLanguageSource,
   VOICE_SESSION_SOURCES,
   VOICE_SESSION_TRIGGERS,
-  VoiceModelSupport,
   WINDOWS_ASR_MODEL_ID,
   WINDOWS_TTS_MODEL_ID
 } from '@shared/ai/localVoice'
-import type { SpeechStreamEvent, TranscriptionStreamEvent } from '@shared/ai/voice'
 import { SpeechInputKind, SpeechOutputKind, TranscriptionInputKind, TranscriptionOutputKind } from '@shared/ai/voice'
+import type { SpeechStreamEvent, TranscriptionStreamEvent } from '@shared/ai/voice'
 import { LOCAL_MODEL_DOWNLOAD_RESULTS } from '@shared/data/presets/localModel'
 import { FileEntryIdSchema, InternalEntrySchema } from '@shared/data/types/file'
 import { voiceErrorCodes } from '@shared/ipc/errors/voice'
-import * as z from 'zod'
 
 import { defineRoute } from '../define'
 

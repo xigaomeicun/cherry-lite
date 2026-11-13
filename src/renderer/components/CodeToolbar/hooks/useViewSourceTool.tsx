@@ -1,9 +1,10 @@
-import type { ActionTool } from '@renderer/components/ActionTools'
-import { TOOL_SPECS, useToolManager } from '@renderer/components/ActionTools'
-import type { ViewMode } from '@renderer/components/CodeBlockView/types'
 import { CodeXml, Eye, SquarePen } from 'lucide-react'
 import { useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
+
+import type { ActionTool } from '@renderer/components/ActionTools'
+import { TOOL_SPECS, useToolManager } from '@renderer/components/ActionTools'
+import type { ViewMode } from '@renderer/components/CodeBlockView/types'
 
 interface UseViewSourceToolProps {
   canEdit: boolean
@@ -29,12 +30,12 @@ export const useViewSourceTool = ({
     if (viewMode === 'split') return
 
     const canEnterEdit = canEdit && !isStreaming
-    if (canEnterEdit && (hasSpecialView || viewMode === 'source')) {
+    if (canEnterEdit) {
       registerTool({
         ...TOOL_SPECS.edit,
         icon: viewMode === 'edit' ? <Eye className="tool-icon" /> : <SquarePen className="tool-icon" />,
         tooltip: viewMode === 'edit' ? t('preview.label') : t('code_block.edit.label'),
-        onClick: () => onViewModeChange(viewMode === 'edit' ? 'special' : 'edit')
+        onClick: () => onViewModeChange(viewMode === 'edit' ? (hasSpecialView ? 'special' : 'source') : 'edit')
       })
       return () => removeTool(TOOL_SPECS.edit.id)
     }

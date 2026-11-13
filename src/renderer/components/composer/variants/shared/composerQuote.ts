@@ -1,8 +1,9 @@
-import { formatQuoteTokenPromptText } from '@renderer/components/composer/quoteToken'
-import { IpcChannel } from '@shared/IpcChannel'
 import type { RefObject } from 'react'
 import { useEffect, useEffectEvent } from 'react'
 import { useTranslation } from 'react-i18next'
+
+import { formatQuoteTokenPromptText } from '@renderer/components/composer/quoteToken'
+import { IpcChannel } from '@shared/IpcChannel'
 
 import { useComposerLayerActive } from '../../ComposerContext'
 import type { ComposerDraftToken } from '../../tokens'
@@ -38,5 +39,5 @@ export function useComposerQuoteInsertion<T extends QuoteInsertionActions>(actio
     return window.electron?.ipcRenderer.on(IpcChannel.App_QuoteToMain, (_, selectedText: string) => {
       insertQuote(selectedText)
     })
-  }, [insertQuote, layerActive])
+  }, [layerActive])
 }

@@ -1,9 +1,11 @@
-import { loggerService } from '@renderer/services/LoggerService'
-import { isHttpUrl } from '@shared/utils/url'
 import type { FC } from 'react'
 import { useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import ReactPlayer from 'react-player'
+
+import { loggerService } from '@renderer/services/LoggerService'
+import { isHttpUrl } from '@shared/utils/url'
+
 const logger = loggerService.withContext('MessageVideo')
 
 interface Props {

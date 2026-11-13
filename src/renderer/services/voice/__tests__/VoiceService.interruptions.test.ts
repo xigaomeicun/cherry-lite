@@ -1,5 +1,6 @@
-import type { VoiceSessionEvent } from '@shared/ipc/schemas/voice'
 import { expect, it, vi } from 'vitest'
+
+import type { VoiceSessionEvent } from '@shared/ipc/schemas/voice'
 
 import { VoiceService } from '../VoiceService'
 

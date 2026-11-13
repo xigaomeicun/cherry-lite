@@ -1,32 +1,33 @@
 import { randomUUID } from 'node:crypto'
 import { setMaxListeners } from 'node:events'
 
-import { t } from '@main/i18n'
-import { type FileAttachment, filenameFromContentDisposition, type ImageAttachment } from '@main/utils/downloadAsBase64'
-import { fetchRemoteBytes } from '@main/utils/remoteFetch'
-import { sanitizeFilename } from '@shared/utils/file'
 import {
-  type BaseMessage,
   decryptFile,
+  MessageType,
+  WSAuthFailureError,
+  WSClient,
+  WSReconnectExhaustedError,
+  type BaseMessage,
   type FileContent,
   type FileMessage,
   type ImageContent,
   type ImageMessage,
-  MessageType,
   type MixedMessage,
   type TextMessage,
   type VideoContent,
   type VideoMessage,
   type VoiceMessage,
-  WSAuthFailureError,
-  WSClient,
-  type WsFrame,
-  WSReconnectExhaustedError
+  type WsFrame
 } from '@wecom/aibot-node-sdk'
 import { delay } from 'es-toolkit'
 import { fileTypeFromBuffer } from 'file-type'
 import { LRUCache } from 'lru-cache'
 import PQueue from 'p-queue'
+
+import { t } from '@main/i18n'
+import { filenameFromContentDisposition, type FileAttachment, type ImageAttachment } from '@main/utils/downloadAsBase64'
+import { fetchRemoteBytes } from '@main/utils/remoteFetch'
+import { sanitizeFilename } from '@shared/utils/file'
 
 import {
   ChannelAdapter,
@@ -35,7 +36,6 @@ import {
   type ChannelStreamOutcome,
   type SendMessageOptions
 } from '../../ChannelAdapter'
-import { registerAdapterFactory } from '../../ChannelManager'
 import { FlushController } from '../../FlushController'
 
 // Conservative limits until the deployed bot's stream/markdown limits are verified.
@@ -617,12 +617,3 @@ export class WeComAdapter extends ChannelAdapter {
 export function createWeComAdapter(config: ChannelAdapterConfig<'wecom'>): WeComAdapter {
   return new WeComAdapter(config)
 }
-
-registerAdapterFactory('wecom', (channel, agentId) => {
-  return new WeComAdapter({
-    channelId: channel.id,
-    channelType: channel.type,
-    agentId,
-    channelConfig: channel.config
-  })
-})

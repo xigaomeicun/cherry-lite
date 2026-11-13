@@ -1,7 +1,8 @@
-import { Skeleton } from '@cherrystudio/ui'
-import type { Topic as RendererTopic } from '@renderer/types/topic'
 import { lazy, type ReactNode, Suspense } from 'react'
 import { useTranslation } from 'react-i18next'
+
+import { Skeleton } from '@cherrystudio/ui'
+import type { Topic as RendererTopic } from '@renderer/types/topic'
 
 import type { HistoryRecordsMode } from './historyRecordsTypes'
 
@@ -37,11 +38,15 @@ type HistoryRecordsViewProps =
       mode: 'assistant'
       onRecordSelect?: (topic: RendererTopic) => void
       onActiveRecordChange?: (topic: RendererTopic | null) => void
+      /** Active while History is permanently deleting `id`; `null` after that attempt settles. */
+      onLocalPermanentDeletePendingChange?: (id: string | null) => void
     })
   | (HistoryRecordsViewBaseProps & {
       mode: 'agent'
       onRecordSelect?: (sessionId: string) => void
       onActiveRecordChange?: (sessionId: string | null) => void
+      /** Active while History is permanently deleting `id`; `null` after that attempt settles. */
+      onLocalPermanentDeletePendingChange?: (id: string | null) => void
     })
 
 const HistoryRecordsView = (props: HistoryRecordsViewProps) => {
@@ -56,6 +61,7 @@ const HistoryRecordsView = (props: HistoryRecordsViewProps) => {
             onClose={props.onClose}
             onRecordSelect={props.onRecordSelect}
             onActiveRecordChange={props.onActiveRecordChange}
+            onLocalPermanentDeletePendingChange={props.onLocalPermanentDeletePendingChange}
             toolbarLeading={props.toolbarLeading}
           />
         ) : (
@@ -64,6 +70,7 @@ const HistoryRecordsView = (props: HistoryRecordsViewProps) => {
             onClose={props.onClose}
             onRecordSelect={props.onRecordSelect}
             onActiveRecordChange={props.onActiveRecordChange}
+            onLocalPermanentDeletePendingChange={props.onLocalPermanentDeletePendingChange}
             toolbarLeading={props.toolbarLeading}
           />
         )}

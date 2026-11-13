@@ -1,4 +1,4 @@
-import { webMcpCallSchema, webMcpListSchema } from '@main/ai/mcp/browserToolDefinitions'
+import { webMcpListSchema, webMcpCallSchema } from '@main/ai/mcp/browserToolDefinitions'
 
 import type { BrowserController } from '../browserController'
 import { browserResult } from './result'

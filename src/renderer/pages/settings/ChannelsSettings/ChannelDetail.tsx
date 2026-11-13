@@ -1,3 +1,8 @@
+import { ChevronDown, CircleSlash, FileText, Folder, Pencil, Plus, Trash2 } from 'lucide-react'
+import type { FC } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
+
 import {
   Badge,
   Button,
@@ -9,6 +14,7 @@ import {
   EmptyState,
   Input,
   Label,
+  ScrollArea,
   Select,
   SelectContent,
   SelectItem,
@@ -21,23 +27,20 @@ import {
 import { loggerService } from '@logger'
 import CopyButton from '@renderer/components/CopyButton'
 import { WorkspaceSelector } from '@renderer/components/resourceCatalog/selectors'
-import Scrollbar from '@renderer/components/Scrollbar'
 import {
   SettingDivider,
   SettingGroup,
   SettingsContentBody,
   SettingTitle
 } from '@renderer/components/SettingsPrimitives'
-import { useQuery } from '@renderer/data/hooks/useDataApi'
+import { useSharedCacheSelector } from '@renderer/data/hooks/useCache'
+import { useDataChange, useQuery } from '@renderer/data/hooks/useDataApi'
 import { useAgents } from '@renderer/hooks/agent/useAgent'
 import { useChannels } from '@renderer/hooks/agent/useChannels'
 import { ipcApi, useIpcOn } from '@renderer/ipc'
 import { getChannelTypeIcon } from '@renderer/utils/agentSession'
 import { AGENT_WORKSPACE_TYPE } from '@shared/data/api/schemas/agentWorkspaces'
-import { ChevronDown, CircleSlash, FileText, Folder, Pencil, Plus, Trash2 } from 'lucide-react'
-import type { FC } from 'react'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useTranslation } from 'react-i18next'
+import type { ChannelStatus } from '@shared/data/types/channel'
 
 import { getFormForType } from './ChannelForms'
 import type { AvailableChannel, ChannelData, ChannelUpdates } from './channelTypes'
@@ -47,8 +50,6 @@ const logger = loggerService.withContext('ChannelDetail')
 // --------------- Types ---------------
 
 type LogEntry = { timestamp: number; level: string; message: string; channelId: string }
-type StatusEvent = { channelId: string; connected: boolean; error?: string }
-
 // --------------- Helpers ---------------
 
 function truncateId(s: string, prefixLen = 7, suffixLen = 3): string {
@@ -203,7 +204,8 @@ const ChannelEditModal: FC<EditModalProps> = ({ open, channel, agents, onClose, 
   const lastChannelRef = useRef<ChannelData | null>(channel)
   // `null` = "No work directory" (system workspace); a string binds the channel to that user workspace.
   const [workspaceId, setWorkspaceId] = useState<string | null>(null)
-  const { data: workspaces } = useQuery('/agent-workspaces')
+  const { data: workspaces, refetch: refetchWorkspaces } = useQuery('/agent-workspaces')
+  useDataChange('/agent-workspaces', () => void refetchWorkspaces())
 
   if (channel) {
     lastChannelRef.current = channel
@@ -275,7 +277,7 @@ const ChannelEditModal: FC<EditModalProps> = ({ open, channel, agents, onClose, 
             <DialogHeader className="shrink-0">
               <DialogTitle>{renderedChannel.name}</DialogTitle>
             </DialogHeader>
-            <Scrollbar className="flex min-h-0 flex-col gap-4">
+            <ScrollArea contentProps={{ className: 'flex flex-col gap-4' }} className="min-h-0">
               <div>
                 <Label className="mb-1 block text-xs">{t('common.name')}</Label>
                 <Input
@@ -325,7 +327,7 @@ const ChannelEditModal: FC<EditModalProps> = ({ open, channel, agents, onClose, 
                   onRemove={() => channel && onDelete(channel.id)}
                 />
               )}
-            </Scrollbar>
+            </ScrollArea>
           </>
         )}
       </DialogContent>
@@ -338,7 +340,7 @@ const ChannelEditModal: FC<EditModalProps> = ({ open, channel, agents, onClose, 
 const ChannelInstanceRow: FC<{
   channel: ChannelData
   agents: Array<{ id: string; name: string }>
-  connectionStatus: StatusEvent | undefined
+  connectionStatus: ChannelStatus | undefined
   onEdit: () => void
   onDelete: () => void
   onToggle: (active: boolean) => void
@@ -388,12 +390,22 @@ const ChannelInstanceRow: FC<{
         </div>
       </div>
       <Tooltip title={t('agent.channels.logs')}>
-        <Button variant="ghost" size="icon-sm" aria-label={t('agent.channels.logs')} onClick={onShowLogs}>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          aria-label={t('agent.channels.logs')}
+          onClick={onShowLogs}
+          className="text-muted-foreground">
           <FileText className="size-4" />
         </Button>
       </Tooltip>
       <Tooltip title={t('common.edit')}>
-        <Button variant="ghost" size="icon-sm" aria-label={t('common.edit')} onClick={onEdit}>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          aria-label={t('common.edit')}
+          onClick={onEdit}
+          className="text-muted-foreground">
           <Pencil className="size-4" />
         </Button>
       </Tooltip>
@@ -401,7 +413,7 @@ const ChannelInstanceRow: FC<{
         <Button
           variant="ghost"
           size="icon-sm"
-          className="hover:text-destructive!"
+          className="text-muted-foreground hover:text-destructive! focus-visible:text-destructive!"
           aria-label={t('common.delete')}
           onClick={() => setDeleteConfirmOpen(true)}>
           <Trash2 className="size-4" />
@@ -464,37 +476,27 @@ const ChannelDetail: FC<ChannelDetailProps> = ({ channelDef }) => {
     setIsEditModalOpen(false)
   }, [])
 
-  // Connection status tracking
-  const [statuses, setStatuses] = useState<Map<string, StatusEvent>>(new Map())
+  const channelIds = useMemo(() => channelList.map((channel) => channel.id), [channelList])
+  const statusKeys = channelIds.map((id) => `channel.status.${id}` as const)
+  const statuses = useSharedCacheSelector(statusKeys, (values) =>
+    Object.fromEntries(
+      channelIds.flatMap((id, index): Array<[string, ChannelStatus]> => {
+        const status = values[index]
+        return status ? [[id, status]] : []
+      })
+    )
+  )
+  const previousStatuses = useRef<Record<string, ChannelStatus>>({})
 
   // Log modal
   const [logChannel, setLogChannel] = useState<{ id: string; name: string } | null>(null)
 
-  // Fetch initial statuses
   useEffect(() => {
-    ipcApi
-      .request('channel.get_statuses')
-      .then((list) => {
-        setStatuses(new Map(list.map((s) => [s.channelId, s])))
-      })
-      .catch((err) => {
-        logger.warn('Failed to load initial channel statuses', { err })
-      })
-  }, [])
-
-  // Subscribe to real-time status changes
-  useIpcOn('channel.status_changed', (status) => {
-    setStatuses((prev) => {
-      // When a channel transitions to connected, revalidate SWR
-      // (e.g. after QR registration saves credentials in main process)
-      if (status.connected && !prev.get(status.channelId)?.connected) {
-        void mutate()
-      }
-      const next = new Map(prev)
-      next.set(status.channelId, status)
-      return next
-    })
-  })
+    for (const status of Object.values(statuses)) {
+      if (status.connected && !previousStatuses.current[status.channelId]?.connected) void mutate()
+    }
+    previousStatuses.current = statuses
+  }, [mutate, statuses])
 
   useIpcOn('channel.feishu.qr_login', (data) => {
     if (channelDef.type === 'feishu' && data.status === 'confirmed') {
@@ -531,7 +533,7 @@ const ChannelDetail: FC<ChannelDetailProps> = ({ channelDef }) => {
       if (updates.isActive !== undefined) apiUpdates.isActive = updates.isActive
       if (updates.permissionMode !== undefined) apiUpdates.permissionMode = updates.permissionMode
 
-      await updateChannel(channelId, apiUpdates as never)
+      await updateChannel(channelId, apiUpdates)
     },
     [channelList, updateChannel]
   )
@@ -555,18 +557,24 @@ const ChannelDetail: FC<ChannelDetailProps> = ({ channelDef }) => {
 
   if (isLoading) {
     return (
-      <Scrollbar className="flex flex-1 flex-col" style={{ height: 'calc(100vh - var(--navbar-height))' }}>
+      <ScrollArea
+        contentProps={{ className: 'flex flex-col' }}
+        className="flex-1"
+        style={{ height: 'calc(100vh - var(--navbar-height))' }}>
         <SettingsContentBody className="flex-1 items-center justify-center">
           <Spinner text={t('common.loading')} />
         </SettingsContentBody>
-      </Scrollbar>
+      </ScrollArea>
     )
   }
 
   const icon = getChannelTypeIcon(channelDef.type)
 
   return (
-    <Scrollbar className="flex flex-1 flex-col" style={{ height: 'calc(100vh - var(--navbar-height))' }}>
+    <ScrollArea
+      contentProps={{ className: 'flex flex-col' }}
+      className="flex-1"
+      style={{ height: 'calc(100vh - var(--navbar-height))' }}>
       <SettingsContentBody>
         <SettingGroup>
           <div className="flex items-center justify-between gap-4 pb-1">
@@ -599,7 +607,7 @@ const ChannelDetail: FC<ChannelDetailProps> = ({ channelDef }) => {
                 key={ch.id}
                 channel={ch}
                 agents={agents}
-                connectionStatus={statuses.get(ch.id)}
+                connectionStatus={statuses[ch.id]}
                 onEdit={() => openEditModal(ch.id)}
                 onDelete={() => handleDelete(ch.id)}
                 onToggle={(active) => handleToggle(ch.id, active)}
@@ -625,7 +633,7 @@ const ChannelDetail: FC<ChannelDetailProps> = ({ channelDef }) => {
         channelName={logChannel?.name ?? ''}
         onClose={() => setLogChannel(null)}
       />
-    </Scrollbar>
+    </ScrollArea>
   )
 }
 

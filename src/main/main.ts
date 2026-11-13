@@ -12,7 +12,6 @@
 // BootConfig must load before any other import (configures userData path)
 
 import '@main/data/bootConfig'
-
 import { application } from '@application'
 import { serviceList } from '@main/core/application/serviceRegistry'
 // Preboot phase — order matters. See core/preboot/README.md.
@@ -25,6 +24,8 @@ import { runV2MigrationGate } from '@main/core/preboot/v2MigrationGate'
 import { MINI_APP_SCHEME_DECLARATION } from '@main/features/miniApp/runtime/protocol'
 import { runDataReset } from '@main/services/dataReset'
 import { CHERRY_MEDIA_SCHEME_DECLARATION } from '@main/services/mediaProtocol'
+import { configureRemoteDebugging } from '@main/services/remoteDebugging'
+import { initSentry } from '@main/services/sentry'
 import { runUserDataRelocation } from '@main/services/userDataRelocation'
 import { getApplicationId } from '@main/utils/appEdition'
 
@@ -32,17 +33,19 @@ import { getApplicationId } from '@main/utils/appEdition'
 resolveUserDataLocation()
 requireSingleInstance()
 configureChromiumFlags()
+configureRemoteDebugging()
 initCrashTelemetry()
 // Freeze the path registry — bootstrap() asserts this completed.
 application.initPathRegistry()
 const isolatedRestoreSession = prepareBackupRestoreSession()
+initSentry()
 // Privileged schemes must be declared before the app is ready, and only ONCE per
 // process — startApp() itself awaits app.whenReady(), so this cannot move in there.
 protocol.registerSchemesAsPrivileged([CHERRY_MEDIA_SCHEME_DECLARATION, MINI_APP_SCHEME_DECLARATION])
 
-import { electronApp } from '@electron-toolkit/utils'
-import { loggerService } from '@logger'
 import { app, protocol } from 'electron'
+
+import { loggerService } from '@logger'
 
 import { registerIpc } from './ipc'
 import { versionService } from './services/VersionService'
@@ -69,11 +72,11 @@ const startApp = async () => {
   const migrationResult = await runV2MigrationGate()
   if (migrationResult === 'handled') return
 
-  // Set the Windows AppUserModelID — the identity Windows uses to attribute this
-  // app's notifications, taskbar icon grouping, and Jump Lists (no-op on macOS/Linux).
-  // Must run before any window is created or notification fires, hence after the
-  // migration gate returns and before lifecycle bootstrap.
-  electronApp.setAppUserModelId(getApplicationId())
+  // The toolkit uses the executable path in development, which can exceed Windows' AUMID limit.
+  // Establish the edition identity before bootstrap creates windows or notifications.
+  if (process.platform === 'win32') {
+    app.setAppUserModelId(`${getApplicationId()}${app.isPackaged ? '' : '.Development'}`)
+  }
 
   // Start lifecycle (BeforeReady runs parallel with app.whenReady)
   application.registerAll(serviceList)

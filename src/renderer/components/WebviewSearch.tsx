@@ -1,11 +1,12 @@
-import { Button, Input } from '@cherrystudio/ui'
-import { loggerService } from '@logger'
-import { toast } from '@renderer/services/toast'
 import type { WebviewTag } from 'electron'
 import { ChevronDown, ChevronUp, X } from 'lucide-react'
 import type { FC } from 'react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+
+import { Button, Input } from '@cherrystudio/ui'
+import { loggerService } from '@logger'
+import { toast } from '@renderer/services/toast'
 
 type FoundInPageResult = Electron.FoundInPageResult
 
@@ -217,7 +218,7 @@ const WebviewSearch: FC<WebviewSearchProps> = ({
       const guestTarget = event.target instanceof Element && event.target.tagName === 'WEBVIEW' ? event.target : null
       if (guestTarget && guestTarget !== webviewRef.current) return
 
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'f') {
+      if ((event.ctrlKey || event.metaKey) && !event.shiftKey && !event.altKey && event.key.toLowerCase() === 'f') {
         // Only the pane that owns the shortcut opens; the others must not, or
         // one keypress opens every mounted pane's search overlay.
         if (!guestTarget && !hostShortcutEnabled) return
@@ -228,8 +229,8 @@ const WebviewSearch: FC<WebviewSearchProps> = ({
 
       if (!isVisible) return
 
-      // A lone overlay is unambiguously the target and always answers; with
-      // rivals, focus decides, and pane ownership only when none holds it.
+      // Escape can fall back to the lone overlay or owning pane; with rivals,
+      // a focused overlay takes precedence over pane ownership.
       const active = document.activeElement
       const ownsFocus = overlayRef.current?.contains(active) ?? false
       const overlayFocused = active instanceof Element && active.closest(OVERLAY_SELECTOR) !== null
@@ -243,6 +244,7 @@ const WebviewSearch: FC<WebviewSearchProps> = ({
       }
 
       if (event.key === 'Enter') {
+        if (!guestTarget && !ownsFocus) return
         event.preventDefault()
         if (event.shiftKey) {
           goToPrevious()
@@ -309,7 +311,7 @@ const WebviewSearch: FC<WebviewSearchProps> = ({
         className="h-8 w-60 border-0 bg-transparent px-2 py-0 shadow-none focus-visible:border-transparent focus-visible:ring-0"
       />
       <span
-        className="min-w-11 text-center text-muted-foreground text-sm tabular-nums"
+        className="text-muted-foreground min-w-11 text-center text-sm tabular-nums"
         title={noResultTitle}
         role="status"
         aria-live="polite"
