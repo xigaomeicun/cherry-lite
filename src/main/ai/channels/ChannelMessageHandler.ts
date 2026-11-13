@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto'
+import fs from 'node:fs/promises'
 import path from 'node:path'
 
 import mime from 'mime'
@@ -21,10 +22,32 @@ import { AGENT_SESSION_SLASH_COMMANDS_CACHE_KEY } from '@shared/ai/agentSessionS
 import type { AgentChannelEntity } from '@shared/data/api/schemas/agentChannels'
 import type { AgentSessionEntity } from '@shared/data/api/schemas/agentSessions'
 import type { CherryMessagePart, FileUIPart } from '@shared/data/types/message'
+import { MODEL_CAPABILITY, type UniqueModelId } from '@shared/data/types/model'
 import { withCherryMeta } from '@shared/data/types/uiParts'
 
-import type { ChannelAdapter, ChannelCommandEvent, ChannelMessageEvent, SendMessageOptions } from './ChannelAdapter'
+import type {
+  ChannelAdapter,
+  ChannelCallbackQueryEvent,
+  ChannelCommandEvent,
+  ChannelMessageEvent,
+  SendMessageOptions
+} from './ChannelAdapter'
 import { SLASH_COMMANDS } from './constants'
+import {
+  askUserPending,
+  buildBusyCardKeyboard,
+  buildBusyCardText,
+  buildBusyResultText,
+  BUSY_AUTO_STEER_MS,
+  type BusyOffer,
+  busyOffers,
+  clearAllBusyOffers,
+  escHtml,
+  MODEL_PICK_LIMIT,
+  modelPickTokens,
+  rememberModelPick,
+  takeBusyOffer
+} from './telegramChannelExtras'
 
 const logger = loggerService.withContext('ChannelMessageHandler')
 
@@ -227,6 +250,17 @@ export class ChannelMessageHandler {
       })
       return Promise.resolve()
     }
+
+    // Telegram: if a turn is already streaming for this session, post a confirmation card
+    // (🧭 引导 / ⚡ 发送 / ❎ 取消). The message is queued meanwhile, so if the current turn
+    // finishes before the user taps, it simply runs normally (and the card's offer expires).
+    if (adapter.channelType === 'telegram') {
+      const sid = this.peekSessionId(adapter.agentId, adapter.channelId, conversationIdOf(message))
+      if (sid && this.activeAbortControllers.has(sid)) {
+        this.offerBusyCard(adapter, sid, message)
+      }
+    }
+
     const batchKey = `${conversationKey(adapter.agentId, adapter.channelId, conversationIdOf(message))}:${message.userId}`
 
     return new Promise<void>((resolve, reject) => {
@@ -297,9 +331,23 @@ export class ChannelMessageHandler {
         await ready
         if (batch.cancelled) return
 
-        const merged = this.mergeMessages(batch.messages)
-        if (batch.messages.length > 1) {
-          logger.info('Flushing merged message batch', { batchKey, messageCount: batch.messages.length })
+        const alive = batch.messages.filter((m) => !(m as { _cherryBusyCancelled?: boolean })._cherryBusyCancelled)
+        for (const m of batch.messages) {
+          const offerId = (m as { _cherryBusyOfferId?: string })._cherryBusyOfferId
+          if (offerId) takeBusyOffer(offerId)
+        }
+        if (!alive.length) {
+          batch.admit()
+          return
+        }
+
+        const merged = this.mergeMessages(alive)
+        if (alive.length > 1) {
+          logger.info('Flushing merged message batch', { batchKey, messageCount: alive.length })
+        }
+        if ((merged as { _cherryBusyCancelled?: boolean })._cherryBusyCancelled) {
+          batch.admit()
+          return
         }
         await this.processIncoming(batch.adapter, merged, batch.admit)
       })
@@ -374,6 +422,13 @@ export class ChannelMessageHandler {
     message: ChannelMessageEvent,
     onAdmitted?: () => void
   ): Promise<void> {
+    if ((message as { _cherryBusyCancelled?: boolean })._cherryBusyCancelled) {
+      onAdmitted?.()
+      return
+    }
+    const offerId = (message as { _cherryBusyOfferId?: string })._cherryBusyOfferId
+    if (offerId) takeBusyOffer(offerId)
+
     const { agentId } = adapter
     let streamStarted = false
 
@@ -489,7 +544,16 @@ export class ChannelMessageHandler {
       return
     }
 
-    if (command.command === 'help' || command.command === 'whoami') {
+    if (
+      command.command === 'help' ||
+      command.command === 'whoami' ||
+      command.command === 'stop' ||
+      command.command === 'status' ||
+      command.command === 'mode' ||
+      command.command === 'model' ||
+      command.command === 'switch' ||
+      command.command === 'rename'
+    ) {
       return this.processCommand(adapter, command, () => {})
     }
 
@@ -611,6 +675,273 @@ export class ChannelMessageHandler {
           )
           break
         }
+        case 'stop': {
+          onAdmitted()
+          void adapter.dismissToolProgress(command.chatId).catch(() => {})
+          const sid = this.peekSessionId(agentId, adapter.channelId, conversationIdOf(command))
+          if (!sid || !this.abortSession(sid)) {
+            await adapter.sendMessage(command.chatId, '当前没有正在执行的任务。', {
+              ...replyOpts,
+              parseMode: 'plain'
+            })
+          } else {
+            await adapter.sendMessage(command.chatId, '✋ 已发送终止信号。', { ...replyOpts, parseMode: 'plain' })
+          }
+          break
+        }
+        case 'reboot': {
+          onAdmitted()
+          if (typeof adapter.dismissToolProgress === 'function') {
+            void adapter.dismissToolProgress(command.chatId).catch(() => {})
+          }
+          try {
+            const dataDir = application.getPath ? application.getPath('feature.agents.data') : null
+            if (dataDir) {
+              const rebootNotifyPath = path.join(dataDir, 'reboot-notify.json')
+              await fs.writeFile(
+                rebootNotifyPath,
+                JSON.stringify({ channelId: adapter.channelId, chatId: command.chatId, at: Date.now() }),
+                'utf-8'
+              )
+            }
+          } catch (err) {
+            logger.warn('Failed to save reboot notify file', { err })
+          }
+
+          try {
+            await adapter.sendMessage(command.chatId, '🍒 正在重启樱桃服务', {
+              ...replyOpts,
+              parseMode: 'plain'
+            })
+          } catch (err) {
+            logger.error('Failed to send rebooting message to channel', { err })
+          }
+
+          setTimeout(() => {
+            try {
+              application.relaunch()
+            } catch (err) {
+              logger.error('Failed to relaunch application', { err })
+            }
+          }, 800)
+          break
+        }
+        case 'status': {
+          onAdmitted()
+          const agent = agentService.getAgent(agentId)
+          const agentName = agent?.name || 'Cherry Agent'
+          const agentType = agent?.type || 'unknown'
+          const currentMode = agent?.configuration?.permission_mode || 'default'
+          const modelStr = String(agent?.model || '默认模型')
+          const modeMeta: Record<string, { emoji: string; label: string }> = {
+            plan: { emoji: '💡', label: '仅规划 (Plan)' },
+            bypassPermissions: { emoji: '🚀', label: '完全放行 (Bypass)' },
+            auto: { emoji: '🪐', label: '智能批准 (Auto)' },
+            default: { emoji: '🔒', label: '逐次确认 (Ask)' }
+          }
+          const modeInfo = modeMeta[String(currentMode)] || { emoji: '', label: String(currentMode) }
+          const fmtTok = (n: number): string | null => {
+            if (!Number.isFinite(n) || n < 0) return null
+            if (n >= 1e6) {
+              const m = (n / 1e6).toFixed(1)
+              return m.endsWith('.0') ? `${Number.parseInt(m, 10)}M` : `${m}M`
+            }
+            if (n >= 1e3) {
+              const k = (n / 1e3).toFixed(1)
+              return k.endsWith('.0') ? `${Number.parseInt(k, 10)}k` : `${k}k`
+            }
+            return String(Math.round(n))
+          }
+          let contextLine: string | null = null
+          try {
+            const { AGENT_SESSION_CONTEXT_USAGE_CACHE_KEY } = await import('@shared/ai/agentSessionContextUsage')
+            const sessionId = this.peekSessionId(agentId, adapter.channelId, conversationIdOf(command))
+            if (sessionId) {
+              try {
+                application.get('AgentSessionRuntimeService').refreshContextUsageOnDemand(sessionId)
+              } catch {
+                /* no live connection */
+              }
+              await new Promise((r) => setTimeout(r, 350))
+              const usage = application
+                .get('CacheService')
+                .getShared(AGENT_SESSION_CONTEXT_USAGE_CACHE_KEY(sessionId)) as
+                | { totalTokens?: number; maxTokens?: number; percentage?: number }
+                | null
+                | undefined
+              if (usage) {
+                const used = Math.round(Number(usage.totalTokens) || 0)
+                // Prefer the model's declared contextWindow (e.g. 1M) over CLI auto-compact
+                // budget (usage.maxTokens), matching what users configure.
+                let max = 0
+                try {
+                  const { modelService } = await import('@data/services/ModelService')
+                  const models = modelService.list({ enabled: true })
+                  const hit =
+                    models.find((m) => `${m.providerId}::${m.id}` === modelStr) ||
+                    models.find((m) => modelStr.endsWith(`::${m.id}`) || modelStr.endsWith(m.id))
+                  max = Math.round(Number(hit?.contextWindow) || 0)
+                } catch {
+                  /* ignore */
+                }
+                if (max <= 0) max = Math.round(Number(usage.maxTokens) || 0)
+                if (max <= 0) max = 256000
+                const pct = max > 0 ? (used / max) * 100 : 0
+                const usedLabel = fmtTok(used)
+                const maxLabel = fmtTok(max)
+                if (usedLabel && maxLabel && max > 0) {
+                  contextLine = `• <b>上下文</b>: 🧠 <code>${usedLabel} / ${maxLabel} (${pct.toFixed(1)}%)</code>`
+                } else if (usedLabel) {
+                  contextLine = `• <b>上下文</b>: 🧠 <code>${usedLabel} tokens</code>`
+                }
+              }
+            }
+          } catch {
+            /* ignore context lookup */
+          }
+          const modelShort = modelStr.includes('::') ? modelStr.split('::').pop()! : modelStr
+          const statusLines = [
+            `📊 <b>Cherry Studio 智能体状态</b>`,
+            '',
+            `• <b>智能体</b>: ${escHtml(agentName)}`,
+            `• <b>架构</b>: <code>${escHtml(String(agentType))}</code>`,
+            `• <b>模型</b>: <code>${escHtml(modelShort)}</code>`,
+            `• <b>权限</b>: ${modeInfo.emoji} <code>${escHtml(modeInfo.label)}</code>`
+          ]
+          if (contextLine) statusLines.push(contextLine)
+          await adapter.sendMessage(command.chatId, statusLines.join('\n'), {
+            ...replyOpts,
+            parseMode: 'html'
+          })
+          break
+        }
+        case 'mode': {
+          onAdmitted()
+          const agent = agentService.getAgent(agentId)
+          const current = agent?.configuration?.permission_mode ?? 'default'
+          const agentType = agent?.type || 'claude-code'
+          const supportsPlan = agentType !== 'pi'
+          const rows: Array<Array<{ text: string; callback_data: string }>> = []
+          if (supportsPlan) {
+            rows.push([
+              {
+                text: current === 'plan' ? '✅ 💡 仅规划模式' : '💡 仅规划模式',
+                callback_data: 'perm:plan'
+              }
+            ])
+          }
+          rows.push([
+            {
+              text: current === 'bypassPermissions' ? '✅ 🚀 完全放行模式' : '🚀 完全放行模式',
+              callback_data: 'perm:bypassPermissions'
+            }
+          ])
+          rows.push([
+            {
+              text: current === 'auto' ? '✅ 🪐 智能批准模式' : '🪐 智能批准模式',
+              callback_data: 'perm:auto'
+            }
+          ])
+          rows.push([
+            {
+              text: current === 'default' ? '✅ 🔒 逐次确认模式' : '🔒 逐次确认模式',
+              callback_data: 'perm:default'
+            }
+          ])
+          await adapter.sendMessage(
+            command.chatId,
+            `🎮 <b>切换权限模式</b>\n当前：<code>${escHtml(String(current))}</code>`,
+            {
+              ...replyOpts,
+              parseMode: 'html',
+              replyMarkup: { inline_keyboard: rows }
+            }
+          )
+          break
+        }
+        case 'model': {
+          onAdmitted()
+          const { modelService } = await import('@data/services/ModelService')
+          const agent = agentService.getAgent(agentId)
+          const currentModelId = agent?.model
+          const models = modelService
+            .list({ enabled: true })
+            .filter((m) => {
+              // Chat-only picker: non-conversational models (embedding / rerank / image generation)
+              // can never answer a turn, so they must not appear as a base-model choice.
+              const caps = m.capabilities ?? []
+              return !(
+                caps.includes(MODEL_CAPABILITY.EMBEDDING) ||
+                caps.includes(MODEL_CAPABILITY.RERANK) ||
+                caps.includes(MODEL_CAPABILITY.IMAGE_GENERATION) ||
+                m.imageGeneration !== undefined
+              )
+            })
+            .slice(0, MODEL_PICK_LIMIT)
+          if (models.length === 0) {
+            await adapter.sendMessage(command.chatId, '未找到已启用模型。', { ...replyOpts, parseMode: 'plain' })
+            break
+          }
+          const buttons = models.map((m) => {
+            // `Model.id` is ALREADY the canonical `providerId::modelId` unique id — re-prefixing it
+            // with `m.providerId` produced a malformed double-prefixed id that the switch handler
+            // stored verbatim, so the picker could never actually change the base model.
+            // Telegram callback_data is capped at 64 bytes, so we store a short token → full id/name
+            // instead of embedding the UniqueModelId (UUID providers truncate, e.g. `…::ge`).
+            const id = m.id
+            const isCurrent = id === currentModelId
+            const displayName = m.name || id
+            const label = `${isCurrent ? '✅ ' : ''}${displayName}`.slice(0, 30)
+            const token = rememberModelPick(id, displayName)
+            return { text: label, callback_data: `mdl:${token}` }
+          })
+          const rows: Array<Array<{ text: string; callback_data: string }>> = []
+          for (let i = 0; i < buttons.length; i += 2) {
+            rows.push(buttons.slice(i, i + 2))
+          }
+          await adapter.sendMessage(command.chatId, '🧠 <b>选择底座模型</b>', {
+            ...replyOpts,
+            parseMode: 'html',
+            replyMarkup: { inline_keyboard: rows }
+          })
+          break
+        }
+        case 'switch': {
+          onAdmitted()
+          const { agents } = agentService.listAgents({ limit: 30 })
+          if (agents.length === 0) {
+            await adapter.sendMessage(command.chatId, '没有可用智能体。', { ...replyOpts, parseMode: 'plain' })
+            break
+          }
+          const buttons = agents.map((a) => ({
+            text: `${a.id === agentId ? '✅ ' : ''}${(a.name || a.id).slice(0, 40)}`,
+            callback_data: `sw:${a.id}`.slice(0, 64)
+          }))
+          const rows: Array<Array<{ text: string; callback_data: string }>> = []
+          for (let i = 0; i < buttons.length; i += 2) {
+            rows.push(buttons.slice(i, i + 2))
+          }
+          await adapter.sendMessage(command.chatId, '🤖 <b>切换执行后端（智能体）</b>', {
+            ...replyOpts,
+            parseMode: 'html',
+            replyMarkup: { inline_keyboard: rows }
+          })
+          break
+        }
+        case 'rename': {
+          onAdmitted()
+          const newName = (command.args || '').trim()
+          if (!newName) {
+            await adapter.sendMessage(command.chatId, '用法：/rename 新名称', { ...replyOpts, parseMode: 'plain' })
+            break
+          }
+          agentService.updateAgent(agentId, { name: newName.slice(0, 80) })
+          await adapter.sendMessage(command.chatId, `✏️ 已命名为：${newName.slice(0, 80)}`, {
+            ...replyOpts,
+            parseMode: 'plain'
+          })
+          break
+        }
       }
     } catch (error) {
       logger.error('Error handling command', {
@@ -630,6 +961,200 @@ export class ChannelMessageHandler {
         })
     } finally {
       onAdmitted()
+    }
+  }
+
+  /** Telegram inline-keyboard callbacks (perm / mdl / sw / busy / approval cards). */
+  async handleCallbackQuery(adapter: ChannelAdapter, cb: ChannelCallbackQueryEvent): Promise<void> {
+    const { data, chatId } = cb
+    try {
+      if (data.startsWith('perm:')) {
+        const targetPerm = data.slice(5) as 'plan' | 'bypassPermissions' | 'auto' | 'default' | 'acceptEdits'
+        const agent = agentService.getAgent(adapter.agentId)
+        if (agent) {
+          const currentConfig = agent.configuration || {}
+          agentService.updateAgent(adapter.agentId, {
+            configuration: { ...currentConfig, permission_mode: targetPerm }
+          })
+          await cb.answerCallbackQuery({ text: `已切换至 [${targetPerm}]` })
+          await cb.editReplyMarkup({
+            inline_keyboard: [[{ text: `✅ 已切换: ${targetPerm}`, callback_data: 'noop' }]]
+          })
+        } else {
+          await cb.answerCallbackQuery({ text: '智能体不存在' })
+        }
+        return
+      }
+
+      if (data.startsWith('mdl:')) {
+        const tokenOrId = data.slice(4)
+        const remembered = modelPickTokens.get(tokenOrId)
+        // Prefer the short-token map; fall back to a legacy embedded UniqueModelId for
+        // keyboards that were rendered before the token fix (only if still ≤64 and intact).
+        const modelId = remembered?.id ?? (tokenOrId.includes('::') ? tokenOrId : '')
+        const displayName = remembered?.name ?? modelId
+        if (!modelId.includes('::')) {
+          await cb.answerCallbackQuery({ text: '无效模型' })
+          return
+        }
+        if (remembered) modelPickTokens.delete(tokenOrId)
+        agentService.updateAgent(adapter.agentId, {
+          model: modelId as UniqueModelId
+        })
+        await cb.answerCallbackQuery({ text: '模型已切换' })
+        await cb.editReplyMarkup({
+          inline_keyboard: [[{ text: `✅ ${displayName.slice(0, 40)}`, callback_data: 'noop' }]]
+        })
+        return
+      }
+
+      if (data.startsWith('sw:')) {
+        const targetAgentId = data.slice(3)
+        const target = agentService.getAgent(targetAgentId)
+        if (!target) {
+          await cb.answerCallbackQuery({ text: '目标智能体不存在' })
+          return
+        }
+        channelService.updateChannel(adapter.channelId, { agentId: targetAgentId })
+        // Soft-heal permission mode for Pi
+        const mode = target.configuration?.permission_mode
+        if (target.type === 'pi' && mode === 'plan') {
+          agentService.updateAgent(targetAgentId, {
+            configuration: { ...target.configuration, permission_mode: 'auto' }
+          })
+        }
+        await cb.answerCallbackQuery({ text: `已切换至 ${target.name || targetAgentId}` })
+        await cb.editReplyMarkup({
+          inline_keyboard: [[{ text: `✅ ${target.name || targetAgentId}`, callback_data: 'noop' }]]
+        })
+        // Notify on the still-live adapter before reconnect tears it down.
+        await adapter
+          .sendMessage(chatId, `🤖 渠道已绑定智能体 <b>${escHtml(target.name || targetAgentId)}</b>`, {
+            parseMode: 'html'
+          })
+          .catch(() => {})
+        void application
+          .get('ChannelManager')
+          .reconcileChannel(adapter.channelId)
+          .catch((err: unknown) => logger.warn('Channel switch sync failed', { err, channelId: adapter.channelId }))
+        return
+      }
+
+      if (data.startsWith('busy:')) {
+        await this.handleBusyCallback(adapter, cb, data)
+        return
+      }
+
+      // Approval cards: xplan / asku / tapr — dispatched through ToolApprovalRegistry.
+      if (data.startsWith('xplan:') || data.startsWith('asku:') || data.startsWith('tapr:')) {
+        const { toolApprovalRegistry } = await import('@main/ai/toolApproval/ToolApprovalRegistry')
+        if (data.startsWith('xplan:approve:')) {
+          const approvalId = data.slice('xplan:approve:'.length)
+          toolApprovalRegistry.dispatch(approvalId, { approved: true })
+          await cb.answerCallbackQuery({ text: '✅ 已批准执行' })
+          await cb.editReplyMarkup({ inline_keyboard: [[{ text: '✅ 已批准执行', callback_data: 'noop' }]] })
+          return
+        }
+        if (data.startsWith('xplan:revise:')) {
+          const approvalId = data.slice('xplan:revise:'.length)
+          toolApprovalRegistry.dispatch(approvalId, {
+            approved: false,
+            reason: '用户选择继续调整计划'
+          })
+          await cb.answerCallbackQuery({ text: '✏️ 已退回调整' })
+          await cb.editReplyMarkup({ inline_keyboard: [[{ text: '✏️ 继续调整中', callback_data: 'noop' }]] })
+          return
+        }
+        if (data.startsWith('xplan:cancel:')) {
+          const approvalId = data.slice('xplan:cancel:'.length)
+          toolApprovalRegistry.dispatch(approvalId, { approved: false, reason: '用户放弃任务' })
+          await cb.answerCallbackQuery({ text: '❌ 已放弃' })
+          await cb.editReplyMarkup({ inline_keyboard: [[{ text: '❌ 已放弃任务', callback_data: 'noop' }]] })
+          return
+        }
+        if (data.startsWith('tapr:ok:')) {
+          const approvalId = data.slice('tapr:ok:'.length)
+          toolApprovalRegistry.dispatch(approvalId, { approved: true })
+          await cb.answerCallbackQuery({ text: '✅ 已允许' })
+          await cb.editReplyMarkup({ inline_keyboard: [[{ text: '✅ 已允许', callback_data: 'noop' }]] })
+          return
+        }
+        if (data.startsWith('tapr:no:')) {
+          const approvalId = data.slice('tapr:no:'.length)
+          toolApprovalRegistry.dispatch(approvalId, { approved: false, reason: '用户通过 Telegram 拒绝了该工具调用。' })
+          await cb.answerCallbackQuery({ text: '❌ 已拒绝' })
+          await cb.editReplyMarkup({ inline_keyboard: [[{ text: '❌ 已拒绝', callback_data: 'noop' }]] })
+          return
+        }
+        if (data.startsWith('asku:')) {
+          // asku:approvalId:optionIndex — MVP single-question
+          const rest = data.slice('asku:'.length)
+          const colon = rest.lastIndexOf(':')
+          const approvalId = rest.slice(0, colon)
+          const oi = Number(rest.slice(colon + 1))
+          const pending = askUserPending.get(approvalId)
+          if (!pending) {
+            await cb.answerCallbackQuery({ text: '题目已过期' })
+            return
+          }
+          const q = pending.input.questions[pending.qIndex]
+          const opt = q?.options?.[oi]
+          if (!q || !opt) {
+            await cb.answerCallbackQuery({ text: '无效选项' })
+            return
+          }
+          pending.answers[q.header || q.question || `q${pending.qIndex}`] = {
+            selected: [opt.label],
+            freeText: undefined
+          }
+          pending.qIndex += 1
+          if (pending.qIndex >= pending.input.questions.length) {
+            askUserPending.delete(approvalId)
+            toolApprovalRegistry.dispatch(approvalId, {
+              approved: true,
+              updatedInput: { ...pending.input, answers: pending.answers }
+            })
+            await cb.answerCallbackQuery({ text: '✅ 已提交' })
+            await cb.editReplyMarkup({ inline_keyboard: [[{ text: '✅ 已提交答案', callback_data: 'noop' }]] })
+          } else {
+            await cb.answerCallbackQuery({
+              text: `已选，下一题 (${pending.qIndex + 1}/${pending.input.questions.length})`
+            })
+            // Next question is re-sent by listener only on first show; for multi-q send next card here.
+            const nq = pending.input.questions[pending.qIndex]
+            const circles = ['①', '②', '③', '④']
+            const options = Array.isArray(nq.options) ? nq.options : []
+            let cardText = `💬 <b>请选择</b> <i>(${pending.qIndex + 1}/${pending.input.questions.length})</i>\n\n${escHtml(nq.question || nq.header || '请选择')}`
+            const rows: Array<Array<{ text: string; callback_data: string }>> = []
+            for (let i = 0; i < options.length && i < 4; i++) {
+              const label = String(options[i].label || `选项${i + 1}`).slice(0, 60)
+              cardText += `\n\n<b>${circles[i]}</b> ${escHtml(label)}`
+              rows.push([
+                {
+                  text: `${circles[i]} ${label}`.slice(0, 64),
+                  callback_data: `asku:${approvalId}:${i}`
+                }
+              ])
+            }
+            await adapter.sendMessage(chatId, cardText, {
+              parseMode: 'html',
+              replyMarkup: { inline_keyboard: rows }
+            })
+            await cb.editReplyMarkup({ inline_keyboard: [[{ text: '✅ 本题已答', callback_data: 'noop' }]] })
+          }
+          return
+        }
+      }
+
+      if (data === 'noop') {
+        await cb.answerCallbackQuery()
+        return
+      }
+
+      await cb.answerCallbackQuery({ text: '未知操作' })
+    } catch (err) {
+      logger.error('Callback query error', { err, data, chatId })
+      await cb.answerCallbackQuery({ text: '处理失败' }).catch(() => {})
     }
   }
 
@@ -679,9 +1204,123 @@ export class ChannelMessageHandler {
     }
   }
 
+  /** Register a busy offer and send the Telegram confirmation card for a message arriving mid-turn. */
+  private offerBusyCard(adapter: ChannelAdapter, sessionId: string, message: ChannelMessageEvent): void {
+    const offerId = randomUUID().replace(/-/g, '').slice(0, 16)
+    const queueIndex =
+      [...busyOffers.values()].filter((o) => o.activeSessionId === sessionId && !o.cancelled).length + 1
+    const tagged = message as BusyOffer['message']
+    tagged._cherryBusyOfferId = offerId
+    const offer: BusyOffer = { activeSessionId: sessionId, message: tagged, cancelled: false, queueIndex }
+    busyOffers.set(offerId, offer)
+    offer.autoTimer = setTimeout(() => {
+      offer.autoTimer = undefined
+      void this.autoSteerBusyOffer(adapter, offerId).catch((err) => logger.debug('Busy auto-steer failed', { err }))
+    }, BUSY_AUTO_STEER_MS)
+    void adapter
+      .sendMessage(message.chatId, buildBusyCardText(queueIndex, message), {
+        ...responseOptionsFor(message),
+        parseMode: 'plain',
+        replyMarkup: buildBusyCardKeyboard(offerId),
+        onSent: (id) => {
+          offer.cardMessageId = id
+        }
+      })
+      .catch((err) => logger.debug('Failed to send busy confirmation card', { err }))
+  }
+
+  /** Steer into the live turn; on success drop the queued copy. Shared by tap and auto-steer. */
+  private steerBusyOffer(offer: BusyOffer): boolean {
+    const text = offer.message.text
+    const runtimeService = application.get('AgentSessionRuntimeService')
+    const accepted = text ? Boolean(runtimeService.trySteer?.(offer.activeSessionId, text)) : false
+    if (accepted) {
+      offer.cancelled = true
+      offer.message._cherryBusyCancelled = true
+    }
+    return accepted
+  }
+
+  /** Timeout path: nobody tapped, so default to 引导. Race-safe: takeBusyOffer is the single claim. */
+  private async autoSteerBusyOffer(adapter: ChannelAdapter, offerId: string): Promise<void> {
+    const offer = takeBusyOffer(offerId)
+    if (!offer) return
+    const result = this.steerBusyOffer(offer)
+      ? t('common.channel_busy.result_auto_steered')
+      : t('common.channel_busy.result_steer_unsupported')
+    if (offer.cardMessageId !== undefined && adapter.editMessageText) {
+      await adapter.editMessageText(
+        offer.message.chatId,
+        offer.cardMessageId,
+        buildBusyResultText(offer.queueIndex, offer.message, result)
+      )
+    }
+  }
+
+  /** Cancel all pending busy-card auto-steer timers (app shutdown). */
+  disposeBusyOffers(): void {
+    clearAllBusyOffers()
+  }
+
+  /** busy:<steer|send|cancel>:<offerId> (legacy: busy:interrupt / busy:queue). */
+  private async handleBusyCallback(
+    adapter: ChannelAdapter,
+    cb: ChannelCallbackQueryEvent,
+    data: string
+  ): Promise<void> {
+    const [, rawAction, offerId] = data.split(':')
+    const action = rawAction === 'interrupt' ? 'send' : rawAction
+    const known = action === 'steer' || action === 'send' || action === 'cancel'
+    const offer = offerId && known ? takeBusyOffer(offerId) : undefined
+    if (!offer) {
+      // Stale: already handled, already started running (turn finished first), or app restarted.
+      await cb.answerCallbackQuery({ text: t('common.channel_busy.expired') })
+      await cb.editReplyMarkup({ inline_keyboard: [] })
+      return
+    }
+
+    const finish = async (result: string): Promise<void> => {
+      await cb.answerCallbackQuery({ text: result })
+      const text = buildBusyResultText(offer.queueIndex, offer.message, result)
+      if (cb.editMessageText) {
+        await cb.editMessageText(text)
+      } else {
+        await cb.editReplyMarkup({ inline_keyboard: [[{ text: result.slice(0, 60), callback_data: 'noop' }]] })
+      }
+    }
+
+    if (action === 'steer') {
+      // Absorbed into the live turn's tool loop, or (runtime can't steer / turn ended) stays queued.
+      await finish(
+        this.steerBusyOffer(offer)
+          ? t('common.channel_busy.result_steered')
+          : t('common.channel_busy.result_steer_unsupported')
+      )
+      return
+    }
+    if (action === 'send') {
+      void adapter.dismissToolProgress(cb.chatId).catch(() => {})
+      await finish(t('common.channel_busy.result_sent'))
+      // Aborting releases the chat queue; this (still queued) message runs next.
+      this.abortSession(offer.activeSessionId)
+      return
+    }
+    if (action === 'cancel') {
+      offer.cancelled = true
+      offer.message._cherryBusyCancelled = true
+      await finish(t('common.channel_busy.result_cancelled'))
+      return
+    }
+    await cb.answerCallbackQuery()
+  }
+
   /** Abort an active stream for the given session. Returns true if a stream was in flight. */
   abortSession(sessionId: string): boolean {
-    if (!this.activeAbortControllers.has(sessionId)) return false
+    const hasLocal = this.activeAbortControllers.has(sessionId)
+    const topicId = buildAgentSessionTopicId(sessionId)
+    const streamManager = application.get('AiStreamManager')
+    const hasStream = streamManager.hasLiveStream(topicId)
+    if (!hasLocal && !hasStream) return false
     this.abortSessionStream(sessionId, 'channel-session-aborted')
     return true
   }

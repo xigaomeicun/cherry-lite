@@ -1181,6 +1181,50 @@ export class AgentSessionRuntimeService extends BaseService {
     })
   }
 
+  /**
+   * Cherry-Lite channel busy-card steer: inject `text` into the live turn via the runtime's
+   * `redirect` hook (claude's PreToolUse steer; Pi's native redirect). Returns true when the
+   * runtime accepted the message — false when no steer-capable live turn exists so the caller
+   * leaves the queued copy alone.
+   */
+  trySteer(sessionId: string, text: string): boolean {
+    const entry = this.entries.get(sessionId)
+    if (!entry) return false
+
+    const turn = this.currentTurn(entry)
+    if (
+      entry.runtimeState.execution.kind !== 'turn' ||
+      entry.runtimeState.execution.reply.delivery.kind !== 'open' ||
+      !turn ||
+      !this.isTurnLive(entry, turn)
+    ) {
+      return false
+    }
+
+    const connection = this.currentConnection(entry)
+    if (!connection?.redirect) return false
+
+    let userMessage: AgentSessionMessageEntity
+    try {
+      userMessage = agentSessionMessageService.saveMessage({
+        sessionId,
+        message: {
+          role: 'user',
+          status: 'success',
+          data: { parts: [{ type: 'text', text }] }
+        }
+      })
+    } catch (error) {
+      logger.warn('Failed to persist steer message in channel', { sessionId, error })
+      return false
+    }
+
+    return connection.redirect({
+      message: userMessage,
+      systemReminder: true
+    })
+  }
+
   markTurnTerminal(sessionId: string, status: AgentSessionRuntimeTerminalStatus, expectedTurnId?: string): void {
     const entry = this.entries.get(sessionId)
     if (!entry) {
