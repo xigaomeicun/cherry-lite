@@ -734,7 +734,6 @@ export class ChannelMessageHandler {
           const currentMode = agent?.configuration?.permission_mode || 'default'
           const modelStr = String(agent?.model || '默认模型')
           const modeMeta: Record<string, { emoji: string; label: string }> = {
-            plan: { emoji: '💡', label: '仅规划 (Plan)' },
             bypassPermissions: { emoji: '🚀', label: '完全放行 (Bypass)' },
             auto: { emoji: '🪐', label: '智能批准 (Auto)' },
             default: { emoji: '🔒', label: '逐次确认 (Ask)' }
@@ -819,17 +818,7 @@ export class ChannelMessageHandler {
           onAdmitted()
           const agent = agentService.getAgent(agentId)
           const current = agent?.configuration?.permission_mode ?? 'default'
-          const agentType = agent?.type || 'claude-code'
-          const supportsPlan = agentType !== 'pi'
           const rows: Array<Array<{ text: string; callback_data: string }>> = []
-          if (supportsPlan) {
-            rows.push([
-              {
-                text: current === 'plan' ? '✅ 💡 仅规划模式' : '💡 仅规划模式',
-                callback_data: 'perm:plan'
-              }
-            ])
-          }
           rows.push([
             {
               text: current === 'bypassPermissions' ? '✅ 🚀 完全放行模式' : '🚀 完全放行模式',
@@ -969,7 +958,7 @@ export class ChannelMessageHandler {
     const { data, chatId } = cb
     try {
       if (data.startsWith('perm:')) {
-        const targetPerm = data.slice(5) as 'plan' | 'bypassPermissions' | 'auto' | 'default' | 'acceptEdits'
+        const targetPerm = data.slice(5) as 'bypassPermissions' | 'auto' | 'default' | 'acceptEdits'
         const agent = agentService.getAgent(adapter.agentId)
         if (agent) {
           const currentConfig = agent.configuration || {}
@@ -1016,7 +1005,7 @@ export class ChannelMessageHandler {
           return
         }
         channelService.updateChannel(adapter.channelId, { agentId: targetAgentId })
-        // Soft-heal permission mode for Pi
+        // Soft-heal permission mode for Pi (plan mode is not offered over channels)
         const mode = target.configuration?.permission_mode
         if (target.type === 'pi' && mode === 'plan') {
           agentService.updateAgent(targetAgentId, {
@@ -1045,33 +1034,9 @@ export class ChannelMessageHandler {
         return
       }
 
-      // Approval cards: xplan / asku / tapr — dispatched through ToolApprovalRegistry.
-      if (data.startsWith('xplan:') || data.startsWith('asku:') || data.startsWith('tapr:')) {
+      // Approval cards: asku / tapr — dispatched through ToolApprovalRegistry.
+      if (data.startsWith('asku:') || data.startsWith('tapr:')) {
         const { toolApprovalRegistry } = await import('@main/ai/toolApproval/ToolApprovalRegistry')
-        if (data.startsWith('xplan:approve:')) {
-          const approvalId = data.slice('xplan:approve:'.length)
-          toolApprovalRegistry.dispatch(approvalId, { approved: true })
-          await cb.answerCallbackQuery({ text: '✅ 已批准执行' })
-          await cb.editReplyMarkup({ inline_keyboard: [[{ text: '✅ 已批准执行', callback_data: 'noop' }]] })
-          return
-        }
-        if (data.startsWith('xplan:revise:')) {
-          const approvalId = data.slice('xplan:revise:'.length)
-          toolApprovalRegistry.dispatch(approvalId, {
-            approved: false,
-            reason: '用户选择继续调整计划'
-          })
-          await cb.answerCallbackQuery({ text: '✏️ 已退回调整' })
-          await cb.editReplyMarkup({ inline_keyboard: [[{ text: '✏️ 继续调整中', callback_data: 'noop' }]] })
-          return
-        }
-        if (data.startsWith('xplan:cancel:')) {
-          const approvalId = data.slice('xplan:cancel:'.length)
-          toolApprovalRegistry.dispatch(approvalId, { approved: false, reason: '用户放弃任务' })
-          await cb.answerCallbackQuery({ text: '❌ 已放弃' })
-          await cb.editReplyMarkup({ inline_keyboard: [[{ text: '❌ 已放弃任务', callback_data: 'noop' }]] })
-          return
-        }
         if (data.startsWith('tapr:ok:')) {
           const approvalId = data.slice('tapr:ok:'.length)
           toolApprovalRegistry.dispatch(approvalId, { approved: true })

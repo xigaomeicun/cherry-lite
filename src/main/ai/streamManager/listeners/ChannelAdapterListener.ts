@@ -51,7 +51,6 @@ export class ChannelAdapterListener implements StreamListener {
   private accumulatedText = ''
   private lastLiveText = ''
   private liveUpdateTimer: ReturnType<typeof setTimeout> | undefined
-  private exitPlanCardSent = false
   private settled = false
   private readonly cursorToolParser: CursorToolLineParser | null
   private cursorToolSeq = 0
@@ -201,30 +200,6 @@ export class ChannelAdapterListener implements StreamListener {
     const toolKey = normalizeToolKey(toolNameRaw)
     const input = (details?.originalInput ?? {}) as Record<string, unknown>
 
-    if (toolKey === 'exitplanmode' && !this.exitPlanCardSent) {
-      this.exitPlanCardSent = true
-      void this.adapter
-        .sendMessage(
-          this.platformChatId,
-          '📋 <b>计划已就绪</b>\n\n模型已提交 <code>exit_plan_mode</code>，源码尚未改动。请确认：',
-          {
-            ...this.responseOptions,
-            parseMode: 'html',
-            replyMarkup: {
-              inline_keyboard: [
-                [
-                  { text: '✅ 批准执行', callback_data: `xplan:approve:${approvalId}` },
-                  { text: '✏️ 继续调整', callback_data: `xplan:revise:${approvalId}` },
-                  { text: '❌ 放弃任务', callback_data: `xplan:cancel:${approvalId}` }
-                ]
-              ]
-            }
-          }
-        )
-        .catch((err) => logger.error('Failed to send exit_plan_mode card', { err }))
-      return
-    }
-
     if (toolKey === 'askuserquestion' || toolKey === 'builtinaskuserquestion') {
       const questions = Array.isArray(input.questions) ? input.questions : []
       if (questions.length === 0 || askUserPending.has(approvalId)) return
@@ -271,7 +246,7 @@ export class ChannelAdapterListener implements StreamListener {
       return
     }
 
-    if (!toolKey || toolKey === 'exitplanmode') return
+    if (!toolKey) return
     if (toolPermSent.has(approvalId)) return
     toolPermSent.add(approvalId)
 
