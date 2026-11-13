@@ -11,14 +11,14 @@ function isErrnoException(error: unknown): error is NodeJS.ErrnoException {
 }
 
 /**
- * Well-known CPA / agent asset dump root (`~/.agents/workspace`).
+ * Well-known CPA / agent asset dump root (`~/.cursor/workspace`).
  * DSH/skills often write generated images here even when the Cherry session
  * workspace is an app-owned `Agents/system/...` directory — outbound channel
  * delivery must be allowed to read from this bounded root without opening the
- * entire filesystem.
+ * entire filesystem. (CPA moved `~/.agents/workspace` → `~/.cursor/workspace`.)
  */
 export function agentAssetsWorkspaceRoot(home = homedir()): string {
-  return path.join(home, '.agents', 'workspace')
+  return path.join(home, '.cursor', 'workspace')
 }
 
 function isInsideRoot(realTarget: string, realRoot: string): boolean {
