@@ -471,11 +471,11 @@ describe('AgentService', () => {
       expect(agentService.deleteAgent(first.id, { deleteSessions: true })).toMatchObject({ deleted: true })
       expect(agentService.getAgent(first.id)).toBeNull()
 
-      // The delete endpoint removed the row, so the tombstone is the only memory of the user's
-      // choice. Recreating here would undo a deliberate deletion behind the user's back.
+      // The delete endpoint soft-deleted the row, so the tombstone is the only memory of the
+      // user's choice. Recreating here would undo a deliberate deletion behind the user's back.
       expect(() => agentService.ensureBuiltinAgent(defaults)).toThrow(/deleted by the user/)
       expect(activeBuiltinRows()).toHaveLength(0)
-      expect(builtinRows()).toHaveLength(0)
+      expect(builtinRows()).toHaveLength(1)
     })
 
     it('keeps a user-deleted support agent deleted even though its id is reserved', () => {

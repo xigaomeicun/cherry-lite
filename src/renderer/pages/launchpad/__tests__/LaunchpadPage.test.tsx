@@ -22,6 +22,9 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('@cherrystudio/ui', () => ({
+  ScrollArea: ({ children, className }: { children: ReactNode; className?: string }) => (
+    <div className={className}>{children}</div>
+  ),
   Sortable: ({ items, itemKey, renderItem, ...props }: any) => {
     mocks.sortableCalls.push({ items, itemKey, renderItem, ...props })
     const getKey = typeof itemKey === 'function' ? itemKey : (item: any) => item[itemKey]
@@ -90,6 +93,26 @@ vi.mock('@renderer/components/Scrollbar', () => ({
   default: ({ children, className }: { children: ReactNode; className?: string }) => (
     <div className={className}>{children}</div>
   )
+}))
+
+vi.mock('@renderer/hooks/useSidebarShortcuts', () => ({
+  useSidebarShortcuts: () => ({
+    shortcuts: mocks.sidebarFavorites.map((fav: SidebarFavoriteItem) => ({
+      type: 'shortcut',
+      id: `sidebar-shortcut:core.app:${fav.id}`,
+      target: { kind: 'resource', locator: { providerId: 'core.app', resourceId: fav.id } }
+    })),
+    setPinned: (target: { locator?: { resourceId?: string } }, pinned: boolean) => {
+      const id = target?.locator?.resourceId as SidebarAppId | undefined
+      if (!id) return
+      const current = mocks.sidebarFavorites.map((f: SidebarFavoriteItem) => (f as { id: string }).id as SidebarAppId)
+      const next: SidebarFavoriteItem[] = (pinned ? [...current, id] : current.filter((x) => x !== id)).map((i) => ({
+        type: 'app',
+        id: i
+      }))
+      ;(mocks.setSidebarFavorites as (v: SidebarFavoriteItem[]) => void)(next)
+    }
+  })
 }))
 
 vi.mock('@renderer/hooks/useMiniApps', () => ({
@@ -271,7 +294,7 @@ describe('LaunchpadPage', () => {
 
     const systemSortable = mocks.sortableCalls.find((call) => call.itemKey === 'id')
     act(() => {
-      systemSortable.onDragStart({ active: { id: 'notes' } })
+      systemSortable.onDragStart({ activeId: 'notes' })
     })
 
     fireEvent.click(screen.getByRole('button', { name: 'Notes' }))

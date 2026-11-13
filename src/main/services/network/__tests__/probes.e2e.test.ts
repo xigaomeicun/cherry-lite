@@ -90,11 +90,16 @@ describe('tlsHandshake against a real TLS server', () => {
 })
 
 describe('resolveHost', () => {
-  it('resolves localhost and fails an .invalid name as dns', async () => {
-    await expect(resolveHost('localhost', signal())).resolves.toMatchObject({ status: 'ok' })
-    await expect(resolveHost('cherry-doctor-test.invalid', signal())).resolves.toMatchObject({
-      status: 'failed',
-      kind: 'dns'
-    })
-  })
+  // Stash's utun answers *.invalid with a fake 198.18.x address, so the DNS-failure path
+  // only asserts when no TUN resolver is in front of the system resolver.
+  it.runIf(process.env.CHERRY_E2E_DIRECT_DNS === '1')(
+    'resolves localhost and fails an .invalid name as dns',
+    async () => {
+      await expect(resolveHost('localhost', signal())).resolves.toMatchObject({ status: 'ok' })
+      await expect(resolveHost('cherry-doctor-test.invalid', signal())).resolves.toMatchObject({
+        status: 'failed',
+        kind: 'dns'
+      })
+    }
+  )
 })

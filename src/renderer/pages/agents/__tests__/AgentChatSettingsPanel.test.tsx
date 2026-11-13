@@ -558,7 +558,8 @@ describe('AgentChat settings panel', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 
-  it('switches the model directly without confirmation dialog even when the session has messages', async () => {
+  it('switches the model directly without confirmation dialog when the skip flag is set', async () => {
+    modelSwitchConfirmationCacheMock.value = true
     partsByMessageIdMock.value = {
       'message-1': [{ type: 'text', text: 'hello' }]
     }

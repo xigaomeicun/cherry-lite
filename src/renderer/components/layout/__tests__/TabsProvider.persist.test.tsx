@@ -189,12 +189,13 @@ describe('pinned persistence with the real store and hook', () => {
   })
 
   it('restores pinned home once and keeps distinct ids with the same URL', async () => {
+    // /app/code is a removed route in cherry-lite, so its pins are dropped on restore.
     await mount([
       pin('home', { url: '/app/chat' }),
       pin('code-a', { url: '/app/code' }),
       pin('code-b', { url: '/app/code' })
     ])
-    expect(context.tabs.map((tab) => tab.id)).toEqual(['home', 'code-a', 'code-b'])
+    expect(context.tabs.map((tab) => tab.id)).toEqual(['home'])
     expect(context.activeTabId).toBe('home')
     expect(context.tabs.filter((tab) => !tab.isDormant).map((tab) => tab.id)).toEqual(['home'])
     expect(service.getPersist('ui.tab.normal_tabs')).toEqual([])

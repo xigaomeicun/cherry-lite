@@ -1,12 +1,12 @@
+import { readdirSync, readFileSync } from 'fs'
 import { createRequire } from 'node:module'
+import { join, resolve } from 'path'
 
 import tailwindcss from '@tailwindcss/vite'
 import { tanstackRouter } from '@tanstack/router-plugin/vite'
 import react from '@vitejs/plugin-react'
 import { CodeInspectorPlugin } from 'code-inspector-plugin'
 import { defineConfig } from 'electron-vite'
-import { readdirSync, readFileSync } from 'fs'
-import { join, resolve } from 'path'
 import { visualizer } from 'rollup-plugin-visualizer'
 import type { Plugin } from 'vite'
 import { parse } from 'yaml'
@@ -16,6 +16,7 @@ import { parse } from 'yaml'
 import pkg from './package.json'
 import { buildFlatContractCss } from './packages/ui/scripts/build-theme-css'
 import { chunkExportGuardPlugin } from './scripts/checkChunkExports'
+import { claudeCodeBinaryManifest } from './scripts/claudeCodeBinaryManifest'
 import { piVccBundlePlugin } from './scripts/piVccBundle'
 import { uiContractPlugin } from './scripts/uiContract/vitePlugin'
 import { APP_EDITIONS, type AppEdition } from './src/shared/types/appEdition'
@@ -122,6 +123,9 @@ export const mainResolveAlias = {
 
 export default defineConfig({
   main: {
+    define: {
+      __CLAUDE_CODE_BINARY_MANIFEST__: JSON.stringify(claudeCodeBinaryManifest(__dirname))
+    },
     plugins: [
       {
         name: 'cherry-selection-panel',
@@ -135,7 +139,13 @@ export default defineConfig({
       miniAppThemeAssetPlugin(),
       ...visualizerPlugin('main')
     ],
-    resolve: { alias: mainResolveAlias },
+    resolve: {
+      alias: [
+        ...Object.entries(mainResolveAlias).map(([find, replacement]) => ({ find, replacement })),
+        // file-stream-rotator requires Moment's callable CommonJS export, not its ESM namespace.
+        { find: /^moment$/, replacement: 'moment/moment.js' }
+      ]
+    },
     build: {
       externalizeDeps: {
         include: mainExternalModules

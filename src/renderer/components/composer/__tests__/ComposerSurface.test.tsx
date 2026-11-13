@@ -1125,7 +1125,7 @@ describe('ComposerSurface', () => {
 
     fireEvent.mouseMove(document, { clientY: 100 })
 
-    expect(editorContainer).toHaveStyle({ height: '146px' })
+    expect(editorContainer).toHaveStyle({ height: '154px' })
     expect(screen.getByRole('button', { name: 'chat.input.restore' })).toHaveAttribute('aria-pressed', 'true')
 
     fireEvent.mouseUp(document)
@@ -1136,7 +1136,7 @@ describe('ComposerSurface', () => {
     await waitFor(() =>
       expect(screen.getByRole('button', { name: 'chat.input.expand' })).toHaveAttribute('aria-pressed', 'false')
     )
-    await waitFor(() => expect(editorContainer).toHaveStyle({ height: '46px' }))
+    await waitFor(() => expect(editorContainer).toHaveStyle({ height: '54px' }))
     fireEvent.transitionEnd(editorContainer, { propertyName: 'height' })
 
     expect(editorContainer.style.height).toBe('')
@@ -1154,7 +1154,7 @@ describe('ComposerSurface', () => {
     expect(editorContainer).toHaveStyle({ height: expandedHeight })
 
     fireEvent.mouseMove(document, { clientY: 1000 })
-    expect(editorContainer).toHaveStyle({ height: '46px' })
+    expect(editorContainer).toHaveStyle({ height: '54px' })
   })
 
   it('converts expanded height to manual height when dragging from the expanded state', async () => {
@@ -1185,7 +1185,7 @@ describe('ComposerSurface', () => {
     fireEvent.mouseMove(document, { clientY: 100 })
     fireEvent.mouseUp(document)
 
-    expect(editorContainer).toHaveStyle({ height: '146px' })
+    expect(editorContainer).toHaveStyle({ height: '154px' })
 
     act(() => {
       mocks.actions?.toggleExpanded(true)
@@ -1203,7 +1203,7 @@ describe('ComposerSurface', () => {
     })
     expect(handled).toBe(true)
 
-    await waitFor(() => expect(editorContainer).toHaveStyle({ height: '46px' }))
+    await waitFor(() => expect(editorContainer).toHaveStyle({ height: '54px' }))
     fireEvent.transitionEnd(editorContainer, { propertyName: 'height' })
 
     expect(editorContainer.style.height).toBe('')
@@ -1234,7 +1234,7 @@ describe('ComposerSurface', () => {
     expect(resizeHandle).toHaveFocus()
 
     fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Home' })
-    expect(editorContainer).toHaveStyle({ height: '46px' })
+    expect(editorContainer).toHaveStyle({ height: '54px' })
   })
 
   it('renders editing controls in a full-width header inside the inputbar', () => {

@@ -188,6 +188,8 @@ describe('CodeCliService', () => {
   })
 
   it('reconciles available CLI skills only after every service is ready', async () => {
+    const fs = (await import('node:fs')).default
+    vi.mocked(fs.existsSync).mockReturnValue(true)
     const { codeCliService } = await loadModules()
 
     await codeCliService._doInit()
@@ -205,6 +207,8 @@ describe('CodeCliService', () => {
 
   describe('CLI skill lifecycle', () => {
     it('installs the bundled skill only after the CLI install succeeds', async () => {
+      const fs = (await import('node:fs')).default
+      vi.mocked(fs.existsSync).mockReturnValue(true)
       const { codeCliService } = await loadModules()
 
       await codeCliService.installCli({ name: 'codex' })
@@ -252,6 +256,8 @@ describe('CodeCliService', () => {
     })
 
     it('keeps the skill when a system CLI remains after managed removal', async () => {
+      const fs = (await import('node:fs')).default
+      vi.mocked(fs.existsSync).mockReturnValue(true)
       binaryManagerMock.getToolSnapshots.mockResolvedValue({
         codex: { name: 'codex', availability: { source: 'system', path: '/usr/local/bin/codex' } }
       })

@@ -98,7 +98,7 @@ describe('useScrollAnchor', () => {
     expect(rectSpy).not.toHaveBeenCalled()
   })
 
-  it('hands an explicitly opened disclosure to the runtime without writing scrollTop locally', () => {
+  it('does not seize reading mode on disclosure expand (cherry-lite Codex Mode delta)', () => {
     const { scroller, anchorEl, scrollTopWrites } = setupScroller()
     const requestReadingControl = vi.fn()
     const { result } = renderScrollAnchor({ runtimeScroller: scroller, requestReadingControl })
@@ -106,7 +106,7 @@ describe('useScrollAnchor', () => {
 
     act(() => result.current.withScrollAnchor(vi.fn(), { enterReadingMode: true }))
 
-    expect(requestReadingControl).toHaveBeenCalledWith(anchorEl)
+    expect(requestReadingControl).not.toHaveBeenCalled()
     expect(scrollTopWrites).toEqual([])
   })
 
@@ -129,7 +129,7 @@ describe('useScrollAnchor', () => {
     const update = vi.fn()
     act(() => result.current.withScrollAnchor(update, { enterReadingMode: true }))
 
-    expect(requestReadingControl).toHaveBeenCalledWith(anchorEl)
+    expect(requestReadingControl).not.toHaveBeenCalled()
     expect(update).toHaveBeenCalledOnce()
   })
 

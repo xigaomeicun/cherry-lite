@@ -1,27 +1,20 @@
 import {
   Activity,
-  Archive,
+  CalendarClock,
   AudioLines,
   Bell,
   Cloud,
   Command,
-  Crop,
   FileBox,
-  FileCode,
   Globe,
   HardDrive,
   Info,
-  MonitorSmartphone,
-  MousePointer2,
   Package,
   Palette,
-  PictureInPicture2,
   Radio,
-  ScanText,
   Search,
   Settings2,
   Terminal,
-  TextCursorInput,
   ToolCase,
   UserRound,
   Zap
@@ -88,37 +81,37 @@ export const settingsMenu: readonly SettingsMenuEntry[] = [
     route: '/settings/prompts',
     titleKey: 'settings.prompts.title',
     icon: createElement(Zap),
-    groupKey: BUILTIN_TOOLS_GROUP_KEY
-  },
-  {
-    route: '/settings/computer-use',
-    titleKey: 'settings.computerUse.title',
-    icon: createElement(MousePointer2),
-    groupKey: BUILTIN_TOOLS_GROUP_KEY
+    groupKey: 'settings.menuGroups.capabilities'
   },
   {
     route: '/settings/browser',
     titleKey: 'settings.browser.title',
     icon: createElement(Globe),
-    groupKey: BUILTIN_TOOLS_GROUP_KEY
+    groupKey: 'settings.menuGroups.capabilities'
   },
   {
     route: '/settings/websearch',
     titleKey: 'settings.tool.websearch.title',
     icon: createElement(Search),
-    groupKey: BUILTIN_TOOLS_GROUP_KEY
+    groupKey: 'settings.menuGroups.capabilities'
   },
   {
-    route: '/settings/file-processing',
-    titleKey: 'settings.tool.file_processing.features.document_to_markdown.title',
-    icon: createElement(FileCode),
-    groupKey: BUILTIN_TOOLS_GROUP_KEY
+    route: '/settings/channels',
+    titleKey: 'settings.channels.title',
+    icon: createElement(Radio),
+    groupKey: 'settings.menuGroups.capabilities'
   },
   {
-    route: '/settings/ocr',
-    titleKey: 'settings.tool.file_processing.features.image_to_text.title',
-    icon: createElement(ScanText),
-    groupKey: BUILTIN_TOOLS_GROUP_KEY
+    route: '/settings/scheduled-tasks',
+    titleKey: 'settings.scheduledTasks.title',
+    icon: createElement(CalendarClock),
+    groupKey: 'settings.menuGroups.capabilities'
+  },
+  {
+    route: '/settings/shortcut',
+    titleKey: 'settings.shortcuts.title',
+    icon: createElement(Command),
+    groupKey: 'settings.menuGroups.capabilities'
   },
   {
     route: '/settings/general',
@@ -151,52 +144,10 @@ export const settingsMenu: readonly SettingsMenuEntry[] = [
     groupKey: 'settings.menuGroups.personal'
   },
   {
-    route: '/settings/archive',
-    titleKey: 'settings.data.trash.title',
-    icon: createElement(Archive),
-    groupKey: 'settings.menuGroups.personal'
-  },
-  {
     route: '/settings/usage',
     titleKey: 'settings.usage.title',
     icon: createElement(Activity),
     groupKey: 'settings.menuGroups.personal'
-  },
-  {
-    route: '/settings/channels',
-    titleKey: 'settings.channels.title',
-    icon: createElement(Radio),
-    groupKey: 'settings.menuGroups.automation'
-  },
-  {
-    route: '/settings/device-connections',
-    titleKey: 'deviceConnections.title',
-    icon: createElement(MonitorSmartphone),
-    groupKey: 'settings.menuGroups.automation'
-  },
-  {
-    route: '/settings/shortcut',
-    titleKey: 'settings.shortcuts.title',
-    icon: createElement(Command),
-    groupKey: 'settings.menuGroups.automation'
-  },
-  {
-    route: '/settings/quick-assistant',
-    titleKey: 'settings.quickAssistant.title',
-    icon: createElement(PictureInPicture2),
-    groupKey: 'settings.menuGroups.automation'
-  },
-  {
-    route: '/settings/selection-assistant',
-    titleKey: 'selection.name',
-    icon: createElement(TextCursorInput),
-    groupKey: 'settings.menuGroups.automation'
-  },
-  {
-    route: '/settings/screenshot',
-    titleKey: 'settings.screenshot.title',
-    icon: createElement(Crop),
-    groupKey: 'settings.menuGroups.automation'
   },
   {
     route: '/settings/dependencies',

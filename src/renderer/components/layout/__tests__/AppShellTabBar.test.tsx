@@ -437,30 +437,6 @@ describe('AppShellTabBar', () => {
     })
   })
 
-  it('renders preset and installed mini app icons at the same circular size', () => {
-    const presetMiniAppTab = createTab('preset-mini-app', {
-      url: '/app/mini-app/google',
-      title: 'Preset Mini App',
-      icon: 'google'
-    })
-    const miniAppTab = createTab('installed-mini-app', {
-      url: '/app/mini-app/com.example.installed',
-      title: 'Installed Mini App',
-      icon: 'file:///files/installed.webp'
-    })
-
-    renderTabBar({ tabs: [presetMiniAppTab, miniAppTab], activeTabId: miniAppTab.id })
-
-    const presetIcon = screen.getByTestId('preset-mini-app-avatar')
-    const tab = screen.getByRole('button', { name: 'Installed Mini App' })
-    const image = tab.querySelector('img')
-    expect(presetIcon).toHaveAttribute('data-shape', 'circle')
-    expect(presetIcon).toHaveStyle({ width: '18px', height: '18px' })
-    expect(image).toHaveClass('rounded-full', 'object-cover')
-    expect(image).toHaveStyle({ width: '18px', height: '18px' })
-    expect(image?.style.backgroundColor).toBe('')
-  })
-
   it('shows the focused tab as a Back control with a visible detach action', async () => {
     const user = userEvent.setup()
     const settingsTab = createTab('settings', { url: '/settings/provider', title: 'Settings', isPinned: true })

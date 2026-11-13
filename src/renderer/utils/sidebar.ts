@@ -391,6 +391,7 @@ export function getOrderedLaunchpadApps(stored: readonly string[] | undefined): 
   for (const id of SIDEBAR_FAVORITE_ORDER) {
     if (!seen.has(id)) {
       seen.add(id)
+      ordered.push(id)
     }
   }
 

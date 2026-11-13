@@ -451,6 +451,8 @@ export class MainWindowService extends BaseService {
         event.preventDefault()
         return
       }
+      // Mini app partitions carry their own gate and preload; leave them untouched here.
+      if (securityProfile === WebviewSecurityProfile.MiniApp) return
 
       if (
         (securityProfile === WebviewSecurityProfile.AgentBrowser &&

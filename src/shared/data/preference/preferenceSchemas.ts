@@ -1055,7 +1055,13 @@ export const DefaultPreferences: PreferenceSchemas = {
     'ui.launchpad.app_order': [],
     'ui.marketplace.skill_sources': [],
     'ui.navbar.position': 'top',
-    'ui.sidebar.favorites': [{ id: 'agents', type: 'app' }, { id: 'assistants', type: 'app' }, { id: 'translate', type: 'app' }, { id: 'paintings', type: 'app' }],
+    'ui.sidebar.favorites': [
+      { id: 'agents', type: 'app' },
+      { id: 'assistants', type: 'app' },
+      { id: 'translate', type: 'app' },
+      { id: 'paintings', type: 'app' },
+      { id: 'knowledge', type: 'app' }
+    ],
     'ui.sidebar_shortcut': [{ id: 'sidebar-shortcut:core.app:agents', target: { kind: 'resource', locator: { providerId: 'core.app', resourceId: 'agents' } }, type: 'shortcut' }, { id: 'sidebar-shortcut:core.app:assistants', target: { kind: 'resource', locator: { providerId: 'core.app', resourceId: 'assistants' } }, type: 'shortcut' }, { id: 'sidebar-shortcut:core.app:scheduled_tasks', target: { kind: 'resource', locator: { providerId: 'core.app', resourceId: 'scheduled_tasks' } }, type: 'shortcut' }, { id: 'sidebar-shortcut:core.app:translate', target: { kind: 'resource', locator: { providerId: 'core.app', resourceId: 'translate' } }, type: 'shortcut' }, { id: 'sidebar-shortcut:core.app:paintings', target: { kind: 'resource', locator: { providerId: 'core.app', resourceId: 'paintings' } }, type: 'shortcut' }],
     'ui.theme_mode': PreferenceTypes.ThemeMode.system,
     'ui.theme_user.code_font_family': '',

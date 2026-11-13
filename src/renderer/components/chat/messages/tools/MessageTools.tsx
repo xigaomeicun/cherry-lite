@@ -20,6 +20,7 @@ const DEDICATED_AGENT_SERVERS = new Set(['cherry-tools', 'agent-memory'])
 
 function rendersThroughChooseTool(toolResponse: McpToolResponse | NormalToolResponse): boolean {
   const tool = toolResponse.tool
+  if (tool.type !== 'mcp') return true
   return (
     DEDICATED_AGENT_SERVERS.has((tool as McpTool).serverId) &&
     canRenderMessageToolResponse(toolResponse as NormalToolResponse)

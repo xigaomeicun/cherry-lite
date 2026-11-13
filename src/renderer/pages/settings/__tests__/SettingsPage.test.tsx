@@ -1,7 +1,8 @@
-import zhCN from '@renderer/i18n/locales/zh-cn.json'
 import { fireEvent, render, screen } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+import zhCN from '@renderer/i18n/locales/zh-cn.json'
 
 import SettingsPage from '../SettingsPage'
 
@@ -11,6 +12,9 @@ const { isMacTransparentWindowMock, navigateMock } = vi.hoisted(() => ({
 }))
 
 vi.mock('@cherrystudio/ui', () => ({
+  ScrollArea: ({ children, className }: { children: ReactNode; className?: string }) => (
+    <div className={className}>{children}</div>
+  ),
   MenuDivider: () => <hr data-testid="menu-divider" />,
   MenuItem: ({ icon, label, onClick }: { icon?: ReactNode; label: string; onClick?: () => void }) => (
     <button type="button" data-testid="menu-item" onClick={onClick}>

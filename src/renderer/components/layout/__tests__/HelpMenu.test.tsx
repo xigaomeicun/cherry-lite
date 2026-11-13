@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   openFeedback: vi.fn(),
   openReleaseNotes: vi.fn(),
   openSmartMiniApp: vi.fn(),
+  ipcRequest: vi.fn(),
   showDoctor: vi.fn()
 }))
 
@@ -26,8 +27,8 @@ vi.mock('@renderer/hooks/useOpenReleaseNotes', () => ({
   useOpenReleaseNotes: () => mocks.openReleaseNotes
 }))
 
-vi.mock('@renderer/hooks/useMiniAppPopup', () => ({
-  useMiniAppPopup: () => ({ openSmartMiniApp: mocks.openSmartMiniApp })
+vi.mock('@renderer/ipc', () => ({
+  ipcApi: { request: (...args: unknown[]) => mocks.ipcRequest(...args) }
 }))
 
 vi.mock('@renderer/components/doctor', () => ({
@@ -186,15 +187,7 @@ describe('HelpMenu', () => {
 
     await user.click(screen.getByRole('button', { name: 'help.guide' }))
 
-    await waitFor(() =>
-      expect(mocks.openSmartMiniApp).toHaveBeenCalledWith(
-        expect.objectContaining({
-          appId: 'cherrystudio-guide',
-          name: 'help.guide',
-          url: expectedUrl
-        })
-      )
-    )
+    await waitFor(() => expect(mocks.ipcRequest).toHaveBeenCalledWith('system.shell.open_website', expectedUrl))
   })
 
   it('requests the feedback dialog from the secondary menu action', async () => {

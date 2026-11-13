@@ -145,17 +145,17 @@ describe('sidebar conversation navigation', () => {
     const wrapper = ({ children }: PropsWithChildren) => createElement(TabsContext, { value: tabs }, children)
     const { result } = renderHook(() => useSidebarShortcutActivation(), { wrapper })
     const assistant = CORE_SIDEBAR_SHORTCUT_PROVIDERS.find((candidate) => candidate.id === 'core.assistant')!
-    const knowledge = CORE_SIDEBAR_SHORTCUT_PROVIDERS.find((candidate) => candidate.id === 'core.knowledge-base')!
+    const knowledge = CORE_SIDEBAR_SHORTCUT_PROVIDERS.find((candidate) => candidate.id === 'core.agent-session')!
     const resource = { label: 'Resource', renderIcon: () => null }
     const first = result.current(assistant, createSidebarShortcutTarget('core.assistant', 'a'), resource)
-    await act(async () => result.current(knowledge, createSidebarShortcutTarget('core.knowledge-base', 'b'), resource))
+    await act(async () => result.current(knowledge, createSidebarShortcutTarget('core.agent-session', 'b'), resource))
     await act(async () => {
       resolveFirst({ topic: { id: 'late-topic' } })
       await first
     })
     expect(state.activeTabId).toBe('current')
     expect(state.tabs).toHaveLength(1)
-    expect(state.tabs[0].url).toBe('/app/knowledge?baseId=b')
+    expect(state.tabs[0].url).toBe('/app/agents?sessionId=b')
     MockDataApiUtils.resetMocks()
   })
 
@@ -298,8 +298,6 @@ describe('sidebar conversation navigation', () => {
   })
 
   it.each([
-    ['core.mini-app', 'one', '/app/mini-app/one'],
-    ['core.knowledge-base', 'one', '/app/knowledge?baseId=one'],
     [
       'core.file-entry',
       '11111111-1111-4111-8111-111111111111',
@@ -319,14 +317,14 @@ describe('sidebar conversation navigation', () => {
 
   it('does not rewrite the active tab when it already shows the shortcut resource', async () => {
     const { context, state } = statefulTabContext([
-      { id: 'current', type: 'route', url: '/app/knowledge?baseId=one', title: 'KB' }
+      { id: 'current', type: 'route', url: '/app/agents?sessionId=one', title: 'Session' }
     ])
 
-    await activateShortcut(context, 'core.knowledge-base', 'one')
+    await activateShortcut(context, 'core.agent-session', 'one')
 
     expect(state.activeTabId).toBe('current')
     expect(state.tabs).toHaveLength(1)
-    expect(state.tabs[0]).toMatchObject({ url: '/app/knowledge?baseId=one', title: 'KB' })
+    expect(state.tabs[0]).toMatchObject({ url: '/app/agents?sessionId=one', title: 'Session' })
   })
 
   it('does not duplicate a pinned agent tab that already shows the agent entry', async () => {

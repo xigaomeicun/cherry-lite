@@ -78,7 +78,8 @@ describe('session item actions', () => {
       'session.position',
       'session.save-notes',
       'session.export',
-      'session.copy'
+      'session.copy',
+      'session.delete'
     ])
     expect(actions.find((action) => action.id === 'session.auto-rename')?.label).toBe('agent.session.auto_rename')
     expect(actions.find((action) => action.id === 'session.rename')?.label).toBe('agent.session.edit.title')
@@ -165,11 +166,13 @@ describe('session item actions', () => {
     expect(onSetPanePosition).toHaveBeenCalledWith('left')
   })
 
-  it('uses localized cancel text for the delete confirmation', () => {
-    const actions = resolveSessionMenuActions(createSessionActionFixture())
+  it('archives without a confirmation dialog and exposes permanent delete separately', () => {
+    const actions = resolveSessionMenuActions(createSessionActionFixture({ onDeletePermanently: vi.fn() }))
     const deleteAction = actions.find((action) => action.id === 'session.delete')
+    const permanentAction = actions.find((action) => action.id === 'session.delete-permanently')
 
-    expect(deleteAction?.confirm?.cancelText).toBe('common.cancel')
+    expect(deleteAction?.confirm).toBeUndefined()
+    expect(permanentAction?.danger).toBe(true)
   })
 
   it('keeps Save to Notes independent from export and copy preferences', () => {

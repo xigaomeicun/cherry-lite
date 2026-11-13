@@ -672,15 +672,13 @@ describe('TabsProvider', () => {
       </TabsProvider>
     )
 
-    expect(screen.getByTestId('tab-urls')).toHaveTextContent('/app/code,/app/files,/app/chat')
+    // cherry-lite: /app/code was removed as well, so the OpenClaw pin is dropped entirely.
+    expect(screen.getByTestId('tab-urls')).toHaveTextContent('/app/files,/app/chat')
     const persisted = setPinnedTabsMock.mock.calls.reduce<Tab[]>(
       (current, [action]) => (typeof action === 'function' ? action(current) : action),
       pinnedTabsValue
     )
-    expect(persisted).toEqual([
-      { ...PINNED_OPENCLAW_TAB, url: '/app/code', title: '/app/code', isDormant: true },
-      { ...PINNED_FILES_TAB, isDormant: true }
-    ])
+    expect(persisted).toEqual([{ ...PINNED_FILES_TAB, isDormant: true }])
   })
 
   it('closes active and adjacent tabs atomically when closing a batch', async () => {
@@ -1053,18 +1051,18 @@ describe('migratePinnedTabs', () => {
   it('redirects an OpenClaw pin to the Code page and flags the change', () => {
     const { tabs, changed } = migratePinnedTabs([PINNED_OPENCLAW_TAB, PINNED_FILES_TAB])
     expect(changed).toBe(true)
-    expect(tabs).toEqual([{ ...PINNED_OPENCLAW_TAB, url: '/app/code', title: '/app/code' }, PINNED_FILES_TAB])
+    expect(tabs).toEqual([PINNED_FILES_TAB])
   })
 
-  it('drops the OpenClaw pin instead of duplicating an existing Code pin', () => {
+  it('drops the OpenClaw pin and the removed Code pin alike', () => {
     const { tabs, changed } = migratePinnedTabs([PINNED_CODE_TAB, PINNED_OPENCLAW_TAB])
     expect(changed).toBe(true)
-    expect(tabs).toEqual([PINNED_CODE_TAB])
+    expect(tabs).toEqual([])
   })
 
-  it('collapses two OpenClaw pins into a single Code pin', () => {
+  it('drops all OpenClaw pins (code page removed in cherry-lite)', () => {
     const { tabs } = migratePinnedTabs([PINNED_OPENCLAW_TAB, { ...PINNED_OPENCLAW_TAB, id: 'openclaw2' }])
-    expect(tabs).toEqual([{ ...PINNED_OPENCLAW_TAB, url: '/app/code', title: '/app/code' }])
+    expect(tabs).toEqual([])
   })
 
   it('drops legacy library pins', () => {
@@ -1074,7 +1072,7 @@ describe('migratePinnedTabs', () => {
   })
 
   it('is a no-op when nothing needs migrating', () => {
-    const input = [PINNED_FILES_TAB, PINNED_CODE_TAB]
+    const input = [PINNED_FILES_TAB]
     const { tabs, changed } = migratePinnedTabs(input)
     expect(changed).toBe(false)
     expect(tabs).toEqual(input)
