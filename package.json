@@ -457,7 +457,6 @@
     "fs-extra": "^11.2.0",
     "google-auth-library": "^9.15.1",
     "gpt-tokenizer": "^3.4.0",
-    "grammy": "^1.36.3",
     "gray-matter": "4.0.3",
     "html-to-image": "^1.11.13",
     "html-to-text": "^9.0.5",
