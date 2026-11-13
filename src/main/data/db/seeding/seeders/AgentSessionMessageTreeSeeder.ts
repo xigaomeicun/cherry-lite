@@ -1,4 +1,4 @@
-import { asc, eq, inArray } from 'drizzle-orm'
+import { and, asc, eq, inArray, isNotNull } from 'drizzle-orm'
 
 import { agentSessionTable as sessions } from '@data/db/schemas/agentSession'
 import { agentSessionMessageTable as messages } from '@data/db/schemas/agentSessionMessage'
@@ -8,7 +8,7 @@ import type { DbType, ISeeder } from '../../types'
 
 export class AgentSessionMessageTreeSeeder implements ISeeder {
   readonly name = 'agentSessionMessageTree'
-  readonly version = '1'
+  readonly version = '2'
   readonly description = 'Preserve flat Agent archives as one selected message path'
   readonly executionPolicy = 'run-on-change' as const
 
@@ -16,7 +16,22 @@ export class AgentSessionMessageTreeSeeder implements ISeeder {
     db.transaction(
       (tx) => {
         for (const session of tx.select().from(sessions).all()) {
-          if (session.activeNodeId) continue
+          if (session.activeNodeId) {
+            const head = tx
+              .select({ role: messages.role })
+              .from(messages)
+              .where(eq(messages.id, session.activeNodeId))
+              .get()
+            // Reads can lazily root a session, leaving a flat archive stranded behind the root head.
+            if (head && head.role !== 'root') continue
+            const linked = tx
+              .select({ id: messages.id })
+              .from(messages)
+              .where(and(eq(messages.sessionId, session.id), isNotNull(messages.parentId)))
+              .limit(1)
+              .get()
+            if (linked) continue
+          }
           const rows = tx
             .select({ id: messages.id, role: messages.role, updatedAt: messages.updatedAt })
             .from(messages)
