@@ -1333,9 +1333,9 @@ describe('Sessions', () => {
     expect(screen.getByRole('button', { name: 'Today' })).toHaveAttribute('aria-expanded', 'true')
   })
 
-  it.each(['time', 'agent', 'workdir'])('expands all sessions in %s groups with one click', async (displayMode) => {
+  it('expands all sessions in time groups with one click', async () => {
     const user = userEvent.setup()
-    preferenceMocks.values.set('agent.session.display_mode', displayMode)
+    preferenceMocks.values.set('agent.session.display_mode', 'time')
     setupSessions({
       sessions: [
         ...Array.from({ length: 56 }, (_, index) =>
@@ -1353,11 +1353,35 @@ describe('Sessions', () => {
     render(<SessionsForTest />)
 
     expect(screen.getByText('Session 1')).toBeInTheDocument()
+    expect(screen.getByText('Session 50')).toBeInTheDocument()
+    expect(screen.queryByText('Session 51')).not.toBeInTheDocument()
     expect(screen.queryByText('Session 56')).not.toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Expand display' }))
 
     expect(screen.getByText('Session 56')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Expand display' })).not.toBeInTheDocument()
+  })
+
+  it.each(['agent', 'workdir'])('shows all sessions in %s groups without folding', async (displayMode) => {
+    preferenceMocks.values.set('agent.session.display_mode', displayMode)
+    setupSessions({
+      sessions: [
+        ...Array.from({ length: 10 }, (_, index) =>
+          createSession({
+            id: `session-${index + 1}`,
+            name: `Session ${index + 1}`,
+            orderKey: String(index + 1).padStart(3, '0'),
+            updatedAt: CURRENT_SESSION_ISO
+          })
+        )
+      ]
+    })
+
+    render(<SessionsForTest />)
+
+    expect(screen.getByText('Session 1')).toBeInTheDocument()
+    expect(screen.getByText('Session 10')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Expand display' })).not.toBeInTheDocument()
   })
 
@@ -1978,27 +2002,29 @@ describe('Sessions', () => {
   })
 
   it('reveals a history-selected session hidden by search and show-more with row focus', async () => {
+    preferenceMocks.values.set('agent.session.display_mode', 'time')
     setupSessions({
-      sessions: Array.from({ length: 6 }, (_, index) =>
+      sessions: Array.from({ length: 51 }, (_, index) =>
         createSession({
           id: `session-${index + 1}`,
           name: `Session ${index + 1}`,
-          orderKey: `${index + 1}`
+          orderKey: `${index + 1}`,
+          updatedAt: CURRENT_SESSION_ISO
         })
       )
     })
 
     const { rerender } = render(<SessionsForTest />)
 
-    expect(screen.queryByText('Session 6')).not.toBeInTheDocument()
+    expect(screen.queryByText('Session 51')).not.toBeInTheDocument()
 
     vi.useFakeTimers()
     rerender(
-      <SessionsForTest revealRequest={{ itemId: 'session-6', requestId: 1, clearFilters: true, clearQuery: true }} />
+      <SessionsForTest revealRequest={{ itemId: 'session-51', requestId: 1, clearFilters: true, clearQuery: true }} />
     )
 
-    expect(screen.getByText('Session 6')).toBeInTheDocument()
-    const revealedRow = screen.getByText('Session 6').closest('[role="option"]')
+    expect(screen.getByText('Session 51')).toBeInTheDocument()
+    const revealedRow = screen.getByText('Session 51').closest('[role="option"]')
     expect(revealedRow).not.toBeNull()
     expect(revealedRow!).toHaveAttribute('data-reveal-focus', 'true')
     expect(virtualMocks.scrollToIndex).toHaveBeenCalledWith(expect.any(Number), { align: 'center' })
@@ -4447,77 +4473,77 @@ describe('Sessions', () => {
     expect(recycleBinFeedbackMocks.showRecycleBinUndo).not.toHaveBeenCalled()
   })
 
-  it.each([
-    { builtinRole: 'assistant' as const, name: 'Cherry Assistant' },
-    { builtinRole: 'support' as const, name: 'Cherry Support' }
-  ])('deletes only sessions from the protected built-in $name group', async ({ builtinRole, name }) => {
-    const onActiveAgentDeleted = vi.fn()
-    preferenceMocks.values.set('agent.session.display_mode', 'agent')
-    agentDataMocks.useAgents.mockReturnValue({
-      agents: [
-        {
-          id: 'agent-a',
-          model: 'model-a',
-          name,
-          configuration: { builtin_role: builtinRole }
-        }
-      ],
-      isLoading: false,
-      error: undefined,
-      refetch: dataApiMocks.refetchAgents
-    })
-    setupSessions({
-      sessions: [createSession({ id: 'session-a', name: 'Alpha session', agentId: 'agent-a', orderKey: 'a' })]
-    })
-    dataApiMocks.deleteAgentSessions.mockResolvedValueOnce({ deletedIds: ['session-a', 'session-not-loaded'] })
+  it.each([{ builtinRole: 'doctor' as const, name: 'System Doctor' }])(
+    'deletes only sessions from the protected built-in $name group',
+    async ({ builtinRole, name }) => {
+      const onActiveAgentDeleted = vi.fn()
+      preferenceMocks.values.set('agent.session.display_mode', 'agent')
+      agentDataMocks.useAgents.mockReturnValue({
+        agents: [
+          {
+            id: 'agent-a',
+            model: 'model-a',
+            name,
+            configuration: { builtin_role: builtinRole }
+          }
+        ],
+        isLoading: false,
+        error: undefined,
+        refetch: dataApiMocks.refetchAgents
+      })
+      setupSessions({
+        sessions: [createSession({ id: 'session-a', name: 'Alpha session', agentId: 'agent-a', orderKey: 'a' })]
+      })
+      dataApiMocks.deleteAgentSessions.mockResolvedValueOnce({ deletedIds: ['session-a', 'session-not-loaded'] })
 
-    render(<SessionsForTest onActiveAgentDeleted={onActiveAgentDeleted} />)
+      render(<SessionsForTest onActiveAgentDeleted={onActiveAgentDeleted} />)
 
-    const agentGroup = screen.getByRole('button', { name }).closest('div')
-    expect(agentGroup).not.toBeNull()
-    fireEvent.pointerDown(within(agentGroup as HTMLElement).getByRole('button', { name: 'More' }))
-    const deleteSessionsMenuItem = screen
-      .getAllByRole('menuitem', { name: 'Archive all conversations' })
-      .find((button) => button.getAttribute('data-slot') === 'dropdown-menu-item')
-    expect(deleteSessionsMenuItem).toBeDefined()
-    expect(screen.queryByRole('menuitem', { name: 'Archive' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('menuitem', { name: /Delete Permanently/ })).not.toBeInTheDocument()
+      const agentGroup = screen.getByRole('button', { name }).closest('div')
+      expect(agentGroup).not.toBeNull()
+      fireEvent.pointerDown(within(agentGroup as HTMLElement).getByRole('button', { name: 'More' }))
+      const deleteSessionsMenuItem = screen
+        .getAllByRole('menuitem', { name: 'Archive all conversations' })
+        .find((button) => button.getAttribute('data-slot') === 'dropdown-menu-item')
+      expect(deleteSessionsMenuItem).toBeDefined()
+      expect(screen.queryByRole('menuitem', { name: 'Archive' })).not.toBeInTheDocument()
+      expect(screen.queryByRole('menuitem', { name: /Delete Permanently/ })).not.toBeInTheDocument()
 
-    fireEvent.click(deleteSessionsMenuItem as HTMLElement)
+      fireEvent.click(deleteSessionsMenuItem as HTMLElement)
 
-    await vi.waitFor(() =>
-      expect(dataApiMocks.deleteAgentSessions).toHaveBeenCalledWith({ params: { agentId: 'agent-a' } })
-    )
-    expect(dataApiMocks.deleteAgent).not.toHaveBeenCalled()
-    expect(tabsContextMocks.closeConversationTabs).toHaveBeenCalledWith('agents', ['session-a', 'session-not-loaded'])
-    expect(popup.confirm).not.toHaveBeenCalled()
-    expect(conversationOwnerPopupMocks.show).not.toHaveBeenCalled()
-    expect(archiveSessionsPopupMocks.show).toHaveBeenCalledWith(
-      expect.objectContaining({ agentName: name, sessionCount: 1 })
-    )
-    expect(onActiveAgentDeleted).toHaveBeenCalledWith('agent-a')
-    expect(recycleBinFeedbackMocks.showRecycleBinBatchUndo).toHaveBeenCalledWith({
-      itemCount: 2,
-      onUndo: expect.any(Function)
-    })
+      await vi.waitFor(() =>
+        expect(dataApiMocks.deleteAgentSessions).toHaveBeenCalledWith({ params: { agentId: 'agent-a' } })
+      )
+      expect(dataApiMocks.deleteAgent).not.toHaveBeenCalled()
+      expect(tabsContextMocks.closeConversationTabs).toHaveBeenCalledWith('agents', ['session-a', 'session-not-loaded'])
+      expect(popup.confirm).not.toHaveBeenCalled()
+      expect(conversationOwnerPopupMocks.show).not.toHaveBeenCalled()
+      expect(archiveSessionsPopupMocks.show).toHaveBeenCalledWith(
+        expect.objectContaining({ agentName: name, sessionCount: 1 })
+      )
+      expect(onActiveAgentDeleted).toHaveBeenCalledWith('agent-a')
+      expect(recycleBinFeedbackMocks.showRecycleBinBatchUndo).toHaveBeenCalledWith({
+        itemCount: 2,
+        onUndo: expect.any(Function)
+      })
 
-    sessionDataMocks.restoreSession.mockRejectedValueOnce(
-      new IpcError(aiErrorCodes.AI_AGENT_SESSION_NOT_FOUND, 'Session active')
-    )
-    const getActiveSession = vi.spyOn(dataApiService, 'get').mockResolvedValue({ id: 'session-a' })
-    const reloadCountBeforeUndo = sessionDataMocks.reload.mock.calls.length
-    await expect(recycleBinFeedbackMocks.showRecycleBinBatchUndo.mock.calls.at(-1)?.[0].onUndo()).resolves.toEqual({
-      restored: ['session-a', 'session-not-loaded'],
-      failed: []
-    })
-    expect(sessionDataMocks.restoreSession).toHaveBeenCalledTimes(2)
-    expect(sessionDataMocks.restoreSession).toHaveBeenNthCalledWith(1, 'session-a')
-    expect(sessionDataMocks.restoreSession).toHaveBeenNthCalledWith(2, 'session-not-loaded')
-    expect(getActiveSession).toHaveBeenCalledWith('/agent-sessions/session-a')
-    expect(sessionDataMocks.reload).toHaveBeenCalledTimes(reloadCountBeforeUndo + 1)
-    expect(dataApiMocks.restoreAgent).not.toHaveBeenCalled()
-    getActiveSession.mockRestore()
-  })
+      sessionDataMocks.restoreSession.mockRejectedValueOnce(
+        new IpcError(aiErrorCodes.AI_AGENT_SESSION_NOT_FOUND, 'Session active')
+      )
+      const getActiveSession = vi.spyOn(dataApiService, 'get').mockResolvedValue({ id: 'session-a' })
+      const reloadCountBeforeUndo = sessionDataMocks.reload.mock.calls.length
+      await expect(recycleBinFeedbackMocks.showRecycleBinBatchUndo.mock.calls.at(-1)?.[0].onUndo()).resolves.toEqual({
+        restored: ['session-a', 'session-not-loaded'],
+        failed: []
+      })
+      expect(sessionDataMocks.restoreSession).toHaveBeenCalledTimes(2)
+      expect(sessionDataMocks.restoreSession).toHaveBeenNthCalledWith(1, 'session-a')
+      expect(sessionDataMocks.restoreSession).toHaveBeenNthCalledWith(2, 'session-not-loaded')
+      expect(getActiveSession).toHaveBeenCalledWith('/agent-sessions/session-a')
+      expect(sessionDataMocks.reload).toHaveBeenCalledTimes(reloadCountBeforeUndo + 1)
+      expect(dataApiMocks.restoreAgent).not.toHaveBeenCalled()
+      getActiveSession.mockRestore()
+    }
+  )
 
   it.each(['cancel', 'confirm', 'empty'] as const)(
     'archives only the selected Agent conversations after %s',

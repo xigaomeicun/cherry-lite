@@ -2800,7 +2800,7 @@ describe('Topics', () => {
     expect(topicStreamStatusMocks.markSeen).toHaveBeenCalledWith('topic-a')
   })
 
-  it.each(['time', 'assistant'])(
+  it.each(['time'] as const)(
     'expands all topics in %s groups with one click and collapses back',
     async (displayMode) => {
       const user = userEvent.setup()
@@ -2854,6 +2854,47 @@ describe('Topics', () => {
       expect(queryByRowText(displayMode === 'time' ? 'Topic 51' : 'Topic 6')).not.toBeInTheDocument()
     }
   )
+
+  it('shows all topics in assistant groups without folding', () => {
+    MockUsePreferenceUtils.setPreferenceValue('topic.tab.display_mode' as never, 'assistant')
+    mockUseQuery.mockImplementation((path) => {
+      if (path === '/pins') {
+        return {
+          data: [],
+          isLoading: false,
+          isRefreshing: false,
+          error: undefined,
+          refetch: vi.fn().mockResolvedValue(undefined),
+          mutate: vi.fn().mockResolvedValue(undefined)
+        }
+      }
+      return {
+        data: undefined,
+        isLoading: false,
+        isRefreshing: false,
+        error: undefined,
+        refetch: vi.fn().mockResolvedValue(undefined),
+        mutate: vi.fn().mockResolvedValue(undefined)
+      }
+    })
+    mockUseInfiniteQuery.mockReturnValue({
+      pages: [{ items: createTopicPageItems(10) }],
+      isLoading: false,
+      isRefreshing: false,
+      error: undefined,
+      hasNext: false,
+      loadNext: vi.fn(),
+      refresh: vi.fn(),
+      reset: vi.fn(),
+      mutate: vi.fn()
+    })
+
+    renderTopicList()
+
+    expect(getByRowText('Topic 1')).toBeInTheDocument()
+    expect(getByRowText('Topic 10')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Show more conversations' })).not.toBeInTheDocument()
+  })
 
   it('keeps the expanded topic window after selecting a topic revealed by show more', () => {
     MockUsePreferenceUtils.setPreferenceValue('topic.tab.display_mode' as never, 'time')

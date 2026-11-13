@@ -171,7 +171,7 @@ function permanentAgentDeleteError(err: unknown, message: (key: string) => strin
 const EMPTY_WORKSPACE_ROWS: AgentWorkspaceEntity[] = []
 // Let the context menu close before mounting the heavier offscreen message list.
 const IMAGE_CAPTURE_START_DELAY_MS = 160
-const DEFAULT_SESSION_GROUP_VISIBLE_COUNT = 5
+const DEFAULT_SESSION_GROUP_VISIBLE_COUNT = Number.POSITIVE_INFINITY
 const LEFT_PANEL_TIME_SESSION_GROUP_VISIBLE_COUNT = 50
 
 const Sessions = ({
@@ -1652,8 +1652,12 @@ const Sessions = ({
       canDragItem={canDragSessionItem}
       canDropItem={canDropSessionItem}
       groupEmptyLabel={t('agent.session.empty.title')}
-      groupShowMoreLabel={t('agent.session.group.show_more')}
-      groupCollapseLabel={t('agent.session.group.collapse')}
+      groupShowMoreLabel={
+        defaultGroupVisibleCount === Number.POSITIVE_INFINITY ? undefined : t('agent.session.group.show_more')
+      }
+      groupCollapseLabel={
+        defaultGroupVisibleCount === Number.POSITIVE_INFINITY ? undefined : t('agent.session.group.collapse')
+      }
       onRenameItem={handleRenameSession}
       onGroupHeaderSelectItem={handleSelectSession}
       onReorder={handleSessionReorder}
