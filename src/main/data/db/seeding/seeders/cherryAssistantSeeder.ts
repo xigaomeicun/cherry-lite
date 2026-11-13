@@ -1,6 +1,7 @@
 import { app } from 'electron'
 import { v4 as uuidv4 } from 'uuid'
 
+import { isBuiltinAgentDeletedTx } from '@data/db/builtinAgentTombstone'
 import { agentService } from '@data/services/AgentService'
 import { agentSessionService } from '@data/services/AgentSessionService'
 import type { AgentConfiguration } from '@shared/data/api/schemas/agents'
@@ -36,6 +37,10 @@ export class CherryAssistantSeeder implements ISeeder {
 
   run(db: DbType): void {
     db.transaction((tx) => {
+      // A user deletion is durable: the row is gone, so the tombstone is the only memory of it. A
+      // future version bump re-runs this seeder, and without this guard it would resurrect an Agent
+      // the user deliberately removed.
+      if (isBuiltinAgentDeletedTx(tx, 'assistant')) return
       const existing = agentService.findBuiltinAgentByRoleTx(tx, 'assistant', { includeDeleted: true })
       if (existing) return
 

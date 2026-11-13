@@ -40,7 +40,7 @@ import {
   getSidebarShortcutResourceIds,
   SIDEBAR_SHORTCUT_PROVIDER_IDS
 } from '@renderer/utils/sidebar'
-import { isProtectedBuiltinAgentRole } from '@shared/ai/builtinAgent'
+import { isDeletionProtectedBuiltinAgentRole } from '@shared/ai/builtinAgent'
 import type { AgentSessionEntity } from '@shared/data/api/schemas/agentSessions'
 import type { AssistantIconType } from '@shared/data/preference/preferenceTypes'
 import {
@@ -324,7 +324,7 @@ export function AgentResourceList({
       const permanent = mode === 'permanent'
       const deleteSessionsOnly = mode === 'archive-sessions'
       const currentAgent = agentsRef.current.find((agent) => agent.id === agentId)
-      const protectedAgent = isProtectedBuiltinAgentRole(currentAgent?.configuration?.builtin_role)
+      const protectedAgent = isDeletionProtectedBuiltinAgentRole(currentAgent?.configuration?.builtin_role)
       if (permanent && (agentId === SESSION_UNKNOWN_AGENT_GROUP_ID || !currentAgent || protectedAgent)) {
         return
       }
@@ -376,7 +376,7 @@ export function AgentResourceList({
           if (
             agentId === SESSION_UNKNOWN_AGENT_GROUP_ID ||
             !liveAgent ||
-            isProtectedBuiltinAgentRole(liveAgent.configuration?.builtin_role)
+            isDeletionProtectedBuiltinAgentRole(liveAgent.configuration?.builtin_role)
           ) {
             await refreshAgentResources()
             throw new Error(t('recycle_bin.delete.stale'))
@@ -537,7 +537,7 @@ export function AgentResourceList({
       if (deleteAgentPromptLockRef.current || deletingAgentId !== null) return false
       if (agentId === SESSION_UNKNOWN_AGENT_GROUP_ID) return false
       const owner = agentsRef.current.find((agent) => agent.id === agentId)
-      return !!owner && !isProtectedBuiltinAgentRole(owner.configuration?.builtin_role)
+      return !!owner && !isDeletionProtectedBuiltinAgentRole(owner.configuration?.builtin_role)
     },
     [deletingAgentId]
   )
@@ -549,7 +549,7 @@ export function AgentResourceList({
       const pinned = agentPinnedIdSet.has(item.id)
       const sidebarPinned = sidebarAgentFavoriteIdSet.has(item.id)
       const owner = agentsRef.current.find((agent) => agent.id === item.id)
-      const deleteSessionsOnly = isProtectedBuiltinAgentRole(owner?.configuration?.builtin_role)
+      const deleteSessionsOnly = isDeletionProtectedBuiltinAgentRole(owner?.configuration?.builtin_role)
 
       return [
         buildResolvedResourceEntityMenuAction({

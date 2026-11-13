@@ -20,7 +20,7 @@ import type {
 } from '@renderer/types/resourceCatalog'
 import { serializeAssistantForExport, serializeAssistantsForExport } from '@renderer/utils/assistantTransfer'
 import { buildCreateAgentCommand, buildCreateAssistantDto } from '@renderer/utils/resourceCatalog'
-import { isProtectedBuiltinAgentRole } from '@shared/ai/builtinAgent'
+import { isDeletionProtectedBuiltinAgentRole } from '@shared/ai/builtinAgent'
 import type { ConcreteApiPaths } from '@shared/data/api/paths'
 import { ASSISTANTS_MAX_LIMIT } from '@shared/data/api/schemas/assistants'
 import type { InstalledSkill } from '@shared/data/types/agent'
@@ -407,7 +407,7 @@ export function useResourceCatalogController(
 
   const handleDelete = useCallback(
     (resource: ResourceItem) => {
-      if (resource.type === 'agent' && isProtectedBuiltinAgentRole(resource.raw.configuration?.builtin_role)) {
+      if (resource.type === 'agent' && isDeletionProtectedBuiltinAgentRole(resource.raw.configuration?.builtin_role)) {
         void onConfirmArchiveAgentSessions?.(resource.name, () => handleDeleteProtectedAgentSessions(resource))
         return
       }

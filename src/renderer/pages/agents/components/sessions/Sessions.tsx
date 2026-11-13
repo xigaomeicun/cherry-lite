@@ -91,7 +91,7 @@ import {
   getSidebarShortcutResourceIds,
   SIDEBAR_SHORTCUT_PROVIDER_IDS
 } from '@renderer/utils/sidebar'
-import { isProtectedBuiltinAgentRole } from '@shared/ai/builtinAgent'
+import { isDeletionProtectedBuiltinAgentRole } from '@shared/ai/builtinAgent'
 import { classifyTurn } from '@shared/ai/transport'
 import type { OrderRequest } from '@shared/data/api/schemas/_endpointHelpers'
 import type { AgentSessionEntity } from '@shared/data/api/schemas/agentSessions'
@@ -759,7 +759,7 @@ const Sessions = ({
       if (
         permanent &&
         (!agent ||
-          isProtectedBuiltinAgentRole(agent.configuration?.builtin_role) ||
+          isDeletionProtectedBuiltinAgentRole(agent.configuration?.builtin_role) ||
           agentId === SESSION_UNKNOWN_AGENT_GROUP_ID)
       ) {
         return
@@ -768,7 +768,7 @@ const Sessions = ({
       const performDelete = async (deleteSessions: boolean) => {
         if (permanent) {
           const liveAgent = agentByIdRef.current.get(agentId)
-          if (!liveAgent || isProtectedBuiltinAgentRole(liveAgent.configuration?.builtin_role)) {
+          if (!liveAgent || isDeletionProtectedBuiltinAgentRole(liveAgent.configuration?.builtin_role)) {
             await refreshAgentResources()
             throw new Error(t('recycle_bin.delete.stale'))
           }
@@ -976,7 +976,7 @@ const Sessions = ({
     (agentId: string | undefined) => {
       if (!agentId || deletingAgentId !== null || agentPermanentDeleteLockRef.current) return false
       const agent = agentById.get(agentId)
-      if (!agent || isProtectedBuiltinAgentRole(agent.configuration?.builtin_role)) return false
+      if (!agent || isDeletionProtectedBuiltinAgentRole(agent.configuration?.builtin_role)) return false
       return true
     },
     [agentById, deletingAgentId]
@@ -1328,7 +1328,7 @@ const Sessions = ({
                 agentId={agentGroupId}
                 assistantIconType={assistantIconType}
                 deleteAgentDisabled={deletingAgentId !== null}
-                deleteSessionsOnly={isProtectedBuiltinAgentRole(
+                deleteSessionsOnly={isDeletionProtectedBuiltinAgentRole(
                   agentById.get(agentGroupId)?.configuration?.builtin_role
                 )}
                 pinDisabled={isAgentPinActionDisabled}
@@ -1515,7 +1515,7 @@ const Sessions = ({
           agentId,
           assistantIconType,
           deleteAgentDisabled: deletingAgentId !== null,
-          deleteSessionsOnly: isProtectedBuiltinAgentRole(agentById.get(agentId)?.configuration?.builtin_role),
+          deleteSessionsOnly: isDeletionProtectedBuiltinAgentRole(agentById.get(agentId)?.configuration?.builtin_role),
           onArchiveSessions: handleArchiveSessions,
           onDeleteAgent: handleDeleteAgent,
           onPermanentDeleteAgent: isAgentGroupPermanentDeleteEligible(agentId) ? handlePermanentDeleteAgent : undefined,
