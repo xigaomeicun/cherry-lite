@@ -123,6 +123,7 @@ export const mainResolveAlias = {
 export default defineConfig({
   main: {
     define: {
+      __APP_EDITION__: JSON.stringify(rendererEdition),
       __CLAUDE_CODE_BINARY_MANIFEST__: JSON.stringify(claudeCodeBinaryManifest(__dirname))
     },
     plugins: [
