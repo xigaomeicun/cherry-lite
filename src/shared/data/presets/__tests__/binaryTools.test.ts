@@ -3,7 +3,6 @@ import { describe, expect, it } from 'vitest'
 import enUs from '../../../../renderer/i18n/locales/en-us.json'
 import {
   BABELDOC_MINIMUM_VERSION,
-  BABELDOC_PIP_DEPENDENCIES,
   BABELDOC_TOOL_NAME,
   getBabelDocInstallationStatus,
   isRuntimeDependency,
@@ -36,23 +35,7 @@ describe('preset descriptions', () => {
   })
 })
 
-describe('BabelDOC Stream preset', () => {
-  it('pins the bitstring major version required by BabelDOC at import time', () => {
-    expect(BABELDOC_PIP_DEPENDENCIES).toEqual(['bitstring<5'])
-    expect(PRESETS_BINARY_TOOLS.find(({ name }) => name === BABELDOC_TOOL_NAME)?.pipDependencies).toBe(
-      BABELDOC_PIP_DEPENDENCIES
-    )
-  })
-
-  it('uses the independently published executable and package recipe', () => {
-    expect(BABELDOC_TOOL_NAME).toBe('babeldoc-stream')
-    expect(PRESETS_BINARY_TOOLS.find(({ name }) => name === BABELDOC_TOOL_NAME)).toMatchObject({
-      displayName: 'BabelDOC Stream',
-      tool: 'pipx:babeldoc-stream',
-      repoUrl: 'https://github.com/eeee0717/BabelDOC'
-    })
-  })
-
+describe('BabelDOC installation status', () => {
   it.each([
     [undefined, 'missing'],
     [{ status: 'absent' } as const, 'missing'],

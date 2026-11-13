@@ -5,7 +5,6 @@ import { gt as semverGt } from 'semver'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { loggerService } from '@logger'
-import { BABELDOC_MINIMUM_VERSION } from '@shared/data/presets/binaryTools'
 import type { BinaryToolInstalledSizes, BinaryToolSnapshot } from '@shared/types/binary'
 
 import EnvironmentDependencies from '../EnvironmentDependencies'
@@ -248,37 +247,13 @@ describe('EnvironmentDependencies', () => {
     render(<EnvironmentDependencies />)
     expect(await screen.findByText('Bun')).toBeInTheDocument()
     expect(screen.getByText('ripgrep')).toBeInTheDocument()
-    expect(screen.getByText('BabelDOC Stream')).toBeInTheDocument()
+    expect(screen.getByText('GitHub CLI')).toBeInTheDocument()
   })
 
   it('gives the public icon-only dependency actions accessible names', async () => {
     render(<EnvironmentDependencies />)
     expect(await screen.findByLabelText('settings.dependencies.checkUpdates')).toBeInTheDocument()
     expect(screen.getByLabelText('settings.dependencies.installSettings.title')).toBeInTheDocument()
-  })
-
-  // A name-only install lets main resolve `latest`, which a lagging PyPI mirror
-  // answers with a build Cherry's progress parser predates — flagged outdated by
-  // the very next availability check, at the cost of a second full download.
-  it('installs the BabelDOC Stream dependency at its pinned version, never latest', async () => {
-    setSnapshots({
-      'babeldoc-stream': {
-        name: 'babeldoc-stream',
-        application: { status: 'absent' },
-        availability: { source: 'none' }
-      }
-    })
-    render(<EnvironmentDependencies />)
-    const card = (await screen.findByText('BabelDOC Stream')).closest('[role="listitem"]') as HTMLElement
-
-    fireEvent.click(within(card).getByRole('button', { name: 'settings.mcp.install' }))
-
-    await waitFor(() =>
-      expect(ipcMocks.installTool).toHaveBeenCalledWith({
-        name: 'babeldoc-stream',
-        targetVersion: BABELDOC_MINIMUM_VERSION
-      })
-    )
   })
 
   it('keeps a system preset display-only, never shadowing it with a managed copy', async () => {

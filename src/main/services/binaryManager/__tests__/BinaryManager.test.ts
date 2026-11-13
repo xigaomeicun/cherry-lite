@@ -769,11 +769,11 @@ describe('BinaryManager', () => {
         if (args[0] === 'ls') {
           return {
             stdout: JSON.stringify({
-              'github:larksuite/cli': [
+              gh: [
                 {
-                  version: '1.0.77',
+                  version: '2.40.0',
                   active: true,
-                  install_path: '/opt/mise/installs/github-larksuite-cli/1.0.77'
+                  install_path: '/opt/mise/installs/gh/2.40.0'
                 }
               ]
             }),
@@ -781,27 +781,25 @@ describe('BinaryManager', () => {
           }
         }
         if (args[0] === 'which') {
-          return { stdout: '/opt/mise/installs/github-larksuite-cli/latest/lark-cli\n', stderr: '' }
+          return { stdout: '/opt/mise/installs/gh/latest/gh\n', stderr: '' }
         }
         return { stdout: '', stderr: '' }
       })
-      mockFsp.realpath.mockImplementation(async (candidate: string) =>
-        candidate.replace('/github-larksuite-cli/latest/', '/github-larksuite-cli/1.0.77/')
-      )
+      mockFsp.realpath.mockImplementation(async (candidate: string) => candidate.replace('/gh/latest/', '/gh/2.40.0/'))
 
-      const snapshots = await service.getToolSnapshots(['lark-cli'])
+      const snapshots = await service.getToolSnapshots(['gh'])
 
-      expect(snapshots['lark-cli']).toEqual({
-        name: 'lark-cli',
+      expect(snapshots['gh']).toEqual({
+        name: 'gh',
         availability: {
           source: 'mise',
-          path: path.join('/mock/feature.binary.data', 'shims', 'lark-cli'),
-          version: '1.0.77'
+          path: path.join('/mock/feature.binary.data', 'shims', 'gh'),
+          version: '2.40.0'
         },
-        application: { status: 'applied', version: '1.0.77' }
+        application: { status: 'applied', version: '2.40.0' }
       })
-      expect(mockFsp.realpath).toHaveBeenCalledWith('/opt/mise/installs/github-larksuite-cli/latest/lark-cli')
-      expect(mockFsp.realpath).toHaveBeenCalledWith('/opt/mise/installs/github-larksuite-cli/1.0.77')
+      expect(mockFsp.realpath).toHaveBeenCalledWith('/opt/mise/installs/gh/latest/gh')
+      expect(mockFsp.realpath).toHaveBeenCalledWith('/opt/mise/installs/gh/2.40.0')
     })
 
     it('reports broken when an active entry shim resolves outside that entry install_path', async () => {
