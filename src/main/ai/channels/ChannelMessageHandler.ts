@@ -1513,15 +1513,21 @@ export class ChannelMessageHandler {
       resolveExecution = resolve
       rejectExecution = reject
     })
+    let sentinelText = ''
     const sentinel: StreamListener = {
       id: `channel-completion:${chatId}`,
-      onChunk() {},
+      // Accumulate chunk text so non-message-sourced runs (claude/pi drivers that never
+      // produce a `finalMessage` projection) still resolve a non-empty response.
+      onChunk(chunk) {
+        if (chunk.type === 'text-delta' && chunk.delta) sentinelText += chunk.delta
+      },
       onDone(result) {
-        resolveExecution(
-          (
-            result.finalMessage?.parts.flatMap((part) => (part.type === 'text' ? [part.text] : [])).join('') ?? ''
-          ).trim()
-        )
+        // Mid-topic done (steer roll): the turn continues on a new execution — keep waiting.
+        if (result.isTopicDone === false) return
+        const projected = (
+          result.finalMessage?.parts.flatMap((part) => (part.type === 'text' ? [part.text] : [])).join('') ?? ''
+        ).trim()
+        resolveExecution(projected || sentinelText.trim())
       },
       onPaused(result) {
         resolveExecution(
@@ -1540,7 +1546,12 @@ export class ChannelMessageHandler {
       const started = await startAgentSessionRun({
         sessionId: session.id,
         userParts,
-        listeners: [sentinel, new ChannelAdapterListener(adapter, chatId, false, responseOptions)],
+        listeners: [
+          sentinel,
+          new ChannelAdapterListener(adapter, chatId, false, responseOptions, session.workspace?.path, undefined, {
+            cursorToolBubbles: true
+          })
+        ],
         headless: true,
         requireIdle: { expectedAgentId: session.agentId }
       })

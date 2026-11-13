@@ -86,6 +86,7 @@ function createHooks(
     loadAdapter,
     onMessage: vi.fn(),
     onCommand: vi.fn(),
+    onCallbackQuery: vi.fn(),
     onCredentials: vi.fn(),
     onDynamicChatId: vi.fn(),
     onLog: vi.fn(),

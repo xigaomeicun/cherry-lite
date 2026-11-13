@@ -88,6 +88,16 @@ class ToolApprovalRegistry {
     return true
   }
 
+  /**
+   * Cherry-Lite channel approval cards need the tool name + original input to render
+   * the confirmation card (old `peekDetails`). Returns `undefined` for unknown ids.
+   */
+  peekDetails(approvalId: string): Pick<PendingApproval, 'toolName' | 'originalInput'> | undefined {
+    const entry = this.pending.get(approvalId)
+    if (!entry) return undefined
+    return { toolName: entry.toolName, originalInput: entry.originalInput }
+  }
+
   /** Returns `undefined` for unknown ids (already dispatched / session expired). */
   peek(approvalId: string): ApprovalRegistration | undefined {
     const entry = this.pending.get(approvalId)

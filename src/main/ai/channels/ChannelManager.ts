@@ -9,7 +9,12 @@ import type { ChannelConfig } from '@shared/data/types/channel'
 import type { IpcEventName } from '@shared/ipc/schemas/ipcSchemas'
 import type { EventPayload } from '@shared/ipc/types'
 
-import type { ChannelAdapter, ChannelCommandEvent, ChannelMessageEvent } from './ChannelAdapter'
+import type {
+  ChannelAdapter,
+  ChannelCallbackQueryEvent,
+  ChannelCommandEvent,
+  ChannelMessageEvent
+} from './ChannelAdapter'
 import { loadChannelAdapter } from './channelAdapterLoader'
 import { ChannelLogBuffer } from './ChannelLogBuffer'
 import { channelMessageHandler } from './ChannelMessageHandler'
@@ -140,6 +145,7 @@ export class ChannelManager extends BaseService {
       loadAdapter: loadChannelAdapter,
       onMessage: (adapter, event) => this.handleMessage(adapter, event),
       onCommand: (adapter, event) => this.handleCommand(adapter, event),
+      onCallbackQuery: (adapter, event) => this.handleCallbackQuery(adapter, event),
       onCredentials: (agentId, id, credentials) => this.saveCredentials(agentId, id, credentials),
       onDynamicChatId: (id, chatId) => this.persistDynamicChatId(id, chatId),
       onLog: (entry) => this.publishLog(entry),
@@ -196,6 +202,25 @@ export class ChannelManager extends BaseService {
           ...(event.replyInThread && { replyInThread: true })
         })
         .catch(() => undefined)
+    })
+  }
+
+  private handleCallbackQuery(adapter: ChannelAdapter, event: ChannelCallbackQueryEvent): void {
+    if (channelMessageHandler.isWriteQuiesced) {
+      logger.warn('Channel callback dropped: intake is write-quiesced', {
+        agentId: adapter.agentId,
+        channelId: adapter.channelId
+      })
+      return
+    }
+    this.runtimes.get(adapter.channelId)?.trackDynamicChatId(adapter, event.chatId)
+    channelMessageHandler.handleCallbackQuery(adapter, event).catch((error) => {
+      logger.error('Unhandled error in callback handler', {
+        agentId: adapter.agentId,
+        channelId: adapter.channelId,
+        error: error instanceof Error ? error.message : String(error)
+      })
+      void event.answerCallbackQuery({ text: '处理失败' }).catch(() => {})
     })
   }
 

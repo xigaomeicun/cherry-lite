@@ -1,7 +1,12 @@
 import { createLatestReconciler, type LatestReconciler } from '@main/core/concurrency/latestReconciler'
 import type { AgentChannelEntity } from '@shared/data/api/schemas/agentChannels'
 
-import type { ChannelAdapter, ChannelCommandEvent, ChannelMessageEvent } from './ChannelAdapter'
+import type {
+  ChannelAdapter,
+  ChannelCallbackQueryEvent,
+  ChannelCommandEvent,
+  ChannelMessageEvent
+} from './ChannelAdapter'
 import type { ChannelAdapterLoader } from './channelAdapterLoader'
 import type { ChannelLogEntry, ChannelStatusEvent } from './types'
 
@@ -19,6 +24,7 @@ export interface ChannelRuntimeHooks {
   loadAdapter: ChannelAdapterLoader
   onMessage: (adapter: ChannelAdapter, event: ChannelMessageEvent) => void
   onCommand: (adapter: ChannelAdapter, event: ChannelCommandEvent) => void
+  onCallbackQuery: (adapter: ChannelAdapter, event: ChannelCallbackQueryEvent) => void
   onCredentials: (agentId: string, channelId: string, credentials: { appId: string; appSecret: string }) => void
   onDynamicChatId: (channelId: string, chatId: string) => void
   onLog: (entry: ChannelLogEntry) => void
@@ -215,6 +221,10 @@ export class ChannelRuntime {
     adapter.on('command', (event) => {
       if (!this.isCurrent(ownership)) return
       this.hooks.onCommand(adapter, event)
+    })
+    adapter.on('callback_query', (event) => {
+      if (!this.isCurrent(ownership)) return
+      this.hooks.onCallbackQuery(adapter, event)
     })
     adapter.on('qr', (url) => {
       if (!this.isCurrent(ownership)) return
