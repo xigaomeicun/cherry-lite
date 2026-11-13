@@ -5,6 +5,7 @@ import type { MiniAppRegion, TransientMiniApp } from '@shared/data/types/miniApp
 import type { Currency } from '@shared/data/types/model'
 import type { AutoBackupType } from '@shared/types/backup'
 import type { AbsoluteFilePath } from '@shared/types/file'
+import type { SkillSubscriptionSnapshot } from '@shared/types/skillMarketplace'
 
 import type { TopicStatusSnapshotEntry } from '../../ai/transport'
 import type * as CacheValueTypes from './cacheValueTypes'
@@ -438,6 +439,7 @@ export type RendererPersistCacheSchema = {
   'settings.usage.entry_sort_order': AiUsageRecordSortOrder
   // Null defers to the cost-total fallback (USD, else the first currency with usage).
   'settings.usage.currency': Currency | null
+  'skill.subscription.catalogs': Record<string, SkillSubscriptionSnapshot>
   // MCP marketplace "available servers" fetched per provider; re-fetchable, so cached not stored
   'feature.mcp.provider_available_servers': CacheValueTypes.McpAvailableServers
   // Last successful external-open target per directory or file-extension scope.
@@ -453,6 +455,7 @@ export type RendererPersistCacheSchema = {
 }
 
 export const DefaultRendererPersistCache: RendererPersistCacheSchema = {
+  'skill.subscription.catalogs': {},
   'ui.browser.import_prompt_hidden': false,
   'ui.tab.pinned_tabs': [],
   'ui.tab.normal_tabs': [],

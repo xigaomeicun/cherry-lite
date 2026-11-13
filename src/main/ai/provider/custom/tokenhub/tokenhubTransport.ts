@@ -3,7 +3,6 @@ import { Agent } from 'undici'
 
 import { t } from '@main/i18n'
 import { createPaintingGenerateError, PaintingGenerateError } from '@shared/ai/paintingGenerateError'
-import { Agent } from 'undici'
 
 import {
   DEFAULT_IMAGE_REQUEST_TIMEOUT_MS,

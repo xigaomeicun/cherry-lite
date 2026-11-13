@@ -629,6 +629,7 @@ export interface PreferenceSchemas {
     // target-key-definitions/complex/complex
     'ui.launchpad.app_order': PreferenceTypes.SidebarFavorite[]
     // redux/settings/navbarPosition
+    'ui.marketplace.skill_sources': PreferenceTypes.SkillSubscriptionSource[]
     'ui.navbar.position': 'left' | 'top'
     // target-key-definitions/complex/complex
     'ui.sidebar.favorites': PreferenceTypes.SidebarFavoriteItem[]
@@ -1004,6 +1005,7 @@ export const DefaultPreferences: PreferenceSchemas = {
     'topic.tab.show': true,
     'ui.custom_css': '',
     'ui.launchpad.app_order': [],
+    'ui.marketplace.skill_sources': [],
     'ui.navbar.position': 'top',
     'ui.sidebar.favorites': [
       { id: 'agents', type: 'app' },
