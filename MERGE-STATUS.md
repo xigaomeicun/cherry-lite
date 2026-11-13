@@ -29,3 +29,38 @@
 - keep-ours 文件是本地旧版，引用的 API 可能已被上游改名 → typecheck 会列出，逐个适配（别整文件换上游，会丢本地 delta）
 - `native/system-speech` 与 `packages/system-speech` 并存（上游迁移中）
 - pnpm 12.6.0 官方渠道下载失败过（网络），npm -g 装的可用；若再失败可把 packageManager 临时改回 11.8.0
+
+---
+
+## 2026-11-13 晚 续跑（小白接手 Devin 中断处）
+
+### 已完成（本批提交 `5037d10d9f` / `888d24c8cc`）
+
+- `pnpm install` 收尾 + lockfile 提交（`5037d10d9f`）
+- 复活清理（`888d24c8cc`）：
+  - 目录删除：`pages/{knowledge,miniApps,marketplace,code}`、`components/MiniApp`、`services/{automation,trash}`、`deepSeekHarness` 相关、`computerUse`、`automationRepl` 工具/MCP server、`trash/computerUse` ipc handlers、`app/marketplace` route
+  - 拆线：`serviceRegistry`、`agentMcpServers`（AUTOMATION 块）、`cherryBuiltinTools`（kb_* 工具）、`buildAgentParams`（automationRun）、`aiSdk/context`（automationRun）、`SubWindowAppShell`（MiniAppTabsPool）
+- 主人确认：知识库 / 小程序 / DSH 全部退役，与删除方向一致
+
+### ⚠️ 真实拦路虎（Devin 当初也卡在这）
+
+`pnpm typecheck` 全量 **956 错误 / 385 文件**，且**不是**删除目录造成的，而是上游 API 漂移型债务：
+
+- `AgentSessionRuntimeService` 泛型签名漂移（`AgentSessionRuntimeState<TTurn,TPendingTurn>` 要求 2 参、找不到 `@shared/ai/agentSessionFlowParts`）
+- `AiService` 多处 `AiToolApprovalRespondResponse` 形状变化、`generateMcpSampling` 消失、`finishReason` 改名
+- `data/api/handlers/*` 统一 `ApiHandler` 要求补 `DELETE/PATCH/POST/PUT`（keep-ours 旧文件与上游类型不兼容）
+- `skill.marketplace.members` / `ui.marketplace.*` / `CacheMiniAppType` / `agent.skills.external_export.enabled` 等**上游新增 key 的 shared schema 未补**（lite 的 preferenceTypes/cacheSchemas 是旧版）
+- `serviceRegistry` 新服务（SkillSubscription/UsageBudget/OfficialAnnouncement 等）import 的 key 在上游 schema 里有、在 lite 里没注册
+
+### 剩余待办
+
+1. 逐包修 typecheck（大头在 `src/main/ai` 481、`src/main/data` 219、`src/main/services` 189）——工作量数小时，须按「keep-ours 旧 API → 上游新 API」逐个适配
+2. `src/shared` 的 schema 追平（preferenceTypes / cacheSchemas / apiSchemas / ipcSchemas 的 key 补齐）
+3. 定向测试（ChannelMessageHandler/fork/agentSession/迁移 0031–0037）
+4. `pnpm build:mac:arm64` → ditto 覆盖安装（**我在 Cherry 里，只构建，安装命令交主人**）
+5. 运维文档更新
+
+### 判断
+
+- ✅ 可以收口的：复活清理方向已闭环，删除面与主人指令一致
+- ⚠️ 无法本批收口的：全量 typecheck 绿——上游一次性带来 ~15 个新服务 + 大量 API 重构，债务规模超出单次会话可安全消化的范围，建议拆「修 shared schema → 修 main/ai → 修 main/data」三批逐个来
