@@ -20,9 +20,7 @@ import { Button, Popover, PopoverContent, PopoverTrigger, Tooltip } from '@cherr
 import { usePersistCache } from '@data/hooks/useCache'
 import { usePreference } from '@data/hooks/usePreference'
 import useAvatar from '@renderer/hooks/useAvatar'
-import { useCherryCloudSubscribeReminder } from '@renderer/hooks/useCherryCloudPlans'
 import { useSidebarShortcuts } from '@renderer/hooks/useSidebarShortcuts'
-import { trackSubscriptionEntryView } from '@renderer/services/cherryCloudSubscriptionAnalytics'
 import { openSettingsTab } from '@renderer/services/mainWindowNavigation'
 import { toast } from '@renderer/services/toast'
 import { isMac } from '@renderer/utils/platform'
@@ -113,10 +111,6 @@ export default function Sidebar({
   }, [layout])
 
   const avatar = useAvatar()
-  const showSubscribeDot = useCherryCloudSubscribeReminder()
-  useEffect(() => {
-    if (showSubscribeDot) trackSubscriptionEntryView('avatar_dot')
-  }, [showSubscribeDot])
   const handleUserMenuOpenChange = useCallback(
     (open: boolean) => {
       setUserMenuOpen(open)
@@ -139,22 +133,16 @@ export default function Sidebar({
     () => ({
       name: userName || t('chat.user', { defaultValue: t('export.user', { defaultValue: 'User' }) }),
       avatar: avatar || undefined,
-      indicator:
-        notificationCenter?.hasUnread || showSubscribeDot ? (
-          <span className="pointer-events-none absolute right-0.5 top-0.5 size-1.5 rounded-full bg-destructive">
-            <span id={unreadDescriptionId} className="sr-only" aria-hidden="true">
-              {[
-                notificationCenter?.hasUnread && t('notification.center.unread'),
-                showSubscribeDot && t('settings.subscription.go_to_subscribe')
-              ]
-                .filter(Boolean)
-                .join(' · ')}
-            </span>
+      indicator: notificationCenter?.hasUnread ? (
+        <span className="pointer-events-none absolute right-0.5 top-0.5 size-1.5 rounded-full bg-destructive">
+          <span id={unreadDescriptionId} className="sr-only" aria-hidden="true">
+            {t('notification.center.unread')}
           </span>
-        ) : undefined,
+        </span>
+      ) : undefined,
       onClick: handleUserMenuToggle
     }),
-    [avatar, handleUserMenuToggle, notificationCenter?.hasUnread, showSubscribeDot, unreadDescriptionId, t, userName]
+    [avatar, handleUserMenuToggle, notificationCenter?.hasUnread, unreadDescriptionId, t, userName]
   )
   const renderSidebarUserTrigger = useCallback(
     (trigger: ReactElement) => (
@@ -162,13 +150,13 @@ export default function Sidebar({
         asChild
         className="relative"
         data-notification-anchor="left"
-        aria-describedby={notificationCenter?.hasUnread || showSubscribeDot ? unreadDescriptionId : undefined}
+        aria-describedby={notificationCenter?.hasUnread ? unreadDescriptionId : undefined}
         onPointerDown={() => (userMenuOpenedByPointerRef.current = true)}
         onKeyDown={() => (userMenuOpenedByPointerRef.current = false)}>
         {trigger}
       </PopoverTrigger>
     ),
-    [notificationCenter?.hasUnread, showSubscribeDot, unreadDescriptionId]
+    [notificationCenter?.hasUnread, unreadDescriptionId]
   )
   const renderUserMenu = () =>
     userMenuOpen ? (
