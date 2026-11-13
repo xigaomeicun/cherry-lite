@@ -64,3 +64,22 @@
 
 - ✅ 可以收口的：复活清理方向已闭环，删除面与主人指令一致
 - ⚠️ 无法本批收口的：全量 typecheck 绿——上游一次性带来 ~15 个新服务 + 大量 API 重构，债务规模超出单次会话可安全消化的范围，建议拆「修 shared schema → 修 main/ai → 修 main/data」三批逐个来
+
+## 2026-11-15 — shared 层收口 (efa9ec2397)
+
+shared/tests 全部清 0。剩余 749 错全在 `src/main`：
+
+| 目录 | 错误数 | 主要形态 |
+|---|---|---|
+| src/main/ai | 479 | AgentSession* 泛型签名、@shared/ai 模块漂移 |
+| src/main/services | 203 | ApiHandler 形状变化 |
+| src/main/data | 25 | 新服务适配 |
+| src/main/features | 24 | 同上 |
+| src/main/ipc | 16 | 路由契约 |
+
+**真身**：上游 `agent-runtime` 重构（#22856 起）把 main 层的
+类型管线改了，lite 的 pi-runtime merge 带来 `pi-durable` 后端 +
+`agentSessionFlowParts` 等共享模块——shared 已修平，main 层需要
+逐文件跟随上游 23800-24200 系 PR 的类型改动做适配。
+
+下一步：按目录分批修 `src/main/ai`（479）→ `src/main/services`（203）。
