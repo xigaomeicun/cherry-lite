@@ -4974,6 +4974,7 @@
   "settings.mcp.deleteServerConfirm": "Είστε σίγουρος ότι θέλετε να διαγράψετε αυτόν τον διακομιστή;",
   "settings.mcp.deleteSuccess": "Ο διακομιστής διαγράφηκε επιτυχώς",
   "settings.mcp.description": "Περιγραφή",
+  "settings.mcp.discover": "Ανακαλύψτε",
   "settings.mcp.env": "Περιβαλλοντικές μεταβλητές",
   "settings.mcp.envTooltip": "Μορφή: KEY=value, κάθε μια σε μια γραμμή",
   "settings.mcp.exportAsJson": "Εξαγωγή ως JSON",

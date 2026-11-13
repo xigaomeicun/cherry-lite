@@ -4974,6 +4974,7 @@
   "settings.mcp.deleteServerConfirm": "このサーバーを削除してもよろしいですか？",
   "settings.mcp.deleteSuccess": "サーバーが正常に削除されました",
   "settings.mcp.description": "説明",
+  "settings.mcp.discover": "発見",
   "settings.mcp.env": "環境変数",
   "settings.mcp.envTooltip": "形式: KEY=value, 1行に1つ",
   "settings.mcp.exportAsJson": "JSON としてエクスポート",

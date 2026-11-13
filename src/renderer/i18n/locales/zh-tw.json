@@ -4974,6 +4974,7 @@
   "settings.mcp.deleteServerConfirm": "確定要刪除此伺服器嗎？",
   "settings.mcp.deleteSuccess": "伺服器刪除成功",
   "settings.mcp.description": "描述",
+  "settings.mcp.discover": "發現",
   "settings.mcp.env": "環境變數",
   "settings.mcp.envTooltip": "格式：KEY=value，每行一個",
   "settings.mcp.exportAsJson": "匯出為 JSON",

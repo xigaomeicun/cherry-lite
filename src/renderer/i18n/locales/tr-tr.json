@@ -4974,6 +4974,7 @@
   "settings.mcp.deleteServerConfirm": "Bu sunucunun silinmesi onaylanıyor mu?",
   "settings.mcp.deleteSuccess": "Sunucu başarıyla silindi",
   "settings.mcp.description": "Açıklama",
+  "settings.mcp.discover": "Keşfet",
   "settings.mcp.env": "Ortam Değişkenleri",
   "settings.mcp.envTooltip": "Biçim: KEY=value, her satırda bir tane",
   "settings.mcp.exportAsJson": "JSON olarak dışa aktar",

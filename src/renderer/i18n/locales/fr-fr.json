@@ -4974,6 +4974,7 @@
   "settings.mcp.deleteServerConfirm": "Voulez-vous vraiment supprimer ce serveur ?",
   "settings.mcp.deleteSuccess": "Serveur supprimé avec succès",
   "settings.mcp.description": "Description",
+  "settings.mcp.discover": "Découvrir",
   "settings.mcp.env": "Variables d'environnement",
   "settings.mcp.envTooltip": "Format : CLÉ=valeur, une par ligne",
   "settings.mcp.exportAsJson": "Exporter au format JSON",

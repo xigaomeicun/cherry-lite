@@ -4974,6 +4974,7 @@
   "settings.mcp.deleteServerConfirm": "Ești sigur că vrei să ștergi acest server?",
   "settings.mcp.deleteSuccess": "Server șters cu succes",
   "settings.mcp.description": "Descriere",
+  "settings.mcp.discover": "Descoperă",
   "settings.mcp.env": "Variabile de mediu",
   "settings.mcp.envTooltip": "Format: CHEIE=valoare, una pe linie",
   "settings.mcp.exportAsJson": "Exportă ca JSON",

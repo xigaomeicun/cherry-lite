@@ -4974,6 +4974,7 @@
   "settings.mcp.deleteServerConfirm": "Вы уверены, что хотите удалить этот сервер?",
   "settings.mcp.deleteSuccess": "Сервер успешно удален",
   "settings.mcp.description": "Описание",
+  "settings.mcp.discover": "Откройте",
   "settings.mcp.env": "Переменные окружения",
   "settings.mcp.envTooltip": "Формат: KEY=value, по одной на строку",
   "settings.mcp.exportAsJson": "Экспортировать в JSON",

@@ -4974,6 +4974,7 @@
   "settings.mcp.deleteServerConfirm": "แน่ใจหรือไม่ว่าต้องการลบเซิร์ฟเวอร์นี้?",
   "settings.mcp.deleteSuccess": "ลบเซิร์ฟเวอร์สำเร็จ",
   "settings.mcp.description": "คำอธิบาย",
+  "settings.mcp.discover": "ค้นพบ",
   "settings.mcp.env": "ตัวแปรสภาพแวดล้อม",
   "settings.mcp.envTooltip": "รูปแบบ: KEY=value หนึ่งรายการต่อบรรทัด",
   "settings.mcp.exportAsJson": "ส่งออกเป็น JSON",

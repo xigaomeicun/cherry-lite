@@ -4974,6 +4974,7 @@
   "settings.mcp.deleteServerConfirm": "Bạn có chắc chắn muốn xóa máy chủ này không?",
   "settings.mcp.deleteSuccess": "Đã xóa máy chủ thành công",
   "settings.mcp.description": "Mô tả",
+  "settings.mcp.discover": "Khám phá",
   "settings.mcp.env": "Biến môi trường",
   "settings.mcp.envTooltip": "Định dạng: KEY=value, mỗi dòng một cặp",
   "settings.mcp.exportAsJson": "Xuất dưới dạng JSON",
