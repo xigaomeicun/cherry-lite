@@ -2,7 +2,6 @@ import type { ToolExecutionOptions } from '@ai-sdk/provider-utils'
 import type { ModelMessage } from 'ai'
 
 import type { FileAttachmentRef } from '@main/ai/messages/attachmentTypes'
-import type { AutomationRun } from '@main/services/automation'
 import type { Assistant } from '@shared/data/types/assistant'
 import type { UniqueModelId } from '@shared/data/types/model'
 import type { WindowId } from '@shared/ipc/types'
@@ -27,7 +26,6 @@ export interface RequestContext {
   readonly assistant?: Assistant
 
   readonly abortSignal?: AbortSignal
-  readonly automationRun?: () => Promise<AutomationRun>
 
   /** Attachments the `read_file` tool may read this request (filename → entry allow-list). */
   readonly fileAttachments?: ReadonlyArray<FileAttachmentRef>

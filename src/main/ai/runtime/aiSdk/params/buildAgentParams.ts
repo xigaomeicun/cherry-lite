@@ -3,15 +3,12 @@ import { stepCountIs, type StopCondition, type ToolSet, type UIMessage } from 'a
 
 import { application } from '@application'
 import type { AiPlugin } from '@cherrystudio/ai-core'
-import { assistantDataService } from '@data/services/AssistantService'
 import { projectRuntimeReasoning, providerRegistryService } from '@data/services/ProviderRegistryService'
-import { topicService } from '@data/services/TopicService'
 import { loggerService } from '@logger'
 import { resolveRequestedMaxOutputTokens } from '@main/ai/contextBuild/resolveOutputReservation'
 import { buildMcpInstructionsContext } from '@main/ai/mcp/serverInstructions'
 import { collectMcpToolResources } from '@main/ai/messages/mcpToolResources'
 import { resolveKnowledgeBaseScope } from '@main/ai/utils/knowledgeScope'
-import type { AutomationRun } from '@main/services/automation'
 import { getProviderById, getProviderForCapability, isPermanentWebSearchConfigError } from '@main/services/webSearch'
 import { mergeHeaders } from '@main/utils/http'
 import {
@@ -261,41 +258,7 @@ export async function buildAgentParams(input: BuildAgentParamsInput): Promise<Bu
     runtimeProviderId
   })
 
-  let automationRun: Promise<AutomationRun> | undefined
-  const automationAbort = new AbortController()
-  let automationFinished = false
-  const getAutomationRun =
-    assistant && request.conversation.topicId && (toolSignals?.browserEnabled || toolSignals?.computerUseEnabled)
-      ? () => {
-          if (automationFinished) throw new Error('Automation request has finished')
-          const topicId = request.conversation.topicId!
-          automationRun ??= application.get('AutomationReplService').acquireRun(
-            {
-              kind: 'topic',
-              sessionId: topicId,
-              ownerId: assistant.id,
-              label: `${assistant.name} · ${topicId.slice(0, 8)}`
-            },
-            request.messageId ?? crypto.randomUUID(),
-            () => {
-              if (topicService.getById(topicId).assistantId !== assistant.id)
-                throw new Error('Conversation owner changed')
-              const settings = assistantDataService.getById(assistant.id).settings
-              return {
-                browser:
-                  toolSignals?.browserEnabled === true &&
-                  settings.enableBrowser !== false &&
-                  application.get('PreferenceService').get('app.browser.agent_control.enabled'),
-                computer:
-                  toolSignals?.computerUseEnabled === true &&
-                  application.get('PreferenceService').get('app.computer_use.agent_control.enabled')
-              }
-            },
-            signal ? AbortSignal.any([signal, automationAbort.signal]) : automationAbort.signal
-          )
-          return automationRun
-        }
-      : undefined
+  // (cherry-lite) automation/browser/computer-use REPL removed; no automationRun.
   const requestContext: RequestContext = {
     requestId: request.messageId ?? crypto.randomUUID(),
     topicId: request.conversation.topicId,
@@ -303,7 +266,6 @@ export async function buildAgentParams(input: BuildAgentParamsInput): Promise<Bu
     model: request.uniqueModelId ?? createUniqueModelId(provider.id, model.id),
     assistant,
     abortSignal: signal,
-    automationRun: getAutomationRun,
     fileAttachments,
     knowledgeBaseIds,
     // fs_read's exact allow-list: blobs referenced by the conversation, plus
@@ -375,23 +337,6 @@ export async function buildAgentParams(input: BuildAgentParamsInput): Promise<Bu
   }
 
   const hookParts = [...contributions.hookParts]
-  if (getAutomationRun) {
-    const finish = async () => {
-      automationFinished = true
-      automationAbort.abort(new Error('Automation request has finished'))
-      const run = await automationRun?.catch(() => undefined)
-      await run?.finish()
-    }
-    hookParts.push({
-      onFinish: finish,
-      onAbort: finish,
-      onError: async () => {
-        await finish()
-        return 'abort' as const
-      }
-    })
-  }
-
   return {
     sdkConfig,
     credentialReceipt,

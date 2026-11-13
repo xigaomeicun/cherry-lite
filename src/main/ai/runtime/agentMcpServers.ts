@@ -13,7 +13,6 @@ import { createMcpBridgeServer } from '@main/ai/mcp/createMcpBridgeServer'
 import { createAgentMemoryServer } from '@main/ai/mcp/servers/agentMemory'
 import { createAssistantServer } from '@main/ai/mcp/servers/assistant'
 import { createAssistantFileToolsServer } from '@main/ai/mcp/servers/AssistantFileToolsServer'
-import { createAutomationReplServer } from '@main/ai/mcp/servers/automationRepl'
 import { createCherryToolsServer } from '@main/ai/mcp/servers/cherryBuiltinTools'
 import { createDoctorServer } from '@main/ai/mcp/servers/doctor'
 import { createMcpManagerServer } from '@main/ai/mcp/servers/mcpManager'
@@ -99,13 +98,6 @@ export function buildAgentMcpServers(
       }
     } catch (error) {
       logger.error(`Failed to create MCP bridge for ${mcpId}`, { error })
-    }
-  }
-
-  if (mountedServers.has(CHERRY_MCP_SERVER.AUTOMATION)) {
-    servers.automation = {
-      name: CHERRY_MCP_SERVER.AUTOMATION,
-      connect: serveAgentMcpServer(() => createAutomationReplServer(session.id, agent.id))
     }
   }
 
