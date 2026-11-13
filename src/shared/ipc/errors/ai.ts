@@ -70,12 +70,6 @@ export function aiErrorDetail(e: unknown): SerializedError | undefined {
   return e instanceof IpcError && e.code === aiErrorCodes.AI_REQUEST_FAILED ? (e.data as SerializedError) : undefined
 }
 
-export function agentSessionForkFailureReason(e: unknown) {
-  if (!(e instanceof IpcError) || e.code !== aiErrorCodes.AI_AGENT_SESSION_FORK_FAILED) return undefined
-  const reason = e.data && typeof e.data === 'object' && 'reason' in e.data ? e.data.reason : undefined
-  return isAgentSessionForkFailureReason(reason) ? reason : undefined
-}
-
 export function aiStreamAdmissionReason(e: unknown): AiStreamAdmissionReason | undefined {
   if (!(e instanceof IpcError) || e.code !== aiErrorCodes.AI_STREAM_ADMISSION_REJECTED) return undefined
   if (!e.data || typeof e.data !== 'object' || !('reason' in e.data)) return undefined

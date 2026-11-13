@@ -38,6 +38,7 @@ export interface PreferenceSchemas {
   default: {
     // target-key-definitions/complex/complex
     'agent.commit_attribution.enabled': boolean
+    'agent.details.sections': PreferenceTypes.AgentDetailsSectionConfig[]
     // target-key-definitions/complex/complex
     'agent.icon_type': PreferenceTypes.AssistantIconType
     // target-key-definitions/complex/complex
@@ -50,9 +51,11 @@ export interface PreferenceSchemas {
     'agent.session.position': PreferenceTypes.TopicTabPosition
     // target-key-definitions/complex/complex
     'app.browser.agent_control.enabled': boolean
-    // target-key-definitions/complex/complex
     'app.browser.open_links_in_browser': boolean
     // redux/settings/enableDeveloperMode
+    'app.browser.start_page.custom_url': string
+    // target-key-definitions/complex/complex
+    'app.browser.start_page.mode': 'home' | 'custom' | 'last'
     'app.developer_mode.enabled': boolean
     // redux/settings/autoCheckUpdate
     'app.dist.auto_update.enabled': boolean
@@ -533,6 +536,7 @@ export interface PreferenceSchemas {
     // target-key-definitions/complex/complex
     'menu.presentation_mode': PreferenceTypes.MenuPresentationMode
     // target-key-definitions/complex/complex
+    'shortcut.agent.workspace.open': PreferenceTypes.PreferenceShortcutType
     'shortcut.app.fullscreen.exit': PreferenceTypes.PreferenceShortcutType
     // target-key-definitions/complex/complex
     'shortcut.app.print': PreferenceTypes.PreferenceShortcutType
@@ -541,6 +545,15 @@ export interface PreferenceSchemas {
     // target-key-definitions/complex/complex
     'shortcut.app.settings.open': PreferenceTypes.PreferenceShortcutType
     // target-key-definitions/complex/complex
+    'shortcut.app.sidebar.open_1': PreferenceTypes.PreferenceShortcutType
+    'shortcut.app.sidebar.open_2': PreferenceTypes.PreferenceShortcutType
+    'shortcut.app.sidebar.open_3': PreferenceTypes.PreferenceShortcutType
+    'shortcut.app.sidebar.open_4': PreferenceTypes.PreferenceShortcutType
+    'shortcut.app.sidebar.open_5': PreferenceTypes.PreferenceShortcutType
+    'shortcut.app.sidebar.open_6': PreferenceTypes.PreferenceShortcutType
+    'shortcut.app.sidebar.open_7': PreferenceTypes.PreferenceShortcutType
+    'shortcut.app.sidebar.open_8': PreferenceTypes.PreferenceShortcutType
+    'shortcut.app.sidebar.open_9': PreferenceTypes.PreferenceShortcutType
     'shortcut.app.sidebar.toggle': PreferenceTypes.PreferenceShortcutType
     // target-key-definitions/complex/complex
     'shortcut.app.window.close': PreferenceTypes.PreferenceShortcutType
@@ -552,6 +565,9 @@ export interface PreferenceSchemas {
     'shortcut.app.zoom.out': PreferenceTypes.PreferenceShortcutType
     // target-key-definitions/complex/complex
     'shortcut.app.zoom.reset': PreferenceTypes.PreferenceShortcutType
+    // target-key-definitions/complex/complex
+    'shortcut.assistant.next': PreferenceTypes.PreferenceShortcutType
+    'shortcut.assistant.prev': PreferenceTypes.PreferenceShortcutType
     // target-key-definitions/complex/complex
     'shortcut.chat.context.toggle_new': PreferenceTypes.PreferenceShortcutType
     // target-key-definitions/complex/complex
@@ -567,8 +583,9 @@ export interface PreferenceSchemas {
     // target-key-definitions/complex/complex
     'shortcut.quick_assistant.toggle': PreferenceTypes.PreferenceShortcutType
     // target-key-definitions/complex/complex
-    'shortcut.screenshot.capture': PreferenceTypes.PreferenceShortcutType
+    'shortcut.resource.delete_permanently': PreferenceTypes.PreferenceShortcutType
     // target-key-definitions/complex/complex
+    'shortcut.screenshot.capture': PreferenceTypes.PreferenceShortcutType
     'shortcut.selection.capture_text': PreferenceTypes.PreferenceShortcutType
     // target-key-definitions/complex/complex
     'shortcut.selection.toggle': PreferenceTypes.PreferenceShortcutType
@@ -577,14 +594,25 @@ export interface PreferenceSchemas {
     // target-key-definitions/complex/complex
     'shortcut.tab.next': PreferenceTypes.PreferenceShortcutType
     // target-key-definitions/complex/complex
-    'shortcut.tab.prev': PreferenceTypes.PreferenceShortcutType
+    'shortcut.tab.open_1': PreferenceTypes.PreferenceShortcutType
+    'shortcut.tab.open_2': PreferenceTypes.PreferenceShortcutType
+    'shortcut.tab.open_3': PreferenceTypes.PreferenceShortcutType
+    'shortcut.tab.open_4': PreferenceTypes.PreferenceShortcutType
+    'shortcut.tab.open_5': PreferenceTypes.PreferenceShortcutType
+    'shortcut.tab.open_6': PreferenceTypes.PreferenceShortcutType
+    'shortcut.tab.open_7': PreferenceTypes.PreferenceShortcutType
+    'shortcut.tab.open_8': PreferenceTypes.PreferenceShortcutType
+    'shortcut.tab.open_9': PreferenceTypes.PreferenceShortcutType
     // target-key-definitions/complex/complex
+    'shortcut.tab.prev': PreferenceTypes.PreferenceShortcutType
     'shortcut.topic.clear_messages': PreferenceTypes.PreferenceShortcutType
     // target-key-definitions/complex/complex
     'shortcut.topic.create': PreferenceTypes.PreferenceShortcutType
     // target-key-definitions/complex/complex
-    'shortcut.topic.rename': PreferenceTypes.PreferenceShortcutType
+    'shortcut.topic.next': PreferenceTypes.PreferenceShortcutType
+    'shortcut.topic.prev': PreferenceTypes.PreferenceShortcutType
     // target-key-definitions/complex/complex
+    'shortcut.topic.rename': PreferenceTypes.PreferenceShortcutType
     'shortcut.topic.sidebar.toggle': PreferenceTypes.PreferenceShortcutType
     // redux/settings/enableTopicNaming
     'topic.naming.enabled': boolean
@@ -604,6 +632,7 @@ export interface PreferenceSchemas {
     'ui.navbar.position': 'left' | 'top'
     // target-key-definitions/complex/complex
     'ui.sidebar.favorites': PreferenceTypes.SidebarFavoriteItem[]
+    'ui.sidebar_shortcut': PreferenceTypes.SidebarShortcutItem[]
     // redux/settings/theme
     'ui.theme_mode': PreferenceTypes.ThemeMode
     // redux/settings/userTheme.userCodeFontFamily
@@ -621,6 +650,17 @@ export interface PreferenceSchemas {
 export const DefaultPreferences: PreferenceSchemas = {
   default: {
     'agent.commit_attribution.enabled': true,
+    'agent.details.sections': [
+      { id: 'workspace', visible: true },
+      { id: 'desktop_control', visible: true },
+      { id: 'plan', visible: true },
+      { id: 'subagents', visible: true },
+      { id: 'workflows', visible: true },
+      { id: 'shells', visible: true },
+      { id: 'other', visible: true },
+      { id: 'artifacts', visible: true },
+      { id: 'context', visible: true }
+    ],
     'agent.icon_type': 'emoji',
     'agent.input.toolbar.pinned_tools': ['composer:new-session', 'skills', 'permission-mode'],
     'agent.language': null,
@@ -628,6 +668,8 @@ export const DefaultPreferences: PreferenceSchemas = {
     'agent.session.position': 'left',
     'app.browser.agent_control.enabled': true,
     'app.browser.open_links_in_browser': false,
+    'app.browser.start_page.custom_url': '',
+    'app.browser.start_page.mode': 'home',
     'app.developer_mode.enabled': false,
     // cherry-lite: default off. The build keeps upstream's version number, so auto-download
     // would fetch the official package and replace this fork (see electron-builder.yml publish).
@@ -904,16 +946,28 @@ export const DefaultPreferences: PreferenceSchemas = {
     'feature.voice.speech.speed': 1,
     'feature.voice.speech.voice_id': '',
     'menu.presentation_mode': 'cherry',
+    'shortcut.agent.workspace.open': { binding: [], enabled: true },
     'shortcut.app.fullscreen.exit': { binding: ['Escape'], enabled: true },
     'shortcut.app.print': { binding: ['CommandOrControl', 'P'], enabled: true },
     'shortcut.app.search': { binding: ['CommandOrControl', 'Shift', 'F'], enabled: true },
     'shortcut.app.settings.open': { binding: ['CommandOrControl', ','], enabled: true },
+    'shortcut.app.sidebar.open_1': { binding: ['CommandOrControl', '1'], enabled: true },
+    'shortcut.app.sidebar.open_2': { binding: ['CommandOrControl', '2'], enabled: true },
+    'shortcut.app.sidebar.open_3': { binding: ['CommandOrControl', '3'], enabled: true },
+    'shortcut.app.sidebar.open_4': { binding: ['CommandOrControl', '4'], enabled: true },
+    'shortcut.app.sidebar.open_5': { binding: ['CommandOrControl', '5'], enabled: true },
+    'shortcut.app.sidebar.open_6': { binding: ['CommandOrControl', '6'], enabled: true },
+    'shortcut.app.sidebar.open_7': { binding: ['CommandOrControl', '7'], enabled: true },
+    'shortcut.app.sidebar.open_8': { binding: ['CommandOrControl', '8'], enabled: true },
+    'shortcut.app.sidebar.open_9': { binding: ['CommandOrControl', '9'], enabled: true },
     'shortcut.app.sidebar.toggle': { binding: ['CommandOrControl', '['], enabled: true },
     'shortcut.app.window.close': { binding: ['CommandOrControl', 'Shift', 'W'], enabled: true },
     'shortcut.app.window.show': { binding: [], enabled: false },
     'shortcut.app.zoom.in': { binding: ['CommandOrControl', '='], enabled: true },
     'shortcut.app.zoom.out': { binding: ['CommandOrControl', '-'], enabled: true },
     'shortcut.app.zoom.reset': { binding: ['CommandOrControl', '0'], enabled: true },
+    'shortcut.assistant.next': { binding: [], enabled: true },
+    'shortcut.assistant.prev': { binding: [], enabled: true },
     'shortcut.chat.context.toggle_new': { binding: ['CommandOrControl', 'K'], enabled: true },
     'shortcut.chat.input.focus': { binding: ['CommandOrControl', 'I'], enabled: true },
     'shortcut.chat.message.copy_last': { binding: ['CommandOrControl', 'Shift', 'C'], enabled: false },
@@ -921,14 +975,26 @@ export const DefaultPreferences: PreferenceSchemas = {
     'shortcut.chat.message.search': { binding: ['CommandOrControl', 'F'], enabled: true },
     'shortcut.chat.model.select': { binding: ['CommandOrControl', 'Shift', 'M'], enabled: true },
     'shortcut.quick_assistant.toggle': { binding: ['CommandOrControl', 'E'], enabled: false },
+    'shortcut.resource.delete_permanently': { binding: [], enabled: true },
     'shortcut.screenshot.capture': { binding: ['CommandOrControl', 'Shift', 'A'], enabled: true },
     'shortcut.selection.capture_text': { binding: [], enabled: false },
     'shortcut.selection.toggle': { binding: [], enabled: false },
     'shortcut.tab.close': { binding: ['CommandOrControl', 'W'], enabled: true },
     'shortcut.tab.next': { binding: ['CommandOrControl', 'Tab'], enabled: true },
+    'shortcut.tab.open_1': { binding: ['CommandOrControl', 'Alt', '1'], enabled: true },
+    'shortcut.tab.open_2': { binding: ['CommandOrControl', 'Alt', '2'], enabled: true },
+    'shortcut.tab.open_3': { binding: ['CommandOrControl', 'Alt', '3'], enabled: true },
+    'shortcut.tab.open_4': { binding: ['CommandOrControl', 'Alt', '4'], enabled: true },
+    'shortcut.tab.open_5': { binding: ['CommandOrControl', 'Alt', '5'], enabled: true },
+    'shortcut.tab.open_6': { binding: ['CommandOrControl', 'Alt', '6'], enabled: true },
+    'shortcut.tab.open_7': { binding: ['CommandOrControl', 'Alt', '7'], enabled: true },
+    'shortcut.tab.open_8': { binding: ['CommandOrControl', 'Alt', '8'], enabled: true },
+    'shortcut.tab.open_9': { binding: ['CommandOrControl', 'Alt', '9'], enabled: true },
     'shortcut.tab.prev': { binding: ['CommandOrControl', 'Shift', 'Tab'], enabled: true },
     'shortcut.topic.clear_messages': { binding: ['CommandOrControl', 'L'], enabled: true },
     'shortcut.topic.create': { binding: ['CommandOrControl', 'N'], enabled: true },
+    'shortcut.topic.next': { binding: [], enabled: true },
+    'shortcut.topic.prev': { binding: [], enabled: true },
     'shortcut.topic.rename': { binding: ['CommandOrControl', 'T'], enabled: false },
     'shortcut.topic.sidebar.toggle': { binding: ['CommandOrControl', ']'], enabled: true },
     'topic.naming.enabled': true,
@@ -946,6 +1012,24 @@ export const DefaultPreferences: PreferenceSchemas = {
       { id: 'paintings', type: 'app' },
       { id: 'knowledge', type: 'app' }
     ],
+    'ui.sidebar_shortcut': [
+      'agents',
+      'assistants',
+      'scheduled_tasks',
+      'translate',
+      'paintings',
+      'knowledge'
+    ].map((resourceId) => {
+      const target: PreferenceTypes.SidebarShortcutTarget = {
+        kind: 'resource',
+        locator: { providerId: 'core.app', resourceId }
+      }
+      return {
+        id: PreferenceTypes.createSidebarShortcutId(target),
+        target,
+        type: 'shortcut' as const
+      }
+    }),
     'ui.theme_mode': PreferenceTypes.ThemeMode.system,
     'ui.theme_user.code_font_family': '',
     'ui.theme_user.color_primary': '#00b96b',

@@ -209,7 +209,8 @@ export const DefaultUseCache: UseCacheSchema = {
     downloadProgress: 0,
     available: false,
     ignore: false,
-    manualCheck: false
+    manualCheck: false,
+    lastErrorKey: null
   },
   'app.path.resources': '',
   // Chat context

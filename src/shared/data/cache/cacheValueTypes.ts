@@ -9,12 +9,16 @@ import type { AgentSessionApiRetryState } from '../../ai/agentSessionApiRetry'
 import type { AgentSessionBackgroundTasks, AgentSessionTaskEvents } from '../../ai/agentSessionBackgroundTasks'
 import type { AgentSessionCompactionState } from '../../ai/agentSessionCompaction'
 import type { AgentSessionContextUsage } from '../../ai/agentSessionContextUsage'
+import type { AgentSessionFlowParts } from '../../ai/agentSessionFlowParts'
 import type { AgentSessionSlashCommand } from '../../ai/agentSessionSlashCommands'
 import type { AutonomousTurnOrigin } from '../../ai/agentSessionTurnOrigin'
 import type { McpServer } from '../types/mcpServer'
+import type { MiniApp } from '../types/miniApp'
 import type { UniqueModelId } from '../types/model'
 import type { ComposerMessageTokenKind } from '../types/uiParts'
 import type { WebSearchStatus } from '../types/webSearch'
+
+export type CacheMiniAppType = MiniApp
 
 export type CacheAppUpdateState = {
   info: UpdateInfo | null
@@ -194,6 +198,8 @@ export type CachePaintingGenerationState = {
   error: string | null
   progress: number | null
 }
+
+export type CacheAgentSessionFlowParts = AgentSessionFlowParts
 
 export type CacheAgentSessionContextUsage = AgentSessionContextUsage | null
 export type CacheAgentSessionCompactionState = AgentSessionCompactionState | null

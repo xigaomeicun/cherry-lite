@@ -1,4 +1,3 @@
-import { DingTalkChannelConfigSchema, WeComChannelConfigSchema } from '@shared/data/types/channel'
 import * as z from 'zod'
 
 import { DingTalkChannelConfigSchema, WeComChannelConfigSchema } from '@shared/data/types/channel'
