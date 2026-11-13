@@ -83,3 +83,10 @@ shared/tests 全部清 0。剩余 749 错全在 `src/main`：
 逐文件跟随上游 23800-24200 系 PR 的类型改动做适配。
 
 下一步：按目录分批修 `src/main/ai`（479）→ `src/main/services`（203）。
+
+## Round 3 — renderer/e2e 收口（`cf1f3cf945`）
+
+- `pnpm typecheck` 全量 **0 错**（主仓 + 全部子包 + e2e）
+- 清理复活特性第二波：marketplace/knowledge/mini_app/code_tools/scheduled_tasks 侧栏与 launchpad 入口、automation 工具渲染、desktop_control 区块、SaveToKnowledgePopup 依赖链与偏好键
+- 恢复 lite 版：LaunchpadPage、BuiltinMcpServerList、McpProviderSettings、dataPanels、mcp 路由、e2e electron.fixture
+- 债务清零：956 → 0
