@@ -288,6 +288,15 @@ importers:
       '@cherrystudio/mlx-tts':
         specifier: github:CherryHQ/mlx-node#f4c21043f557965345b527bc04179ad26d08378f&path:distribution/tts
         version: https://codeload.github.com/CherryHQ/mlx-node/tar.gz/f4c21043f557965345b527bc04179ad26d08378f#path:distribution/tts
+      '@cherrystudio/remote-protocol':
+        specifier: workspace:*
+        version: link:packages/remote-protocol
+      '@cherrystudio/remote-transport':
+        specifier: workspace:*
+        version: link:packages/remote-transport
+      '@cherrystudio/system-speech':
+        specifier: workspace:*
+        version: link:packages/system-speech
       '@earendil-works/chord':
         specifier: 1.5.2
         version: 1.5.2(esbuild@0.25.12)(react@19.3.1)(ws@8.21.3)
@@ -309,6 +318,9 @@ importers:
       '@huggingface/transformers':
         specifier: 4.2.0
         version: 4.2.0(@types/node@24.10.4)
+      '@larksuiteoapi/node-sdk':
+        specifier: ^1.73.0
+        version: 1.73.0(debug@4.4.3(supports-color@8.1.1))(supports-color@8.1.1)
       '@modelcontextprotocol/sdk':
         specifier: 1.32.0
         version: 1.32.0(@cfworker/json-schema@4.1.1)(supports-color@8.1.1)(zod@4.4.3)
@@ -351,18 +363,45 @@ importers:
       graceful-fs:
         specifier: 4.2.11
         version: 4.2.11
+      grammy:
+        specifier: ^1.46.0
+        version: 1.46.0(encoding@0.1.13)(supports-color@8.1.1)
+      gray-matter:
+        specifier: 4.0.3
+        version: 4.0.3
       jsdom:
         specifier: 26.1.0
         version: 26.1.0(supports-color@8.1.1)
+      mediabunny:
+        specifier: 1.58.0
+        version: 1.58.0
       node-screenshots:
         specifier: ^0.2.8
         version: 0.2.8
+      node-stream-zip:
+        specifier: 1.15.0
+        version: 1.15.0
+      officeparser:
+        specifier: 4.2.0
+        version: 4.2.0
       onnxruntime-common:
         specifier: 1.25.1
         version: 1.25.1
       onnxruntime-node:
         specifier: 1.25.1
         version: 1.25.1(patch_hash=7a18bfdf39cbd83c60197c06e5f5c5b2b46d265d7483ed3d80ec3ad499d99cef)
+      opus-decoder:
+        specifier: 0.7.12
+        version: 0.7.12
+      os-proxy-config:
+        specifier: 1.1.2
+        version: 1.1.2
+      pdf-parse:
+        specifier: ^2.4.5
+        version: 2.4.5
+      pdfjs-dist:
+        specifier: 5.4.296
+        version: 5.4.296
       ppu-paddle-ocr:
         specifier: 6.0.0
         version: 6.0.0(patch_hash=462a2a1d24fd9bdf645bed35f34c90d24b40389443b802018f77b85911f08096)
@@ -384,15 +423,30 @@ importers:
       sherpa-onnx-node:
         specifier: 1.13.6
         version: 1.13.6(patch_hash=63432398c7e4f08be86944fdaf2b39cc5a8ce719db9ae38913d794d8bdcbcf0e)
+      smol-toml:
+        specifier: ^1.7.0
+        version: 1.7.0
       sqlite-vec:
         specifier: npm:@aiany/sqlite-vec@0.1.10-alpha.4.aiany.2
         version: '@aiany/sqlite-vec@0.1.10-alpha.4.aiany.2'
+      systeminformation:
+        specifier: 5.33.8
+        version: 5.33.8
+      tar:
+        specifier: 7.5.19
+        version: 7.5.19
       tesseract.js:
         specifier: 6.0.1
         version: 6.0.1(patch_hash=a131c9f36e950911e9fc548408131145a3e5e53977d67abe5196f6b23b32bb6e)(encoding@0.1.13)
       ts-ebml:
         specifier: 3.0.2
         version: 3.0.2(supports-color@8.1.1)
+      turndown:
+        specifier: 7.2.0
+        version: 7.2.0
+      which:
+        specifier: 6.0.1
+        version: 6.0.1
       ws:
         specifier: ^8.21.0
         version: 8.21.3
@@ -457,6 +511,9 @@ importers:
       '@ai-sdk/provider-utils':
         specifier: 4.0.64
         version: 4.0.64(zod@4.4.3)
+      '@ai-sdk/react':
+        specifier: ^3.0.147
+        version: 3.0.333(react@19.3.1)(zod@4.4.3)
       '@ai-sdk/test-server':
         specifier: ^1.0.3
         version: 1.0.3(@types/node@24.10.4)(typescript@5.9.3)
@@ -466,6 +523,9 @@ importers:
       '@ai-sdk/xai':
         specifier: ^3.0.126
         version: 3.0.126(zod@4.4.3)
+      '@aiden0z/pptx-renderer':
+        specifier: 1.2.2
+        version: 1.2.2(patch_hash=cef8fdac29413f0b6e59df97fe5c874f536c1bc064d77aa88f7d5028f78a6329)(pdfjs-dist@5.4.296)
       '@anthropic-ai/sdk':
         specifier: ^0.93.0
         version: 0.93.0(zod@4.4.3)
@@ -514,18 +574,9 @@ importers:
       '@cherrystudio/provider-registry':
         specifier: workspace:*
         version: link:packages/provider-registry
-      '@cherrystudio/remote-protocol':
-        specifier: workspace:*
-        version: link:packages/remote-protocol
       '@cherrystudio/remote-protocol-v0':
         specifier: npm:@cherrystudio/remote-protocol@0.1.0
         version: '@cherrystudio/remote-protocol@0.1.0(zod@4.4.3)'
-      '@cherrystudio/remote-transport':
-        specifier: workspace:*
-        version: link:packages/remote-transport
-      '@cherrystudio/system-speech':
-        specifier: workspace:*
-        version: link:native/system-speech
       '@cherrystudio/ui':
         specifier: workspace:*
         version: link:packages/ui
@@ -619,6 +670,9 @@ importers:
       '@google/genai':
         specifier: ^1.46.0
         version: 1.52.0(@modelcontextprotocol/sdk@1.32.0(@cfworker/json-schema@4.1.1)(supports-color@8.1.1)(zod@4.4.3))(supports-color@8.1.1)
+      '@hello-pangea/dnd':
+        specifier: ^18.0.1
+        version: 18.0.1(@types/react@19.2.7)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
       '@hookform/resolvers':
         specifier: ^5.0.1
         version: 5.2.2(react-hook-form@7.75.0(react@19.3.1))
@@ -631,9 +685,6 @@ importers:
       '@j178/prek':
         specifier: ^0.3.4
         version: 0.3.4(patch_hash=f59e74e485d9524f5d3d76395121114beed831327cea5836f8beee1e5f659a0e)(debug@4.4.3(supports-color@8.1.1))
-      '@larksuiteoapi/node-sdk':
-        specifier: ^1.73.0
-        version: 1.73.0(debug@4.4.3(supports-color@8.1.1))(supports-color@8.1.1)
       '@lezer/common':
         specifier: 1.5.1
         version: 1.5.1
@@ -715,6 +766,9 @@ importers:
       '@shadcn/lint':
         specifier: 0.2.5
         version: 0.2.5(@typescript-eslint/parser@8.51.0(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)(typescript@5.9.3))(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))
+      '@shikijs/markdown-it':
+        specifier: ^3.12.0
+        version: 3.23.0
       '@tailwindcss/vite':
         specifier: ^4.3.3
         version: 4.3.3(vite@8.2.2(@types/node@24.10.4)(esbuild@0.25.12)(jiti@2.7.0)(tsx@4.21.0)(yaml@2.8.2))
@@ -1027,6 +1081,9 @@ importers:
       docx:
         specifier: ^9.0.2
         version: 9.5.1
+      docx-preview:
+        specifier: 0.3.7
+        version: 0.3.7(patch_hash=2a780ab6775f1223fd4fb6f344769f949bdf72d851058935b3f34e59b25cfabb)
       dompurify:
         specifier: ^3.2.6
         version: 3.3.1
@@ -1108,9 +1165,15 @@ importers:
       eslint-plugin-unused-imports:
         specifier: ^4.1.4
         version: 4.3.0(@typescript-eslint/eslint-plugin@8.51.0(@typescript-eslint/parser@8.51.0(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)(typescript@5.9.3))(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)(typescript@5.9.3))(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))
+      exceljs:
+        specifier: ^4.4.0
+        version: 4.4.0
       fast-diff:
         specifier: ^1.3.0
         version: 1.3.0
+      fast-formula-parser:
+        specifier: ^1.0.19
+        version: 1.0.19
       fast-xml-parser:
         specifier: '>=5.10.1'
         version: 5.10.1
@@ -1135,12 +1198,6 @@ importers:
       gpt-tokenizer:
         specifier: ^3.4.0
         version: 3.4.0
-      grammy:
-        specifier: ^1.36.3
-        version: 1.41.1(encoding@0.1.13)(supports-color@8.1.1)
-      gray-matter:
-        specifier: 4.0.3
-        version: 4.0.3
       html-to-image:
         specifier: ^1.11.13
         version: 1.11.13
@@ -1222,9 +1279,9 @@ importers:
       mdast-util-from-markdown:
         specifier: ^2.0.2
         version: 2.0.2(supports-color@8.1.1)
-      mediabunny:
-        specifier: 1.58.0
-        version: 1.58.0
+      mermaid:
+        specifier: ^11.13.0
+        version: 11.13.0
       micromark-util-types:
         specifier: ^2.0.2
         version: 2.0.2
@@ -1249,18 +1306,15 @@ importers:
       node-gyp:
         specifier: 12.4.0
         version: 12.4.0
-      node-stream-zip:
-        specifier: 1.15.0
-        version: 1.15.0
       notion-helper:
         specifier: ^1.3.22
         version: 1.3.29
       npx-scope-finder:
         specifier: ^1.2.0
         version: 1.3.0
-      officeparser:
-        specifier: 4.2.0
-        version: 4.2.0
+      numfmt:
+        specifier: ^3.2.6
+        version: 3.2.6
       og-crd:
         specifier: ^0.0.2
         version: 0.0.2(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
@@ -1270,12 +1324,6 @@ importers:
       open:
         specifier: ^8.4.2
         version: 8.4.2
-      opus-decoder:
-        specifier: 0.7.12
-        version: 0.7.12
-      os-proxy-config:
-        specifier: 1.1.2
-        version: 1.1.2
       oxc-parser:
         specifier: 0.142.0
         version: 0.142.0
@@ -1300,12 +1348,6 @@ importers:
       pdf-lib:
         specifier: ^1.17.1
         version: 1.17.1
-      pdf-parse:
-        specifier: ^2.4.5
-        version: 2.4.5
-      pdfjs-dist:
-        specifier: 5.4.296
-        version: 5.4.296
       postcss:
         specifier: 8.5.6
         version: 8.5.6
@@ -1387,9 +1429,9 @@ importers:
       semver:
         specifier: 7.7.1
         version: 7.7.1
-      smol-toml:
-        specifier: ^1.7.0
-        version: 1.7.0
+      shiki:
+        specifier: ^3.12.0
+        version: 3.23.0
       socks-proxy-agent:
         specifier: ^8.0.5
         version: 8.0.5(supports-color@8.1.1)
@@ -1408,18 +1450,12 @@ importers:
       swr:
         specifier: ^2.3.6
         version: 2.3.8(react@19.3.1)
-      systeminformation:
-        specifier: 5.33.8
-        version: 5.33.8
       tailwind-merge:
         specifier: ^3.3.1
         version: 3.4.0
       tailwindcss:
         specifier: ^4.3.3
         version: 4.3.3
-      tar:
-        specifier: 7.5.19
-        version: 7.5.19
       telegram-markdown-v2:
         specifier: ^0.0.4
         version: 0.0.4(supports-color@8.1.1)
@@ -1435,9 +1471,6 @@ importers:
       tsx:
         specifier: ^4.20.3
         version: 4.21.0
-      turndown:
-        specifier: 7.2.0
-        version: 7.2.0
       turndown-plugin-gfm:
         specifier: ^1.0.2
         version: 1.0.2
@@ -1483,9 +1516,6 @@ importers:
       webdav:
         specifier: ^5.9.0
         version: 5.9.0
-      which:
-        specifier: 6.0.1
-        version: 6.0.1
       winston:
         specifier: ^3.17.0
         version: 3.19.0
@@ -2134,6 +2164,25 @@ importers:
         specifier: ^8.18.3
         version: 8.21.3
 
+  packages/system-speech:
+    dependencies:
+      zod:
+        specifier: ^4.1.5
+        version: 4.4.3
+    devDependencies:
+      '@types/node':
+        specifier: ^24.10.4
+        version: 24.10.4
+      tsdown:
+        specifier: ^0.22.14
+        version: 0.22.14(@typescript/typescript6@6.0.2)(oxc-resolver@11.21.2)(tsx@4.21.0)(unrun@0.2.27(@emnapi/core@1.11.2)(@emnapi/runtime@1.11.3))
+      typescript:
+        specifier: npm:@typescript/typescript6@6.0.2
+        version: '@typescript/typescript6@6.0.2'
+      vitest:
+        specifier: ^5.0.1
+        version: 5.0.1(@opentelemetry/api@1.9.1)(@types/node@24.10.4)(@vitest/coverage-v8@5.0.1)(@vitest/ui@5.0.1)(jsdom@26.1.0(supports-color@10.2.2))(msw@2.12.7(@types/node@24.10.4)(@typescript/typescript6@6.0.2))(vite@8.2.2(@types/node@24.10.4)(esbuild@0.25.12)(jiti@2.7.0)(tsx@4.21.0)(yaml@2.8.2))
+
   packages/ui:
     dependencies:
       '@codemirror/commands':
@@ -2560,6 +2609,12 @@ packages:
   '@ai-sdk/provider@3.0.19':
     resolution: {integrity: sha512-5lWq7zSfRaU5ylDESn3sDQjgGl2AI1vjZKO/6JY3aFW70ct4zcP1kN+ZUYOuTXr28fVsYbyu2YFhddLdIgQFZQ==}
     engines: {node: '>=18'}
+
+  '@ai-sdk/react@3.0.333':
+    resolution: {integrity: sha512-E9oXwfT/DhhquNR8eU86SRcWH6pozWvl4KIpNdhhcyo8a7OdP+fT/sGKHNwxOdoTn1F0itGqGChEcHJsFkop+Q==}
+    engines: {node: '>=18'}
+    peerDependencies:
+      react: ^18 || ~19.0.1 || ~19.1.2 || ^19.2.1
 
   '@ai-sdk/test-server@1.0.3':
     resolution: {integrity: sha512-Qw/phEW2IBKzfHIVdySuYijoqAvVJKuwupCrDbl1ofPJ4jsaH/+f+6EysRwui8LNlo/tbFgH0P39gvRFLKHleQ==}
@@ -3968,8 +4023,14 @@ packages:
       '@modelcontextprotocol/sdk':
         optional: true
 
-  '@grammyjs/types@3.25.0':
-    resolution: {integrity: sha512-iN9i5p+8ZOu9OMxWNcguojQfz4K/PDyMPOnL7PPCON+SoA/F8OKMH3uR7CVUkYfdNe0GCz8QOzAWrnqusQYFOg==}
+  '@grammyjs/types@5.0.0':
+    resolution: {integrity: sha512-iq1Qrq1iPKkB8yAa0qSuIURMZOCuqTY5pWy5gHpCeL1oQ+GPadGhw/cDTVE8waJwuCzacUzuIjRv1sESvk7u7A==}
+
+  '@hello-pangea/dnd@18.0.1':
+    resolution: {integrity: sha512-xojVWG8s/TGrKT1fC8K2tIWeejJYTAeJuj36zM//yEm/ZrnZUSFGS15BpO+jGZT1ybWvyXmeDJwPYb4dhWlbZQ==}
+    peerDependencies:
+      react: ^18.0.0 || ^19.0.0
+      react-dom: ^18.0.0 || ^19.0.0
 
   '@hono/node-server@1.19.10':
     resolution: {integrity: sha512-hZ7nOssGqRgyV3FVVQdfi+U4q02uB23bpnYpdvNXkYTRRyWx84b7yf1ans+dnJ/7h41sGL3CeQTfO+ZGxuO+Iw==}
@@ -7277,29 +7338,55 @@ packages:
       eslint:
         optional: true
 
+  '@shikijs/core@3.23.0':
+    resolution: {integrity: sha512-NSWQz0riNb67xthdm5br6lAkvpDJRTgB36fxlo37ZzM2yq0PQFFzbd8psqC2XMPgCzo1fW6cVi18+ArJ44wqgA==}
+
   '@shikijs/core@4.5.0':
     resolution: {integrity: sha512-6CIgwq+bt2JZ3OSjb/nBkkwEf/CfpHcbam+Mg5Pllco7HAGRQ2/EFhZrrJtbyNTgKwknfVS+llsXGygiDGwJWw==}
     engines: {node: '>=20'}
+
+  '@shikijs/engine-javascript@3.23.0':
+    resolution: {integrity: sha512-aHt9eiGFobmWR5uqJUViySI1bHMqrAgamWE1TYSUoftkAeCCAiGawPMwM+VCadylQtF4V3VNOZ5LmfItH5f3yA==}
 
   '@shikijs/engine-javascript@4.5.0':
     resolution: {integrity: sha512-Ed6UdEj84LyYkwnxM5CvSMWAD+id9ExTYri0/+x41U9zrgNifPSS9lZm0JqBP0VfYI8yr8tY5nbNq9+p9R0kFA==}
     engines: {node: '>=20'}
 
+  '@shikijs/engine-oniguruma@3.23.0':
+    resolution: {integrity: sha512-1nWINwKXxKKLqPibT5f4pAFLej9oZzQTsby8942OTlsJzOBZ0MWKiwzMsd+jhzu8YPCHAswGnnN1YtQfirL35g==}
+
   '@shikijs/engine-oniguruma@4.5.0':
     resolution: {integrity: sha512-dKVmbJecVdB9recl8a/CU4jdpNXyjJQrIcesIkpS70s5HS02ohpnCSpMUbotPnEUzbAcLQ+S4hwZYbkBBiTcJw==}
     engines: {node: '>=20'}
+
+  '@shikijs/langs@3.23.0':
+    resolution: {integrity: sha512-2Ep4W3Re5aB1/62RSYQInK9mM3HsLeB91cHqznAJMuylqjzNVAVCMnNWRHFtcNHXsoNRayP9z1qj4Sq3nMqYXg==}
 
   '@shikijs/langs@4.5.0':
     resolution: {integrity: sha512-wwBTqwduXSz0X4v9Qa2EWeFaYJEw1clCncWjoRNQRbVDu3SPRTRWucnouYapKj3b8Q+sk/41Vbc4B5c8nuYzLA==}
     engines: {node: '>=20'}
 
+  '@shikijs/markdown-it@3.23.0':
+    resolution: {integrity: sha512-0tgFk+UUxBDXmdS/3xznAj0hhZWAF88UgpGGfgQppAEohtYKw+5MAxpuPQwa+baK/NbRrGlyfGdcpeXZqqEQSw==}
+    peerDependencies:
+      markdown-it-async: ^2.2.0
+    peerDependenciesMeta:
+      markdown-it-async:
+        optional: true
+
   '@shikijs/primitive@4.5.0':
     resolution: {integrity: sha512-UM7ShlA8oz0OWxLLO8BmO9Ip6fVqdkt8yF0EH7nOCqHfrx1eEAzF0ZUVK7L+I8NEgeu1PEWSRlxaiPPeCb4iDg==}
     engines: {node: '>=20'}
 
+  '@shikijs/themes@3.23.0':
+    resolution: {integrity: sha512-5qySYa1ZgAT18HR/ypENL9cUSGOeI2x+4IvYJu4JgVJdizn6kG4ia5Q1jDEOi7gTbN4RbuYtmHh0W3eccOrjMA==}
+
   '@shikijs/themes@4.5.0':
     resolution: {integrity: sha512-zGb87H3UBbpuI4yoh5UguB1XbU+2BDU3kflM7UfZ+Cy2hWo9lBtqjSVK20gmLY6ukYl040hAypGXMgud9vul8Q==}
     engines: {node: '>=20'}
+
+  '@shikijs/types@3.23.0':
+    resolution: {integrity: sha512-3JZ5HXOZfYjsYSk0yPwBrkupyYSLpAE26Qc0HLghhZNGTZg/SKxXIIgoxOpmmeQP0RRSDJTk1/vPfw9tbw+jSQ==}
 
   '@shikijs/types@4.5.0':
     resolution: {integrity: sha512-drtPrtD8N0DENyD2cyt6Ajy+IWsiCLgMxODwLTpvH1UsN6a9jf90tNTPjqwHvA+0Lzu9e0txk8DjfqH1p9UJRw==}
@@ -10300,6 +10387,9 @@ packages:
   crypt@0.0.2:
     resolution: {integrity: sha512-mCxBlsHFYh9C+HVpiEacem8FEBnMXgU9gy4zmNC+SXAZNB/1idgp/aulFJ4FgCi7GPEVbfyng092GqL2k2rmow==}
 
+  css-box-model@1.2.1:
+    resolution: {integrity: sha512-a7Vr4Q/kd/aw96bnJG332W9V9LkJO69JRcaCYDUqjp6/z0w6VcZjgAcTbgFxEPfBgdnAwlh3iwu+hLopa+flJw==}
+
   css-select@5.2.2:
     resolution: {integrity: sha512-TizTzUddG/xYLA3NXodFM0fSbNizXjOKhqiQQwvhlspadZokn1KDy0NZFS0wuEubIYAV5/c1/lAr0TaaFXEXzw==}
 
@@ -11775,8 +11865,8 @@ packages:
   graceful-fs@4.2.11:
     resolution: {integrity: sha512-RbJ5/jmFcNNCcDV5o9eTnBLJ/HszWV0P73bc+Ff4nS/rJj+YaS6IGyiOL0VoBYX+l1Wrl3k63h/KrH+nhJ0XvQ==}
 
-  grammy@1.41.1:
-    resolution: {integrity: sha512-wcHAQ1e7svL3fJMpDchcQVcWUmywhuepOOjHUHmMmWAwUJEIyK5ea5sbSjZd+Gy1aMpZeP8VYJa+4tP+j1YptQ==}
+  grammy@1.46.0:
+    resolution: {integrity: sha512-/8Qw+iisrUdOMk+p2mjEHouMm/BBdBEN1DHh16wiTpRUZkxDG3PxexdjCvR+wvK3LWPdrEvnQbdrwpU954sPhg==}
     engines: {node: ^12.20.0 || >=14.13.1}
 
   graphql@16.14.2:
@@ -14283,6 +14373,9 @@ packages:
   race-signal@2.0.2:
     resolution: {integrity: sha512-IuNNNY5NLriMFEGl3BVei2xq9NIcpkuAklhPWamhu5tRJrJz0w9sloUMz73YXpmUluE2EZocmJm9rpQqXmCPiA==}
 
+  raf-schd@4.0.3:
+    resolution: {integrity: sha512-tQkJl2GRWh83ui2DiPTJz9wEiMN20syf+5oKfB03yYP7ioZcJwsIK8FjrtLwH1m7C7e+Tt2yYBlrOpdT+dyeIQ==}
+
   random-int@3.1.0:
     resolution: {integrity: sha512-h8CRz8cpvzj0hC/iH/1Gapgcl2TQ6xtnCpyOI5WvWfXf/yrDx2DOU+tD9rX23j36IF11xg1KqB9W11Z18JPMdw==}
     engines: {node: '>=12'}
@@ -14432,6 +14525,18 @@ packages:
       react: ^17.0.2 || ^18 || ^19
       react-dom: ^17.0.2 || ^18 || ^19
 
+  react-redux@9.3.1:
+    resolution: {integrity: sha512-vxMLT0lalUjbZPkoTepWyKAZbjIIFssNx/CEL9lTfwQBU6XpkGSmCNdcCIrkOBUgB68uftZMnbXVb6DwGnhRKQ==}
+    peerDependencies:
+      '@types/react': ^18.2.25 || ^19
+      react: ^18.0 || ^19
+      redux: ^5.0.0
+    peerDependenciesMeta:
+      '@types/react':
+        optional: true
+      redux:
+        optional: true
+
   react-remove-scroll-bar@2.3.8:
     resolution: {integrity: sha512-9r+yi9+mgU33AKcj6IbT9oRCO78WriSj6t/cF8DWBZJ9aOGPOTEDvdUDz1FwKim7QXWwmHqtdHnRJfhAxEG46Q==}
     engines: {node: '>=10'}
@@ -14529,6 +14634,9 @@ packages:
   redent@3.0.0:
     resolution: {integrity: sha512-6tDA8g98We0zd0GvVeMT9arEOnTw9qM03L9cJXaCjrip1OO764RDBLBfrB4cwzNGDj5OA5ioymC9GkizgWJDUg==}
     engines: {node: '>=8'}
+
+  redux@5.0.1:
+    resolution: {integrity: sha512-M9/ELqF6fy8FwmkpnF0S3YKOqMyoWJ4+CS5Efg2ct3oY9daQvd/Pc71FpGZsVsbl3Cpb+IIcjBDUnnyBdQbq4w==}
 
   reflect-metadata@0.2.2:
     resolution: {integrity: sha512-urBwgfrvVP/eAyXx4hluJivBKzuEbSQs9rKWCrCkbSxNv8mxPcUZKeuoF3Uy4mJl3Lwprp6yy5/39VWigZ4K6Q==}
@@ -14983,6 +15091,9 @@ packages:
     cpu: [x64]
     os: [win32]
 
+  shiki@3.23.0:
+    resolution: {integrity: sha512-55Dj73uq9ZXL5zyeRPzHQsK7Nbyt6Y10k5s7OjuFZGMhpp4r/rsLBH0o/0fstIzX1Lep9VxefWljK/SKCzygIA==}
+
   shiki@4.5.0:
     resolution: {integrity: sha512-OcRW72ngQvc+MSVWBRIovC/BTW589iUE/Vxav7VeM4RcY9MUjqB+IR6ILG1k9nuW6LiG/nct9uma4/MBtnZbmQ==}
     engines: {node: '>=20'}
@@ -15358,6 +15469,10 @@ packages:
 
   text-hex@1.0.0:
     resolution: {integrity: sha512-uuVGNWzgJ4yhRaNSiubPY7OjISw4sw4E5Uv0wbjp+OzcbmVU/rsT8ujgcXJhn9ypzsgr5vlzpPqP+MBBKcGvbg==}
+
+  throttleit@2.1.0:
+    resolution: {integrity: sha512-nt6AMGKW1p/70DF/hGBdJB57B8Tspmbp5gfJ8ilhLnt7kkr2ye7hzD6NVG8GGErk2HWF34igrL2CXmNIkzKqKw==}
+    engines: {node: '>=18'}
 
   through@2.3.8:
     resolution: {integrity: sha512-w89qg7PI8wAdvX60bMDP+bFoD5Dvhm9oLheFp5O4a2QF0cSBGsBX4qZmadPMvVqlLJBBci+WqGGOAPvcDeNSVg==}
@@ -16574,6 +16689,16 @@ snapshots:
     dependencies:
       json-schema: 0.4.0
 
+  '@ai-sdk/react@3.0.333(react@19.3.1)(zod@4.4.3)':
+    dependencies:
+      '@ai-sdk/provider-utils': 4.0.64(zod@4.4.3)
+      ai: 6.0.185(patch_hash=b3aaaf464218099ceb86209aa99ff6811275c3f67adb0f3d5c35c5522e183f4c)(zod@4.4.3)
+      react: 19.3.1
+      swr: 2.3.8(react@19.3.1)
+      throttleit: 2.1.0
+    transitivePeerDependencies:
+      - zod
+
   '@ai-sdk/test-server@1.0.3(@types/node@24.10.4)(typescript@5.9.3)':
     dependencies:
       msw: 2.12.7(@types/node@24.10.4)(typescript@5.9.3)
@@ -16628,8 +16753,8 @@ snapshots:
 
   '@antfu/install-pkg@1.1.0':
     dependencies:
-      package-manager-detector: 1.6.0
-      tinyexec: 1.3.0
+      package-manager-detector: 1.9.0
+      tinyexec: 1.3.1
 
   '@anthropic-ai/claude-agent-sdk-darwin-arm64@0.3.311':
     optional: true
@@ -18822,7 +18947,19 @@ snapshots:
       - supports-color
       - utf-8-validate
 
-  '@grammyjs/types@3.25.0': {}
+  '@grammyjs/types@5.0.0': {}
+
+  '@hello-pangea/dnd@18.0.1(@types/react@19.2.7)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)':
+    dependencies:
+      '@babel/runtime': 7.29.7
+      css-box-model: 1.2.1
+      raf-schd: 4.0.3
+      react: 19.3.1
+      react-dom: 19.3.1(react@19.3.1)
+      react-redux: 9.3.1(@types/react@19.2.7)(react@19.3.1)(redux@5.0.1)
+      redux: 5.0.1
+    transitivePeerDependencies:
+      - '@types/react'
 
   '@hono/node-server@1.19.10(hono@4.12.25)':
     dependencies:
@@ -21665,6 +21802,13 @@ snapshots:
       eslint: 9.39.5(jiti@2.7.0)(supports-color@8.1.1)
       oxc-parser: 0.148.0
 
+  '@shikijs/core@3.23.0':
+    dependencies:
+      '@shikijs/types': 3.23.0
+      '@shikijs/vscode-textmate': 10.0.2
+      '@types/hast': 3.0.5
+      hast-util-to-html: 9.0.5
+
   '@shikijs/core@4.5.0':
     dependencies:
       '@shikijs/primitive': 4.5.0
@@ -21673,20 +21817,40 @@ snapshots:
       '@types/hast': 3.0.5
       hast-util-to-html: 9.0.5
 
+  '@shikijs/engine-javascript@3.23.0':
+    dependencies:
+      '@shikijs/types': 3.23.0
+      '@shikijs/vscode-textmate': 10.0.2
+      oniguruma-to-es: 4.3.6
+
   '@shikijs/engine-javascript@4.5.0':
     dependencies:
       '@shikijs/types': 4.5.0
       '@shikijs/vscode-textmate': 10.0.2
       oniguruma-to-es: 4.3.6
 
+  '@shikijs/engine-oniguruma@3.23.0':
+    dependencies:
+      '@shikijs/types': 3.23.0
+      '@shikijs/vscode-textmate': 10.0.2
+
   '@shikijs/engine-oniguruma@4.5.0':
     dependencies:
       '@shikijs/types': 4.5.0
       '@shikijs/vscode-textmate': 10.0.2
 
+  '@shikijs/langs@3.23.0':
+    dependencies:
+      '@shikijs/types': 3.23.0
+
   '@shikijs/langs@4.5.0':
     dependencies:
       '@shikijs/types': 4.5.0
+
+  '@shikijs/markdown-it@3.23.0':
+    dependencies:
+      markdown-it: 14.1.1
+      shiki: 3.23.0
 
   '@shikijs/primitive@4.5.0':
     dependencies:
@@ -21694,9 +21858,18 @@ snapshots:
       '@shikijs/vscode-textmate': 10.0.2
       '@types/hast': 3.0.5
 
+  '@shikijs/themes@3.23.0':
+    dependencies:
+      '@shikijs/types': 3.23.0
+
   '@shikijs/themes@4.5.0':
     dependencies:
       '@shikijs/types': 4.5.0
+
+  '@shikijs/types@3.23.0':
+    dependencies:
+      '@shikijs/vscode-textmate': 10.0.2
+      '@types/hast': 3.0.5
 
   '@shikijs/types@4.5.0':
     dependencies:
@@ -25159,6 +25332,10 @@ snapshots:
 
   crypt@0.0.2: {}
 
+  css-box-model@1.2.1:
+    dependencies:
+      tiny-invariant: 1.3.3
+
   css-select@5.2.2:
     dependencies:
       boolbase: 1.0.0
@@ -26931,9 +27108,9 @@ snapshots:
 
   graceful-fs@4.2.11: {}
 
-  grammy@1.41.1(encoding@0.1.13)(supports-color@8.1.1):
+  grammy@1.46.0(encoding@0.1.13)(supports-color@8.1.1):
     dependencies:
-      '@grammyjs/types': 3.25.0
+      '@grammyjs/types': 5.0.0
       abort-controller: 3.0.0
       debug: 4.4.3(supports-color@8.1.1)
       node-fetch: 2.7.0(encoding@0.1.13)
@@ -30010,6 +30187,8 @@ snapshots:
 
   race-signal@2.0.2: {}
 
+  raf-schd@4.0.3: {}
+
   random-int@3.1.0: {}
 
   range-parser@1.2.1: {}
@@ -30187,6 +30366,15 @@ snapshots:
     transitivePeerDependencies:
       - '@types/react-dom'
 
+  react-redux@9.3.1(@types/react@19.2.7)(react@19.3.1)(redux@5.0.1):
+    dependencies:
+      '@types/use-sync-external-store': 0.0.6
+      react: 19.3.1
+      use-sync-external-store: 1.6.0(react@19.3.1)
+    optionalDependencies:
+      '@types/react': 19.2.7
+      redux: 5.0.1
+
   react-remove-scroll-bar@2.3.8(@types/react@19.2.7)(react@19.3.1):
     dependencies:
       react: 19.3.1
@@ -30297,6 +30485,8 @@ snapshots:
     dependencies:
       indent-string: 4.0.0
       strip-indent: 3.0.0
+
+  redux@5.0.1: {}
 
   reflect-metadata@0.2.2: {}
 
@@ -30921,6 +31111,17 @@ snapshots:
   sherpa-onnx-win-x64@1.13.8:
     optional: true
 
+  shiki@3.23.0:
+    dependencies:
+      '@shikijs/core': 3.23.0
+      '@shikijs/engine-javascript': 3.23.0
+      '@shikijs/engine-oniguruma': 3.23.0
+      '@shikijs/langs': 3.23.0
+      '@shikijs/themes': 3.23.0
+      '@shikijs/types': 3.23.0
+      '@shikijs/vscode-textmate': 10.0.2
+      '@types/hast': 3.0.5
+
   shiki@4.5.0:
     dependencies:
       '@shikijs/core': 4.5.0
@@ -31383,6 +31584,8 @@ snapshots:
       - react-native-b4a
 
   text-hex@1.0.0: {}
+
+  throttleit@2.1.0: {}
 
   through@2.3.8: {}
 
