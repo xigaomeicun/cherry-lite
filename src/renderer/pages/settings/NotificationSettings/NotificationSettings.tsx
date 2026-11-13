@@ -31,8 +31,6 @@ const NotificationSettings: FC = () => {
     assistant: 'app.notification.assistant.enabled',
     backup: 'app.notification.backup.enabled',
     knowledge: 'app.notification.knowledge.enabled',
-    update: 'app.notification.update.enabled',
-    'mini-app': 'app.notification.mini_app.enabled',
     system: 'app.notification.center.system.enabled',
     usage: 'app.notification.center.usage.enabled',
     official: 'app.notification.center.official.enabled',
@@ -178,24 +176,6 @@ const NotificationSettings: FC = () => {
             aria-label={t('settings.notification.usage_popups')}
             checked={notificationSettings.usagePopups}
             onCheckedChange={(value) => void saveSettings({ usagePopups: value })}
-          />
-        </SettingRow>
-        <SettingDivider />
-        <SettingRow id="setting-notifications-update-notification" className="scroll-mt-6">
-          <SettingRowTitle>{t('settings.notification.update')}</SettingRowTitle>
-          <Switch
-            aria-label={t('settings.notification.update')}
-            checked={notificationSettings.update}
-            onCheckedChange={(v) => handleNotificationChange('update', v)}
-          />
-        </SettingRow>
-        <SettingDivider />
-        <SettingRow id="setting-notifications-mini-app-notification" className="scroll-mt-6">
-          <SettingRowTitle>{t('settings.notification.mini_app')}</SettingRowTitle>
-          <Switch
-            aria-label={t('settings.notification.mini_app')}
-            checked={notificationSettings['mini-app']}
-            onCheckedChange={(v) => handleNotificationChange('mini-app', v)}
           />
         </SettingRow>
       </SettingGroup>
