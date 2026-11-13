@@ -1019,6 +1019,7 @@
   "chat.topics.copy.image": "画像としてコピー",
   "chat.topics.copy.md": "Markdownとしてコピー",
   "chat.topics.copy.plain_text": "プレーンテキストとしてコピー（Markdownを除去）",
+  "chat.topics.copy.session_id": "セッションIDをコピー",
   "chat.topics.copy.title": "コピー",
   "chat.topics.delete.shortcut": "{{key}}キーを押しながらで直接削除",
   "chat.topics.display.assistant": "アシスタント",
