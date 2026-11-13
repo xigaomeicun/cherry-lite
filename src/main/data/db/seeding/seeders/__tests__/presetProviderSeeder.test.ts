@@ -1,32 +1,24 @@
 /**
- * Regression tests for PresetProviderSeeder.run — insert-only behavior.
+ * Contract test for PresetProviderSeeder.run — neutered behavior.
  *
- * Regression: An earlier implementation called db.insert() unconditionally and
- * used onConflictDoUpdate, overwriting user customizations (renamed providers,
- * custom API keys, etc.) on every app start. The fix filters out already-present
- * provider IDs and only inserts genuinely new rows.
+ * Cherry-Lite keeps the providers sidebar limited to user-defined providers,
+ * so the seeder must not materialize the registry's commercial preset
+ * providers. If a future merge restores the upstream seed body, this test
+ * fails instead of silently re-seeding 60+ rows into user_provider.
  */
 
 import { setupTestDatabase } from '@test-helpers/db'
 import { describe, expect, it, vi } from 'vitest'
 
-import { RegistryLoader } from '@cherrystudio/provider-registry/node'
-import { appStateTable } from '@data/db/schemas/appState'
 import { userProviderTable } from '@data/db/schemas/userProvider'
 import { PresetProviderSeeder } from '@data/db/seeding/seeders/presetProviderSeeder'
-import { SeedRunner } from '@data/db/seeding/SeedRunner'
-import { generateOrderKeyBetween, generateOrderKeySequence } from '@data/services/utils/orderKey'
 
-// Fake registry providers — two preset providers: 'openai' and 'anthropic'.
 vi.mock('@cherrystudio/provider-registry/node', () => {
   class RegistryLoader {
     loadProviders() {
       return [
         { id: 'openai', name: 'OpenAI', endpointConfigs: {}, defaultChatEndpoint: null },
-        { id: 'anthropic', name: 'Anthropic', endpointConfigs: {}, defaultChatEndpoint: null },
-        { id: 'azure-openai', name: 'Azure OpenAI', endpointConfigs: {}, defaultChatEndpoint: null },
-        { id: 'vertexai', name: 'Vertex AI', endpointConfigs: {}, defaultChatEndpoint: null },
-        { id: 'aws-bedrock', name: 'AWS Bedrock', endpointConfigs: {}, defaultChatEndpoint: null }
+        { id: 'anthropic', name: 'Anthropic', endpointConfigs: {}, defaultChatEndpoint: null }
       ]
     }
     getProvidersVersion() {
@@ -42,112 +34,12 @@ vi.mock('@cherrystudio/provider-registry/node', () => {
   return { RegistryLoader }
 })
 
-describe('PresetProviderSeeder.run — insert-only behavior', () => {
+describe('PresetProviderSeeder.run — neutered', () => {
   const dbh = setupTestDatabase()
 
-  it('seeds only user-editable auth scaffolding; connection config stays registry-resolved', async () => {
-    const seed = new PresetProviderSeeder()
-    seed.run(dbh.db)
+  it('does not insert preset providers even when the registry offers them', async () => {
+    new PresetProviderSeeder().run(dbh.db)
 
-    const rows = await dbh.db.select().from(userProviderTable)
-    const azure = rows.find((r) => r.providerId === 'azure-openai')
-    const vertex = rows.find((r) => r.providerId === 'vertexai')
-    const bedrock = rows.find((r) => r.providerId === 'aws-bedrock')
-
-    // Delta rows: defaultChatEndpoint/endpointConfigs are NOT seeded — they
-    // resolve from the registry at read time (#17096). Only the
-    // user-editable auth shell is materialized.
-    expect(azure?.defaultChatEndpoint).toBeNull()
-    expect(azure?.endpointConfigs).toBeNull()
-    expect(azure?.authConfig).toEqual({ type: 'iam-azure', apiVersion: '' })
-    expect(vertex?.defaultChatEndpoint).toBeNull()
-    expect(vertex?.authConfig).toEqual({ type: 'iam-gcp', project: '', location: '' })
-    expect(bedrock?.defaultChatEndpoint).toBeNull()
-    expect(bedrock?.authConfig).toEqual({ type: 'iam-aws', region: '' })
-  })
-
-  it('should NOT re-insert openai when it already exists in DB', async () => {
-    await dbh.db
-      .insert(userProviderTable)
-      .values({ providerId: 'openai', name: 'User-renamed OpenAI', orderKey: generateOrderKeyBetween(null, null) })
-
-    const seed = new PresetProviderSeeder()
-    seed.run(dbh.db)
-
-    const rows = await dbh.db.select().from(userProviderTable)
-    const openai = rows.find((r) => r.providerId === 'openai')
-    // User customization must be preserved
-    expect(openai?.name).toBe('User-renamed OpenAI')
-  })
-
-  it('repairs a legacy provider order key before appending preset providers', async () => {
-    await dbh.db.insert(userProviderTable).values([
-      { providerId: 'existing', name: 'Existing', orderKey: generateOrderKeyBetween(null, null) },
-      { providerId: 'legacy-b', name: 'Legacy B', orderKey: 'zz' },
-      { providerId: 'legacy-a', name: 'Legacy A', orderKey: 'zz' }
-    ])
-
-    await dbh.db.insert(appStateTable).values({
-      key: 'seed:presetProvider',
-      value: { version: 'test-version' }
-    })
-
-    const seed = new PresetProviderSeeder()
-    new SeedRunner(dbh.db).runAll([seed])
-
-    const rows = await dbh.db.select().from(userProviderTable)
-    expect(rows.map((row) => row.providerId)).toContain('openai')
-    const legacyRows = rows.filter((row) => row.providerId.startsWith('legacy-'))
-    expect(legacyRows).toHaveLength(2)
-    expect([...legacyRows].sort((a, b) => a.providerId.localeCompare(b.providerId)).map((row) => row.name)).toEqual([
-      'Legacy A',
-      'Legacy B'
-    ])
-    for (const legacy of legacyRows) {
-      expect(legacy.orderKey).not.toBe('zz')
-      expect(() => generateOrderKeyBetween(legacy.orderKey, null)).not.toThrow()
-    }
-
-    const ordered = [...rows].sort((a, b) => a.orderKey.localeCompare(b.orderKey))
-    expect(ordered.map((row) => row.providerId).slice(0, 3)).toEqual(['existing', 'legacy-a', 'legacy-b'])
-  })
-
-  it('repairs legacy provider order keys even when the registry is empty', async () => {
-    await dbh.db.insert(userProviderTable).values({ providerId: 'legacy', name: 'Legacy', orderKey: 'zz' })
-    vi.spyOn(RegistryLoader.prototype, 'loadProviders').mockReturnValueOnce([])
-
-    const seed = new PresetProviderSeeder()
-    new SeedRunner(dbh.db).runAll([seed])
-
-    const [legacy] = await dbh.db.select().from(userProviderTable)
-    expect(legacy.orderKey).not.toBe('zz')
-    expect(() => generateOrderKeyBetween(legacy.orderKey, null)).not.toThrow()
-  })
-
-  it('never seeds endpointConfigs — registry connection config resolves at read time', async () => {
-    const seed = new PresetProviderSeeder()
-    seed.run(dbh.db)
-
-    const rows = await dbh.db.select().from(userProviderTable)
-    // No row freezes a registry connection snapshot (#17096).
-    expect(rows.every((r) => r.endpointConfigs === null)).toBe(true)
-  })
-
-  it('should not insert anything when all registry providers already exist', async () => {
-    const [openaiKey, anthropicKey, azureKey, vertexKey, bedrockKey] = generateOrderKeySequence(5)
-    await dbh.db.insert(userProviderTable).values([
-      { providerId: 'openai', name: 'OpenAI', orderKey: openaiKey },
-      { providerId: 'anthropic', name: 'Anthropic', orderKey: anthropicKey },
-      { providerId: 'azure-openai', name: 'Azure OpenAI', orderKey: azureKey },
-      { providerId: 'vertexai', name: 'Vertex AI', orderKey: vertexKey },
-      { providerId: 'aws-bedrock', name: 'AWS Bedrock', orderKey: bedrockKey }
-    ])
-    const before = await dbh.db.select().from(userProviderTable)
-
-    const seed = new PresetProviderSeeder()
-    seed.run(dbh.db)
-
-    const after = await dbh.db.select().from(userProviderTable)
-    expect(after).toHaveLength(before.length)
+    expect(await dbh.db.select().from(userProviderTable)).toHaveLength(0)
   })
 })
