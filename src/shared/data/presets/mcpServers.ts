@@ -88,18 +88,6 @@ export const PRESET_MCP_SERVERS = freezePresets([
     isTrusted: true
   },
   {
-    name: BuiltinMcpServerNames.braveSearch,
-    type: 'inMemory',
-    isActive: false,
-    env: {
-      BRAVE_API_KEY: 'YOUR_API_KEY'
-    },
-    shouldConfig: true,
-    provider: 'CherryAI',
-    installSource: 'builtin',
-    isTrusted: true
-  },
-  {
     name: BuiltinMcpServerNames.fetch,
     type: 'inMemory',
     isActive: true,
@@ -114,18 +102,6 @@ export const PRESET_MCP_SERVERS = freezePresets([
     disabledAutoApproveTools: [...filesystemManualApprovalTools],
     shouldConfig: true,
     isActive: false,
-    provider: 'CherryAI',
-    installSource: 'builtin',
-    isTrusted: true
-  },
-  {
-    name: BuiltinMcpServerNames.difyKnowledge,
-    type: 'inMemory',
-    isActive: false,
-    env: {
-      DIFY_KEY: 'YOUR_DIFY_KEY'
-    },
-    shouldConfig: true,
     provider: 'CherryAI',
     installSource: 'builtin',
     isTrusted: true
