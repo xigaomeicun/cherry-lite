@@ -134,6 +134,7 @@ vi.mock('@renderer/i18n/label', () => ({
     ({
       assistants: 'Chat',
       agents: 'Agent',
+      scheduled_tasks: 'Scheduled Tasks',
       store: 'Library',
       paintings: 'Paintings',
       translate: 'Translate',
@@ -170,6 +171,7 @@ vi.mock('react-i18next', () => ({
           'notes.title': 'Notes',
           'openclaw.title': 'OpenClaw',
           'paintings.title': 'Paintings',
+          'settings.scheduledTasks.title': 'Scheduled Tasks',
           'title.launchpad': 'Launchpad',
           'translate.title': 'Translate'
         }[key] ??
@@ -213,6 +215,7 @@ describe('LaunchpadPage', () => {
     expect(appsHeading.nextElementSibling).toHaveClass('grid-cols-6', 'justify-items-center', 'gap-2', 'px-2')
     expect(chatButton).toHaveClass('mx-auto', 'w-[92px]')
     expect(screen.getByRole('button', { name: 'Agent' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Scheduled Tasks' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Notes' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Manage' })).not.toBeInTheDocument()
   })
