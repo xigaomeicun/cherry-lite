@@ -1,10 +1,5 @@
-import { eq } from 'drizzle-orm'
-
 import type { InsertUserModelRow } from '@data/db/schemas/userModel'
-import { userModelTable } from '@data/db/schemas/userModel'
 import type { InsertUserProviderRow } from '@data/db/schemas/userProvider'
-import { providerService } from '@data/services/ProviderService'
-import { insertManyWithOrderKey } from '@data/services/utils/orderKey'
 import {
   LOCAL_EMBEDDING_MODEL_GROUP,
   LOCAL_EMBEDDING_MODEL_ID,
@@ -73,28 +68,8 @@ export class LocalModelSeeder implements ISeeder {
     })
   }
 
-  run(db: DbType): void {
-    db.transaction((tx) => {
-      providerService.batchUpsertTx(tx, [createLocalEmbeddingProviderRow()])
-
-      const [existing] = tx
-        .select({ id: userModelTable.id })
-        .from(userModelTable)
-        .where(eq(userModelTable.id, LOCAL_EMBEDDING_UNIQUE_MODEL_ID))
-        .limit(1)
-        .all()
-      if (existing) {
-        tx.update(userModelTable)
-          .set({ name: LOCAL_EMBEDDING_MODEL_NAME })
-          .where(eq(userModelTable.id, LOCAL_EMBEDDING_UNIQUE_MODEL_ID))
-          .run()
-        return
-      }
-
-      insertManyWithOrderKey(tx, userModelTable, [createLocalEmbeddingModelRow()], {
-        pkColumn: userModelTable.id,
-        scope: eq(userModelTable.providerId, LOCAL_EMBEDDING_PROVIDER_ID)
-      })
-    })
+  run(_db: DbType): void {
+    // Cherry-Lite: 绝育内置 Local Models 提供商播种，providers 侧栏只留用户自定义条目
+    return
   }
 }
