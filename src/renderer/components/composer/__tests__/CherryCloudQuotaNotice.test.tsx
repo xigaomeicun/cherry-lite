@@ -54,7 +54,7 @@ describe('CherryCloudQuotaNotice', () => {
         { event: 'subscription_quota_action', action: 'switch_model', modelType: 'paid' }
       ])
     )
-    expect(openSettingsTab).toHaveBeenCalledWith('/settings/profile')
+    expect(openSettingsTab).toHaveBeenCalledWith()
     expect(execute).toHaveBeenCalledWith('chat.model.select')
     expect(startCherryCloudSubscription).not.toHaveBeenCalled()
   })

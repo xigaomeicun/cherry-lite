@@ -83,7 +83,7 @@ export function CherryCloudQuotaNotice({ exhaustion }: { exhaustion: CherryCloud
               })
             }
             if (offerSubscription) void startCherryCloudSubscription('quota_notice')
-            else openSettingsTab('/settings/profile')
+            else openSettingsTab()
           }}>
           {t(offerSubscription ? 'settings.subscription.go_to_subscribe' : 'settings.subscription.view_usage')}
         </Button>

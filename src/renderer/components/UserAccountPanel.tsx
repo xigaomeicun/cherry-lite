@@ -40,7 +40,7 @@ export function UserAccountPanel({
 
   const handleOpenAccountDetails = () => {
     onRequestClose?.()
-    openSettingsTab('/settings/profile')
+    openSettingsTab()
   }
 
   const handleOpenSettings = () => {

@@ -21,6 +21,6 @@ describe('useMessageHeaderCapabilities', () => {
 
     void result.current.openUserProfile?.()
 
-    expect(mocks.openSettingsTab).toHaveBeenCalledWith('/settings/profile')
+    expect(mocks.openSettingsTab).toHaveBeenCalledWith()
   })
 })

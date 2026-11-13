@@ -16,7 +16,6 @@ import {
   Settings2,
   Terminal,
   ToolCase,
-  UserRound,
   Zap
 } from 'lucide-react'
 import type { ReactNode } from 'react'
@@ -56,7 +55,6 @@ export const BUILTIN_TOOLS_GROUP_KEY = 'settings.menuGroups.builtinTools'
  * title searchable — the settings search baseline is structural, not manual.
  */
 export const settingsMenu: readonly SettingsMenuEntry[] = [
-  { route: '/settings/profile', titleKey: 'settings.profile.title', icon: createElement(UserRound) },
   { route: '/settings/provider', titleKey: 'settings.provider.title', icon: createElement(Cloud) },
   { route: '/settings/model', titleKey: 'settings.model', icon: createElement(Package) },
   {

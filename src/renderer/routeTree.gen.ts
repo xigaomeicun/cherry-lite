@@ -36,7 +36,6 @@ import { Route as SettingsLocalModelsRouteImport } from './routes/settings/local
 import { Route as SettingsMcpRouteImport } from './routes/settings/mcp'
 import { Route as SettingsModelRouteImport } from './routes/settings/model'
 import { Route as SettingsNotificationsRouteImport } from './routes/settings/notifications'
-import { Route as SettingsProfileRouteImport } from './routes/settings/profile'
 import { Route as SettingsPromptsRouteImport } from './routes/settings/prompts'
 import { Route as SettingsProviderRouteImport } from './routes/settings/provider'
 import { Route as SettingsQuickAssistantRouteImport } from './routes/settings/quick-assistant'
@@ -46,7 +45,6 @@ import { Route as SettingsSearchRouteImport } from './routes/settings/search'
 import { Route as SettingsSelectionAssistantRouteImport } from './routes/settings/selection-assistant'
 import { Route as SettingsShortcutRouteImport } from './routes/settings/shortcut'
 import { Route as SettingsSkillsRouteImport } from './routes/settings/skills'
-import { Route as SettingsSubscriptionRouteImport } from './routes/settings/subscription'
 import { Route as SettingsSystemRouteImport } from './routes/settings/system'
 import { Route as SettingsUsageRouteImport } from './routes/settings/usage'
 import { Route as SettingsVoiceRouteImport } from './routes/settings/voice'
@@ -201,11 +199,6 @@ const SettingsNotificationsRoute = SettingsNotificationsRouteImport.update({
   path: '/notifications',
   getParentRoute: () => SettingsRoute,
 } as any)
-const SettingsProfileRoute = SettingsProfileRouteImport.update({
-  id: '/profile',
-  path: '/profile',
-  getParentRoute: () => SettingsRoute,
-} as any)
 const SettingsPromptsRoute = SettingsPromptsRouteImport.update({
   id: '/prompts',
   path: '/prompts',
@@ -250,11 +243,6 @@ const SettingsShortcutRoute = SettingsShortcutRouteImport.update({
 const SettingsSkillsRoute = SettingsSkillsRouteImport.update({
   id: '/skills',
   path: '/skills',
-  getParentRoute: () => SettingsRoute,
-} as any)
-const SettingsSubscriptionRoute = SettingsSubscriptionRouteImport.update({
-  id: '/subscription',
-  path: '/subscription',
   getParentRoute: () => SettingsRoute,
 } as any)
 const SettingsSystemRoute = SettingsSystemRouteImport.update({
@@ -373,7 +361,6 @@ export interface FileRoutesByFullPath {
   '/settings/mcp': typeof SettingsMcpRouteWithChildren
   '/settings/model': typeof SettingsModelRoute
   '/settings/notifications': typeof SettingsNotificationsRoute
-  '/settings/profile': typeof SettingsProfileRoute
   '/settings/prompts': typeof SettingsPromptsRoute
   '/settings/provider': typeof SettingsProviderRoute
   '/settings/quick-assistant': typeof SettingsQuickAssistantRoute
@@ -383,7 +370,6 @@ export interface FileRoutesByFullPath {
   '/settings/selection-assistant': typeof SettingsSelectionAssistantRoute
   '/settings/shortcut': typeof SettingsShortcutRoute
   '/settings/skills': typeof SettingsSkillsRouteWithChildren
-  '/settings/subscription': typeof SettingsSubscriptionRoute
   '/settings/system': typeof SettingsSystemRoute
   '/settings/usage': typeof SettingsUsageRoute
   '/settings/voice': typeof SettingsVoiceRoute
@@ -428,7 +414,6 @@ export interface FileRoutesByTo {
   '/settings/local-models': typeof SettingsLocalModelsRoute
   '/settings/model': typeof SettingsModelRoute
   '/settings/notifications': typeof SettingsNotificationsRoute
-  '/settings/profile': typeof SettingsProfileRoute
   '/settings/prompts': typeof SettingsPromptsRoute
   '/settings/provider': typeof SettingsProviderRoute
   '/settings/quick-assistant': typeof SettingsQuickAssistantRoute
@@ -436,7 +421,6 @@ export interface FileRoutesByTo {
   '/settings/search': typeof SettingsSearchRoute
   '/settings/selection-assistant': typeof SettingsSelectionAssistantRoute
   '/settings/shortcut': typeof SettingsShortcutRoute
-  '/settings/subscription': typeof SettingsSubscriptionRoute
   '/settings/system': typeof SettingsSystemRoute
   '/settings/usage': typeof SettingsUsageRoute
   '/settings/voice': typeof SettingsVoiceRoute
@@ -484,7 +468,6 @@ export interface FileRoutesById {
   '/settings/mcp': typeof SettingsMcpRouteWithChildren
   '/settings/model': typeof SettingsModelRoute
   '/settings/notifications': typeof SettingsNotificationsRoute
-  '/settings/profile': typeof SettingsProfileRoute
   '/settings/prompts': typeof SettingsPromptsRoute
   '/settings/provider': typeof SettingsProviderRoute
   '/settings/quick-assistant': typeof SettingsQuickAssistantRoute
@@ -494,7 +477,6 @@ export interface FileRoutesById {
   '/settings/selection-assistant': typeof SettingsSelectionAssistantRoute
   '/settings/shortcut': typeof SettingsShortcutRoute
   '/settings/skills': typeof SettingsSkillsRouteWithChildren
-  '/settings/subscription': typeof SettingsSubscriptionRoute
   '/settings/system': typeof SettingsSystemRoute
   '/settings/usage': typeof SettingsUsageRoute
   '/settings/voice': typeof SettingsVoiceRoute
@@ -543,7 +525,6 @@ export interface FileRouteTypes {
     | '/settings/mcp'
     | '/settings/model'
     | '/settings/notifications'
-    | '/settings/profile'
     | '/settings/prompts'
     | '/settings/provider'
     | '/settings/quick-assistant'
@@ -553,7 +534,6 @@ export interface FileRouteTypes {
     | '/settings/selection-assistant'
     | '/settings/shortcut'
     | '/settings/skills'
-    | '/settings/subscription'
     | '/settings/system'
     | '/settings/usage'
     | '/settings/voice'
@@ -598,7 +578,6 @@ export interface FileRouteTypes {
     | '/settings/local-models'
     | '/settings/model'
     | '/settings/notifications'
-    | '/settings/profile'
     | '/settings/prompts'
     | '/settings/provider'
     | '/settings/quick-assistant'
@@ -606,7 +585,6 @@ export interface FileRouteTypes {
     | '/settings/search'
     | '/settings/selection-assistant'
     | '/settings/shortcut'
-    | '/settings/subscription'
     | '/settings/system'
     | '/settings/usage'
     | '/settings/voice'
@@ -653,7 +631,6 @@ export interface FileRouteTypes {
     | '/settings/mcp'
     | '/settings/model'
     | '/settings/notifications'
-    | '/settings/profile'
     | '/settings/prompts'
     | '/settings/provider'
     | '/settings/quick-assistant'
@@ -663,7 +640,6 @@ export interface FileRouteTypes {
     | '/settings/selection-assistant'
     | '/settings/shortcut'
     | '/settings/skills'
-    | '/settings/subscription'
     | '/settings/system'
     | '/settings/usage'
     | '/settings/voice'
@@ -880,13 +856,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SettingsNotificationsRouteImport
       parentRoute: typeof SettingsRoute
     }
-    '/settings/profile': {
-      id: '/settings/profile'
-      path: '/profile'
-      fullPath: '/settings/profile'
-      preLoaderRoute: typeof SettingsProfileRouteImport
-      parentRoute: typeof SettingsRoute
-    }
     '/settings/prompts': {
       id: '/settings/prompts'
       path: '/prompts'
@@ -948,13 +917,6 @@ declare module '@tanstack/react-router' {
       path: '/skills'
       fullPath: '/settings/skills'
       preLoaderRoute: typeof SettingsSkillsRouteImport
-      parentRoute: typeof SettingsRoute
-    }
-    '/settings/subscription': {
-      id: '/settings/subscription'
-      path: '/subscription'
-      fullPath: '/settings/subscription'
-      preLoaderRoute: typeof SettingsSubscriptionRouteImport
       parentRoute: typeof SettingsRoute
     }
     '/settings/system': {
@@ -1180,7 +1142,6 @@ interface SettingsRouteChildren {
   SettingsMcpRoute: typeof SettingsMcpRouteWithChildren
   SettingsModelRoute: typeof SettingsModelRoute
   SettingsNotificationsRoute: typeof SettingsNotificationsRoute
-  SettingsProfileRoute: typeof SettingsProfileRoute
   SettingsPromptsRoute: typeof SettingsPromptsRoute
   SettingsProviderRoute: typeof SettingsProviderRoute
   SettingsQuickAssistantRoute: typeof SettingsQuickAssistantRoute
@@ -1190,7 +1151,6 @@ interface SettingsRouteChildren {
   SettingsSelectionAssistantRoute: typeof SettingsSelectionAssistantRoute
   SettingsShortcutRoute: typeof SettingsShortcutRoute
   SettingsSkillsRoute: typeof SettingsSkillsRouteWithChildren
-  SettingsSubscriptionRoute: typeof SettingsSubscriptionRoute
   SettingsSystemRoute: typeof SettingsSystemRoute
   SettingsUsageRoute: typeof SettingsUsageRoute
   SettingsVoiceRoute: typeof SettingsVoiceRoute
@@ -1213,7 +1173,6 @@ const SettingsRouteChildren: SettingsRouteChildren = {
   SettingsMcpRoute: SettingsMcpRouteWithChildren,
   SettingsModelRoute: SettingsModelRoute,
   SettingsNotificationsRoute: SettingsNotificationsRoute,
-  SettingsProfileRoute: SettingsProfileRoute,
   SettingsPromptsRoute: SettingsPromptsRoute,
   SettingsProviderRoute: SettingsProviderRoute,
   SettingsQuickAssistantRoute: SettingsQuickAssistantRoute,
@@ -1223,7 +1182,6 @@ const SettingsRouteChildren: SettingsRouteChildren = {
   SettingsSelectionAssistantRoute: SettingsSelectionAssistantRoute,
   SettingsShortcutRoute: SettingsShortcutRoute,
   SettingsSkillsRoute: SettingsSkillsRouteWithChildren,
-  SettingsSubscriptionRoute: SettingsSubscriptionRoute,
   SettingsSystemRoute: SettingsSystemRoute,
   SettingsUsageRoute: SettingsUsageRoute,
   SettingsVoiceRoute: SettingsVoiceRoute,

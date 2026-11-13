@@ -9,7 +9,7 @@ export function useMessageHeaderCapabilities(): Pick<MessageListMeta, 'userProfi
   const avatar = useAvatar()
 
   const openUserProfile = useCallback<NonNullable<MessageListActions['openUserProfile']>>(() => {
-    openSettingsTab('/settings/profile')
+    openSettingsTab()
   }, [])
 
   return useMemo(
