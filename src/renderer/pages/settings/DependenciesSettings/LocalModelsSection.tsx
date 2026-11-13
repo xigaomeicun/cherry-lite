@@ -1,4 +1,4 @@
-import { Boxes, Download, RefreshCw, ScanText, Mic, Volume2, Trash2, X } from 'lucide-react'
+import { Download, RefreshCw, Trash2, X } from 'lucide-react'
 import type { FC, ReactNode } from 'react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -24,39 +24,15 @@ const CARD_NOTICE_KEYS = {
 
 type CardNotice = keyof typeof CARD_NOTICE_KEYS
 
-/** Display metadata belongs to the installed model, not its capability. */
-const MODEL_CARDS = {
-  'qwen3-asr-1.7b-8bit': {
-    icon: <Mic className="size-5" />,
-    nameKey: 'settings.voice.model.qwen3_asr',
-    sources: ['Qwen/Qwen3-ASR-1.7B-hf']
-  },
-  'kokoro-multi-lang-v1.1': {
-    icon: <Volume2 className="size-5" />,
-    nameKey: 'settings.voice.model.kokoro_tts',
-    sources: ['csukuangfj/kokoro-multi-lang-v1_1']
-  },
-  'qwen3-tts-0.6b-customvoice-8bit': {
-    icon: <Volume2 className="size-5" />,
-    nameKey: 'settings.voice.model.qwen3_tts',
-    sources: ['Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice']
-  },
-  'funasr-nano-int8': {
-    icon: <Mic className="size-5" />,
-    nameKey: 'settings.voice.model.funasr',
-    sources: ['csukuangfj/sherpa-onnx-funasr-nano-int8-2025-12-30']
-  },
-  'qwen3-embedding-0.6b': {
-    icon: <Boxes className="size-5" />,
-    nameKey: 'settings.dependencies.localModels.embedding.name',
-    sources: ['onnx-community/Qwen3-Embedding-0.6B-ONNX']
-  },
-  'pp-ocrv6-medium': {
-    icon: <ScanText className="size-5" />,
-    nameKey: 'settings.dependencies.localModels.ocr.name',
-    sources: ['PaddlePaddle/PP-OCRv6_medium_det_onnx', 'PaddlePaddle/PP-OCRv6_medium_rec_onnx']
-  }
-} as const satisfies Record<LocalModelBundleId, { icon: ReactNode; nameKey: string; sources: readonly string[] }>
+/**
+ * Display metadata belongs to the installed model, not its capability.
+ * No bundle cards are surfaced on this page (cherry-lite trim); voice and OCR
+ * bundles are downloaded from their own feature pages, and the registry
+ * entries stay untouched.
+ */
+const MODEL_CARDS: Partial<
+  Record<LocalModelBundleId, { icon: ReactNode; nameKey: string; sources: readonly string[] }>
+> = {}
 
 /**
  * Settings-specific notice state layered over the shared local-model lifecycle.
@@ -119,12 +95,13 @@ interface ModelCardProps {
 const ModelCard: FC<ModelCardProps> = ({ id, capability, onStatusChange }) => {
   const { t } = useTranslation()
   const { status, percent, notice, download, cancel, remove } = useLocalModelCard(id)
-  const { icon, nameKey, sources } = MODEL_CARDS[id]
+  const card = MODEL_CARDS[id]
 
   useEffect(() => {
     onStatusChange(id, status)
   }, [id, status, onStatusChange])
-  if (status === 'unsupported') return null
+  if (status === 'unsupported' || !card) return null
+  const { icon, nameKey, sources } = card
   const ready = status === 'ready'
   const downloading = status === 'downloading'
   const retrying = status === 'error'
