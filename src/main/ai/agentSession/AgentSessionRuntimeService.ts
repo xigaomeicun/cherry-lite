@@ -353,12 +353,7 @@ class AgentSessionRuntimeTerminalListener implements StreamListener {
 @Injectable('AgentSessionRuntimeService')
 @ServicePhase(Phase.WhenReady)
 // Process and prewarm owners must outlive this runtime's shutdown barriers.
-@DependsOn([
-  'ClaudeCodeProcessManager',
-  'ClaudeCodeWarmQueryManager',
-  'AutomationReplService',
-  'RuntimeActivityService'
-])
+@DependsOn(['ClaudeCodeProcessManager', 'ClaudeCodeWarmQueryManager', 'RuntimeActivityService'])
 export class AgentSessionRuntimeService extends BaseService {
   private readonly forks = new AgentSessionForkOperations()
   private readonly failedClosures = new Map<string, Set<AgentRuntimeConnection>>()
