@@ -21,6 +21,9 @@ import { PiForkCheckpointSchema } from '@main/ai/runtime/pi/forkCheckpoint'
 import { preparePiBranch, reservePiBranchTx } from '@main/ai/runtime/pi/piContext'
 import { runtimeDriverRegistry } from '@main/ai/runtime/registry'
 import * as fileUtils from '@main/utils/file'
+import { setupTestDatabase } from '@test-helpers/db'
+import { eq } from 'drizzle-orm'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { AgentSessionForkOperations } from '../AgentSessionForkOperations'
 import { readForkResources, writeForkResources } from '../resources'
@@ -502,5 +505,85 @@ describe('Agent fork publication', () => {
     await new AgentSessionForkOperations().recover()
     expect(await readdir(forkRoot)).toEqual([])
     expect(dbh.db.select().from(appStateTable).all()).toEqual([])
+  })
+
+  it('releases the staging directory when the published target moved on, leaving the target alone', async () => {
+    // Regression: a fork cancelled between publishing a file and committing its DB row leaves a
+    // record whose target identity can never match again — a live session owns that artifact and
+    // keeps writing to it. Cleanup used to throw on the mismatch, which skipped the staging removal
+    // below it, so `.forks/<operationId>` stayed forever and re-warned on every boot (40 dirs /
+    // 17 MB accumulated over two weeks before this was found).
+    const operationId = randomUUID()
+    const artifactDirectory = path.join(forkRoot, operationId)
+    await mkdir(artifactDirectory, { recursive: true })
+    const { forkFileIdentity } = await import('../files')
+
+    const target = path.join(directory, 'live', 'session.jsonl')
+    await mkdir(path.dirname(target), { recursive: true })
+    await writeFile(target, 'the live session kept writing')
+    const source = path.join(artifactDirectory, 'native.jsonl')
+    await writeFile(source, 'the copy we published')
+
+    await writeForkResources({
+      version: 1 as const,
+      operationId,
+      targetSessionId: randomUUID(),
+      createdAt: Date.now(),
+      artifactDirectory,
+      artifactIdentity: await forkFileIdentity(artifactDirectory),
+      published: [{ source, target, identity: 'an-identity-that-can-no-longer-match' }]
+    })
+
+    await new AgentSessionForkOperations().recover()
+
+    // Our own staging is ours to release…
+    expect(await readdir(forkRoot)).toEqual([])
+    expect(await readForkResources()).toEqual([])
+    // …and the file we could not prove we own is untouched.
+    expect(await readFile(target, 'utf8')).toBe('the live session kept writing')
+  })
+  it('still proves ownership of its staging after the volume device number changes', async () => {
+    // macOS renumbers APFS `st_dev` across reboots while inodes stay stable; a strict dev:ino
+    // compare kept every pre-reboot staging directory forever and re-warned on each boot.
+    const operationId = randomUUID()
+    const artifactDirectory = path.join(forkRoot, operationId)
+    await mkdir(artifactDirectory, { recursive: true })
+    const { forkFileIdentity } = await import('../files')
+    const [, ino] = (await forkFileIdentity(artifactDirectory)).split(':')
+    await writeFile(path.join(artifactDirectory, 'partial.jsonl'), 'staged before reboot')
+    await writeForkResources({
+      version: 1 as const,
+      operationId,
+      targetSessionId: randomUUID(),
+      createdAt: Date.now(),
+      artifactDirectory,
+      artifactIdentity: `999999:${ino}`,
+      published: []
+    })
+    await new AgentSessionForkOperations().recover()
+    expect(await readdir(forkRoot)).toEqual([])
+  })
+
+  it('retains a staging directory whose inode no longer matches, and reports it only once', async () => {
+    const operationId = randomUUID()
+    const artifactDirectory = path.join(forkRoot, operationId)
+    await mkdir(artifactDirectory, { recursive: true })
+    await writeFile(path.join(artifactDirectory, 'someone-else.jsonl'), 'not ours')
+    await writeForkResources({
+      version: 1 as const,
+      operationId,
+      targetSessionId: randomUUID(),
+      createdAt: Date.now(),
+      artifactDirectory,
+      artifactIdentity: '999999:1',
+      published: []
+    })
+    const operations = new AgentSessionForkOperations()
+    await operations.recover()
+    expect(await readFile(path.join(artifactDirectory, 'someone-else.jsonl'), 'utf8')).toBe('not ours')
+    expect((await readForkResources())[0]?.cleanupPendingReported).toBe(true)
+    await new AgentSessionForkOperations().recover()
+    expect(await readFile(path.join(artifactDirectory, 'someone-else.jsonl'), 'utf8')).toBe('not ours')
+    expect(await readForkResources()).toHaveLength(1)
   })
 })

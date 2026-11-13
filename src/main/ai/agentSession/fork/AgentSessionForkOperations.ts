@@ -25,7 +25,7 @@ import { Sequencer } from '@shared/utils/async'
 import { ensureRetiredSessionHistory } from '../../runtime/pi/retiredSessionHistory'
 import { runtimeDriverRegistry } from '../../runtime/registry'
 import type { AgentSessionRuntimeDriver } from '../../runtime/types'
-import { copyForkWorkspace, forkFileIdentity, publishForkArtifact } from './files'
+import { copyForkWorkspace, forkFileIdentity, publishForkArtifact, sameDirectoryIdentity } from './files'
 import { getEditFailure, resolveForkBoundary } from './historyActions'
 import { type AgentSessionForkResources, readForkResources, writeForkResources, removeForkResources } from './resources'
 import { workspaceHasReferences } from './workspaceCleanup'
@@ -223,7 +223,14 @@ export class AgentSessionForkOperations {
       try {
         await this.cleanup(resources)
       } catch (error) {
-        logger.warn('Fork cleanup remains pending', { operationId: resources.operationId, error })
+        // Report a stuck record once, not on every boot: the record keeps the flag across restarts.
+        if (resources.cleanupPendingReported) {
+          logger.debug('Fork cleanup still pending', { operationId: resources.operationId, error })
+        } else {
+          logger.warn('Fork cleanup remains pending', { operationId: resources.operationId, error })
+          resources.cleanupPendingReported = true
+          await writeForkResources(resources).catch(() => undefined)
+        }
       }
     }
   }
@@ -428,11 +435,7 @@ export class AgentSessionForkOperations {
       if (path.resolve(expected) !== path.resolve(resources.workspace)) throw new Error('Unowned fork workspace')
       const workspaceInfo = lstatSync(expected, { bigint: true, throwIfNoEntry: false })
       if (workspaceInfo) {
-        if (
-          !workspaceInfo.isDirectory() ||
-          workspaceInfo.ino === 0n ||
-          [workspaceInfo.dev, workspaceInfo.ino].join(':') !== resources.workspaceIdentity
-        ) {
+        if (!sameDirectoryIdentity(resources.workspaceIdentity, workspaceInfo)) {
           throw new Error('Fork workspace ownership is unproven; retained for recovery')
         }
         if (
@@ -446,11 +449,7 @@ export class AgentSessionForkOperations {
           await writeForkResources(resources)
         } else {
           const artifactInfo = lstatSync(resources.artifactDirectory, { bigint: true })
-          if (
-            !artifactInfo.isDirectory() ||
-            artifactInfo.ino === 0n ||
-            [artifactInfo.dev, artifactInfo.ino].join(':') !== resources.artifactIdentity
-          )
+          if (!sameDirectoryIdentity(resources.artifactIdentity, artifactInfo))
             throw new Error('Fork directory ownership is unproven; retained for recovery')
           // No await between the reference check and detach; later cleanup never targets a recreated workspace.
           const disposal = mkdtempSync(path.join(resources.artifactDirectory, 'workspace-disposal-'))
@@ -459,11 +458,9 @@ export class AgentSessionForkOperations {
       }
     }
     try {
-      if ((await lstat(resources.artifactDirectory)).isSymbolicLink()) throw new Error('Fork directory is a link')
-      if (
-        !resources.artifactIdentity ||
-        (await forkFileIdentity(resources.artifactDirectory)) !== resources.artifactIdentity
-      ) {
+      const artifactInfo = await lstat(resources.artifactDirectory, { bigint: true })
+      if (artifactInfo.isSymbolicLink()) throw new Error('Fork directory is a link')
+      if (!sameDirectoryIdentity(resources.artifactIdentity, artifactInfo)) {
         throw new Error('Fork directory ownership is unproven; retained for recovery')
       }
       await rm(resources.artifactDirectory, { recursive: true, force: true })
