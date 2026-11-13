@@ -19,7 +19,6 @@ import { useTranslation } from 'react-i18next'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger, Button, Tooltip } from '@cherrystudio/ui'
 import { loggerService } from '@logger'
 import { CommandShortcut } from '@renderer/components/command'
-import { ComputerUseAppIcon } from '@renderer/components/ComputerUseAppIcon'
 import { OpenTargetButton } from '@renderer/components/OpenTarget'
 import { usePreference } from '@renderer/data/hooks/usePreference'
 import { ipcApi } from '@renderer/ipc'
@@ -28,7 +27,6 @@ import { cn } from '@renderer/utils/style'
 import type { AgentWorkspaceType } from '@shared/data/api/schemas/agentWorkspaces'
 import type { AgentDetailsSectionConfig } from '@shared/data/preference/preferenceTypes'
 import { getDefaultValue } from '@shared/data/preference/preferenceUtils'
-import type { ComputerUseControl } from '@shared/ipc/schemas/computerUse'
 
 import { AgentDetailsCustomize } from './AgentDetailsCustomize'
 import type {
@@ -270,15 +268,9 @@ export function AgentSessionDetailsSections({
   workspaceType,
   onOpenFlow,
   onOpenArtifact,
-  contextUsage,
-  desktopControls = [],
-  pendingDesktopControls,
-  stopDesktopControl
+  contextUsage
 }: {
   contextUsage?: ReactNode
-  desktopControls?: ComputerUseControl[]
-  pendingDesktopControls?: ReadonlySet<string>
-  stopDesktopControl?: (control: ComputerUseControl) => Promise<void>
   status: AgentRightPaneStatus
   sessionId?: string
   workspacePath?: string
@@ -348,54 +340,7 @@ export function AgentSessionDetailsSections({
         )}
       </div>
     ),
-    desktop_control: desktopControls.some((row) => row.appId) ? (
-      <DetailsSection
-        id="desktop_control"
-        title={t('agent.right_pane.info.desktop_control.title')}
-        icon={<Monitor className="size-4" />}
-        summary={desktopControls.filter((row) => row.appId).length}>
-        {desktopControls
-          .filter((row) => row.appId)
-          .map((row) => {
-            const labels = {
-              opening: t('agent.right_pane.info.desktop_control.opening'),
-              active: t('agent.right_pane.info.desktop_control.active'),
-              stopping: t('agent.right_pane.info.desktop_control.stopping'),
-              stopped: t('agent.right_pane.info.desktop_control.stopped'),
-              unconfirmed: t('agent.right_pane.info.desktop_control.unconfirmed')
-            }
-            const name = row.appName ?? row.appId
-            const stopLabel = t('agent.right_pane.info.desktop_control.stop')
-            return (
-              <div
-                key={JSON.stringify([row.ownerId, row.appId])}
-                className="flex min-w-0 items-center gap-2 px-1 py-2 text-xs">
-                <ComputerUseAppIcon app={{ name: name ?? row.label, identity: row.appIdentity }} />
-                <span title={name} className="min-w-0 flex-1 truncate">
-                  {name}
-                </span>
-                <span className="text-muted-foreground">{labels[row.status]}</span>
-                {(row.status === 'opening' || row.status === 'active') && (
-                  <Tooltip content={stopLabel}>
-                    <Button
-                      size="icon-sm"
-                      variant="ghost"
-                      aria-label={stopLabel}
-                      disabled={pendingDesktopControls?.has(JSON.stringify([row.ownerId, row.appId]))}
-                      onClick={() =>
-                        void stopDesktopControl?.(row).catch(() =>
-                          toast.error(t('agent.right_pane.info.desktop_control.stop_failed'))
-                        )
-                      }>
-                      <CircleStop size={14} />
-                    </Button>
-                  </Tooltip>
-                )}
-              </div>
-            )
-          })}
-      </DetailsSection>
-    ) : null,
+    desktop_control: null,
     plan: status.tasks.length > 0 && (
       <DetailsSection
         id="plan"

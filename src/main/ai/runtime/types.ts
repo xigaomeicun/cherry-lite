@@ -1,14 +1,20 @@
 import type { LanguageModelV3ToolApprovalRequest } from '@ai-sdk/provider'
 import type { UIMessageChunk } from 'ai'
 
-import type { InputLookup, InputState, OperationResult, SubmitResult } from '@cherrystudio/agent-runtime'
+import type {
+  InputLookup,
+  InputState,
+  OperationResult,
+  SubmitResult,
+  ThreadContextUsage
+} from '@cherrystudio/agent-runtime'
+import type { AgentSessionContextRow } from '@data/db/schemas/agentSessionContext'
 import type { AiUsageCredentialReceipt, SourceSnapshot } from '@data/services/AiUsageRecordService'
 import type { RuntimeForkAnchor } from '@main/ai/runtime/fork'
 import type { AgentChildUpdate, AgentChildView } from '@shared/ai/agentChildProjection'
 import type { AgentSessionApiRetryInfo } from '@shared/ai/agentSessionApiRetry'
 import type { AgentSessionBackgroundTasks } from '@shared/ai/agentSessionBackgroundTasks'
 import type { AgentSessionCompactionAnchorData, AgentSessionCompactionTrigger } from '@shared/ai/agentSessionCompaction'
-import type { AgentSessionContextUsage } from '@shared/ai/agentSessionContextUsage'
 import type { AgentSessionSlashCommand } from '@shared/ai/agentSessionSlashCommands'
 import type { AutonomousTurnOrigin } from '@shared/ai/agentSessionTurnOrigin'
 import type { AgentSessionMessageEntity } from '@shared/data/api/schemas/agentSessionMessages'
@@ -170,7 +176,7 @@ export type AgentRuntimeEvent =
    *  session status — the host surfaces it in the message stream and clears it when content resumes,
    *  the turn ends/errors/cancels, or the connection closes. Never persisted as conversation content. */
   | { type: 'api-retry'; retry: AgentSessionApiRetryInfo }
-  | { type: 'context-usage'; usage: AgentSessionContextUsage }
+  | { type: 'context-usage'; result: OperationResult<ThreadContextUsage> }
   /** The SDK pushed a fresh slash-command catalog mid-session (`system / commands_changed`) — e.g.
    *  skills discovered as the agent works in a subdirectory. `supportedCommands()` is captured at
    *  init and never reflects this, so the host REPLACES its cached list from `commands`. */
@@ -232,10 +238,10 @@ export interface AgentRuntimeConnection {
   redirect?(input: AgentRuntimeCommand): boolean
   /**
    * Re-derive the session's desired config and reconcile the running connection against it.
-   * Live-appliable tool-policy facts are patched in place before the rebuild verdict, except for
-   * permission-mode changes: those stay frozen for an active turn and apply at the next turn
-   * boundary. Serialized per connection, concurrent push/pull reconciles queue instead of
-   * interleaving SDK and snapshot writes.
+   * Live-appliable tool-policy facts, permission mode included, are patched in place before the
+   * rebuild verdict, even during an active turn: the change governs the turn's next tool call.
+   * Serialized per connection, concurrent push/pull reconciles queue instead of interleaving SDK
+   * and snapshot writes.
    *
    * The input is the config the connection should serve right now (a live turn's frozen model,
    * reasoning, and knowledge selection, or the agent's latest model with defaults) — the same
@@ -249,11 +255,10 @@ export interface AgentRuntimeConnection {
     fastMode?: boolean
   }): Promise<AgentRuntimeReconcileResult>
   /**
-   * Read the live context-window usage for this connection's session. Returns null when the
-   * underlying runtime can't report it (no query yet, or a driver that doesn't support it).
-   * Optional ⇒ the host treats the runtime as unable to report usage.
+   * Read passive, thread-scoped context usage from the harness. Unknown and unsupported
+   * results remain explicit; omitting this operation means the connection cannot report usage.
    */
-  getContextUsage?(): Promise<AgentSessionContextUsage | null>
+  getContextUsage?(): Promise<OperationResult<ThreadContextUsage>>
   /**
    * Read this session's available slash command catalog (`query.supportedCommands()`), including
    * any custom project/user commands the SDK discovered. Returns null when the runtime can't report
@@ -284,6 +289,8 @@ export interface AgentSessionRuntimeDriver {
   /** Restore persisted runtime history after generic fork, crash and delivery recovery. */
   recoverSessions?(): Promise<void>
   fork?(input: RuntimeForkInput): Promise<RuntimeForkResult>
+  /** Validate the opaque checkpoint and its claimed product binding when supplied. */
+  isForkCheckpoint?(value: unknown, binding?: Pick<AgentSessionContextRow, 'backendId' | 'nativeThreadId'>): boolean
   /**
    * Per-driver session prerequisite check: throws if the session can't be
    * served (e.g. workspace path missing, credentials absent). Hosts call

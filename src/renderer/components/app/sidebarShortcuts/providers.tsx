@@ -1,6 +1,5 @@
 import { renderAgentEntityIcon, renderAssistantEntityIcon } from '@renderer/components/chat/resourceList/base'
 import { CLI_TOOLS, CliIcon } from '@renderer/components/icons/CliIcon'
-import MiniAppIcon from '@renderer/components/icons/MiniAppIcon'
 import { dataApiService } from '@renderer/data/DataApiService'
 import { preferenceService } from '@renderer/data/PreferenceService'
 import { getSidebarIconLabelKey } from '@renderer/i18n/label'
@@ -9,7 +8,6 @@ import {
   resolveAgentEntrySessionIdForAgent,
   resolveChatEntryTopicIdForAssistant
 } from '@renderer/utils/conversationEntry'
-import { miniAppIdFromTabUrl } from '@renderer/utils/miniAppKeepAlive'
 import {
   getSidebarApp,
   getSidebarMenuPath,
@@ -151,37 +149,6 @@ const appProvider: SidebarShortcutProvider = {
   }
 }
 
-const miniAppProvider: SidebarShortcutProvider = {
-  id: SIDEBAR_SHORTCUT_PROVIDER_IDS.MINI_APP,
-  validate: (target) => validates(SIDEBAR_SHORTCUT_PROVIDER_IDS.MINI_APP, target),
-  async resolveMany(targets) {
-    const miniApps = await dataApiService.get('/mini-apps')
-    return mapRequested(
-      targets,
-      miniApps,
-      (app) => app.appId,
-      (app) => ({
-        label: app.nameKey ? i18n.t(app.nameKey) : app.name,
-        renderIcon: ({ slotSize, glyphSize, active }) =>
-          app.logo || app.logoSrc ? (
-            <MiniAppIcon app={app} appearance="sidebar" size={slotSize} />
-          ) : (
-            <SidebarIcon icon="miniApp" active={active} size={glyphSize} strokeWidth={1.6} />
-          ),
-        tabIcon: app.logoSrc ?? app.logo,
-        supportsNewTab: true
-      })
-    )
-  },
-  subscribe: localizedCollectionSubscription('/mini-apps'),
-  activate(target, gateway) {
-    if (!this.validate(target)) return
-    const id = target.locator.resourceId
-    gateway.openWorkspace({ url: `/app/mini-app/${encodeURIComponent(id)}`, title: id })
-  },
-  isActive: (target, navigation) => miniAppIdFromTabUrl(navigation.url) === target.locator.resourceId
-}
-
 const agentProvider: SidebarShortcutProvider = {
   id: SIDEBAR_SHORTCUT_PROVIDER_IDS.AGENT,
   validate: (target) => validates(SIDEBAR_SHORTCUT_PROVIDER_IDS.AGENT, target),
@@ -263,35 +230,6 @@ const assistantProvider: SidebarShortcutProvider = {
   isActive: (target, navigation) =>
     navigation.assistantId === target.locator.resourceId ||
     isActiveResourceUrl(navigation.url, '/app/chat', 'assistantId', target.locator.resourceId)
-}
-
-const knowledgeBaseProvider: SidebarShortcutProvider = {
-  id: SIDEBAR_SHORTCUT_PROVIDER_IDS.KNOWLEDGE_BASE,
-  validate: (target) => validates(SIDEBAR_SHORTCUT_PROVIDER_IDS.KNOWLEDGE_BASE, target),
-  resolveMany: (targets) =>
-    resolvePaginatedTargets(
-      targets,
-      100,
-      (ids) => dataApiService.get('/knowledge-bases', { query: { ids, limit: ids.length } }),
-      (base) => base.id,
-      (base) => ({
-        label: base.name,
-        renderIcon: ({ glyphSize, active }) => (
-          <SidebarIcon icon="knowledgeBase" active={active} size={glyphSize} strokeWidth={1.6} />
-        ),
-        supportsNewTab: true
-      })
-    ),
-  subscribe: collectionSubscription('/knowledge-bases'),
-  activate(target, gateway) {
-    if (!this.validate(target)) return
-    gateway.openWorkspace({
-      url: `/app/knowledge?baseId=${encodeURIComponent(target.locator.resourceId)}`,
-      title: target.locator.resourceId
-    })
-  },
-  isActive: (target, navigation) =>
-    isActiveResourceUrl(navigation.url, '/app/knowledge', 'baseId', target.locator.resourceId)
 }
 
 const topicProvider: SidebarShortcutProvider = {
@@ -421,10 +359,8 @@ const codeCliProvider: SidebarShortcutProvider = {
 
 export const CORE_SIDEBAR_SHORTCUT_PROVIDERS: readonly SidebarShortcutProvider[] = [
   appProvider,
-  miniAppProvider,
   agentProvider,
   assistantProvider,
-  knowledgeBaseProvider,
   topicProvider,
   agentSessionProvider,
   fileEntryProvider,

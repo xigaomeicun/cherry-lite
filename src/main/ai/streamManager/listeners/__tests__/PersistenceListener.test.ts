@@ -16,8 +16,6 @@ import type { SerializedError } from '@shared/types/error'
 
 import type { StreamErrorResult } from '../../types'
 
-import type { StreamErrorResult } from '../../types'
-
 const appendAssistantMessageMock = vi.fn()
 const messageUpdateMock = vi.fn()
 const messageFinalizeMock = vi.fn()

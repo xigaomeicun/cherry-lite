@@ -6,11 +6,6 @@ vi.mock('@logger', () => ({
   }
 }))
 
-// Mock registerAdapterFactory to capture the factory function
-vi.mock('../../ChannelManager', () => ({
-  registerAdapterFactory: vi.fn()
-}))
-
 const mockBot = {
   use: vi.fn(),
   command: vi.fn(),
@@ -19,16 +14,12 @@ const mockBot = {
     config: {
       use: vi.fn()
     },
-    getMe: vi.fn(),
     setMyCommands: vi.fn().mockResolvedValue(undefined),
     sendMessage: vi.fn().mockResolvedValue(undefined),
     sendChatAction: vi.fn().mockResolvedValue(undefined),
-    sendDocument: vi.fn().mockResolvedValue(undefined),
-    sendPhoto: vi.fn().mockResolvedValue(undefined),
-    setMessageReaction: vi.fn().mockResolvedValue(undefined)
+    sendDocument: vi.fn().mockResolvedValue(undefined)
   },
   catch: vi.fn(),
-  botInfo: undefined as unknown,
   start: vi.fn(),
   stop: vi.fn().mockResolvedValue(undefined)
 }
@@ -40,76 +31,17 @@ vi.mock('grammy', () => {
       readonly filename: string
     ) {}
   }
-  class MockGrammyError extends Error {
-    constructor(
-      message: string,
-      readonly payload: { ok: boolean; error_code: number; description: string },
-      readonly method: string,
-      readonly parameters: Record<string, unknown>
-    ) {
-      super(message)
-      this.name = 'GrammyError'
-    }
-    get error_code() {
-      return this.payload.error_code
-    }
-    get description() {
-      return this.payload.description
-    }
-  }
-  class MockHttpError extends Error {
-    constructor(
-      message: string,
-      readonly error: unknown
-    ) {
-      super(message)
-      this.name = 'HttpError'
-    }
-  }
   return {
     Bot: vi.fn().mockImplementation(function BotMock() {
       return mockBot
     }),
-    InputFile: MockInputFile,
-    GrammyError: MockGrammyError,
-    HttpError: MockHttpError
+    InputFile: MockInputFile
   }
 })
 
-// Import the module to trigger self-registration side effect
-import '../telegram/TelegramAdapter'
-
 import { Bot, InputFile } from 'grammy'
 
-import { registerAdapterFactory } from '../../ChannelManager'
-import { CHUNK_MAX } from '../telegram/markdownTg'
-
-const BOT_INFO = { id: 1, is_bot: true, first_name: 'Cherry', username: 'cherry_bot' }
-
-/** A getMe that behaves like a real request to an unreachable host: hangs until aborted. */
-function hangingGetMe(_signal?: AbortSignal) {
-  return new Promise((_resolve, reject) => {
-    _signal?.addEventListener('abort', () => reject(new Error('The operation was aborted')), { once: true })
-  })
-}
-
-function grammyError(code: number, description: string) {
-  return import('grammy').then(({ GrammyError }) => {
-    const Ctor = GrammyError as any
-    return new Ctor(
-      `Call to 'getMe' failed! (${code}: ${description})`,
-      { ok: false, error_code: code, description },
-      'getMe',
-      {}
-    )
-  })
-}
-
-function getFactory() {
-  const call = vi.mocked(registerAdapterFactory).mock.calls[0]
-  if (!call) throw new Error('registerAdapterFactory was not called')
-  return call[1] as (channel: any, agentId: string) => any
-}
+import { createTelegramAdapter } from '../telegram/TelegramAdapter'
 
 describe('TelegramAdapter', () => {
   beforeEach(() => {
@@ -117,16 +49,13 @@ describe('TelegramAdapter', () => {
     mockBot.use.mockClear()
     mockBot.command.mockClear()
     mockBot.on.mockClear()
-    mockBot.api.config.use.mockClear()
     mockBot.api.setMyCommands.mockClear().mockResolvedValue(undefined)
+    mockBot.api.config.use.mockClear()
     mockBot.api.sendMessage.mockClear().mockResolvedValue(undefined)
     mockBot.api.sendChatAction.mockClear().mockResolvedValue(undefined)
     mockBot.api.sendDocument.mockClear().mockResolvedValue(undefined)
-    mockBot.api.sendPhoto.mockClear().mockResolvedValue(undefined)
     mockBot.catch.mockClear()
-    mockBot.api.getMe.mockReset().mockResolvedValue(BOT_INFO)
-    mockBot.botInfo = undefined
-    mockBot.start.mockReset().mockImplementation(async (options?: { onStart?: (info: object) => void }) => {
+    mockBot.start.mockReset().mockImplementation(async (options) => {
       await options?.onStart?.({})
     })
     mockBot.stop.mockReset().mockResolvedValue(undefined)
@@ -137,50 +66,21 @@ describe('TelegramAdapter', () => {
     vi.useRealTimers()
   })
 
-  function createAdapter(overrides: Record<string, unknown> = {}) {
-    const factory = getFactory()
-    return factory(
-      {
-        id: (overrides.channelId as string) ?? 'ch-1',
-        type: 'telegram',
-        enabled: true,
-        config: {
-          bot_token: (overrides.bot_token as string) ?? 'test-token',
-          allowed_chat_ids: (overrides.allowed_chat_ids as string[]) ?? ['123']
-        }
-      },
-      (overrides.agentId as string) ?? 'agent-1'
-    )
+  function createAdapter(overrides: Record<string, unknown> = {}): any {
+    return createTelegramAdapter({
+      channelId: (overrides.channelId as string) ?? 'ch-1',
+      channelType: 'telegram',
+      agentId: (overrides.agentId as string) ?? 'agent-1',
+      channelConfig: {
+        bot_token: (overrides.bot_token as string) ?? 'test-token',
+        allowed_chat_ids: (overrides.allowed_chat_ids as string[]) ?? ['123']
+      }
+    })
   }
 
-  it('connect() registers middleware, commands, message handler, and starts polling', async () => {
-    const adapter = createAdapter()
-    await adapter.connect()
-
-    expect(mockBot.use).toHaveBeenCalledTimes(1) // auth middleware
-    expect(mockBot.command).toHaveBeenCalledTimes(10) // new/stop/model/switch/mode/status/rename/compact/reboot/restart
-    expect(mockBot.on).toHaveBeenCalledWith('callback_query:data', expect.any(Function))
-    expect(mockBot.on).toHaveBeenCalledWith('message:text', expect.any(Function))
-    expect(mockBot.api.setMyCommands).toHaveBeenCalledWith([
-      { command: 'new', description: '🆕 开启全新会话' },
-      { command: 'stop', description: '✋ 终止当前任务' },
-      { command: 'model', description: '🧠 切换底座模型' },
-      { command: 'switch', description: '🤖 切换执行后端' },
-      { command: 'mode', description: '🎮 切换权限模式' },
-      { command: 'status', description: '📊 查看当前状态' },
-      { command: 'rename', description: '✏️ 命名当前会话' },
-      { command: 'compact', description: '🗜️ 压缩会话记忆' },
-      { command: 'reboot', description: '🧿 重启樱桃服务' }
-    ])
-    expect(mockBot.catch).toHaveBeenCalledTimes(1)
-    expect(mockBot.start).toHaveBeenCalledTimes(1)
-    expect(mockBot.api.config.use).toHaveBeenCalledTimes(2) // getUpdates timeout + polling health
-    expect(mockBot.start).toHaveBeenCalledWith(expect.objectContaining({ timeout: 30, onStart: expect.any(Function) }))
-  })
-
   it('reports connected only after grammY confirms polling startup', async () => {
-    let onStart: ((info: object) => void) | undefined
-    mockBot.start.mockImplementationOnce((options?: { onStart?: (info: object) => void }) => {
+    let onStart: (() => void) | undefined
+    mockBot.start.mockImplementationOnce((options) => {
       onStart = options?.onStart
       return new Promise(() => {})
     })
@@ -189,7 +89,7 @@ describe('TelegramAdapter', () => {
     await adapter.connect()
     expect(adapter.connected).toBe(false)
 
-    onStart?.({})
+    onStart?.()
     expect(adapter.connected).toBe(true)
   })
 
@@ -199,7 +99,7 @@ describe('TelegramAdapter', () => {
     await adapter.connect()
     const transformer = mockBot.api.config.use.mock.calls[0][0]
     let requestSignal: AbortSignal | undefined
-    const request = vi.fn((_method: string, _payload: unknown, signal?: AbortSignal) => {
+    const request = vi.fn((_method, _payload, signal?: AbortSignal) => {
       requestSignal = signal
       return new Promise((_resolve, reject) => {
         signal?.addEventListener('abort', () => reject(signal.reason), { once: true })
@@ -219,6 +119,21 @@ describe('TelegramAdapter', () => {
     expect(removeListener).toHaveBeenCalledWith('abort', expect.any(Function))
   })
 
+  it('forwards an already-aborted signal to getUpdates', async () => {
+    const adapter = createAdapter()
+    await adapter.connect()
+    const transformer = mockBot.api.config.use.mock.calls[0][0]
+    const upstream = new AbortController()
+    upstream.abort(new Error('poll cancelled'))
+    const request = vi.fn((_method, _payload, signal?: AbortSignal) => {
+      expect(signal?.aborted).toBe(true)
+      expect(signal?.reason).toBe(upstream.signal.reason)
+      return Promise.reject(signal?.reason)
+    })
+
+    await expect(transformer(request, 'getUpdates', { timeout: 30 }, upstream.signal)).rejects.toThrow('poll cancelled')
+  })
+
   it('does not apply the polling timeout to sends or uploads', async () => {
     const adapter = createAdapter()
     await adapter.connect()
@@ -236,7 +151,7 @@ describe('TelegramAdapter', () => {
   it('coalesces resume events and restarts polling on the same bot', async () => {
     let finishStop: (() => void) | undefined
     let finishPolling: (() => void) | undefined
-    mockBot.start.mockImplementationOnce((options?: { onStart?: (info: object) => void }) => {
+    mockBot.start.mockImplementationOnce((options) => {
       options?.onStart?.({})
       return new Promise<void>((resolve) => {
         finishPolling = resolve
@@ -259,6 +174,125 @@ describe('TelegramAdapter', () => {
     finishPolling?.()
     await vi.waitFor(() => expect(mockBot.start).toHaveBeenCalledTimes(2))
     expect(Bot).toHaveBeenCalledOnce()
+  })
+
+  it.each(['resume', 'stop failure', 'disconnect'] as const)(
+    'waits for real grammY middleware to finish during %s recovery',
+    async (scenario) => {
+      const { Bot: RealBot } = await vi.importActual<{ Bot: typeof Bot }>('grammy')
+      const bot = new RealBot('test-token', {
+        botInfo: {
+          id: 1,
+          is_bot: true,
+          first_name: 'Test',
+          username: 'test_bot',
+          can_join_groups: true,
+          can_read_all_group_messages: false,
+          supports_inline_queries: false,
+          can_connect_to_business: false,
+          has_main_web_app: false,
+          has_topics_enabled: false,
+          allows_users_to_create_topics: false,
+          can_manage_bots: false,
+          supports_join_request_queries: false
+        }
+      })
+      vi.mocked(Bot).mockImplementationOnce(function () {
+        return bot
+      })
+      vi.spyOn(bot.api, 'setMyCommands').mockResolvedValue(true)
+      vi.spyOn(bot.api, 'deleteWebhook').mockResolvedValue(true)
+      const middleware = Promise.withResolvers<void>()
+      const entered = Promise.withResolvers<void>()
+      const stopped = Promise.withResolvers<void>()
+      bot.use(async (_ctx, next) => {
+        entered.resolve()
+        await middleware.promise
+        await next()
+      })
+      let activePolls = 0
+      let maxActivePolls = 0
+      let failStop = scenario === 'stop failure'
+      vi.spyOn(bot.api, 'getUpdates')
+        .mockResolvedValueOnce([
+          {
+            update_id: 1,
+            message: {
+              message_id: 1,
+              date: 0,
+              chat: { id: 123, type: 'private', first_name: 'User' },
+              from: { id: 123, is_bot: false, first_name: 'User' },
+              text: 'hello'
+            }
+          }
+        ])
+        .mockImplementation(async (payload, signal) => {
+          if (!payload?.timeout) {
+            stopped.resolve()
+            if (failStop) {
+              failStop = false
+              throw new Error('acknowledgement failed')
+            }
+            return []
+          }
+          activePolls++
+          maxActivePolls = Math.max(maxActivePolls, activePolls)
+          try {
+            return await new Promise<never>((_resolve, reject) => {
+              if (signal?.aborted) reject(new Error('poll aborted'))
+              else signal?.addEventListener('abort', () => reject(new Error('poll aborted')), { once: true })
+            })
+          } finally {
+            activePolls--
+          }
+        })
+      const adapter = createAdapter()
+      const messages: string[] = []
+      adapter.on('message', (event: { text: string }) => messages.push(event.text))
+
+      try {
+        await adapter.connect()
+        await entered.promise
+        adapter.handleSystemResume()
+        adapter.handleSystemResume()
+        await stopped.promise
+        await new Promise<void>((resolve) => setImmediate(resolve))
+
+        expect(adapter.connected).toBe(false)
+        expect(activePolls).toBe(0)
+        if (scenario === 'disconnect') await adapter.disconnect()
+        middleware.resolve()
+        await vi.waitFor(() => expect(messages).toEqual(['hello']))
+        await new Promise<void>((resolve) => setImmediate(resolve))
+
+        expect(adapter.connected).toBe(scenario !== 'disconnect')
+        expect(activePolls).toBe(scenario === 'disconnect' ? 0 : 1)
+        expect(maxActivePolls).toBe(scenario === 'disconnect' ? 0 : 1)
+      } finally {
+        middleware.resolve()
+        await adapter.disconnect()
+      }
+    }
+  )
+
+  it('ignores resume until initial polling setup has completed', async () => {
+    let finishSetup: (() => void) | undefined
+    mockBot.api.setMyCommands.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          finishSetup = resolve
+        })
+    )
+    const adapter = createAdapter()
+
+    const connecting = adapter.connect()
+    await Promise.resolve()
+    adapter.handleSystemResume()
+    expect(mockBot.stop).not.toHaveBeenCalled()
+
+    finishSetup?.()
+    await connecting
+    expect(mockBot.start).toHaveBeenCalledOnce()
   })
 
   it('restarts polling after resume even when stopping the stale poll fails', async () => {
@@ -287,17 +321,9 @@ describe('TelegramAdapter', () => {
     const disconnecting = adapter.disconnect()
     finishResumeStop?.()
     await disconnecting
+    await Promise.resolve()
 
-    await vi.waitFor(() => expect(mockBot.start).toHaveBeenCalledTimes(1))
-    expect(adapter.connected).toBe(false)
-  })
-
-  it('disconnect() stops the bot', async () => {
-    const adapter = createAdapter()
-    await adapter.connect()
-    await adapter.disconnect()
-
-    expect(mockBot.stop).toHaveBeenCalledTimes(1)
+    expect(mockBot.start).toHaveBeenCalledOnce()
   })
 
   // channel-adapters-2: grammY rethrows a fatal 409/Conflict out of bot.start(); the adapter
@@ -309,9 +335,7 @@ describe('TelegramAdapter', () => {
     // First polling attempt fails (recoverable 409); the reconnect attempt succeeds.
     mockBot.start
       .mockRejectedValueOnce(new Error('409: Conflict'))
-      .mockImplementation(async (options?: { onStart?: (info: object) => void }) => {
-        await options?.onStart?.({})
-      })
+      .mockImplementationOnce(async (options) => options?.onStart?.({}))
 
     await adapter.connect()
     await vi.advanceTimersByTimeAsync(0) // let the rejection handler schedule the reconnect
@@ -319,200 +343,6 @@ describe('TelegramAdapter', () => {
 
     await vi.advanceTimersByTimeAsync(1000) // first backoff delay
     expect(mockBot.start).toHaveBeenCalledTimes(2) // reconnected
-  })
-
-  it('probes with a bounded getMe (not bot.init) and sets botInfo', async () => {
-    const adapter = createAdapter()
-    await adapter.connect()
-    expect(mockBot.api.getMe).toHaveBeenCalledTimes(1)
-    expect(mockBot.botInfo).toEqual(BOT_INFO)
-    expect(mockBot.start).toHaveBeenCalledTimes(1)
-  })
-
-  it('times out a hanging startup probe and retries with backoff', async () => {
-    vi.useFakeTimers()
-    mockBot.api.getMe.mockImplementationOnce(hangingGetMe)
-    const adapter = createAdapter()
-    const statuses: any[] = []
-    adapter.on('statusChange', (s: any) => statuses.push(s))
-
-    let settled = false
-    const connecting = adapter.connect().then(() => (settled = true))
-    await vi.advanceTimersByTimeAsync(9_999)
-    expect(settled).toBe(false)
-    await vi.advanceTimersByTimeAsync(1)
-    await connecting // connect() resolves (awaitConnect never hangs) and schedules a retry
-    expect(mockBot.start).not.toHaveBeenCalled()
-    expect(statuses.at(-1)).toMatchObject({ connected: false, error: expect.stringContaining('timed out') })
-
-    await vi.advanceTimersByTimeAsync(1000)
-    expect(mockBot.api.getMe).toHaveBeenCalledTimes(2)
-    expect(mockBot.start).toHaveBeenCalledTimes(1)
-    expect(adapter.connected).toBe(true)
-  })
-
-  it('retries with backoff when the startup probe hits a network error', async () => {
-    vi.useFakeTimers()
-    const { HttpError } = (await import('grammy')) as any
-    mockBot.api.getMe.mockRejectedValueOnce(
-      new HttpError(
-        "Network request for 'getMe' failed!",
-        Object.assign(new Error('socket hang up'), { code: 'ECONNRESET' })
-      )
-    )
-    const adapter = createAdapter()
-    await expect(adapter.connect()).resolves.toBeUndefined()
-    expect(mockBot.start).not.toHaveBeenCalled()
-
-    await vi.advanceTimersByTimeAsync(1000)
-    expect(mockBot.api.getMe).toHaveBeenCalledTimes(2)
-    expect(mockBot.start).toHaveBeenCalledTimes(1)
-  })
-
-  it('switches to slow retry after the fast backoff budget is exhausted', async () => {
-    vi.useFakeTimers()
-    const { HttpError } = (await import('grammy')) as any
-    mockBot.api.getMe.mockRejectedValue(new HttpError("Network request for 'getMe' failed!", new Error('ENETUNREACH')))
-    const adapter = createAdapter()
-    await adapter.connect()
-    // 1 initial + 50 fast retries (1s,2s,5s,10s,30s, then 60s each)
-    const fastBudgetMs = 1000 + 2000 + 5000 + 10000 + 30000 + 45 * 60000
-    await vi.advanceTimersByTimeAsync(fastBudgetMs)
-    expect(mockBot.api.getMe).toHaveBeenCalledTimes(51)
-
-    await vi.advanceTimersByTimeAsync(5 * 60_000 - 1)
-    expect(mockBot.api.getMe).toHaveBeenCalledTimes(51)
-    await vi.advanceTimersByTimeAsync(1)
-    expect(mockBot.api.getMe).toHaveBeenCalledTimes(52)
-
-    mockBot.api.getMe.mockResolvedValue(BOT_INFO)
-    await vi.advanceTimersByTimeAsync(5 * 60_000)
-    expect(mockBot.start).toHaveBeenCalledTimes(1)
-    expect(adapter.connected).toBe(true)
-  })
-
-  it('does not retry a startup 401 and reports the reason', async () => {
-    vi.useFakeTimers()
-    mockBot.api.getMe.mockRejectedValueOnce(await grammyError(401, 'Unauthorized'))
-    const adapter = createAdapter()
-    const statuses: any[] = []
-    adapter.on('statusChange', (s: any) => statuses.push(s))
-    await expect(adapter.connect()).rejects.toThrow('401')
-    expect(statuses.at(-1)).toMatchObject({ connected: false, error: expect.stringContaining('Unauthorized') })
-    await vi.advanceTimersByTimeAsync(10 * 60_000)
-    expect(mockBot.api.getMe).toHaveBeenCalledTimes(1)
-  })
-
-  it('stops reconnecting when a reconnect attempt hits 401', async () => {
-    vi.useFakeTimers()
-    const { HttpError } = (await import('grammy')) as any
-    mockBot.api.getMe
-      .mockRejectedValueOnce(new HttpError("Network request for 'getMe' failed!", new Error('ETIMEDOUT')))
-      .mockRejectedValueOnce(await grammyError(401, 'Unauthorized'))
-    const adapter = createAdapter()
-    const statuses: any[] = []
-    adapter.on('statusChange', (s: any) => statuses.push(s))
-    await adapter.connect()
-    await vi.advanceTimersByTimeAsync(1000)
-    expect(mockBot.api.getMe).toHaveBeenCalledTimes(2)
-    expect(statuses.at(-1)).toMatchObject({ connected: false, error: expect.stringContaining('not retrying') })
-    await vi.advanceTimersByTimeAsync(60 * 60_000)
-    expect(mockBot.api.getMe).toHaveBeenCalledTimes(2)
-  })
-
-  it('stops reconnecting when polling is rejected with 401', async () => {
-    vi.useFakeTimers()
-    mockBot.start.mockReset().mockRejectedValue(await grammyError(401, 'Unauthorized'))
-    const adapter = createAdapter()
-    await adapter.connect()
-    await vi.advanceTimersByTimeAsync(60 * 60_000)
-    expect(mockBot.start).toHaveBeenCalledTimes(1)
-    expect(adapter.connected).toBe(false)
-  })
-
-  it('gives up after a limited number of 409 conflicts', async () => {
-    vi.useFakeTimers()
-    mockBot.start
-      .mockReset()
-      .mockRejectedValue(await grammyError(409, 'Conflict: terminated by other getUpdates request'))
-    const adapter = createAdapter()
-    await adapter.connect()
-    await vi.advanceTimersByTimeAsync(60 * 60_000)
-    expect(mockBot.start).toHaveBeenCalledTimes(6) // initial + 5 retries
-  })
-
-  it('disconnect during the startup probe cancels it and never starts polling', async () => {
-    vi.useFakeTimers()
-    mockBot.api.getMe.mockImplementationOnce(hangingGetMe)
-    const adapter = createAdapter()
-    const connecting = adapter.connect()
-    await vi.advanceTimersByTimeAsync(2000)
-    await adapter.disconnect()
-    await expect(connecting).resolves.toBeUndefined()
-    await vi.advanceTimersByTimeAsync(60 * 60_000)
-    expect(mockBot.start).not.toHaveBeenCalled()
-    expect(mockBot.api.setMyCommands).not.toHaveBeenCalled()
-    expect(mockBot.api.getMe).toHaveBeenCalledTimes(1)
-  })
-
-  it('disconnect while getMe resolves late still never starts polling', async () => {
-    let finish: ((v: unknown) => void) | undefined
-    mockBot.api.getMe.mockImplementationOnce(() => new Promise((r) => (finish = r)))
-    const adapter = createAdapter()
-    const connecting = adapter.connect()
-    await vi.waitFor(() => expect(finish).toBeDefined())
-    const disconnecting = adapter.disconnect()
-    finish?.(BOT_INFO) // grammY may resolve even though we aborted
-    await Promise.all([connecting, disconnecting])
-    expect(mockBot.start).not.toHaveBeenCalled()
-  })
-
-  it('reports polling offline after consecutive getUpdates network failures and online on recovery', async () => {
-    const { HttpError } = (await import('grammy')) as any
-    const adapter = createAdapter()
-    await adapter.connect()
-    const health = mockBot.api.config.use.mock.calls[1][0]
-    const statuses: any[] = []
-    adapter.on('statusChange', (s: any) => statuses.push(s))
-    const fail = vi
-      .fn()
-      .mockRejectedValue(new HttpError("Network request for 'getUpdates' failed!", new Error('ECONNRESET')))
-    await expect(health(fail, 'getUpdates', {}, undefined)).rejects.toBeInstanceOf(HttpError)
-    expect(adapter.connected).toBe(true)
-    await expect(health(fail, 'getUpdates', {}, undefined)).rejects.toBeInstanceOf(HttpError)
-    expect(adapter.connected).toBe(false)
-    await expect(health(vi.fn().mockResolvedValue([]), 'getUpdates', {}, undefined)).resolves.toEqual([])
-    expect(adapter.connected).toBe(true)
-    expect(statuses.map((s) => s.connected)).toEqual([false, true])
-  })
-
-  it('does not fail connect when setMyCommands fails', async () => {
-    const { HttpError } = (await import('grammy')) as any
-    mockBot.api.setMyCommands.mockRejectedValueOnce(new HttpError("Network request for 'setMyCommands' failed!", {}))
-    const adapter = createAdapter()
-    await adapter.connect()
-    expect(mockBot.start).toHaveBeenCalledTimes(1)
-  })
-
-  it('resets the reconnect budget after a stable polling window (REGRESSION channel-adapters-2)', async () => {
-    vi.useFakeTimers()
-    const adapter = createAdapter()
-    mockBot.start.mockReset()
-    // One transient failure bumps the attempt counter, then the reconnect stays up.
-    mockBot.start
-      .mockRejectedValueOnce(new Error('409: Conflict'))
-      .mockImplementation(async (options?: { onStart?: (info: object) => void }) => {
-        await options?.onStart?.({})
-      })
-
-    await adapter.connect()
-    await vi.advanceTimersByTimeAsync(1000) // reconnect fires and succeeds
-    expect(adapter.reconnectAttempts).toBe(1)
-
-    // After the stability window the counter resets, so lifetime-cumulative transient
-    // failures can't monotonically exhaust maxReconnectAttempts.
-    await vi.advanceTimersByTimeAsync(60_000)
-    expect(adapter.reconnectAttempts).toBe(0)
   })
 
   it('does not reconnect after disconnect() (REGRESSION channel-adapters-2)', async () => {
@@ -530,30 +360,7 @@ describe('TelegramAdapter', () => {
     expect(mockBot.start.mock.calls.length).toBe(callsAfterDisconnect) // no further reconnect
   })
 
-  it('sendMessage() sends text with HTML by default', async () => {
-    const adapter = createAdapter()
-    await adapter.connect()
-    await adapter.sendMessage('123', 'Hello')
-
-    expect(mockBot.api.sendMessage).toHaveBeenCalledWith('123', 'Hello', {
-      parse_mode: 'HTML',
-      link_preview_options: { is_disabled: true }
-    })
-  })
-
-  it('sendMessage() converts markdown to Telegram HTML via library', async () => {
-    const adapter = createAdapter()
-    await adapter.connect()
-    await adapter.sendMessage('123', '**bold price**')
-
-    const call = mockBot.api.sendMessage.mock.calls[0]
-    expect(call[0]).toBe('123')
-    expect(call[2]).toEqual({ parse_mode: 'HTML', link_preview_options: { is_disabled: true } })
-    expect(call[1]).toContain('<b>')
-    expect(call[1]).not.toBe('**bold price**')
-  })
-
-  it('sendMessage() falls back to plain text on HTML parse error', async () => {
+  it('sendMessage() falls back to plain text on MarkdownV2 error', async () => {
     const adapter = createAdapter()
     await adapter.connect()
 
@@ -564,7 +371,6 @@ describe('TelegramAdapter', () => {
     expect(mockBot.api.sendMessage).toHaveBeenCalledTimes(2)
     // Second call should be plain text fallback
     expect(mockBot.api.sendMessage.mock.calls[1][1]).toBe('Hello')
-    expect(mockBot.api.sendMessage.mock.calls[1][2]).toMatchObject({ link_preview_options: { is_disabled: true } })
   })
 
   it('sendMessage() chunks long messages', async () => {
@@ -579,15 +385,10 @@ describe('TelegramAdapter', () => {
     await vi.runAllTimersAsync()
     await sendPromise
 
-    // Splitting is by converted visible length (planTelegramSend). A single
-    // break-less line offers no block or row boundary, so the oversized-block
-    // fallback hard-cuts it into several parts instead of the old raw 4096 split.
-    const parts = mockBot.api.sendMessage.mock.calls.map((call) => call[1] as string)
-    expect(parts.length).toBeGreaterThan(1)
-    // Nothing is dropped or duplicated across the parts.
-    expect(parts.join('')).toBe(longText)
-    // Every part stays within Telegram's 4096-char ceiling.
-    for (const part of parts) expect(part.length).toBeLessThanOrEqual(CHUNK_MAX)
+    expect(mockBot.api.sendMessage).toHaveBeenCalledTimes(2)
+    // After MarkdownV2 conversion the total length may differ slightly
+    const totalSent = mockBot.api.sendMessage.mock.calls[0][1].length + mockBot.api.sendMessage.mock.calls[1][1].length
+    expect(totalSent).toBe(5000)
   })
 
   it('sendFile() sends a document built from the decoded buffer and filename', async () => {
@@ -603,49 +404,6 @@ describe('TelegramAdapter', () => {
     expect(inputFile).toBeInstanceOf(InputFile)
     expect(inputFile.filename).toBe('report.pdf')
     expect(inputFile.data.toString()).toBe('file-bytes')
-  })
-
-  it('sendImage() uses sendPhoto for JPEG/PNG/WebP under the photo size limit', async () => {
-    const adapter = createAdapter()
-    await adapter.connect()
-
-    const data = Buffer.from('fakepng').toString('base64')
-    await adapter.sendImage('123', { filename: 'shot.png', data, media_type: 'image/png', size: 7 })
-
-    expect(mockBot.api.sendPhoto).toHaveBeenCalledTimes(1)
-    expect(mockBot.api.sendDocument).not.toHaveBeenCalled()
-    const [chatId, inputFile] = mockBot.api.sendPhoto.mock.calls[0]
-    expect(chatId).toBe('123')
-    expect(inputFile).toBeInstanceOf(InputFile)
-    expect((inputFile as InstanceType<typeof InputFile>).filename).toBe('shot.png')
-  })
-
-  it('sendImage() falls back to sendDocument for GIF', async () => {
-    const adapter = createAdapter()
-    await adapter.connect()
-
-    const data = Buffer.from('fakegif').toString('base64')
-    await adapter.sendImage('123', { filename: 'anim.gif', data, media_type: 'image/gif', size: 7 })
-
-    expect(mockBot.api.sendDocument).toHaveBeenCalledTimes(1)
-    expect(mockBot.api.sendPhoto).not.toHaveBeenCalled()
-  })
-
-  it('sendImage() falls back to sendDocument when payload exceeds the photo limit', async () => {
-    const adapter = createAdapter()
-    await adapter.connect()
-
-    const big = Buffer.alloc(10 * 1024 * 1024 + 1, 1)
-    const data = big.toString('base64')
-    await adapter.sendImage('123', {
-      filename: 'huge.png',
-      data,
-      media_type: 'image/png',
-      size: big.length
-    })
-
-    expect(mockBot.api.sendDocument).toHaveBeenCalledTimes(1)
-    expect(mockBot.api.sendPhoto).not.toHaveBeenCalled()
   })
 
   it('sendTypingIndicator() sends typing action', async () => {
@@ -694,21 +452,18 @@ describe('TelegramAdapter', () => {
       chatId: '123',
       userId: '456',
       userName: 'TestUser',
-      command: 'new',
-      messageId: ''
+      command: 'new'
     })
   })
 
-  it('stop command handler emits command events', async () => {
+  it('whoami command handler emits command events', async () => {
     const adapter = createAdapter()
     await adapter.connect()
 
     const commandSpy = vi.fn()
     adapter.on('command', commandSpy)
 
-    const stopCall = mockBot.command.mock.calls.find((call) => call[0] === 'stop')
-    expect(stopCall).toBeDefined()
-    const commandHandler = stopCall![1] as (ctx: any) => void
+    const commandHandler = mockBot.command.mock.calls[3][1] as (ctx: any) => void
 
     commandHandler({
       chat: { id: 123 },
@@ -719,8 +474,7 @@ describe('TelegramAdapter', () => {
       chatId: '123',
       userId: '456',
       userName: 'TestUser',
-      command: 'stop',
-      messageId: ''
+      command: 'whoami'
     })
   })
 
@@ -731,93 +485,20 @@ describe('TelegramAdapter', () => {
     const messageSpy = vi.fn()
     adapter.on('message', messageSpy)
 
-    const textCall = mockBot.on.mock.calls.find((call) => call[0] === 'message:text')
-    expect(textCall).toBeDefined()
-    const messageHandler = textCall![1] as (ctx: any) => void
+    // Extract the message:text handler
+    const messageHandler = mockBot.on.mock.calls[0][1] as (ctx: any) => void
 
     messageHandler({
       chat: { id: 123 },
       from: { id: 456, first_name: 'TestUser' },
-      message: { message_id: 42, text: 'Hello bot' }
+      message: { text: 'Hello bot' }
     })
 
     expect(messageSpy).toHaveBeenCalledWith({
       chatId: '123',
       userId: '456',
       userName: 'TestUser',
-      text: 'Hello bot',
-      messageId: '42'
-    })
-  })
-
-  it('retries HTML sendMessage on network failure before giving up', async () => {
-    const adapter = createAdapter()
-    await adapter.connect()
-
-    mockBot.api.sendMessage
-      .mockRejectedValueOnce(new Error('Network request failed'))
-      .mockResolvedValueOnce({ message_id: 101 })
-
-    await adapter.sendMessage('123', 'Hello **bold**')
-
-    expect(mockBot.api.sendMessage).toHaveBeenCalledTimes(2)
-    expect(mockBot.api.sendMessage).toHaveBeenNthCalledWith(1, '123', expect.stringContaining('<b>bold</b>'), {
-      parse_mode: 'HTML',
-      link_preview_options: { is_disabled: true }
-    })
-    expect(mockBot.api.sendMessage).toHaveBeenNthCalledWith(2, '123', expect.stringContaining('<b>bold</b>'), {
-      parse_mode: 'HTML',
-      link_preview_options: { is_disabled: true }
-    })
-  })
-
-  it('falls back to plain text immediately on parse entities error', async () => {
-    const { GrammyError } = await import('grammy')
-    const adapter = createAdapter()
-    await adapter.connect()
-
-    const parseError = new GrammyError(
-      'Bad Request',
-      { ok: false, error_code: 400, description: "Bad Request: can't parse entities: unclosed tag" },
-      'sendMessage',
-      {}
-    )
-    mockBot.api.sendMessage.mockRejectedValueOnce(parseError).mockResolvedValueOnce({ message_id: 102 })
-
-    await adapter.sendMessage('123', 'Hello **bold**')
-
-    expect(mockBot.api.sendMessage).toHaveBeenCalledTimes(2)
-    expect(mockBot.api.sendMessage).toHaveBeenNthCalledWith(1, '123', expect.stringContaining('<b>bold</b>'), {
-      parse_mode: 'HTML',
-      link_preview_options: { is_disabled: true }
-    })
-    expect(mockBot.api.sendMessage).toHaveBeenNthCalledWith(2, '123', 'Hello **bold**', {
-      link_preview_options: { is_disabled: true }
-    })
-  })
-
-  it('reboot command handler emits command events', async () => {
-    const adapter = createAdapter()
-    await adapter.connect()
-
-    const commandSpy = vi.fn()
-    adapter.on('command', commandSpy)
-
-    const rebootCall = mockBot.command.mock.calls.find((call) => call[0] === 'reboot')
-    expect(rebootCall).toBeDefined()
-    const commandHandler = rebootCall![1] as (ctx: any) => void
-
-    commandHandler({
-      chat: { id: 123 },
-      from: { id: 456, first_name: 'TestUser' }
-    })
-
-    expect(commandSpy).toHaveBeenCalledWith({
-      chatId: '123',
-      userId: '456',
-      userName: 'TestUser',
-      command: 'reboot',
-      messageId: ''
+      text: 'Hello bot'
     })
   })
 })

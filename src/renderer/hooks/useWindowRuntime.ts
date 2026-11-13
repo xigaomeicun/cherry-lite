@@ -11,7 +11,6 @@ import { useConversationTabTitleChangeSync } from '@renderer/hooks/tab'
 import { useCustomCss } from '@renderer/hooks/useCustomCss'
 import { useLanguageSync } from '@renderer/hooks/useLanguageSync'
 import useMacTransparentWindow from '@renderer/hooks/useMacTransparentWindow'
-import { useMiniAppListSync } from '@renderer/hooks/useMiniApps'
 import { useTopicAutoRenameSync } from '@renderer/hooks/useTopic'
 import { useWebSearchFallbackNotice } from '@renderer/hooks/useWebSearchFallbackNotice'
 import { setDayjsLocale } from '@renderer/i18n/resolver'
@@ -126,5 +125,4 @@ export function useWindowRuntime(): void {
 
   // Launcher-list convergence after IPC-side writes: exactly once per window,
   // and outside every `<Activity>`.
-  useMiniAppListSync()
 }

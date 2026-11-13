@@ -18,7 +18,6 @@ import { OpenInNewWindowIcon } from '@renderer/components/icons/WindowIcons'
 import type { OpenTabOptions, Tab } from '@renderer/hooks/tab'
 import { useLeadingWindowControlsOverlay } from '@renderer/hooks/useLeadingWindowControlsOverlay'
 import useMacTransparentWindow from '@renderer/hooks/useMacTransparentWindow'
-import { MINI_APP_ROUTE_PREFIX } from '@renderer/utils/miniAppKeepAlive'
 import { isMac, isWin } from '@renderer/utils/platform'
 import { cn } from '@renderer/utils/style'
 
@@ -69,10 +68,9 @@ interface DragItemProps {
  */
 const TAB_DIVIDER_CLASS = 'h-4 w-[1.5px] bg-border/80'
 const DEFAULT_TAB_ICON_SIZE = 14
-const MINI_APP_TAB_ICON_SIZE = 18
 
-function getTabIconSize(tab: Pick<Tab, 'url'>): number {
-  return tab.url.startsWith(MINI_APP_ROUTE_PREFIX) ? MINI_APP_TAB_ICON_SIZE : DEFAULT_TAB_ICON_SIZE
+function getTabIconSize(_tab: Pick<Tab, 'url'>): number {
+  return DEFAULT_TAB_ICON_SIZE
 }
 
 // Pinned/normal zone split — same hairline as the per-tab divider, and it

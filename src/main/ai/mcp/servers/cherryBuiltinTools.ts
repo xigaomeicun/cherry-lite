@@ -58,9 +58,9 @@ import {
 
 import { type AutonomyToolsContext, registerAutonomyTools } from './cherryAutonomyTools'
 import { registerCliTools } from './cherryCliTools'
+import { type KnowledgeToolsContext, registerKnowledgeTools } from './cherryKnowledgeTools'
 
-// (cherry-lite) the knowledge-base tools (…__kb_*) were removed with the KB feature.
-export type CherryToolsOptions = AutonomyToolsContext & CherryDocumentContext
+export type CherryToolsOptions = AutonomyToolsContext & KnowledgeToolsContext & CherryDocumentContext
 
 const logger = loggerService.withContext('McpServer:CherryBuiltinTools')
 
@@ -123,6 +123,7 @@ function registerBuiltinTools(server: McpServer): void {
 export function createCherryToolsServer(options: CherryToolsOptions): McpServer {
   const server = new McpServer({ name: 'cherry-tools', version: '1.0.0' })
   registerBuiltinTools(server)
+  registerKnowledgeTools(server, options)
   registerAutonomyTools(server, options)
   registerCliTools(server)
   registerDocumentTools(server, options)

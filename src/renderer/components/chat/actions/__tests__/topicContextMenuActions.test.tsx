@@ -56,6 +56,7 @@ function createTopicActionFixture(overrides: Partial<TopicActionContext> = {}): 
     onExportWord: vi.fn(),
     onExportYuque: vi.fn(),
     onPinTopic: vi.fn(),
+    onSaveToKnowledge: vi.fn(),
     onSaveToNotes: vi.fn(),
     onStartRename: vi.fn(),
     t,

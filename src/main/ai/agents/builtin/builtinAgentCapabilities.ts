@@ -60,11 +60,7 @@ const CAPABILITIES_BY_ROLE: Record<BuiltinAgentRole, AgentCapabilities> = {
     hostTools: { runtimes: AGENT_TYPES }
   },
   [BUILTIN_AGENT_ROLE.SUPPORT]: {
-    // Cherry-Lite: 'sealed' 会让 buildSkillWhitelist 只放行 builtin skill，并在
-    // resolveMountedMcpServers 里卸载 skills / mcp-manager MCP，导致 support agent
-    // 无法使用本地 skill（Skill 工具报 Unknown skill）。改为 'open' 放开这两处；
-    // hostTools（navigate/diagnose/...）保持不变。
-    environment: 'open',
+    environment: 'sealed',
     allKnowledgeBases: false,
     // Product-support capabilities intentionally exclude creation of arbitrary Agents. Reusable
     // channel-linked sessions keep the full surface; per-turn guards deny UI-backed tools headlessly.

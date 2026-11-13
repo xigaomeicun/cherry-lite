@@ -37,7 +37,6 @@ import { ApiGatewayService } from '@main/features/apiGateway/ApiGatewayService'
 import { BrowserSessionService } from '@main/features/browser'
 import { FileProcessingService, TesseractRuntimeService } from '@main/features/fileProcessing'
 import { KnowledgeService, KnowledgeVectorStoreService } from '@main/features/knowledge'
-import { MiniAppRuntimeService } from '@main/features/miniApp/runtime/MiniAppRuntimeService'
 import { IpcApiService } from '@main/ipc/IpcApiService'
 import { AnalyticsService } from '@main/services/AnalyticsService'
 import { AppMenuService } from '@main/services/AppMenuService'
@@ -82,6 +81,7 @@ import { ShortcutService } from '@main/services/ShortcutService'
 import { StorageMonitorService } from '@main/services/StorageMonitorService'
 import { SubWindowService } from '@main/services/SubWindowService'
 import { ThemeService } from '@main/services/ThemeService'
+import { TrashService } from '@main/services/trash'
 import { TrayService } from '@main/services/TrayService'
 import { UsageBudgetNotificationService } from '@main/services/UsageBudgetNotificationService'
 import { WebSearchService } from '@main/services/webSearch'
@@ -112,6 +112,7 @@ import { WebviewService } from '@main/services/webview'
  */
 export const services = {
   RemoteAccessService,
+  TrashService,
   MainNetworkDevtoolsService,
   WindowManager,
   UtilityProcessManager,
@@ -198,7 +199,6 @@ export const services = {
   LocalModelService,
   KnowledgeService,
   KnowledgeVectorStoreService,
-  MiniAppRuntimeService,
   ApiGatewayService,
   AppUpdaterService,
   AutoBackupService,

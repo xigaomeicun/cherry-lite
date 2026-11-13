@@ -135,9 +135,7 @@ export class TrayService extends BaseService implements Activatable {
   }
 
   private async syncVisibility(): Promise<void> {
-    const needed =
-      application.get('PreferenceService').get('app.tray.enabled') ||
-      application.get('ComputerUseService').getControls().length > 0
+    const needed = application.get('PreferenceService').get('app.tray.enabled')
     if (needed) {
       await this.activate()
       this.updateContextMenu()

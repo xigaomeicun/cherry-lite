@@ -13,7 +13,6 @@ import { isLinux, isLinuxWayland, isMac, isWin } from '@main/core/platform'
 import { isAppRendererUrl } from '@main/core/security/validateSender'
 import { getTitleBarOverlay, syncTitleBarOverlayWithTheme } from '@main/core/window/titleBarOverlay'
 import { WindowType } from '@main/core/window/types'
-import { isMiniAppPartition } from '@main/features/miniApp/runtime/partition'
 import { t } from '@main/i18n'
 import { openRequestPath } from '@main/services/file'
 import { openTabInMainWindow, resetMainRendererTabAttachDelivery } from '@main/services/mainWindowNavigation'
@@ -447,13 +446,11 @@ export class MainWindowService extends BaseService {
 
     mainWindow.webContents.on('will-attach-webview', (event, webPreferences, params) => {
       const securityProfile = getWebviewSecurityProfile(params.partition ?? '')
-      // Mini app partitions carry their own gate (installMiniAppWebviewHost) and the
-      // shared `persist:webview` lockdown lives in WebviewService.attachWebviewPreload.
+      // The shared `persist:webview` lockdown lives in WebviewService.attachWebviewPreload.
       if (!securityProfile) {
-        if (!isMiniAppPartition(params.partition)) event.preventDefault()
+        event.preventDefault()
         return
       }
-      if (securityProfile === WebviewSecurityProfile.MiniApp) return
 
       if (
         (securityProfile === WebviewSecurityProfile.AgentBrowser &&

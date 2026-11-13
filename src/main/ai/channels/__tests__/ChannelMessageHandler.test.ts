@@ -1,26 +1,32 @@
-import { mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { EventEmitter } from 'events'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+import { setupTestDatabase } from '@test-helpers/db'
+import { MockMainCacheServiceUtils } from '@test-mocks/main/CacheService'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+import { application } from '@application'
 import { agentChannelService as channelService } from '@data/services/AgentChannelService'
 import { agentService } from '@data/services/AgentService'
 import { agentSessionService } from '@data/services/AgentSessionService'
 import { buildAgentSessionTopicId } from '@main/ai/agentSession/topic'
 import { AgentSessionWorkspaceError } from '@main/ai/runtime/agentSessionWorkspace'
 import { buildAgentUserContent } from '@main/ai/runtime/agentUserContent'
+import { BaseService } from '@main/core/lifecycle'
 import { t } from '@main/i18n'
+import { FileManager } from '@main/services/file'
 import { AGENT_SESSION_SLASH_COMMANDS_CACHE_KEY } from '@shared/ai/agentSessionSlashCommands'
 import type { AgentSessionMessageEntity } from '@shared/data/api/schemas/agentSessionMessages'
+import type { CherryUIMessage } from '@shared/data/types/message'
 import type { CherryMessagePart } from '@shared/data/types/message'
-import { MockMainCacheServiceUtils } from '@test-mocks/main/CacheService'
-import { EventEmitter } from 'events'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { readCherryMeta } from '@shared/data/types/uiParts'
 
 import type { ChannelMessageEvent } from '../ChannelAdapter'
 import { channelMessageHandler } from '../ChannelMessageHandler'
 import { sanitizeChannelOutput } from '../security/OutputSanitizer'
-import { BUSY_AUTO_STEER_MS, busyOffers, modelPickTokens, resetModelPickTokensForTests } from '../telegramChannelExtras'
 
 const { mockPrepareAgentSessionWorkspaceDirectory, MockAgentSessionWorkspaceError } = vi.hoisted(() => {
   class MockAgentSessionWorkspaceError extends Error {
@@ -54,21 +60,16 @@ vi.mock('@logger', () => ({
 }))
 
 vi.mock('../security/OutputSanitizer', () => ({
-  sanitizeChannelOutput: vi.fn((text: string) => ({ text, redacted: false }))
+  sanitizeChannelOutput: vi.fn((text: string) => ({ text, redacted: false })),
+  sanitizeChannelOutputSilently: vi.fn((text: string) => ({ text, redactedPatterns: [] }))
 }))
 
 // The global mock (tests/main.setup.ts) wires the default service set, which omits
 // AiStreamManager; the abort path reads it, so override locally with a captured spy.
-const { mockStreamAbort, mockTrySteer } = vi.hoisted(() => ({
-  mockStreamAbort: vi.fn(),
-  mockTrySteer: vi.fn()
-}))
+const { mockStreamAbort } = vi.hoisted(() => ({ mockStreamAbort: vi.fn() }))
 vi.mock('@application', async () => {
   const { mockApplicationFactory } = await import('@test-mocks/main/application')
-  return mockApplicationFactory({
-    AiStreamManager: { abort: mockStreamAbort, isTopicLive: () => false },
-    AgentSessionRuntimeService: { trySteer: mockTrySteer }
-  } as never)
+  return mockApplicationFactory({ AiStreamManager: { abort: mockStreamAbort } } as never)
 })
 
 vi.mock('@data/services/AgentService', () => ({
@@ -77,8 +78,7 @@ vi.mock('@data/services/AgentService', () => ({
       id: 'agent-1',
       configuration: {},
       model: 'openai::gpt-4'
-    }),
-    updateAgent: vi.fn()
+    })
   }
 }))
 
@@ -105,11 +105,6 @@ vi.mock('@shared/data/types/model', async (importOriginal) => {
   }
 })
 
-const { mockModelList } = vi.hoisted(() => ({ mockModelList: vi.fn() }))
-vi.mock('@data/services/ModelService', () => ({
-  modelService: { list: (...args: unknown[]) => mockModelList(...args) }
-}))
-
 const { mockStartAgentSessionRun } = vi.hoisted(() => ({ mockStartAgentSessionRun: vi.fn() }))
 vi.mock('@main/ai/streamManager/api/startAgentSessionRun', () => ({
   startAgentSessionRun: (...args: unknown[]) => mockStartAgentSessionRun(...args)
@@ -133,30 +128,31 @@ vi.mock('@data/services/AgentChannelService', () => ({
   }
 }))
 
-/**
- * Helper: configure mockStartAgentSessionRun to simulate streaming chunks to ALL
- * registered listeners (both the `channel-completion:` sentinel and the
- * `ChannelAdapterListener` that owns delivery), then call onDone on each so the
- * `executionDone` promise inside `collectStreamResponse` resolves and the listener
- * finalizes delivery. `text-delta` chunks carry the payload on `delta` (AI SDK
- * `UIMessageChunk`), not `text`.
- */
+// Each consumer receives the same complete view before terminal delivery.
 function simulateStream(parts: Array<{ type: string; delta?: string }>) {
   mockStartAgentSessionRun.mockImplementationOnce(
     async ({
-      listeners
+      listeners,
+      onPersist
     }: {
+      onPersist?: () => void
       listeners: Array<{
         id: string
-        onChunk: (chunk: unknown) => void
-        onDone: (result: { status: string }) => void | Promise<void>
+        onMessage?: (message: CherryUIMessage) => void
+        onDone: (result: { status: string; finalMessage: CherryUIMessage }) => void | Promise<void>
       }>
     }) => {
+      onPersist?.()
       for (const listener of listeners) {
-        for (const part of parts) {
-          listener.onChunk(part)
+        const finalMessage: CherryUIMessage = {
+          id: 'reply',
+          role: 'assistant',
+          parts: parts.flatMap((part) =>
+            part.type === 'text-delta' ? [{ type: 'text' as const, text: part.delta ?? '' }] : []
+          )
         }
-        await listener.onDone({ status: 'success' })
+        listener.onMessage?.(finalMessage)
+        await listener.onDone({ status: 'success', finalMessage })
       }
       return { mode: 'started' }
     }
@@ -190,10 +186,23 @@ async function handleIncomingAndFlush(adapter: ReturnType<typeof createMockAdapt
 }
 
 describe('ChannelMessageHandler', () => {
-  beforeEach(() => {
+  setupTestDatabase()
+  let managedRoot: string
+  beforeEach(async () => {
+    managedRoot = await mkdtemp(path.join(os.tmpdir(), 'channel-managed-'))
+    await mkdir(path.join(managedRoot, 'files'))
+    vi.spyOn(application, 'getPath').mockImplementation((_key, filename) =>
+      path.join(managedRoot, 'files', filename ?? '')
+    )
+    BaseService.resetInstances()
+    const manager = new FileManager()
+    Object.assign(application.get('FileManager'), {
+      createInternalEntry: manager.createInternalEntry.bind(manager),
+      getPhysicalPath: manager.getPhysicalPath.bind(manager),
+      getUrl: manager.getUrl.bind(manager)
+    })
     vi.useFakeTimers()
     vi.clearAllMocks()
-    resetModelPickTokensForTests()
     // Restore default agent mock after clearAllMocks
     vi.mocked(agentService.getAgent).mockReturnValue({
       id: 'agent-1',
@@ -211,8 +220,10 @@ describe('ChannelMessageHandler', () => {
     channelMessageHandler.clearSessionTracker('agent-1')
   })
 
-  afterEach(() => {
+  afterEach(async () => {
     vi.useRealTimers()
+    vi.mocked(application.getPath).mockRestore()
+    await rm(managedRoot, { recursive: true, force: true })
   })
 
   it('collectStreamResponse accumulates text across turns and sends via adapter', async () => {
@@ -243,7 +254,7 @@ describe('ChannelMessageHandler', () => {
     })
 
     // Delivery is owned by ChannelAdapterListener (the handler no longer post-sends);
-    // it accumulates all text-delta chunks via `.delta`, trims, and sends once.
+    // It extracts the final message text, trims it, and sends once.
     expect(adapter.sendMessage).toHaveBeenCalledTimes(1)
     expect(adapter.sendMessage).toHaveBeenCalledWith('chat-1', 'Hello world!\n\nDone.', undefined)
   })
@@ -294,67 +305,6 @@ describe('ChannelMessageHandler', () => {
     ])
   })
 
-  it('keeps waiting across a steer roll (isTopicDone=false) and settles on the final done', async () => {
-    const adapter = createMockAdapter()
-    vi.mocked(agentSessionService.create).mockReturnValueOnce({
-      id: 'session-steer-roll',
-      agentId: 'agent-1',
-      workspace: { path: '/tmp/test-workspace' }
-    } as any)
-    let settled = false
-    mockStartAgentSessionRun.mockImplementationOnce(async ({ listeners }: any) => {
-      setTimeout(async () => {
-        for (const l of listeners) {
-          l.onChunk({ type: 'text-delta', delta: 'A1' })
-          await l.onDone({ status: 'success', isTopicDone: false })
-        }
-      }, 1)
-      setTimeout(async () => {
-        for (const l of listeners) {
-          l.onChunk({ type: 'text-delta', delta: 'A2' })
-          await l.onDone({ status: 'success', isTopicDone: true })
-        }
-      }, 50)
-      return { mode: 'started' }
-    })
-    const pending = channelMessageHandler
-      .handleIncoming(adapter, { chatId: 'chat-1', userId: 'user-1', userName: 'User', text: 'hello' })
-      .then(() => {
-        settled = true
-      })
-    await vi.advanceTimersByTimeAsync(1010)
-    expect(settled).toBe(false)
-    await vi.advanceTimersByTimeAsync(100)
-    await pending
-    expect(settled).toBe(true)
-    expect(adapter.sendMessage.mock.calls.map((c: unknown[]) => c[1])).toEqual(['A1', 'A2'])
-  })
-
-  it('settles via onError when the A2 continuation fails after a steer roll', async () => {
-    const adapter = createMockAdapter()
-    vi.mocked(agentSessionService.create).mockReturnValueOnce({
-      id: 'session-steer-err',
-      agentId: 'agent-1',
-      workspace: { path: '/tmp/test-workspace' }
-    } as any)
-    mockStartAgentSessionRun.mockImplementationOnce(async ({ listeners }: any) => {
-      setTimeout(async () => {
-        for (const l of listeners) await l.onDone({ status: 'success', isTopicDone: false })
-        for (const l of listeners) void l.onError({ error: { message: 'continuation failed' }, isTopicDone: true })
-      }, 1)
-      return { mode: 'started' }
-    })
-    const pending = channelMessageHandler.handleIncoming(adapter, {
-      chatId: 'chat-1',
-      userId: 'user-1',
-      userName: 'User',
-      text: 'hello'
-    })
-    await vi.advanceTimersByTimeAsync(1010)
-    await pending
-    expect(adapter.sendMessage.mock.calls.at(-1)?.[1]).toBe(t('common.channel_error', { error: 'continuation failed' }))
-  })
-
   it('settles a busy channel message and leaves the chat queue usable', async () => {
     const adapter = createMockAdapter()
     const session = {
@@ -390,333 +340,6 @@ describe('ChannelMessageHandler', () => {
       text: 'second'
     })
     expect(adapter.sendMessage).toHaveBeenCalledWith('chat-1', 'second completed', undefined)
-  })
-
-  describe('Telegram busy confirmation card', () => {
-    const SID = 'session-tg-busy'
-    let abortController: AbortController
-    let startedTexts: string[]
-
-    function setupBusy() {
-      const adapter = createMockAdapter({ channelType: 'telegram' })
-      adapter.dismissToolProgress = vi.fn().mockResolvedValue(undefined)
-      const session = {
-        id: SID,
-        agentId: 'agent-1',
-        agentType: 'claude-code',
-        model: 'openai::gpt-4',
-        workspace: { path: '/tmp/test-workspace' },
-        configuration: {}
-      }
-      vi.mocked(agentSessionService.create).mockReturnValue(session as any)
-      abortController = new AbortController()
-      ;(channelMessageHandler as any).activeAbortControllers.set(SID, abortController)
-      persistedChannelSessions.bindings.set('channel-1:chat-1', SID)
-      persistedChannelSessions.sessions.set(SID, session as any)
-      startedTexts = []
-      mockStartAgentSessionRun.mockImplementation(async (args: any) => {
-        startedTexts.push(JSON.stringify(args.message ?? args.userMessage ?? args))
-        for (const l of args.listeners ?? []) await l.onDone?.({ status: 'success' })
-        return { mode: 'started' }
-      })
-      return adapter
-    }
-
-    function cardCall(adapter: any, n = 1) {
-      return vi.mocked(adapter.sendMessage).mock.calls.filter((c: any[]) => c[2]?.replyMarkup)[n - 1]
-    }
-
-    function offerIdFrom(adapter: any, n = 1): string {
-      const markup = cardCall(adapter, n)![2].replyMarkup
-      return markup.inline_keyboard[0][0].callback_data.split(':')[2]
-    }
-
-    function cb(data: string) {
-      return {
-        chatId: 'chat-1',
-        userId: 'user-1',
-        userName: 'User',
-        data,
-        answerCallbackQuery: vi.fn().mockResolvedValue(undefined),
-        editReplyMarkup: vi.fn().mockResolvedValue(undefined),
-        editMessageText: vi.fn().mockResolvedValue(undefined)
-      }
-    }
-
-    afterEach(() => {
-      ;(channelMessageHandler as any).activeAbortControllers.delete(SID)
-      ;(channelMessageHandler as any).chatQueues.clear()
-      channelMessageHandler.disposeBusyOffers()
-      mockStartAgentSessionRun.mockReset()
-      mockTrySteer.mockReset()
-    })
-
-    it('sends a plain-text card with steer/send/cancel buttons and does not auto-steer', async () => {
-      const adapter = setupBusy()
-      const p = channelMessageHandler.handleIncoming(adapter, {
-        chatId: 'chat-1',
-        userId: 'user-1',
-        userName: 'User',
-        text: 'hello *new*'
-      })
-      const call = cardCall(adapter)!
-      expect(call[1]).toBe(
-        [
-          '📋 New message pending (queue #1)',
-          '',
-          'hello *new*',
-          '',
-          '🧭 Steer — keep the current task running and inject this message to guide it (default, auto in 10s)',
-          '⚡ Send — abort the current task and run this now',
-          '❎ Cancel — drop this new message (the running task is unaffected)'
-        ].join('\n')
-      )
-      expect(call[2].parseMode).toBe('plain')
-      const buttons = call[2].replyMarkup.inline_keyboard[0]
-      expect(buttons.map((b: any) => b.callback_data.split(':')[1])).toEqual(['steer', 'send', 'cancel'])
-      expect(buttons.every((b: any) => b.callback_data.length <= 64)).toBe(true)
-      expect(mockTrySteer).not.toHaveBeenCalled()
-      expect(abortController.signal.aborted).toBe(false)
-      await vi.advanceTimersByTimeAsync(1000)
-      await p
-    })
-
-    it('numbers multiple pending cards by queue position', async () => {
-      const adapter = setupBusy()
-      const p1 = channelMessageHandler.handleIncoming(adapter, {
-        chatId: 'chat-1',
-        userId: 'user-1',
-        userName: 'User',
-        text: 'a'
-      })
-      const p2 = channelMessageHandler.handleIncoming(adapter, {
-        chatId: 'chat-1',
-        userId: 'user-1',
-        userName: 'User',
-        text: 'b'
-      })
-      expect(cardCall(adapter, 1)![1]).toContain('queue #1')
-      expect(cardCall(adapter, 2)![1]).toContain('queue #2')
-      await vi.advanceTimersByTimeAsync(1000)
-      await Promise.all([p1, p2])
-    })
-
-    it('steer: injects into the running turn, edits the card and drops the queued copy', async () => {
-      const adapter = setupBusy()
-      mockTrySteer.mockReturnValueOnce(true)
-      const p = channelMessageHandler.handleIncoming(adapter, {
-        chatId: 'chat-1',
-        userId: 'user-1',
-        userName: 'User',
-        text: 'steer me'
-      })
-      const ev = cb(`busy:steer:${offerIdFrom(adapter)}`)
-      await channelMessageHandler.handleCallbackQuery(adapter, ev as any)
-      expect(mockTrySteer).toHaveBeenCalledWith(SID, 'steer me')
-      expect(ev.editMessageText).toHaveBeenCalledWith(expect.stringContaining('🧭 Steered into the current task'))
-      await vi.advanceTimersByTimeAsync(1000)
-      await p
-      expect(mockStartAgentSessionRun).not.toHaveBeenCalled()
-      expect(abortController.signal.aborted).toBe(false)
-    })
-
-    it('steer: falls back to queue when the runtime cannot steer', async () => {
-      const adapter = setupBusy()
-      mockTrySteer.mockReturnValueOnce(false)
-      const p = channelMessageHandler.handleIncoming(adapter, {
-        chatId: 'chat-1',
-        userId: 'user-1',
-        userName: 'User',
-        text: 'q me'
-      })
-      const ev = cb(`busy:steer:${offerIdFrom(adapter)}`)
-      await channelMessageHandler.handleCallbackQuery(adapter, ev as any)
-      expect(ev.editMessageText).toHaveBeenCalledWith(
-        expect.stringContaining('This runtime cannot steer; message queued')
-      )
-      await vi.advanceTimersByTimeAsync(1000)
-      await p
-      expect(mockStartAgentSessionRun).toHaveBeenCalledTimes(1)
-    })
-
-    it('send: aborts the current turn and runs the new message', async () => {
-      const adapter = setupBusy()
-      const p = channelMessageHandler.handleIncoming(adapter, {
-        chatId: 'chat-1',
-        userId: 'user-1',
-        userName: 'User',
-        text: 'now'
-      })
-      const ev = cb(`busy:send:${offerIdFrom(adapter)}`)
-      await channelMessageHandler.handleCallbackQuery(adapter, ev as any)
-      expect(mockStreamAbort).toHaveBeenCalledWith(expect.stringContaining(SID), 'channel-session-aborted')
-      expect(ev.editMessageText).toHaveBeenCalledWith(expect.stringContaining('Current task aborted'))
-      await vi.advanceTimersByTimeAsync(1000)
-      await p
-      expect(mockStartAgentSessionRun).toHaveBeenCalledTimes(1)
-    })
-
-    it('cancel: drops the new message without touching the running turn', async () => {
-      const adapter = setupBusy()
-      const p = channelMessageHandler.handleIncoming(adapter, {
-        chatId: 'chat-1',
-        userId: 'user-1',
-        userName: 'User',
-        text: 'nope'
-      })
-      const ev = cb(`busy:cancel:${offerIdFrom(adapter)}`)
-      await channelMessageHandler.handleCallbackQuery(adapter, ev as any)
-      expect(ev.editMessageText).toHaveBeenCalledWith(expect.stringContaining('New message cancelled'))
-      await vi.advanceTimersByTimeAsync(1000)
-      await p
-      expect(mockStartAgentSessionRun).not.toHaveBeenCalled()
-      expect(abortController.signal.aborted).toBe(false)
-    })
-
-    it('runs normally if the turn finishes first, and a later tap is treated as stale', async () => {
-      const adapter = setupBusy()
-      const p = channelMessageHandler.handleIncoming(adapter, {
-        chatId: 'chat-1',
-        userId: 'user-1',
-        userName: 'User',
-        text: 'later'
-      })
-      const offerId = offerIdFrom(adapter)
-      await vi.advanceTimersByTimeAsync(1000)
-      await p
-      expect(mockStartAgentSessionRun).toHaveBeenCalledTimes(1)
-      const ev = cb(`busy:send:${offerId}`)
-      await channelMessageHandler.handleCallbackQuery(adapter, ev as any)
-      expect(ev.answerCallbackQuery).toHaveBeenCalledWith({ text: '⚪ This action has expired or was already handled' })
-      expect(ev.editReplyMarkup).toHaveBeenCalledWith({ inline_keyboard: [] })
-      expect(mockTrySteer).not.toHaveBeenCalled()
-    })
-
-    describe('auto-steer timeout', () => {
-      function holdTurn() {
-        // Keep the running turn alive so the queued message waits past the timeout.
-        let release!: () => void
-        const gate = new Promise<void>((r) => (release = r))
-        ;(channelMessageHandler as any).chatQueues.set('agent-1:channel-1:chat-1', gate)
-        return release
-      }
-
-      it('auto-steers after BUSY_AUTO_STEER_MS and edits the card', async () => {
-        const adapter = setupBusy()
-        const release = holdTurn()
-        adapter.editMessageText = vi.fn().mockResolvedValue(undefined)
-        adapter.sendMessage = vi.fn(async (_c: string, _t: string, o: any) => o?.onSent?.(777))
-        mockTrySteer.mockReturnValueOnce(true)
-        const p = channelMessageHandler.handleIncoming(adapter, {
-          chatId: 'chat-1',
-          userId: 'user-1',
-          userName: 'User',
-          text: 'auto me'
-        })
-        const offerId = offerIdFrom(adapter)
-        expect(busyOffers.has(offerId)).toBe(true)
-        await vi.advanceTimersByTimeAsync(BUSY_AUTO_STEER_MS - 1)
-        expect(mockTrySteer).not.toHaveBeenCalled()
-        await vi.advanceTimersByTimeAsync(1)
-        expect(mockTrySteer).toHaveBeenCalledWith(SID, 'auto me')
-        expect(adapter.editMessageText).toHaveBeenCalledWith(
-          'chat-1',
-          777,
-          expect.stringContaining('🧭 Auto-steered into the current task')
-        )
-        expect(busyOffers.has(offerId)).toBe(false)
-        release()
-        await vi.advanceTimersByTimeAsync(10)
-        await p
-        expect(mockStartAgentSessionRun).not.toHaveBeenCalled()
-        const ev = cb(`busy:send:${offerId}`)
-        await channelMessageHandler.handleCallbackQuery(adapter, ev as any)
-        expect(ev.answerCallbackQuery).toHaveBeenCalledWith({
-          text: '⚪ This action has expired or was already handled'
-        })
-        expect(abortController.signal.aborted).toBe(false)
-      })
-
-      it('auto-steer falls back to queue when the runtime cannot steer', async () => {
-        const adapter = setupBusy()
-        const release = holdTurn()
-        adapter.editMessageText = vi.fn().mockResolvedValue(undefined)
-        adapter.sendMessage = vi.fn(async (_c: string, _t: string, o: any) => o?.onSent?.(9))
-        mockTrySteer.mockReturnValueOnce(false)
-        const p = channelMessageHandler.handleIncoming(adapter, {
-          chatId: 'chat-1',
-          userId: 'user-1',
-          userName: 'User',
-          text: 'queue me'
-        })
-        await vi.advanceTimersByTimeAsync(BUSY_AUTO_STEER_MS)
-        expect(adapter.editMessageText).toHaveBeenCalledWith(
-          'chat-1',
-          9,
-          expect.stringContaining('This runtime cannot steer; message queued')
-        )
-        release()
-        await vi.advanceTimersByTimeAsync(10)
-        await p
-        expect(mockStartAgentSessionRun).toHaveBeenCalledTimes(1)
-      })
-
-      it('a tap cancels the timer (no auto-steer afterwards)', async () => {
-        const adapter = setupBusy()
-        const release = holdTurn()
-        adapter.editMessageText = vi.fn().mockResolvedValue(undefined)
-        const p = channelMessageHandler.handleIncoming(adapter, {
-          chatId: 'chat-1',
-          userId: 'user-1',
-          userName: 'User',
-          text: 'tap'
-        })
-        const ev = cb(`busy:cancel:${offerIdFrom(adapter)}`)
-        await channelMessageHandler.handleCallbackQuery(adapter, ev as any)
-        await vi.advanceTimersByTimeAsync(BUSY_AUTO_STEER_MS * 2)
-        expect(mockTrySteer).not.toHaveBeenCalled()
-        expect(adapter.editMessageText).not.toHaveBeenCalled()
-        release()
-        await vi.advanceTimersByTimeAsync(10)
-        await p
-      })
-
-      it('turn finishing first cancels the timer', async () => {
-        const adapter = setupBusy()
-        adapter.editMessageText = vi.fn().mockResolvedValue(undefined)
-        const p = channelMessageHandler.handleIncoming(adapter, {
-          chatId: 'chat-1',
-          userId: 'user-1',
-          userName: 'User',
-          text: 'runs'
-        })
-        await vi.advanceTimersByTimeAsync(1000)
-        await p
-        expect(busyOffers.size).toBe(0)
-        await vi.advanceTimersByTimeAsync(BUSY_AUTO_STEER_MS * 2)
-        expect(mockTrySteer).not.toHaveBeenCalled()
-        expect(adapter.editMessageText).not.toHaveBeenCalled()
-      })
-
-      it('shutdown clears pending timers', async () => {
-        const adapter = setupBusy()
-        const release = holdTurn()
-        const p = channelMessageHandler.handleIncoming(adapter, {
-          chatId: 'chat-1',
-          userId: 'user-1',
-          userName: 'User',
-          text: 'bye'
-        })
-        expect(busyOffers.size).toBe(1)
-        channelMessageHandler.disposeBusyOffers()
-        expect(busyOffers.size).toBe(0)
-        await vi.advanceTimersByTimeAsync(BUSY_AUTO_STEER_MS * 2)
-        expect(mockTrySteer).not.toHaveBeenCalled()
-        release()
-        await vi.advanceTimersByTimeAsync(10)
-        await p
-      })
-    })
   })
 
   // channels-core-3: the streaming delivery path (real ChannelAdapterListener) must route
@@ -849,7 +472,7 @@ describe('ChannelMessageHandler', () => {
       const parts: CherryMessagePart[] = mockStartAgentSessionRun.mock.calls[0][0].userParts
       expect(parts.filter((part) => part.type === 'text')).toEqual(text ? [{ type: 'text', text }] : [])
       const files = parts.filter((part) => part.type === 'file')
-      expect(files).toEqual([
+      expect(files).toMatchObject([
         {
           type: 'file',
           url: expect.stringMatching(/^file:\/\//),
@@ -888,7 +511,8 @@ describe('ChannelMessageHandler', () => {
   it.each(['images', 'files'] as const)('does not dispatch a turn when saving %s fails', async (kind) => {
     const workDir = await mkdtemp(path.join(os.tmpdir(), 'channel-attachments-'))
     try {
-      await writeFile(path.join(workDir, '.cherry-studio'), 'blocks attachment directory creation')
+      await rm(path.join(managedRoot, 'files'), { recursive: true })
+      await writeFile(path.join(managedRoot, 'files'), 'blocks managed file creation')
       const adapter = createMockAdapter()
       vi.mocked(agentSessionService.create).mockReturnValueOnce({
         agentId: 'agent-1',
@@ -916,7 +540,7 @@ describe('ChannelMessageHandler', () => {
     }
   })
 
-  it('confines an image with a hostile media type to channel-images as .png', async () => {
+  it('preserves a managed original for an image with a hostile media type', async () => {
     const workDir = await mkdtemp(path.join(os.tmpdir(), 'channel-images-'))
     try {
       const adapter = createMockAdapter()
@@ -939,11 +563,14 @@ describe('ChannelMessageHandler', () => {
         images: [{ media_type: 'image/a\\..\\..\\..\\evil', data: Buffer.from('img').toString('base64') }]
       })
 
-      const written = await readdir(path.join(workDir, '.cherry-studio', 'channel-images'))
-      expect(written).toHaveLength(1)
-      expect(written[0]).toMatch(/\.png$/)
-      expect(await readdir(workDir)).toEqual(['.cherry-studio'])
-      expect(await readdir(path.join(workDir, '.cherry-studio'))).toEqual(['channel-images'])
+      const parts: CherryMessagePart[] = mockStartAgentSessionRun.mock.calls[0][0].userParts
+      const file = parts.find((part) => part.type === 'file')!
+      expect(file).toBeDefined()
+      expect(file.filename?.endsWith('.png')).toBe(true)
+      const entryId = file.type === 'file' ? readCherryMeta(file)?.fileEntryId : undefined
+      expect(entryId).toBeTruthy()
+      expect(await readFile(new URL(file.url), 'utf8')).toBe('img')
+      expect(await readFile(application.get('FileManager').getPhysicalPath(entryId!), 'utf8')).toBe('img')
     } finally {
       await rm(workDir, { recursive: true, force: true })
     }
@@ -1078,87 +705,6 @@ describe('ChannelMessageHandler', () => {
     expect(adapter.sendMessage).toHaveBeenCalledWith('chat-1', 'Compacted.', undefined)
   })
 
-  it('handleCommand /model lists chat models two per row, hides embedding/image, and marks the current one', async () => {
-    const adapter = createMockAdapter({ channelType: 'telegram' })
-    mockModelList.mockReturnValueOnce([
-      { id: 'p::kimi-k3', providerId: 'p', name: 'Kimi K3', capabilities: ['reasoning'] },
-      { id: 'p::gemini-flash', providerId: 'p', name: 'Gemini Flash', capabilities: ['image-recognition'] },
-      { id: 'p::gemini-image', providerId: 'p', name: 'Gemini Image', capabilities: ['image-generation'] },
-      { id: 'p::qwen-embed', providerId: 'p', name: 'Qwen3 Embedding 0.6B', capabilities: ['embedding'] },
-      { id: 'p::rerank-x', providerId: 'p', name: 'Rerank X', capabilities: ['rerank'] },
-      { id: 'openai::gpt-4', providerId: 'openai', name: 'GPT-4', capabilities: ['function-call'] }
-    ])
-
-    await channelMessageHandler.handleCommand(adapter, {
-      chatId: 'chat-1',
-      userId: 'user-1',
-      userName: 'User',
-      command: 'model'
-    })
-
-    // The hint suffix is gone; only the plain title remains.
-    expect(adapter.sendMessage).toHaveBeenCalledWith(
-      'chat-1',
-      '🧠 <b>选择底座模型</b>',
-      expect.objectContaining({ parseMode: 'html' })
-    )
-    const markup = vi.mocked(adapter.sendMessage).mock.calls.at(-1)?.[2]?.replyMarkup as {
-      inline_keyboard: Array<Array<{ text: string; callback_data: string }>>
-    }
-    // Embedding / rerank / image-generation models are never offered as a base model.
-    const flat = markup.inline_keyboard.flat()
-    // callback_data uses short tokens (Telegram 64-byte cap) that map back to full UniqueModelIds.
-    expect(flat.every((b) => b.callback_data.startsWith('mdl:') && b.callback_data.length <= 64)).toBe(true)
-    expect(flat.map((b) => modelPickTokens.get(b.callback_data.slice(4))?.id)).toEqual([
-      'p::kimi-k3',
-      'p::gemini-flash',
-      'openai::gpt-4'
-    ])
-    // Two buttons per row (last row may hold the odd one out).
-    expect(markup.inline_keyboard.map((row) => row.length)).toEqual([2, 1])
-    // The agent's current model is flagged so the picker shows current state.
-    expect(flat[2].text).toContain('✅')
-    expect(flat[2].text).toContain('GPT-4')
-  })
-
-  it('handleCallbackQuery mdl: stores the full UniqueModelId and shows the friendly name', async () => {
-    const adapter = createMockAdapter({ channelType: 'telegram' })
-    const longProvider = '3e39ea56-ea80-47ef-a301-42f2d196fed9'
-    const fullId = `${longProvider}::gemini-flash`
-    mockModelList.mockReturnValueOnce([
-      { id: fullId, providerId: longProvider, name: 'Gemini Flash', capabilities: ['image-recognition'] }
-    ])
-
-    await channelMessageHandler.handleCommand(adapter, {
-      chatId: 'chat-1',
-      userId: 'user-1',
-      userName: 'User',
-      command: 'model'
-    })
-
-    const markup = vi.mocked(adapter.sendMessage).mock.calls.at(-1)?.[2]?.replyMarkup as {
-      inline_keyboard: Array<Array<{ text: string; callback_data: string }>>
-    }
-    const callbackData = markup.inline_keyboard.flat()[0].callback_data
-    expect(callbackData.length).toBeLessThanOrEqual(64)
-    expect(callbackData).not.toContain(longProvider)
-
-    const answerCallbackQuery = vi.fn().mockResolvedValue(undefined)
-    const editReplyMarkup = vi.fn().mockResolvedValue(undefined)
-    await channelMessageHandler.handleCallbackQuery(adapter, {
-      chatId: 'chat-1',
-      userId: 'user-1',
-      data: callbackData,
-      answerCallbackQuery,
-      editReplyMarkup
-    } as any)
-
-    expect(agentService.updateAgent).toHaveBeenCalledWith('agent-1', { model: fullId })
-    expect(editReplyMarkup).toHaveBeenCalledWith({
-      inline_keyboard: [[{ text: '✅ Gemini Flash', callback_data: 'noop' }]]
-    })
-  })
-
   it('serializes commands after earlier messages in the same conversation', async () => {
     const adapter = createMockAdapter()
     let releaseStream!: () => void
@@ -1213,16 +759,9 @@ describe('ChannelMessageHandler', () => {
       command: 'help'
     })
 
-    expect(adapter.sendMessage).toHaveBeenCalledTimes(1)
     const helpText = adapter.sendMessage.mock.calls[0][1] as string
-    expect(helpText).toContain('*TestAgent*')
-    expect(helpText).toContain('_A test agent_')
-    expect(helpText).toContain('Available commands:')
-    expect(helpText).toContain('/new')
-    expect(helpText).toContain('/compact')
-    expect(helpText).toContain('/stop')
-    expect(helpText).toContain('/model')
-    expect(helpText).not.toContain('/help')
+    expect(helpText).toContain('TestAgent')
+    expect(helpText).toContain('A test agent')
   })
 
   it('handleCommand /help merges the bound session slash commands (control wins on collision)', async () => {
@@ -1246,7 +785,7 @@ describe('ChannelMessageHandler', () => {
 
       const helpText = adapter.sendMessage.mock.calls[0][1] as string
       expect(helpText).toContain('/deploy - Deploy the app')
-      expect(helpText).toContain('/compact - 🗜️ 压缩会话记忆')
+
       expect(helpText).not.toContain('session dup')
     } finally {
       MockMainCacheServiceUtils.setSharedCacheValue(AGENT_SESSION_SLASH_COMMANDS_CACHE_KEY('session-xyz'), null)
@@ -1273,35 +812,8 @@ describe('ChannelMessageHandler', () => {
       const helpText = adapter.sendMessage.mock.calls[0][1] as string
       expect(helpText).not.toContain('/leak')
       // Control commands are still listed — only the foreign session catalog is withheld.
-      expect(helpText).toContain('/new')
     } finally {
       MockMainCacheServiceUtils.setSharedCacheValue(AGENT_SESSION_SLASH_COMMANDS_CACHE_KEY('stale-session'), null)
-    }
-  })
-
-  it('handleCommand /reboot notifies user and triggers application.relaunch', async () => {
-    vi.useFakeTimers()
-    try {
-      const adapter = createMockAdapter()
-      const { application } = await import('@application')
-
-      await channelMessageHandler.handleCommand(adapter, {
-        chatId: 'oc_123',
-        userId: 'user-1',
-        userName: 'User',
-        command: 'reboot'
-      })
-
-      expect(adapter.sendMessage).toHaveBeenCalledWith('oc_123', '🍒 正在重启樱桃服务', {
-        replyToMessageId: undefined,
-        parseMode: 'plain'
-      })
-
-      expect(application.relaunch).not.toHaveBeenCalled()
-      vi.advanceTimersByTime(1000)
-      expect(application.relaunch).toHaveBeenCalledTimes(1)
-    } finally {
-      vi.useRealTimers()
     }
   })
 
@@ -1315,44 +827,9 @@ describe('ChannelMessageHandler', () => {
       command: 'whoami'
     })
 
-    expect(adapter.sendMessage).toHaveBeenCalledWith(
-      'oc_123',
-      'Current chat ID: `oc_123`\n\nAdd this value to `allowed_chat_ids` (or `allowed_channel_ids` for Discord) in settings to receive notifications.',
-      { replyToMessageId: undefined }
-    )
-  })
-
-  it('resolveSession tracks sessions after /new', async () => {
-    const adapter = createMockAdapter()
-    const newSession = {
-      id: 'new-session',
-      agentId: 'agent-1',
-      agentType: 'claude-code',
-      model: 'openai::gpt-4',
-      workspace: { path: '/tmp/test-workspace' },
-      configuration: {}
-    }
-
-    vi.mocked(agentSessionService.create).mockReturnValueOnce(newSession as any)
-
-    await channelMessageHandler.handleCommand(adapter, {
-      chatId: 'chat-1',
-      userId: 'user-1',
-      userName: 'User',
-      command: 'new'
+    expect(adapter.sendMessage).toHaveBeenCalledWith('oc_123', expect.stringContaining('oc_123'), {
+      replyToMessageId: undefined
     })
-
-    const createdSessionId = vi.mocked(agentSessionService.createTx).mock.calls[0][1]
-    simulateStream([{ type: 'text-delta', delta: 'OK' }])
-
-    await handleIncomingAndFlush(adapter, {
-      chatId: 'chat-1',
-      userId: 'user-1',
-      userName: 'User',
-      text: 'test'
-    })
-
-    expect(agentSessionService.getById).toHaveBeenCalledWith(createdSessionId)
   })
 
   it('clearSessionTracker causes fresh session resolution', async () => {

@@ -1,10 +1,3 @@
-import { createActionRegistry } from '@renderer/components/chat/actions/actionRegistry'
-import type { ResolvedAction } from '@renderer/components/chat/actions/actionTypes'
-import DeleteIcon from '@renderer/components/icons/DeleteIcon'
-import EditIcon from '@renderer/components/icons/EditIcon'
-import { OpenInNewWindowIcon } from '@renderer/components/icons/WindowIcons'
-import { copySessionId } from '@renderer/services/copy'
-import type { TopicTabPosition } from '@shared/data/preference/preferenceTypes'
 import type { TFunction } from 'i18next'
 import {
   Copy,
@@ -19,6 +12,13 @@ import {
   Sparkles,
   UploadIcon
 } from 'lucide-react'
+
+import { createActionRegistry } from '@renderer/components/chat/actions/actionRegistry'
+import type { ResolvedAction } from '@renderer/components/chat/actions/actionTypes'
+import DeleteIcon from '@renderer/components/icons/DeleteIcon'
+import EditIcon from '@renderer/components/icons/EditIcon'
+import { OpenInNewWindowIcon } from '@renderer/components/icons/WindowIcons'
+import type { TopicTabPosition } from '@shared/data/preference/preferenceTypes'
 
 export type SessionExportMenuOptions = Record<
   | 'docx'
@@ -37,12 +37,15 @@ export type SessionExportMenuOptions = Record<
 export interface SessionActionContext {
   exportMenuOptions?: Partial<SessionExportMenuOptions>
   isActiveInCurrentTab: boolean
+  isBusy?: boolean
+  isDeleting?: boolean
   isRenaming?: boolean
   onAutoRename?: () => void | Promise<void>
   onCopyImage?: () => void | Promise<void>
   onCopyMarkdown?: () => void | Promise<void>
   onCopyPlainText?: () => void | Promise<void>
-  onDelete: () => void
+  onDelete: () => void | Promise<void>
+  onDeletePermanently?: () => void | Promise<void>
   onExportImage?: () => void | Promise<void>
   onExportJoplin?: () => void | Promise<void>
   onExportMarkdown?: () => void | Promise<void>
@@ -52,15 +55,17 @@ export interface SessionActionContext {
   onExportSiyuan?: () => void | Promise<void>
   onExportWord?: () => void | Promise<void>
   onExportYuque?: () => void | Promise<void>
+  permanentDeleteShortcut?: string
   onOpenInNewTab?: () => void
   onOpenInNewWindow?: () => void
+  onSaveToKnowledge?: () => void | Promise<void>
   onSaveToNotes?: () => void | Promise<void>
   onSetPanePosition?: (position: TopicTabPosition) => void | Promise<void>
   onTogglePin?: () => void
+  onToggleSidebar?: () => void
   panePosition?: TopicTabPosition
   pinned?: boolean
-  /** 会话 UUID。与 sessionName 同为纯值字段（非回调），供「复制会话 ID」直接取用。 */
-  sessionId: string
+  sidebarPinned?: boolean
   sessionName: string
   startEdit: (value: string) => void
   t: TFunction
@@ -84,14 +89,7 @@ const hasExportOption = ({
   (exportMenuOptions?.notion && !!onExportNotion) ||
   (exportMenuOptions?.obsidian && !!onExportObsidian)
 
-const hasCopyOption = ({
-  exportMenuOptions,
-  onCopyImage,
-  onCopyMarkdown,
-  onCopyPlainText,
-  sessionId
-}: SessionActionContext) =>
-  !!sessionId ||
+const hasCopyOption = ({ exportMenuOptions, onCopyImage, onCopyMarkdown, onCopyPlainText }: SessionActionContext) =>
   !!onCopyMarkdown ||
   (!!exportMenuOptions?.image && !!onCopyImage) ||
   (!!exportMenuOptions?.plain_text && !!onCopyPlainText)
@@ -220,12 +218,6 @@ sessionActionRegistry.registerCommand({
     enabled: !!exportMenuOptions?.plain_text && !!onCopyPlainText
   }),
   run: ({ onCopyPlainText }) => onCopyPlainText?.()
-})
-
-sessionActionRegistry.registerCommand({
-  id: 'session.copy.session-id',
-  availability: ({ sessionId }) => ({ visible: !!sessionId, enabled: !!sessionId }),
-  run: ({ sessionId }) => copySessionId(sessionId)
 })
 
 sessionActionRegistry.registerCommand({

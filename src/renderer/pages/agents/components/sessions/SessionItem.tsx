@@ -66,7 +66,6 @@ export interface SessionItemMenuActions {
   onExportSiyuan: (session: AgentSessionEntity) => void | Promise<void>
   onExportWord: (session: AgentSessionEntity) => void | Promise<void>
   onExportYuque: (session: AgentSessionEntity) => void | Promise<void>
-  onSaveToKnowledge: (session: AgentSessionEntity) => void | Promise<void>
   onSaveToNotes: (session: AgentSessionEntity) => void | Promise<void>
 }
 
@@ -200,7 +199,6 @@ const SessionItem = ({
       onExportYuque: () => sessionMenuActions.onExportYuque(session),
       onOpenInNewTab: onOpenInNewTab ? handleOpenInNewTab : undefined,
       onOpenInNewWindow: onOpenInNewWindow ? handleOpenInNewWindow : undefined,
-      onSaveToKnowledge: () => sessionMenuActions.onSaveToKnowledge(session),
       onSaveToNotes: () => sessionMenuActions.onSaveToNotes(session),
       onSetPanePosition,
       onTogglePin: onTogglePin ? handleTogglePin : undefined,

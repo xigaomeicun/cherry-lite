@@ -1,7 +1,6 @@
-import fs from 'node:fs/promises'
-import path from 'node:path'
+import { type ApiCallFn, Bot, InputFile, type Transformer } from 'grammy'
+import { convert as toMarkdownV2 } from 'telegram-markdown-v2'
 
-import { application } from '@application'
 import {
   downloadFileAsBase64,
   downloadImageAsBase64,
@@ -9,40 +8,23 @@ import {
   type ImageAttachment,
   MAX_FILE_SIZE_BYTES
 } from '@main/utils/downloadAsBase64'
-import { type ApiCallFn, Bot, GrammyError, HttpError, InputFile, type Transformer } from 'grammy'
 
-import {
-  ChannelAdapter,
-  type ChannelAdapterConfig,
-  type ChannelCommandEvent,
-  type SendMessageOptions,
-  type ToolProgressEvent
-} from '../../ChannelAdapter'
-import { registerAdapterFactory } from '../../ChannelManager'
-import { planTelegramSend } from './markdownTg'
-import { TelegramToolBubbleController } from './TelegramToolBubble'
+import { ChannelAdapter, type ChannelAdapterConfig, type SendMessageOptions } from '../../ChannelAdapter'
 
 const TELEGRAM_MAX_LENGTH = 4096
-/** 链接保持可点，但不展开预览卡片（卡片会把推送顶部变成整页预览）。 */
-const NO_LINK_PREVIEW = { link_preview_options: { is_disabled: true } } as const
-/** Bot API soft limit for sendPhoto; larger images fall back to sendDocument. */
-const TELEGRAM_PHOTO_MAX_BYTES = 10 * 1024 * 1024
-/** MIME types Telegram accepts as photos (GIF → document / animation). */
-const TELEGRAM_PHOTO_MIME = new Set(['image/jpeg', 'image/png', 'image/webp'])
-
-import { splitMessage } from '../../utils'
-
 const TELEGRAM_LONG_POLL_TIMEOUT_SECONDS = 30
 const TELEGRAM_GET_UPDATES_TIMEOUT_MS = 45_000
-/** Startup `getMe` probe budget. Bypasses grammY's unbounded `init()` retry loop. */
-export const TELEGRAM_PROBE_TIMEOUT_MS = 10_000
-/** Consecutive getUpdates transport failures before the channel is reported offline (grammY retries every 3s). */
-const TELEGRAM_POLL_FAILURES_BEFORE_OFFLINE = 2
-/** A 409 Conflict (another poller with the same token) is retried this many times before giving up. */
-const TELEGRAM_MAX_CONFLICT_RETRIES = 5
 type GrammyAbortSignal = NonNullable<Parameters<ApiCallFn>[2]>
+/**
+ * Plain-text chunk budget under MarkdownV2. We split the *plain* text (so each
+ * chunk has an index-aligned plain fallback) and then escape it; escaping only
+ * grows length, so this headroom keeps the formatted chunk within the 4096 hard
+ * limit for normal prose. A pathological all-special-char chunk could still
+ * overflow — Telegram then rejects it and the catch sends the plain chunk, which
+ * is always within budget.
+ */
+const TELEGRAM_MARKDOWN_CHUNK_BUDGET = 3200
 
-/** Bound only `getUpdates` so a suspended long poll cannot hang for grammY's 500s default (#21412). */
 const withGetUpdatesTimeout: Transformer = async (prev, method, payload, signal) => {
   if (method !== 'getUpdates') return prev(method, payload, signal)
 
@@ -60,54 +42,14 @@ const withGetUpdatesTimeout: Transformer = async (prev, method, payload, signal)
   }
 }
 
-/** Describe a grammY error including the wrapped network cause (e.g. ECONNRESET / ETIMEDOUT). */
-export function describeTelegramError(err: unknown): string {
-  if (!(err instanceof Error)) return String(err)
-  if (err instanceof HttpError) {
-    const inner = err.error as
-      | { code?: string; message?: string; cause?: { code?: string; message?: string } }
-      | undefined
-    const detail = [inner?.code, inner?.message, inner?.cause?.code, inner?.cause?.message].filter(Boolean).join(' / ')
-    return detail ? `${err.message} (${detail})` : err.message
-  }
-  return err.message
-}
-
-/** The startup `getMe` probe did not answer within {@link TELEGRAM_PROBE_TIMEOUT_MS}. */
-export class TelegramProbeTimeoutError extends Error {
-  constructor() {
-    super(`Telegram getMe probe timed out after ${TELEGRAM_PROBE_TIMEOUT_MS}ms`)
-    this.name = 'TelegramProbeTimeoutError'
-  }
-}
-
-/** The adapter was disconnected while a startup step was in flight; must stop silently. */
-class TelegramStoppedError extends Error {
-  constructor() {
-    super('Telegram adapter stopped')
-    this.name = 'TelegramStoppedError'
-  }
-}
-
-/** Network-level (transport) failure, as opposed to a Telegram API rejection like 401. */
-export function isTelegramNetworkError(err: unknown): boolean {
-  return err instanceof HttpError || err instanceof TelegramProbeTimeoutError
-}
-
-/** Telegram rejected the bot itself (bad/revoked token): retrying can never succeed. */
-export function isTelegramFatalError(err: unknown): boolean {
-  return err instanceof GrammyError && (err.error_code === 401 || err.error_code === 404)
-}
-
-function isTelegramConflictError(err: unknown): boolean {
-  return err instanceof GrammyError && err.error_code === 409
-}
+import { splitMessage } from '../../utils'
 
 class TelegramAdapter extends ChannelAdapter {
   private bot: Bot | null = null
+  private pollingBot: Bot | null = null
+  private pollingPromise: Promise<void> | null = null
   private readonly botToken: string
   private readonly allowedChatIds: string[]
-  private readonly toolBubbles = new Map<string, TelegramToolBubbleController>()
 
   // Long-polling reconnect with backoff. grammY rethrows fatal polling errors (401/409) out of
   // `bot.start()`; without this a recoverable 409/Conflict left the bot permanently down.
@@ -116,18 +58,10 @@ class TelegramAdapter extends ChannelAdapter {
   private reconnectAttempts = 0
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null
   private stabilityTimer: ReturnType<typeof setTimeout> | null = null
-  private pollingBot: Bot | null = null
-  private pollingPromise: Promise<void> | null = null
   private resumePromise: Promise<void> | null = null
   private pollingGeneration = 0
   private readonly reconnectDelays = [1000, 2000, 5000, 10000, 30000, 60000]
   private readonly maxReconnectAttempts = 50
-  private readonly slowReconnectDelayMs = 5 * 60_000
-  /** Owned by the adapter lifetime (connect → disconnect); aborts in-flight startup probes. */
-  private lifecycleAbort: AbortController | null = null
-  private conflictAttempts = 0
-  private pollFailures = 0
-  private pollingOffline = false
   // Long polling has no "ready" event (a fatal 409 surfaces *after* `markConnected`), so
   // resetting the backoff budget on connect would let a persistent failure loop forever and
   // never hit the cap. Instead reset only after the bot has polled cleanly for this window —
@@ -150,131 +84,21 @@ class TelegramAdapter extends ChannelAdapter {
     if (!this.botToken) {
       throw new Error('Telegram bot token is required')
     }
-    this.clearReconnectTimer()
-    this.lifecycleAbort?.abort()
-    this.lifecycleAbort = new AbortController()
     this.shouldStop = false
     this.reconnectAttempts = 0
-    this.conflictAttempts = 0
-    try {
-      await this.startBot()
-    } catch (err) {
-      if (err instanceof TelegramStoppedError || this.shouldStop) return
-      // A transient network failure at startup must not permanently drop the channel:
-      // keep the adapter registered and retry with backoff until the network returns.
-      if (!isTelegramNetworkError(err)) {
-        this.markDisconnected(describeTelegramError(err))
-        throw err
-      }
-      this.handleTransportFailure(err, 'Telegram initial connect failed')
-    }
-  }
-
-  /**
-   * Central failure policy for startup/reconnect/polling errors:
-   * - disconnected by the user → silent
-   * - 401/404 (bad token) → report and stop retrying
-   * - 409 Conflict → limited retries
-   * - everything else (network, timeouts, 5xx, …) → backoff reconnect (fast, then slow forever)
-   */
-  private handleTransportFailure(err: unknown, context: string): void {
-    if (this.shouldStop || err instanceof TelegramStoppedError) return
-    const msg = describeTelegramError(err)
-    if (isTelegramFatalError(err)) {
-      this.clearReconnectTimer()
-      this.markDisconnected(`${msg} (not retrying)`)
-      this.log.error(`${context}: ${msg}; not retrying (check the bot token)`)
-      return
-    }
-    if (isTelegramConflictError(err)) {
-      this.conflictAttempts++
-      if (this.conflictAttempts > TELEGRAM_MAX_CONFLICT_RETRIES) {
-        this.clearReconnectTimer()
-        this.markDisconnected(`${msg} (gave up after ${TELEGRAM_MAX_CONFLICT_RETRIES} retries)`)
-        this.log.error(`${context}: ${msg}; another instance keeps polling this bot, giving up`)
-        return
-      }
-    }
-    this.markDisconnected(msg)
-    this.log.warn(`${context}, will retry: ${msg}`)
-    this.scheduleReconnect()
-  }
-
-  /**
-   * Fetch bot info with a bounded, cancellable `getMe` instead of `bot.init()`, whose grammY
-   * retry loop never rejects on network errors (and in <1.46 slept seconds-as-ms).
-   */
-  private async probeBot(bot: Bot): Promise<void> {
-    const lifecycle = this.lifecycleAbort
-    if (this.shouldStop || !lifecycle || lifecycle.signal.aborted) throw new TelegramStoppedError()
-    const controller = new AbortController()
-    let timedOut = false
-    const onAbort = () => controller.abort()
-    lifecycle.signal.addEventListener('abort', onAbort, { once: true })
-    const timer = setTimeout(() => {
-      timedOut = true
-      controller.abort()
-    }, TELEGRAM_PROBE_TIMEOUT_MS)
-    try {
-      const me = await bot.api.getMe(controller.signal as unknown as GrammyAbortSignal)
-      bot.botInfo = me
-    } catch (err) {
-      if (lifecycle.signal.aborted || this.shouldStop) throw new TelegramStoppedError()
-      if (timedOut) throw new TelegramProbeTimeoutError()
-      throw err
-    } finally {
-      clearTimeout(timer)
-      lifecycle.signal.removeEventListener('abort', onAbort)
-    }
-  }
-
-  /** True when `bot` is no longer the adapter's live bot (disconnected or replaced). */
-  private isDiscardedBot(bot: Bot): boolean {
-    return this.shouldStop || this.bot !== bot
-  }
-
-  /**
-   * Tracks getUpdates transport health. grammY retries failed polls internally every 3s and
-   * never surfaces network errors, so without this the channel would stay "connected" for the
-   * whole outage. Reports offline after a few consecutive failures and online on the next success.
-   */
-  private readonly pollingHealth: Transformer = async (prev, method, payload, signal) => {
-    if (method !== 'getUpdates') return prev(method, payload, signal)
-    try {
-      const result = await prev(method, payload, signal)
-      this.pollFailures = 0
-      if (this.pollingOffline && !this.shouldStop) {
-        this.pollingOffline = false
-        this.markConnected()
-        this.log.info('Telegram polling recovered')
-      }
-      return result
-    } catch (err) {
-      const cancelled = (signal as unknown as { aborted?: boolean } | undefined)?.aborted
-      if (!cancelled && !this.shouldStop && err instanceof HttpError) {
-        this.pollFailures++
-        if (this.pollFailures >= TELEGRAM_POLL_FAILURES_BEFORE_OFFLINE && !this.pollingOffline) {
-          this.pollingOffline = true
-          const msg = describeTelegramError(err)
-          this.markDisconnected(msg)
-          this.log.warn(`Telegram polling offline (grammY keeps retrying): ${msg}`)
-        }
-      }
-      throw err
-    }
+    await this.startBot()
   }
 
   private async startBot(existingBot?: Bot): Promise<void> {
     if (existingBot) {
       this.bot = existingBot
-      this.startPolling(existingBot, false)
+      this.startPolling(existingBot)
       return
     }
 
     const bot = new Bot(this.botToken)
     this.bot = bot
     bot.api.config.use(withGetUpdatesTimeout)
-    bot.api.config.use(this.pollingHealth)
 
     // Auth middleware — must be first
     bot.use(async (ctx, next) => {
@@ -286,72 +110,55 @@ class TelegramAdapter extends ChannelAdapter {
       await next()
     })
 
-    const emitCommand = (
-      ctx: { chat: { id: number }; from?: { id: number; first_name?: string }; match?: string | RegExpMatchArray },
-      command: ChannelCommandEvent['command'],
-      withArgs = false
-    ) => {
-      const args = withArgs ? String(ctx.match ?? '').trim() : undefined
+    // Command handlers
+    bot.command('new', (ctx) => {
       this.emit('command', {
         chatId: ctx.chat.id.toString(),
         userId: ctx.from?.id?.toString() ?? '',
         userName: ctx.from?.first_name ?? '',
-        command,
-        ...(args ? { args } : {}),
-        messageId: String((ctx as { message?: { message_id?: number } }).message?.message_id ?? '')
+        command: 'new'
       })
-    }
+    })
 
-    // Command handlers (Cherry-Lite extended menu; no /whoami /help)
-    bot.command('new', (ctx) => emitCommand(ctx, 'new'))
-    bot.command('stop', (ctx) => emitCommand(ctx, 'stop'))
-    bot.command('model', (ctx) => emitCommand(ctx, 'model'))
-    bot.command('switch', (ctx) => emitCommand(ctx, 'switch'))
-    bot.command('mode', (ctx) => emitCommand(ctx, 'mode'))
-    bot.command('status', (ctx) => emitCommand(ctx, 'status'))
-    bot.command('rename', (ctx) => emitCommand(ctx, 'rename', true))
-    bot.command('compact', (ctx) => emitCommand(ctx, 'compact'))
-    bot.command('reboot', (ctx) => emitCommand(ctx, 'reboot'))
-    bot.command('restart', (ctx) => emitCommand(ctx, 'reboot'))
-
-    bot.on('callback_query:data', async (ctx) => {
-      const data = ctx.callbackQuery?.data
-      if (!data) return
-      const chatId = ctx.chat?.id?.toString() || ctx.callbackQuery.message?.chat?.id?.toString()
-      if (!chatId) return
-      this.emit('callback_query', {
-        chatId,
+    bot.command('compact', (ctx) => {
+      this.emit('command', {
+        chatId: ctx.chat.id.toString(),
         userId: ctx.from?.id?.toString() ?? '',
         userName: ctx.from?.first_name ?? '',
-        data,
-        messageId: ctx.callbackQuery.message?.message_id,
-        answerCallbackQuery: async (opts) => {
-          await ctx.answerCallbackQuery(opts?.text ? { text: opts.text } : undefined).catch(() => {})
-        },
-        editReplyMarkup: async (keyboard) => {
-          await ctx.editMessageReplyMarkup({ reply_markup: keyboard as never }).catch(() => {})
-        },
-        editMessageText: async (text) => {
-          await ctx.editMessageText(text, { reply_markup: { inline_keyboard: [] } }).catch(() => {})
-        }
+        command: 'compact'
+      })
+    })
+
+    bot.command('help', (ctx) => {
+      this.emit('command', {
+        chatId: ctx.chat.id.toString(),
+        userId: ctx.from?.id?.toString() ?? '',
+        userName: ctx.from?.first_name ?? '',
+        command: 'help'
+      })
+    })
+
+    bot.command('whoami', (ctx) => {
+      this.emit('command', {
+        chatId: ctx.chat.id.toString(),
+        userId: ctx.from?.id?.toString() ?? '',
+        userName: ctx.from?.first_name ?? '',
+        command: 'whoami'
       })
     })
 
     // Text message handler
     bot.on('message:text', (ctx) => {
-      this.ackInbound(ctx)
       this.emit('message', {
         chatId: ctx.chat.id.toString(),
         userId: ctx.from?.id?.toString() ?? '',
         userName: ctx.from?.first_name ?? '',
-        text: ctx.message.text,
-        messageId: String(ctx.message.message_id)
+        text: ctx.message.text
       })
     })
 
     // Photo message handler — download the largest resolution and emit with caption
     bot.on('message:photo', async (ctx) => {
-      this.ackInbound(ctx)
       const photos = ctx.message.photo
       if (!photos || photos.length === 0) return
 
@@ -367,14 +174,12 @@ class TelegramAdapter extends ChannelAdapter {
         userId: ctx.from?.id?.toString() ?? '',
         userName: ctx.from?.first_name ?? '',
         text,
-        messageId: String(ctx.message.message_id),
         ...(images.length > 0 ? { images } : {})
       })
     })
 
     // Document/file handler — download and emit as file attachment
     bot.on('message:document', async (ctx) => {
-      this.ackInbound(ctx)
       const doc = ctx.message.document
       if (!doc) return
 
@@ -394,33 +199,17 @@ class TelegramAdapter extends ChannelAdapter {
         userId: ctx.from?.id?.toString() ?? '',
         userName: ctx.from?.first_name ?? '',
         text,
-        messageId: String(ctx.message.message_id),
         ...(files.length > 0 ? { files } : {})
       })
     })
 
-    // Bounded probe before polling: fails fast (≤10s) on network errors so the caller retries.
-    await this.probeBot(bot)
-    if (this.isDiscardedBot(bot)) {
-      // Disconnected (or replaced) while probing: never start a zombie poller.
-      void bot.stop().catch(() => {})
-      throw new TelegramStoppedError()
-    }
-
-    // Register bot commands with Telegram (best effort; must not block the channel)
-    void bot.api
-      .setMyCommands([
-        { command: 'new', description: '🆕 开启全新会话' },
-        { command: 'stop', description: '✋ 终止当前任务' },
-        { command: 'model', description: '🧠 切换底座模型' },
-        { command: 'switch', description: '🤖 切换执行后端' },
-        { command: 'mode', description: '🎮 切换权限模式' },
-        { command: 'status', description: '📊 查看当前状态' },
-        { command: 'rename', description: '✏️ 命名当前会话' },
-        { command: 'compact', description: '🗜️ 压缩会话记忆' },
-        { command: 'reboot', description: '🧿 重启樱桃服务' }
-      ])
-      .catch((err) => this.log.warn(`setMyCommands failed: ${describeTelegramError(err)}`))
+    // Register bot commands with Telegram
+    await bot.api.setMyCommands([
+      { command: 'new', description: 'Start a new conversation' },
+      { command: 'compact', description: 'Compact conversation history' },
+      { command: 'help', description: 'Show help information' },
+      { command: 'whoami', description: 'Show the current chat ID' }
+    ])
 
     // Error handler — err is a BotError wrapping the original cause in err.error
     bot.catch((err) => {
@@ -429,50 +218,41 @@ class TelegramAdapter extends ChannelAdapter {
       this.log.error(`Bot error: ${msg}`)
     })
 
-    this.startPolling(bot, true)
+    this.startPolling(bot)
   }
 
-  private startPolling(bot: Bot, notifyReboot: boolean): void {
-    if (this.isDiscardedBot(bot)) return
+  private startPolling(bot: Bot): void {
     const generation = ++this.pollingGeneration
-    this.pollFailures = 0
-    this.pollingOffline = false
     this.pollingBot = bot
-    // `bot.start()` only resolves when the bot stops; a fatal polling error (e.g. 409 Conflict)
-    // rejects — schedule a backoff reconnect. Connected is reported only after grammY's onStart.
     this.pollingPromise = bot
       .start({
         timeout: TELEGRAM_LONG_POLL_TIMEOUT_SECONDS,
         onStart: () => {
-          if (this.isStalePolling(bot, generation)) return
+          if (this.shouldStop || this.bot !== bot || this.pollingBot !== bot || this.pollingGeneration !== generation)
+            return
           this.markConnected()
           this.log.info('Telegram bot polling started')
-          // Check for pending reboot notification and send online confirmation
-          if (notifyReboot) void this.checkAndSendRebootOnlineNotification()
           this.startStabilityTimer(bot, generation)
         }
       })
       .catch((err) => {
-        if (this.isStalePolling(bot, generation)) return
+        if (this.shouldStop || this.bot !== bot || this.pollingBot !== bot || this.pollingGeneration !== generation)
+          return
         this.pollingBot = null
+        const msg = err instanceof Error ? err.message : String(err)
         this.clearStabilityTimer()
-        this.handleTransportFailure(err, 'Telegram polling stopped')
+        this.markDisconnected(msg)
+        this.log.error(`Polling stopped: ${msg}`)
+        this.scheduleReconnect()
       })
   }
 
-  private isStalePolling(bot: Bot, generation: number): boolean {
-    return this.shouldStop || this.bot !== bot || this.pollingBot !== bot || this.pollingGeneration !== generation
-  }
-
-  /** Reset the reconnect budget once this connection has stayed up for the stability window. */
   private startStabilityTimer(bot: Bot, generation: number): void {
     this.clearStabilityTimer()
     this.stabilityTimer = setTimeout(() => {
       this.stabilityTimer = null
-      if (!this.isStalePolling(bot, generation)) {
+      if (!this.shouldStop && this.bot === bot && this.pollingBot === bot && this.pollingGeneration === generation)
         this.reconnectAttempts = 0
-        this.conflictAttempts = 0
-      }
     }, this.stabilityResetMs)
   }
 
@@ -506,25 +286,6 @@ class TelegramAdapter extends ChannelAdapter {
     await this.startBot(bot)
   }
 
-  private async checkAndSendRebootOnlineNotification(): Promise<void> {
-    try {
-      const rebootNotifyPath = path.join(application.getPath('feature.agents.data'), 'reboot-notify.json')
-      const raw = await fs.readFile(rebootNotifyPath, 'utf-8').catch(() => null)
-      if (!raw) return
-      await fs.unlink(rebootNotifyPath).catch(() => {})
-      const data = JSON.parse(raw) as { channelId?: string; chatId?: string; at?: number }
-      if (!data.chatId || (data.channelId && data.channelId !== this.channelId)) return
-      // Only notify if within 5 minutes of the reboot trigger
-      if (typeof data.at === 'number' && Date.now() - data.at <= 300_000) {
-        await this.sendMessage(data.chatId, '🍒 樱桃服务重启成功', { parseMode: 'plain' })
-      }
-    } catch (error) {
-      this.log.warn('Failed to handle reboot online notification', {
-        error: error instanceof Error ? error.message : String(error)
-      })
-    }
-  }
-
   private clearStabilityTimer(): void {
     if (this.stabilityTimer) {
       clearTimeout(this.stabilityTimer)
@@ -535,23 +296,24 @@ class TelegramAdapter extends ChannelAdapter {
   private scheduleReconnect(): void {
     if (this.shouldStop || this.reconnectTimer) return
 
-    // After the fast backoff budget is spent, keep probing slowly so the channel recovers
-    // on its own once the network comes back (instead of staying down until app restart).
-    const exhausted = this.reconnectAttempts >= this.maxReconnectAttempts
-    if (exhausted && this.reconnectAttempts === this.maxReconnectAttempts) {
-      this.log.error('Telegram max reconnect attempts reached; switching to slow retry')
+    if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+      this.log.error('Telegram max reconnect attempts reached, giving up')
+      return
     }
 
-    const delay = exhausted
-      ? this.slowReconnectDelayMs
-      : this.reconnectDelays[Math.min(this.reconnectAttempts, this.reconnectDelays.length - 1)]
+    const delay = this.reconnectDelays[Math.min(this.reconnectAttempts, this.reconnectDelays.length - 1)]
     this.reconnectAttempts++
     this.log.info(`Telegram reconnecting in ${delay}ms (attempt ${this.reconnectAttempts})`)
 
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null
       if (this.shouldStop) return
-      this.startBot().catch((err) => this.handleTransportFailure(err, 'Telegram reconnect failed'))
+      this.startBot().catch((err) => {
+        const msg = err instanceof Error ? err.message : String(err)
+        this.markDisconnected(msg)
+        this.log.error(`Telegram reconnect failed: ${msg}`)
+        this.scheduleReconnect()
+      })
     }, delay)
   }
 
@@ -564,16 +326,10 @@ class TelegramAdapter extends ChannelAdapter {
 
   protected override async performDisconnect(): Promise<void> {
     this.shouldStop = true
-    this.lifecycleAbort?.abort()
-    this.lifecycleAbort = null
     this.pollingGeneration++
     this.pollingBot = null
     this.clearReconnectTimer()
     this.clearStabilityTimer()
-    for (const bubble of this.toolBubbles.values()) {
-      bubble.dispose()
-    }
-    this.toolBubbles.clear()
     if (this.bot) {
       await this.bot.stop()
       this.bot = null
@@ -623,119 +379,50 @@ class TelegramAdapter extends ChannelAdapter {
     }
   }
 
-  async editMessageText(chatId: string, messageId: number | string, text: string): Promise<void> {
-    if (!this.bot) throw new Error('Bot is not connected')
-    await this.bot.api.editMessageText(chatId, Number(messageId), text, { reply_markup: { inline_keyboard: [] } })
-  }
-
   async sendMessage(chatId: string, text: string, opts?: SendMessageOptions): Promise<void> {
     if (!this.bot) {
       throw new Error('Bot is not connected')
     }
 
-    const isPlain = (opts?.parseMode as string) === 'plain'
-    if (isPlain) {
-      const plainChunks = splitMessage(text, TELEGRAM_MAX_LENGTH)
-      for (let i = 0; i < plainChunks.length; i++) {
-        const plain = plainChunks[i]
-        const replyParams =
-          typeof opts?.replyToMessageId === 'number' && i === 0
-            ? { reply_parameters: { message_id: opts.replyToMessageId } }
-            : {}
-        const markupParams = i === plainChunks.length - 1 && opts?.replyMarkup ? { reply_markup: opts.replyMarkup } : {}
-        const sent = await this.bot.api.sendMessage(chatId, plain, {
-          ...NO_LINK_PREVIEW,
-          ...replyParams,
-          ...markupParams
-        })
-        if (i === plainChunks.length - 1 && sent?.message_id !== undefined) opts?.onSent?.(sent.message_id)
-      }
-      return
-    }
+    const parseMode = opts?.parseMode ?? 'MarkdownV2'
+    const isMarkdown = parseMode === 'MarkdownV2'
+    // Split the PLAIN text first and escape each chunk, so the MarkdownV2 send and
+    // its plain-text fallback share one chunk boundary. (Splitting the *formatted*
+    // text and then re-splitting the *raw* text by the same index misaligns — escaping
+    // changes lengths/boundaries — dropping, duplicating, or passing `undefined` chunks.)
+    const plainChunks = splitMessage(text, isMarkdown ? TELEGRAM_MARKDOWN_CHUNK_BUDGET : TELEGRAM_MAX_LENGTH)
 
-    // High-fidelity Telegram HTML rendering (ports markdown-tg with table-to-list, code blocks, br handling)
-    // Markdown 按「转换后」可见长度切段（见 planTelegramSend），每段自带纯文本降级内容
-    const isRawHtml = opts?.parseMode === 'html' || opts?.parseMode === 'HTML'
-    const chunks = planTelegramSend(text, { rawHtml: isRawHtml })
-
-    for (let i = 0; i < chunks.length; i++) {
-      const chunk = chunks[i].html
+    for (let i = 0; i < plainChunks.length; i++) {
+      const plain = plainChunks[i]
+      const formatted = isMarkdown ? toMarkdownV2(plain).trimEnd() : plain
+      // Telegram message ids are numeric; a string replyToMessageId (QQ's msg_id) isn't ours.
       const replyParams =
         typeof opts?.replyToMessageId === 'number' && i === 0
           ? { reply_parameters: { message_id: opts.replyToMessageId } }
-          : typeof opts?.replyToMessageId === 'string' && /^\d+$/.test(opts.replyToMessageId) && i === 0
-            ? { reply_parameters: { message_id: Number(opts.replyToMessageId) } }
-            : {}
-      const isLast = i === chunks.length - 1
-      const markupParams = isLast && opts?.replyMarkup ? { reply_markup: opts.replyMarkup } : {}
+          : {}
 
-      let sent = false
-      let lastError: unknown
-
-      // 1. 先尝试发送 HTML 消息，网络瞬断时支持指数退避重试 (最多 3 次)，避免因瞬时代理抖动误判降级
-      for (let attempt = 1; attempt <= 3; attempt++) {
-        try {
-          await this.bot.api.sendMessage(chatId, chunk, {
-            parse_mode: 'HTML',
-            ...NO_LINK_PREVIEW,
-            ...replyParams,
-            ...markupParams
-          })
-          sent = true
-          break
-        } catch (error) {
-          lastError = error
-          const isParseError =
-            error instanceof GrammyError &&
-            error.error_code === 400 &&
-            /can('t| not) parse entities|unmatched end tag|unsupported start tag/i.test(error.description ?? '')
-
-          // 若明确是 Telegram API 无法解析的 HTML 语法错误，则无需盲目重试，立即进入降级
-          if (isParseError) {
-            break
-          }
-
-          // 否则是网络抖动、连接断开或限流，进行指数重试 (500ms, 1000ms)
-          if (attempt < 3) {
-            this.log.warn(`Telegram HTML sendMessage attempt ${attempt} failed, retrying...`, {
-              chatId,
-              error: error instanceof Error ? error.message : String(error)
-            })
-            await new Promise((resolve) => setTimeout(resolve, attempt * 500))
-          }
-        }
-      }
-
-      // 2. 只有在重试仍失败且确属 HTML 解析异常时，才向纯文本降级
-      if (!sent) {
-        this.log.warn('HTML send failed after attempts, falling back to plain text', {
-          chatId,
-          error: lastError instanceof Error ? lastError.message : String(lastError)
+      try {
+        await this.bot.api.sendMessage(chatId, formatted, {
+          parse_mode: parseMode,
+          ...replyParams
         })
-        // 只降级本段：整篇重发会让已成功发出的段落重复
-        const plainChunks = splitMessage(chunks[i].plain, TELEGRAM_MAX_LENGTH)
-        for (const plain of plainChunks) {
-          await this.bot.api.sendMessage(chatId, plain, { ...NO_LINK_PREVIEW, ...replyParams })
+      } catch (error) {
+        // Fallback to plain text if MarkdownV2 parsing fails — same chunk content.
+        if (isMarkdown) {
+          this.log.warn('MarkdownV2 send failed, falling back to plain text', {
+            chatId,
+            error: error instanceof Error ? error.message : String(error)
+          })
+          await this.bot.api.sendMessage(chatId, plain, replyParams)
+        } else {
+          throw error
         }
       }
 
       // Small delay between chunks to avoid rate limiting
-      if (i < chunks.length - 1) {
-        await new Promise((resolve) => setTimeout(resolve, 350))
+      if (i < plainChunks.length - 1) {
+        await new Promise((resolve) => setTimeout(resolve, 100))
       }
-    }
-  }
-
-  /** Inbound ack: reaction eyes + typing (best-effort). */
-  private ackInbound(ctx: { chat?: { id: number }; message?: { message_id: number } }): void {
-    try {
-      const chatId = ctx.chat?.id
-      const messageId = ctx.message?.message_id
-      if (chatId == null || messageId == null || !this.bot) return
-      this.bot.api.setMessageReaction(chatId, messageId, [{ type: 'emoji', emoji: '👀' }]).catch(() => {})
-      this.bot.api.sendChatAction(chatId, 'typing').catch(() => {})
-    } catch {
-      /* ignore */
     }
   }
 
@@ -746,31 +433,6 @@ class TelegramAdapter extends ChannelAdapter {
     const buffer = Buffer.from(file.data, 'base64')
     await this.bot.api.sendDocument(chatId, new InputFile(buffer, file.filename))
     this.log.info('Sent file', { chatId, filename: file.filename, size: file.size })
-  }
-
-  /**
-   * Prefer sendPhoto for album UX. Fall back to sendDocument when the MIME is
-   * not photo-friendly (e.g. GIF) or the payload exceeds the ~10MB photo limit.
-   */
-  override async sendImage(chatId: string, file: FileAttachment): Promise<void> {
-    if (!this.bot) {
-      throw new Error('Bot is not connected')
-    }
-    const buffer = Buffer.from(file.data, 'base64')
-    const mime = file.media_type.toLowerCase()
-    const usePhoto = TELEGRAM_PHOTO_MIME.has(mime) && buffer.length <= TELEGRAM_PHOTO_MAX_BYTES
-    if (usePhoto) {
-      await this.bot.api.sendPhoto(chatId, new InputFile(buffer, file.filename))
-      this.log.info('Sent photo', { chatId, filename: file.filename, size: file.size })
-      return
-    }
-    await this.bot.api.sendDocument(chatId, new InputFile(buffer, file.filename))
-    this.log.info('Sent image as document (fallback)', {
-      chatId,
-      filename: file.filename,
-      size: file.size,
-      mime
-    })
   }
 
   override async onTextUpdate(chatId: string, fullText: string): Promise<void> {
@@ -787,55 +449,10 @@ class TelegramAdapter extends ChannelAdapter {
 
     await this.bot.api.sendChatAction(chatId, 'typing')
   }
-
-  private getBubbleController(chatId: string): TelegramToolBubbleController | null {
-    if (!this.bot) return null
-    let controller = this.toolBubbles.get(chatId)
-    if (!controller) {
-      controller = new TelegramToolBubbleController(
-        chatId,
-        {
-          sendMessage: async (text: string) => {
-            const msg = await this.bot!.api.sendMessage(chatId, text)
-            return msg.message_id
-          },
-          editMessageText: async (messageId: number, text: string) => {
-            await this.bot!.api.editMessageText(chatId, messageId, text)
-          },
-          deleteMessage: async (messageId: number) => {
-            await this.bot!.api.deleteMessage(chatId, messageId)
-          }
-        },
-        this.log
-      )
-      this.toolBubbles.set(chatId, controller)
-    }
-    return controller
-  }
-
-  override async onToolProgress(chatId: string, event: ToolProgressEvent): Promise<void> {
-    const bubble = this.getBubbleController(chatId)
-    if (!bubble) return
-    if (event.kind === 'start') {
-      bubble.onStart(event.toolCallId, event.toolName, event.input, event.description)
-    } else if (event.kind === 'done') {
-      bubble.onDone(event.toolCallId)
-    }
-  }
-
-  override async dismissToolProgress(chatId: string): Promise<void> {
-    const bubble = this.toolBubbles.get(chatId)
-    if (!bubble) return
-    await bubble.dismiss(false)
-  }
 }
 
-// Self-registration
-registerAdapterFactory('telegram', (channel, agentId) => {
+export function createTelegramAdapter(config: ChannelAdapterConfig<'telegram'>) {
   return new TelegramAdapter({
-    channelId: channel.id,
-    channelType: channel.type,
-    agentId,
-    channelConfig: channel.config
+    ...config
   })
-})
+}

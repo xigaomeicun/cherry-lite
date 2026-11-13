@@ -73,7 +73,6 @@ import { FilePreviewNavigationProvider, hasRenderedFilePreview } from '@renderer
 import type { WebviewAnnotationSavedPayload } from '@renderer/components/WebviewAnnotationControls'
 import { usePreference } from '@renderer/data/hooks/usePreference'
 import { useAgentChildProjection } from '@renderer/hooks/agent/useAgentChildProjection'
-import { useAgentDesktopControls } from '@renderer/hooks/agent/useAgentDesktopControls'
 import { useAgentSessionBackgroundTasks } from '@renderer/hooks/agent/useAgentSessionBackgroundTasks'
 import { useAgentSessionCompaction } from '@renderer/hooks/agent/useAgentSessionCompaction'
 import { useAgentSessionContextUsage } from '@renderer/hooks/agent/useAgentSessionContextUsage'
@@ -1595,51 +1594,22 @@ export function AgentTaskProgressCapsule() {
   )
 }
 
-type DesktopControls = ReturnType<typeof useAgentDesktopControls>
-const DesktopControlsContext = createContext<{
-  rows: NonNullable<DesktopControls['controls']>
-  failed: boolean
-  pending: DesktopControls['pending']
-  stopApp: DesktopControls['stopApp']
-} | null>(null)
-
 function AgentDetailsScope({ children, present }: { children: ReactNode; present: boolean }) {
   const meta = useAgentRightPaneMeta()
   const panel = useRightPanelState()
-  const desktopControls = useAgentDesktopControls()
-  const ownerKey = meta.sessionId && meta.agentId ? `agent:${meta.sessionId}:${meta.agentId}` : undefined
-  const rows =
-    desktopControls.controls?.filter(
-      (row) =>
-        ownerKey &&
-        row.ownerId === ownerKey &&
-        typeof row.appId === 'string' &&
-        row.appId.length > 0 &&
-        ['opening', 'active', 'stopping', 'stopped', 'unconfirmed'].includes(row.status)
-    ) ?? []
   const { t } = useTranslation()
-  useEffect(() => {
-    if (desktopControls.failed) toast.error(t('agent.right_pane.info.desktop_control.load_failed'))
-  }, [desktopControls.failed, t])
+  void t
   return (
-    <DesktopControlsContext
-      value={{
-        rows,
-        failed: desktopControls.failed,
-        pending: desktopControls.pending,
-        stopApp: desktopControls.stopApp
-      }}>
-      <AgentSessionDetailsProvider
-        sessionId={meta.sessionId}
-        available={present && meta.conversationState === 'ready' && !!meta.sessionId && !panel.presentationMaximized}>
-        <AgentRunTaskStopsProvider>
-          {present && meta.conversationState === 'ready' && meta.sessionId && meta.workspacePath && (
-            <AgentWorkspaceOpenShortcut workspacePath={meta.workspacePath} />
-          )}
-          {children}
-        </AgentRunTaskStopsProvider>
-      </AgentSessionDetailsProvider>
-    </DesktopControlsContext>
+    <AgentSessionDetailsProvider
+      sessionId={meta.sessionId}
+      available={present && meta.conversationState === 'ready' && !!meta.sessionId && !panel.presentationMaximized}>
+      <AgentRunTaskStopsProvider>
+        {present && meta.conversationState === 'ready' && meta.sessionId && meta.workspacePath && (
+          <AgentWorkspaceOpenShortcut workspacePath={meta.workspacePath} />
+        )}
+        {children}
+      </AgentRunTaskStopsProvider>
+    </AgentSessionDetailsProvider>
   )
 }
 
@@ -1650,13 +1620,9 @@ function AgentDetailsContent() {
   const status = useAgentRightPaneStatus()
   const { usage, percentage } = useAgentSessionContextUsage(meta.sessionId, meta.model)
   const compaction = useAgentSessionCompaction(meta.sessionId)
-  const desktopControls = use(DesktopControlsContext)
   return (
     <div key={meta.sessionId}>
       <AgentSessionDetailsSections
-        desktopControls={desktopControls?.rows}
-        pendingDesktopControls={desktopControls?.pending}
-        stopDesktopControl={desktopControls?.stopApp}
         contextUsage={
           <AgentContextUsageSummary
             usage={usage}

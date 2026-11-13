@@ -1,10 +1,11 @@
 import { readdir, readFile, rm } from 'node:fs/promises'
 
+import * as z from 'zod'
+
 import { application } from '@application'
 import { loggerService } from '@logger'
 import { atomicWriteFile } from '@main/utils/file'
 import { AbsoluteFilePathSchema } from '@shared/types/file'
-import * as z from 'zod'
 
 const logger = loggerService.withContext('AgentSessionForkResources')
 
@@ -21,9 +22,7 @@ export const AgentSessionForkResourcesSchema = z.object({
   workspaceIdentity: z.string().optional(),
   published: z.array(z.strictObject({ source: z.string(), target: z.string(), identity: z.string().optional() })),
   workspaceDisposition: z.literal('retained').optional(),
-  nativeDisposition: z.literal('retained').optional(),
-  /** Set once the stuck-cleanup warning was logged, so later boots stay quiet. */
-  cleanupPendingReported: z.boolean().optional()
+  nativeDisposition: z.literal('retained').optional()
 })
 
 export type AgentSessionForkResources = z.infer<typeof AgentSessionForkResourcesSchema>

@@ -115,30 +115,3 @@ it('appends desktop control to an old saved list and reset restores the default 
     defaults.findIndex(({ id }) => id === 'workspace') + 1
   )
 })
-
-it('hides desktop control without stopping an application', () => {
-  const stop = vi.fn()
-  const row = { ownerId: 'agent:s:a', label: 'Agent', appId: 'app', status: 'active' as const }
-  const content = (
-    <AgentSessionDetailsSections
-      status={{
-        tasks: [],
-        runTasks: [],
-        completedTaskCount: 0,
-        totalTaskCount: 0,
-        isTaskPlanActive: false,
-        artifacts: []
-      }}
-      desktopControls={[row]}
-      stopDesktopControl={stop}
-    />
-  )
-  const view = render(content)
-  expect(screen.getByRole('button', { name: /agent.right_pane.info.desktop_control.title/ })).toBeVisible()
-  fireEvent.click(screen.getByRole('button', { name: 'agent.right_pane.details.customize' }))
-  fireEvent.click(screen.getByRole('switch', { name: 'agent.right_pane.info.desktop_control.title' }))
-  view.unmount()
-  render(content)
-  expect(screen.queryByRole('button', { name: /agent.right_pane.info.desktop_control.title/ })).toBeNull()
-  expect(stop).not.toHaveBeenCalled()
-})

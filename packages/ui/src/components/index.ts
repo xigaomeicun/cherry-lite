@@ -2,7 +2,6 @@
 export { KeyboardLayerProvider, type KeyboardLayerProps } from './primitives/keyboard-layer'
 export { BarVisualizer, type BarVisualizerProps, type BarVisualizerState } from './primitives/bar-visualizer'
 export { Avatar, AvatarBadge, AvatarFallback, AvatarGroup, AvatarGroupCount, AvatarImage } from './primitives/avatar'
-export { BarVisualizer, type BarVisualizerProps, type BarVisualizerState } from './primitives/bar-visualizer'
 export { default as CircularProgress, type CircularProgressProps } from './primitives/circular-progress'
 export { default as CopyButton } from './primitives/copy-button'
 export { default as CustomTag, type CustomTagProps } from './primitives/custom-tag'

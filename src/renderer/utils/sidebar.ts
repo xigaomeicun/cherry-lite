@@ -67,17 +67,9 @@ const SIDEBAR_APP_DEFINITIONS = [
     }
   },
   {
-    id: 'scheduled_tasks',
-    routePrefix: '/app/scheduled-tasks'
-  },
-  {
     id: 'paintings',
     routePrefix: '/app/paintings',
     resolveUrl: ({ defaultPaintingProvider }) => `/app/paintings/${defaultPaintingProvider}`
-  },
-  {
-    id: 'marketplace',
-    routePrefix: '/app/marketplace'
   },
   {
     id: 'translate',
@@ -299,15 +291,14 @@ export function addSidebarShortcut(
   const items = normalizeSidebarShortcutItems(values)
   const id = createSidebarShortcutId(target)
   if (items.some((item) => isSidebarShortcutItem(item) && item.id === id)) return items
-  const chatIndex =
-    isBuiltInAppShortcutTarget(target) && target.locator.resourceId === 'scheduled_tasks'
-      ? items.findIndex(
-          (item) =>
-            isSidebarShortcutItem(item) &&
-            isBuiltInAppShortcutTarget(item.target) &&
-            item.target.locator.resourceId === 'assistants'
-        )
-      : -1
+  const chatIndex = false
+    ? items.findIndex(
+        (item) =>
+          isSidebarShortcutItem(item) &&
+          isBuiltInAppShortcutTarget(item.target) &&
+          item.target.locator.resourceId === 'assistants'
+      )
+    : -1
   const insertIndex = chatIndex === -1 ? items.length : chatIndex + 1
   return [
     ...items.slice(0, insertIndex),
@@ -400,11 +391,6 @@ export function getOrderedLaunchpadApps(stored: readonly string[] | undefined): 
   for (const id of SIDEBAR_FAVORITE_ORDER) {
     if (!seen.has(id)) {
       seen.add(id)
-      if (id === 'marketplace' && ordered.includes('paintings')) {
-        ordered.splice(ordered.indexOf('paintings') + 1, 0, id)
-      } else {
-        ordered.push(id)
-      }
     }
   }
 

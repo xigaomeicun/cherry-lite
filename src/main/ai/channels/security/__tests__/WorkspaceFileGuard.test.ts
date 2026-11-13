@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, realpath, rm, symlink, truncate, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, symlink, truncate, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { Readable } from 'node:stream'
@@ -9,7 +9,7 @@ import { MAX_FILE_SIZE_BYTES } from '@main/utils/downloadAsBase64'
 import type * as MainFileUtils from '@main/utils/file'
 import { openReadableFileSnapshot } from '@main/utils/file'
 
-import { agentAssetsWorkspaceRoot, resolveWorkspaceFile } from '../WorkspaceFileGuard'
+import { resolveWorkspaceFile } from '../WorkspaceFileGuard'
 
 // Wrap only `openReadableFileSnapshot` as a spy so a single test can simulate a file
 // growing between stat and read; every other fs call (and the spy by default) stays real.
@@ -41,7 +41,6 @@ describe('resolveWorkspaceFile', () => {
     expect(file.media_type).toBe('text/markdown')
     expect(file.size).toBe(Buffer.byteLength('hello world'))
     expect(Buffer.from(file.data, 'base64').toString()).toBe('hello world')
-    expect(file.canonicalPath).toBe(await realpath(path.join(workspace, 'note.md')))
   })
 
   it('accepts an absolute path inside the workspace', async () => {
@@ -135,36 +134,5 @@ describe('resolveWorkspaceFile', () => {
   it('rejects a directory as not-a-file', async () => {
     await mkdir(path.join(workspace, 'adir'))
     await expect(resolveWorkspaceFile(workspace, 'adir')).rejects.toThrow(/Not a regular file/)
-  })
-
-  it('accepts an absolute path under an additional allowed root (CPA agent assets)', async () => {
-    const assetsRoot = await mkdtemp(path.join(tmpdir(), 'wfg-assets-'))
-    try {
-      await mkdir(path.join(assetsRoot, 'assets'))
-      const abs = path.join(assetsRoot, 'assets', 'cute.png')
-      await writeFile(abs, 'img')
-
-      const file = await resolveWorkspaceFile(workspace, abs, [assetsRoot])
-      expect(file.filename).toBe('cute.png')
-      expect(file.media_type).toBe('image/png')
-    } finally {
-      await rm(assetsRoot, { recursive: true, force: true })
-    }
-  })
-
-  it('still rejects absolute paths outside workspace and additional roots', async () => {
-    const assetsRoot = await mkdtemp(path.join(tmpdir(), 'wfg-assets-'))
-    try {
-      await writeFile(path.join(outside, 'secret.png'), 'x')
-      await expect(resolveWorkspaceFile(workspace, path.join(outside, 'secret.png'), [assetsRoot])).rejects.toThrow(
-        /outside the workspace/
-      )
-    } finally {
-      await rm(assetsRoot, { recursive: true, force: true })
-    }
-  })
-
-  it('agentAssetsWorkspaceRoot points at ~/.agents/workspace', () => {
-    expect(agentAssetsWorkspaceRoot('/Users/demo')).toBe(path.join('/Users/demo', '.agents', 'workspace'))
   })
 })

@@ -12,8 +12,6 @@ import type { AbsoluteFilePath, FileVersion, ReadResult } from '@shared/types/fi
 
 import { runPathMutationExclusive } from '../pathMutationLock'
 
-import { runPathMutationExclusive } from '../pathMutationLock'
-
 export type TextReadOptions = { encoding?: 'text'; detectEncoding?: boolean }
 export type Base64ReadOptions = { encoding: 'base64' }
 export type BinaryReadOptions = { encoding: 'binary'; withContentHash?: boolean }

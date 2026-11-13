@@ -1,3 +1,4 @@
+import * as z from 'zod'
 /**
  * Agents domain API Schema definitions
  *
@@ -6,17 +7,17 @@
  * a response payload and an entity). DTOs are derived via .pick().
  */
 
-import * as z from 'zod'
-
+import { MAX_HEARTBEAT_TIMEOUT_MINUTES } from '@shared/ai/agentHeartbeat'
 import { BUILTIN_AGENT_ROLE } from '@shared/ai/builtinAgent'
 import { AgentLanguageSchema } from '@shared/data/types/agentLanguage'
+import { FileEntryIdSchema } from '@shared/data/types/file'
 import { ServiceTierSelectionSchema, UniqueModelIdSchema } from '@shared/data/types/model'
 import { ReasoningEffortOptionSchema } from '@shared/types/aiSdk'
 
 import type { OffsetPaginationResponse } from '../types'
 import type { OrderEndpoints } from './_endpointHelpers'
 import { AgentSessionWorkspaceSourceSchema } from './agentWorkspaces'
-import { TriggerSchema } from './jobs'
+import { type JobSnapshot, TriggerSchema } from './jobs'
 
 // ============================================================================
 // Field atoms (shared validators reused across entity and DTO schemas)
@@ -63,7 +64,10 @@ export const AgentConfigurationSchema = z
     scheduler_last_run: z.string().optional(),
     heartbeat_enabled: z.boolean().optional(),
     heartbeat_interval: z.number().optional(),
-    builtin_role: z.enum([BUILTIN_AGENT_ROLE.ASSISTANT, BUILTIN_AGENT_ROLE.SUPPORT]).optional(),
+    heartbeat_timeout_minutes: z.number().int().positive().max(MAX_HEARTBEAT_TIMEOUT_MINUTES).optional(),
+    builtin_role: z
+      .enum([BUILTIN_AGENT_ROLE.ASSISTANT, BUILTIN_AGENT_ROLE.SUPPORT, BUILTIN_AGENT_ROLE.DOCTOR])
+      .optional(),
     language: AgentLanguageSchema.nullable().optional()
   })
   // .loose() (passthrough) is intentional: the configuration object is stored as a JSON blob
@@ -102,7 +106,7 @@ export function sanitizeAgentConfiguration(raw: unknown): {
   }
   const reparsed = AgentConfigurationSchema.safeParse(filtered)
   return {
-    data: reparsed.success ? reparsed.data : ({} as AgentConfiguration),
+    data: reparsed.success ? reparsed.data : {},
     invalidKeys
   }
 }
@@ -150,10 +154,14 @@ export const AgentEntitySchema = AgentBaseSchema.extend({
   /** Persistent ordering key. Read-only; modified only through order endpoints. */
   orderKey: z.string(),
   model: UniqueModelIdSchema.nullable(),
+  /** Read-only soft-delete timestamp, present only for trashed agents. */
+  deletedAt: z.string().optional(),
   /**
    * Human-readable primary model name resolved from the current runtime Model
    * at read time. Edits still go through the `model` UniqueModelId field.
    */
+  avatarFileId: FileEntryIdSchema.optional(),
+  avatarSrc: z.string().optional(),
   modelName: z.string().nullable()
 })
 
@@ -181,8 +189,8 @@ export const ScheduledTaskEntitySchema = z.strictObject({
   lastRun: z.string().nullable().optional(),
   /** Live enable/disable flag — pause/resume flips this. */
   enabled: z.boolean(),
-  /** Output-only derived label kept for UI continuity (active / paused / completed). */
-  status: z.enum(['active', 'paused', 'completed']),
+  /** Output-only state derived from the schedule and its execution history. */
+  status: z.enum(['active', 'paused', 'completed', 'missed']),
   createdAt: z.string(),
   updatedAt: z.string()
 })
@@ -248,6 +256,13 @@ export const ListQuerySchema = z.strictObject({
 })
 export type ListQuery = z.infer<typeof ListQuerySchema>
 
+export const ListTasksQuerySchema = ListQuerySchema.extend({
+  status: z
+    .union([ScheduledTaskEntitySchema.shape.status, z.array(ScheduledTaskEntitySchema.shape.status).min(1)])
+    .optional()
+})
+export type ListTasksQuery = z.infer<typeof ListTasksQuerySchema>
+
 export const AGENTS_DEFAULT_PAGE = 1
 export const AGENTS_DEFAULT_LIMIT = 100
 export const AGENTS_MAX_LIMIT = 500
@@ -259,6 +274,11 @@ export const AGENTS_MAX_LIMIT = 500
  *   builtin Cherry Assistant fallback when its stored description is blank.
  */
 export const ListAgentsQuerySchema = z.strictObject({
+  ids: z.array(z.string().min(1)).min(1).max(AGENTS_MAX_LIMIT).optional(),
+  /** Only the builtin agent holding this role, which has no fixed ID except Support's. */
+  builtinRole: z.enum(BUILTIN_AGENT_ROLE).optional(),
+  /** `true` lists only trashed agents; omitted/false lists active agents. */
+  inTrash: z.boolean().optional(),
   /** Free-text match against name OR description, including builtin fallback text (case-insensitive LIKE). */
   search: z.string().trim().min(1).optional(),
   /** Positive integer, defaults to {@link AGENTS_DEFAULT_PAGE}. */
@@ -298,7 +318,7 @@ export type AgentSchemas = {
   /** List scheduled tasks across every agent (settings overview, paginated) */
   '/agent-tasks': {
     GET: {
-      query?: ListQuery
+      query?: ListTasksQuery
       response: OffsetPaginationResponse<ScheduledTaskListItem>
     }
   }
@@ -307,11 +327,18 @@ export type AgentSchemas = {
   '/agent-tasks/:taskId': {
     GET: {
       params: { taskId: string }
-      response: ScheduledTaskEntity
+      response: ScheduledTaskListItem
     }
   }
 
   /** List tasks for an agent (mutations live on IpcApi `ai.agent.task.*`) */
+  '/agents/:agentId/heartbeat': {
+    GET: {
+      params: { agentId: string }
+      response: { scheduleEnabled: boolean; latestRun: JobSnapshot | null }
+    }
+  }
+
   '/agents/:agentId/tasks': {
     GET: {
       params: { agentId: string }

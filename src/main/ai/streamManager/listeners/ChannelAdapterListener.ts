@@ -1,54 +1,27 @@
 import { loggerService } from '@logger'
 import {
-  agentAssetsWorkspaceRoot,
-  askUserPending,
   type ChannelAdapter,
-  CursorToolLineParser,
-  describeCursorToolLine,
-  escHtml,
-  extractOutboundLocalImages,
-  hasOutboundImageDelivered,
-  markOutboundImageDelivered,
-  normalizeToolKey,
-  resolveWorkspaceFile,
   sanitizeChannelOutput,
-  type SendMessageOptions,
-  toolPermSent
+  sanitizeChannelOutputSilently,
+  type SendMessageOptions
 } from '@main/ai/channels'
-import { toolApprovalRegistry } from '@main/ai/toolApproval/ToolApprovalRegistry'
 import { t } from '@main/i18n'
-import type { UniqueModelId } from '@shared/data/types/model'
-import type { UIMessageChunk } from 'ai'
+import type { CherryUIMessage } from '@shared/data/types/message'
 
 import type { StreamDoneResult, StreamErrorResult, StreamListener, StreamPausedResult } from '../types'
 
 const logger = loggerService.withContext('ChannelAdapterListener')
 const INCOMPLETE_CITATION_MARKER_PATTERN = /[ \t]?\[(?:c(?:i(?:t(?:e(?::[\w-]*)?)?)?)?)?$/
-
-export interface ChannelAdapterListenerOptions {
-  /**
-   * Telegram only: turn Cursor-model `[tool] <label>: <summary>` reasoning lines (tools the CPA
-   * gateway executes itself, so no tool_calls reach us) into ephemeral tool bubbles. Display-only —
-   * nothing is injected into the UI message stream or persisted. Skipped for group chats.
-   */
-  cursorToolBubbles?: boolean
-}
-
-/** Telegram group/supergroup/channel chat ids are negative; private chats are positive. */
-function isTelegramGroupChatId(chatId: string): boolean {
-  const n = Number(chatId)
-  return !Number.isFinite(n) || n < 0
-}
+// Sanitizing re-scans the whole reply, so coalesce deltas instead of paying that per chunk.
+const LIVE_UPDATE_INTERVAL_MS = 250
 
 /** IM-channel sink (Discord / Slack / Feishu / Telegram / etc). */
 export class ChannelAdapterListener implements StreamListener {
   readonly id: string
   private accumulatedText = ''
-  private exitPlanCardSent = false
+  private lastLiveText = ''
+  private liveUpdateTimer: ReturnType<typeof setTimeout> | undefined
   private settled = false
-  private readonly cursorToolParser: CursorToolLineParser | null
-  private cursorToolSeq = 0
-  private activeCursorToolId: string | null = null
 
   constructor(
     private readonly adapter: ChannelAdapter,
@@ -60,25 +33,8 @@ export class ChannelAdapterListener implements StreamListener {
      */
     private readonly suppressErrorMessage = false,
     /** Response context for the inbound message, including thread placement where supported. */
-    private readonly responseOptions?: SendMessageOptions,
-    /**
-     * Session workspace root for resolving local image paths before outbound upload.
-     * When unset (e.g. scheduled-task notify), path→photo conversion is skipped.
-     */
-    private readonly workspacePath?: string,
-    /**
-     * Extra allowed roots for outbound image resolution (defaults to the CPA
-     * `~/.agents/workspace` dump). Pass `[]` in tests to disable.
-     */
-    private readonly additionalRoots: readonly string[] | undefined = undefined,
-    options: ChannelAdapterListenerOptions = {}
+    private readonly responseOptions?: SendMessageOptions
   ) {
-    this.cursorToolParser =
-      options.cursorToolBubbles === true &&
-      this.adapter.channelType === 'telegram' &&
-      !isTelegramGroupChatId(this.platformChatId)
-        ? new CursorToolLineParser()
-        : null
     const responseKey = this.responseOptions?.replyToMessageId ?? 'unthreaded'
     this.id = `channel:${adapter.channelId}:${this.platformChatId}:${responseKey}`
   }
@@ -88,357 +44,61 @@ export class ChannelAdapterListener implements StreamListener {
     return this.adapter.sendMessage(this.platformChatId, text, this.responseOptions)
   }
 
-  private updateStream(text: string): Promise<void> {
-    return this.adapter.onTextUpdate(this.platformChatId, text, this.responseOptions)
-  }
-
   private completeStream(text: string, status: 'success' | 'paused'): Promise<boolean> {
     return this.adapter.onStreamComplete(this.platformChatId, text, this.responseOptions, { status })
   }
 
-  /**
-   * On final delivery only: upload workspace-local images referenced in the
-   * markdown, strip successful paths from the body, and re-append failures so
-   * the IM user still sees something useful. Never called from onTextUpdate.
-   */
-  private async prepareOutboundDelivery(text: string): Promise<string> {
-    if (!this.workspacePath) return text
+  onChunk(): void {}
 
-    const { cleanedText, imagePaths } = extractOutboundLocalImages(text)
-    if (imagePaths.length === 0) return text
-
-    const failedPaths: string[] = []
-    for (const imagePath of imagePaths) {
-      try {
-        const extraRoots = this.additionalRoots ?? [agentAssetsWorkspaceRoot()]
-        const file = await resolveWorkspaceFile(this.workspacePath, imagePath, extraRoots)
-        if (!file.media_type.startsWith('image/')) {
-          failedPaths.push(imagePath)
-          logger.warn('Outbound local image skipped: not image/*', {
-            channelId: this.adapter.channelId,
-            chatId: this.platformChatId,
-            imagePath,
-            mediaType: file.media_type
-          })
-          continue
-        }
-        const canonicalPath = file.canonicalPath
-        if (canonicalPath && hasOutboundImageDelivered(this.adapter.channelId, this.platformChatId, canonicalPath)) {
-          // notify(file_path) already delivered this photo — skip duplicate sendPhoto/sendDocument.
-          continue
-        }
-        await this.adapter.sendImage(this.platformChatId, file)
-        if (canonicalPath) {
-          markOutboundImageDelivered(this.adapter.channelId, this.platformChatId, canonicalPath)
-        }
-      } catch (err) {
-        failedPaths.push(imagePath)
-        logger.warn('Failed to deliver outbound local image', {
-          channelId: this.adapter.channelId,
-          chatId: this.platformChatId,
-          imagePath,
-          err
-        })
-      }
-    }
-
-    let deliveryText = cleanedText
-    if (failedPaths.length > 0) {
-      const footnote = failedPaths.join('\n')
-      deliveryText = deliveryText ? `${deliveryText}\n\n${footnote}` : footnote
-    }
-    return deliveryText
-  }
-
-  /** Finalize streaming UI then fall back to sendMessage when the adapter did not handle it. */
-  private async finalizeDelivery(text: string): Promise<void> {
-    if (!text) {
-      // Image-only turn: still ask the adapter to close any streaming draft/card.
-      await this.completeStream('', 'success')
-      return
-    }
-    const handled = await this.completeStream(text, 'success')
-    if (!handled) {
-      await this.deliver(text)
-    }
-  }
-
-  // oxlint-disable-next-line no-unused-vars
-  onChunk(chunk: UIMessageChunk, _sourceModelId?: UniqueModelId): void {
+  onMessage(message: CherryUIMessage): void {
     if (this.settled) return
-    if (chunk.type === 'text-delta' && chunk.delta) {
-      this.accumulatedText += chunk.delta
-      // Best-effort streaming update; adapter chooses to throttle. Sanitize here — this is
-      // the live delivery path that reaches the IM platform, so secrets (keys/tokens) must
-      // be redacted before they leave.
-      const { text } = sanitizeChannelOutput(this.accumulatedText)
-      const update = this.updateStream(text.replace(INCOMPLETE_CITATION_MARKER_PATTERN, ''))
-      void update.catch(() => {})
-    }
-
-    if (this.cursorToolParser) {
-      if (chunk.type === 'reasoning-delta' && chunk.delta) {
-        this.handleCursorToolReasoning(chunk.id, chunk.delta)
-      } else if (chunk.type === 'reasoning-end') {
-        this.cursorToolParser.end(chunk.id)
-      }
-    }
-
-    if (chunk.type === 'tool-approval-request' && this.adapter.channelType === 'telegram') {
-      this.sendTelegramApprovalCard(chunk)
-    }
-
-    if (chunk.type === 'tool-input-available') {
-      void this.adapter
-        .onToolProgress?.(
-          this.platformChatId,
-          {
-            kind: 'start',
-            toolCallId: chunk.toolCallId,
-            toolName: chunk.toolName,
-            input: chunk.input
-          },
-          this.responseOptions
-        )
-        ?.catch(() => {})
-    } else if (chunk.type === 'tool-input-start') {
-      void this.adapter
-        .onToolProgress?.(
-          this.platformChatId,
-          {
-            kind: 'start',
-            toolCallId: chunk.toolCallId,
-            toolName: chunk.toolName
-          },
-          this.responseOptions
-        )
-        ?.catch(() => {})
-    } else if (chunk.type === 'tool-output-available' || chunk.type === 'tool-output-error') {
-      void this.adapter
-        .onToolProgress?.(
-          this.platformChatId,
-          {
-            kind: 'done',
-            toolCallId: chunk.toolCallId,
-            ok: chunk.type === 'tool-output-available'
-          },
-          this.responseOptions
-        )
-        ?.catch(() => {})
+    this.accumulatedText = message.parts.flatMap((part) => (part.type === 'text' ? [part.text] : [])).join('')
+    if (this.adapter.onTextUpdate && !this.liveUpdateTimer) {
+      this.liveUpdateTimer = setTimeout(() => this.pushLiveUpdate(), LIVE_UPDATE_INTERVAL_MS)
     }
   }
 
-  /** Each new `[tool]` line replaces the previous one; turn end dismisses via `dismissToolProgress`. */
-  private handleCursorToolReasoning(reasoningId: string, delta: string): void {
-    if (!this.cursorToolParser) return
-    for (const line of this.cursorToolParser.push(reasoningId, delta)) {
-      const described = describeCursorToolLine(line)
-      if (!described) continue
-      if (this.activeCursorToolId) {
-        const previous = this.activeCursorToolId
-        void this.adapter
-          .onToolProgress?.(this.platformChatId, { kind: 'done', toolCallId: previous, ok: true }, this.responseOptions)
-          ?.catch(() => {})
-      }
-      const toolCallId = `cursor-tool-${++this.cursorToolSeq}`
-      this.activeCursorToolId = toolCallId
-      void this.adapter
-        .onToolProgress?.(
-          this.platformChatId,
-          { kind: 'start', toolCallId, toolName: described.toolName, description: described.description },
-          this.responseOptions
-        )
-        ?.catch(() => {})
-    }
+  private pushLiveUpdate(): void {
+    this.liveUpdateTimer = undefined
+    // The stream manager prunes a retired adapter without a terminal callback, so this timer can outlive it.
+    if (!this.isAlive()) return
+    // Best-effort streaming update; adapter chooses to throttle. Sanitize here — this is
+    // the live delivery path that reaches the IM platform, so secrets (keys/tokens) must
+    // be redacted before they leave.
+    const text = sanitizeChannelOutputSilently(this.accumulatedText).text.replace(
+      INCOMPLETE_CITATION_MARKER_PATTERN,
+      ''
+    )
+    if (text === this.lastLiveText) return
+    this.lastLiveText = text
+    void this.adapter.onTextUpdate?.(this.platformChatId, text, this.responseOptions)?.catch(() => {})
   }
 
-  private resetCursorToolState(): void {
-    this.cursorToolParser?.end()
-    this.activeCursorToolId = null
-  }
-
-  private sendTelegramApprovalCard(chunk: UIMessageChunk & { type: 'tool-approval-request' }): void {
-    const approvalId = chunk.approvalId
-    if (!approvalId) return
-
-    const details = toolApprovalRegistry.peekDetails(approvalId)
-    const toolNameRaw = details?.toolName ?? ''
-    const toolKey = normalizeToolKey(toolNameRaw)
-    const input = (details?.originalInput ?? {}) as Record<string, unknown>
-
-    if (toolKey === 'exitplanmode' && !this.exitPlanCardSent) {
-      this.exitPlanCardSent = true
-      void this.adapter
-        .sendMessage(
-          this.platformChatId,
-          '📋 <b>计划已就绪</b>\n\n模型已提交 <code>exit_plan_mode</code>，源码尚未改动。请确认：',
-          {
-            ...this.responseOptions,
-            parseMode: 'html',
-            replyMarkup: {
-              inline_keyboard: [
-                [
-                  { text: '✅ 批准执行', callback_data: `xplan:approve:${approvalId}` },
-                  { text: '✏️ 继续调整', callback_data: `xplan:revise:${approvalId}` },
-                  { text: '❌ 放弃任务', callback_data: `xplan:cancel:${approvalId}` }
-                ]
-              ]
-            }
-          }
-        )
-        .catch((err) => logger.error('Failed to send exit_plan_mode card', { err }))
-      return
-    }
-
-    if (toolKey === 'askuserquestion' || toolKey === 'builtinaskuserquestion') {
-      const questions = Array.isArray(input.questions) ? input.questions : []
-      if (questions.length === 0 || askUserPending.has(approvalId)) return
-
-      askUserPending.set(approvalId, {
-        input: input as {
-          questions: Array<{
-            question?: string
-            header?: string
-            options?: Array<{ label?: string; description?: string }>
-          }>
-          answers?: Record<string, unknown>
-        },
-        answers: { ...((input.answers as Record<string, unknown>) || {}) },
-        qIndex: 0
-      })
-
-      const q = questions[0] as {
-        question?: string
-        header?: string
-        options?: Array<{ label?: string; description?: string }>
-      }
-      const options = Array.isArray(q.options) ? q.options : []
-      const circles = ['①', '②', '③', '④']
-      let cardText = '💬 <b>请选择</b>'
-      if (questions.length > 1) cardText += ` <i>(1/${questions.length})</i>`
-      cardText += `\n\n${escHtml(q.question || q.header || '请选择')}`
-      const rows: Array<Array<{ text: string; callback_data: string }>> = []
-      for (let oi = 0; oi < options.length && oi < 4; oi++) {
-        const label = String(options[oi].label || `选项${oi + 1}`).slice(0, 60)
-        cardText += `\n\n<b>${circles[oi]}</b> ${escHtml(label)}`
-        if (options[oi].description) {
-          cardText += `\n<i>${escHtml(String(options[oi].description).slice(0, 120))}</i>`
-        }
-        rows.push([{ text: `${circles[oi]} ${label}`.slice(0, 64), callback_data: `asku:${approvalId}:${oi}` }])
-      }
-      void this.adapter
-        .sendMessage(this.platformChatId, cardText, {
-          ...this.responseOptions,
-          parseMode: 'html',
-          replyMarkup: { inline_keyboard: rows }
-        })
-        .catch((err) => logger.error('Failed to send AskUserQuestion card', { err }))
-      return
-    }
-
-    if (!toolKey || toolKey === 'exitplanmode') return
-    if (toolPermSent.has(approvalId)) return
-    toolPermSent.add(approvalId)
-
-    let cardText = `⚠️ <b>AI 申请操作权限</b>\n\n🔹 <b>工具</b>: <code>${escHtml(toolNameRaw || toolKey)}</code>`
-    try {
-      let detail = ''
-      if (typeof input.command === 'string') detail = input.command
-      else if (typeof input.file_path === 'string') detail = input.file_path
-      else if (typeof input.path === 'string') detail = input.path
-      else if (typeof input.filePath === 'string') detail = input.filePath
-      else if (typeof input.url === 'string') detail = input.url
-      else if (Object.keys(input).length > 0) detail = JSON.stringify(input)
-      if (detail) {
-        if (detail.length > 1500) detail = `${detail.slice(0, 1500)}\n... (已截断)`
-        cardText += `\n🔹 <b>详情</b>:\n<pre>${escHtml(detail)}</pre>`
-      }
-    } catch {
-      // ignore serialization failures
-    }
-    cardText += '\n\n请问是否授权该操作？'
-    void this.adapter
-      .sendMessage(this.platformChatId, cardText, {
-        ...this.responseOptions,
-        parseMode: 'html',
-        replyMarkup: {
-          inline_keyboard: [
-            [
-              { text: '✅ 允许', callback_data: `tapr:ok:${approvalId}` },
-              { text: '❌ 拒绝', callback_data: `tapr:no:${approvalId}` }
-            ]
-          ]
-        }
-      })
-      .catch((err) => logger.error('Failed to send tool permission card', { err }))
+  private settle(): void {
+    this.settled = true
+    clearTimeout(this.liveUpdateTimer)
   }
 
   async onDone(result: StreamDoneResult): Promise<void> {
-    if (result.isTopicDone === false && !this.settled) {
-      await this.flushSegment()
-      return
-    }
-    this.resetCursorToolState()
-    await this.adapter.dismissToolProgress?.(this.platformChatId, this.responseOptions)?.catch(() => {})
-    await this.finish(result.status)
+    await this.finish(result.status, result.finalMessage)
   }
 
-  // oxlint-disable-next-line no-unused-vars
-  async onPaused(_result: StreamPausedResult): Promise<void> {
-    this.resetCursorToolState()
-    await this.adapter.dismissToolProgress?.(this.platformChatId, this.responseOptions)?.catch(() => {})
-    await this.finish('paused')
+  async onPaused(result: StreamPausedResult): Promise<void> {
+    await this.finish('paused', result.finalMessage)
   }
 
-  /**
-   * Mid-topic done (agent steer roll: A1a closed, the A2 continuation reuses this listener). Deliver the
-   * pre-steer text as its own message and keep listening so A2 streams as a new message. Snapshot and
-   * clear the buffer synchronously so A2 deltas arriving during the awaits start a fresh segment.
-   */
-  private async flushSegment(): Promise<void> {
-    const raw = this.accumulatedText
-    this.accumulatedText = ''
-    this.resetCursorToolState()
-    await this.adapter.dismissToolProgress?.(this.platformChatId, this.responseOptions)?.catch(() => {})
-    const text = sanitizeChannelOutput(raw).text.trim()
-    try {
-      await this.finalizeDelivery(text ? await this.prepareOutboundDelivery(text) : '')
-    } catch (err) {
-      logger.error('Failed to deliver steer segment to channel', {
-        channelId: this.adapter.channelId,
-        chatId: this.platformChatId,
-        err
-      })
-    }
-  }
-
-  private async finish(status: 'success' | 'paused'): Promise<void> {
+  private async finish(status: 'success' | 'paused', message?: CherryUIMessage): Promise<void> {
     if (this.settled) return
-    this.settled = true
+    this.settle()
+    if (message)
+      this.accumulatedText = message.parts.flatMap((part) => (part.type === 'text' ? [part.text] : [])).join('')
     const text = sanitizeChannelOutput(this.accumulatedText).text.trim()
-    if (status === 'success' && !text) {
-      logger.warn('ChannelAdapterListener.onDone with empty text', {
-        channelId: this.adapter.channelId,
-        chatId: this.platformChatId,
-        status
-      })
-      return
-    }
 
     try {
-      const deliveryText = await this.prepareOutboundDelivery(text)
-      if (status === 'paused') {
-        if (!deliveryText) {
-          await this.completeStream('', 'paused')
-          return
-        }
-        const handled = await this.completeStream(deliveryText, 'paused')
-        if (!handled) {
-          await this.deliver(`${deliveryText}\n\n⏹ ${t('common.channel_stopped')}`)
-        }
-        return
+      const handled = await this.completeStream(text, status)
+      if (!handled && text) {
+        await this.deliver(status === 'paused' ? `${text}\n\n_(${t('common.channel_stopped')})_` : text)
       }
-      await this.finalizeDelivery(deliveryText)
     } catch (err) {
       logger.error('Failed to deliver terminal message to channel', {
         channelId: this.adapter.channelId,
@@ -449,10 +109,8 @@ export class ChannelAdapterListener implements StreamListener {
   }
 
   async onError(result: StreamErrorResult): Promise<void> {
-    this.resetCursorToolState()
-    await this.adapter.dismissToolProgress?.(this.platformChatId, this.responseOptions)?.catch(() => {})
     if (this.settled) return
-    this.settled = true
+    this.settle()
     try {
       const error = sanitizeChannelOutput(result.error.message ?? t('common.channel_message_processing_error')).text
       const handled = await this.adapter.onStreamError(this.platformChatId, error, this.responseOptions, {

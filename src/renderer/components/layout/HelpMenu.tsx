@@ -12,11 +12,10 @@ import { useTranslation } from 'react-i18next'
 
 import { Button, MenuItem, MenuList, Popover, PopoverContent, PopoverTrigger } from '@cherrystudio/ui'
 import { loggerService } from '@logger'
-import AppLogo from '@renderer/assets/images/logo.png'
 import { DoctorPopup } from '@renderer/components/doctor'
 import { useAccountSubmenu } from '@renderer/hooks/useAccountSubmenu'
-import { useMiniAppPopup } from '@renderer/hooks/useMiniAppPopup'
 import { useOpenReleaseNotes } from '@renderer/hooks/useOpenReleaseNotes'
+import { ipcApi } from '@renderer/ipc'
 
 const logger = loggerService.withContext('HelpMenu')
 
@@ -28,7 +27,6 @@ export function HelpMenu({
   onRequestClose?: () => void
 }) {
   const { t, i18n } = useTranslation()
-  const { openSmartMiniApp } = useMiniAppPopup()
   const openReleaseNotes = useOpenReleaseNotes()
   const {
     open: menuOpen,
@@ -48,12 +46,7 @@ export function HelpMenu({
     const language = i18n.resolvedLanguage ?? i18n.language
     const url =
       language === 'zh-CN' || language === 'zh-TW' ? 'https://cherryai.com.cn/docs' : 'https://cherryai.com/docs'
-    openSmartMiniApp({
-      appId: 'cherrystudio-guide',
-      name: t('help.guide'),
-      url,
-      logo: AppLogo
-    })
+    void ipcApi.request('system.shell.open_website', url)
   }
 
   const trigger = (

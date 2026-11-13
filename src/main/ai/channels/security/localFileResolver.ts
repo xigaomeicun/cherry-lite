@@ -59,8 +59,7 @@ export async function readCanonicalLocalFile(
       filename,
       data: data.toString('base64'),
       media_type: mimeForFilename(filename),
-      size: data.length,
-      canonicalPath: target
+      size: data.length
     }
   } finally {
     // Swallow close errors so they can't mask an in-flight resolution error.

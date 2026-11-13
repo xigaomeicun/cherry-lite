@@ -1,7 +1,8 @@
+import { EventEmitter } from 'events'
+
 import { loggerService } from '@logger'
 import type { FileAttachment, ImageAttachment } from '@main/utils/downloadAsBase64'
 import type { AgentChannelEntity, AgentChannelType } from '@shared/data/api/schemas/agentChannels'
-import { EventEmitter } from 'events'
 
 import type { ChannelLogEntry, ChannelLogLevel, ChannelStatusEvent } from './types'
 
@@ -26,26 +27,13 @@ export type ChannelMessageEvent = {
   files?: FileAttachment[]
 }
 
-export type ChannelCommandName =
-  | 'new'
-  | 'compact'
-  | 'help'
-  | 'whoami'
-  | 'stop'
-  | 'model'
-  | 'switch'
-  | 'mode'
-  | 'status'
-  | 'rename'
-  | 'reboot'
-
 export type ChannelCommandEvent = {
   chatId: string
   /** Stable external conversation identity. Defaults to chatId for platforms without threads. */
   conversationId?: string
   userId: string
   userName: string
-  command: ChannelCommandName
+  command: 'new' | 'compact' | 'help' | 'whoami'
   args?: string
   /** Platform message id of the command message, so the reply can target it. See `ChannelMessageEvent.messageId`. */
   messageId?: string
@@ -53,45 +41,14 @@ export type ChannelCommandEvent = {
   replyInThread?: boolean
 }
 
-/** Telegram-style inline keyboard (also usable as opaque markup for other platforms). */
-export type ChannelInlineKeyboard = {
-  inline_keyboard: Array<Array<{ text: string; callback_data: string }>>
-}
-
-export type ChannelCallbackQueryEvent = {
-  chatId: string
-  userId: string
-  userName: string
-  data: string
-  messageId?: number
-  answerCallbackQuery: (opts?: { text?: string }) => Promise<void>
-  editReplyMarkup: (keyboard: ChannelInlineKeyboard) => Promise<void>
-  /** Replace the card's text (plain) and remove its inline keyboard, when the platform supports it. */
-  editMessageText?: (text: string) => Promise<void>
-}
-
 export type SendMessageOptions = {
-  parseMode?: 'MarkdownV2' | 'HTML' | 'html' | 'plain' | null
+  parseMode?: 'MarkdownV2' | 'HTML'
   /** Inbound message id to reply against. String for QQ (passive `msg_id`); number for Telegram. */
   replyToMessageId?: string | number
   /** Keep the reply inside the inbound message's thread when the platform supports it. */
   replyInThread?: boolean
-  /** Telegram inline keyboard / equivalent. */
-  replyMarkup?: ChannelInlineKeyboard
-  /** Called with the platform message id of the (last) sent chunk, when the adapter can report it. */
-  onSent?: (messageId: number | string) => void
 }
 
-export type ToolProgressEvent =
-  | {
-      kind: 'start'
-      toolCallId: string
-      toolName: string
-      input?: unknown
-      /** Preformatted bubble line; when set, adapters show it as-is instead of deriving one from `input`. */
-      description?: string
-    }
-  | { kind: 'done'; toolCallId: string; ok: boolean }
 export type ChannelStreamOutcome = { status: 'success' | 'paused' }
 export type ChannelStreamErrorOptions = { suppressDelivery: boolean }
 
@@ -236,12 +193,15 @@ export abstract class ChannelAdapter extends EventEmitter {
    * Disconnect the adapter. Aborts any in-progress connect, then calls performDisconnect.
    */
   async disconnect(): Promise<void> {
-    if (this.connectAbort) {
-      this.connectAbort.abort()
-      this.connectAbort = null
-    }
+    this.abortConnect()
     this._connected = false
     await this.performDisconnect()
+  }
+
+  /** Abort in-progress connection work before the owning runtime reconciles a newer target. */
+  abortConnect(): void {
+    this.connectAbort?.abort()
+    this.connectAbort = null
   }
 
   /** Allow adapters to recover transports invalidated while the system was suspended. */
@@ -272,12 +232,6 @@ export abstract class ChannelAdapter extends EventEmitter {
   abstract sendTypingIndicator(chatId: string, opts?: SendMessageOptions): Promise<void>
 
   /**
-   * Replace a previously sent message's text (plain) and drop its inline keyboard.
-   * Optional: adapters that can't edit leave it undefined.
-   */
-  editMessageText?(chatId: string, messageId: number | string, text: string): Promise<void>
-
-  /**
    * Send a file to a chat. Non-abstract so adapters can adopt outbound file
    * forwarding incrementally — the default rejects with a clear reason for
    * adapters whose platform upload isn't wired yet.
@@ -288,23 +242,12 @@ export abstract class ChannelAdapter extends EventEmitter {
   }
 
   /**
-   * Send an image to a chat (album/photo UX when the platform supports it).
-   * Default falls back to sendFile so adapters without a dedicated photo API
-   * still receive the bytes.
-   */
-  async sendImage(chatId: string, file: FileAttachment): Promise<void> {
-    return this.sendFile(chatId, file)
-  }
-
-  /**
-   * Called on every text update during streaming. The adapter decides
+   * Called with live text updates during streaming. The adapter decides
    * internally when/how to flush to the platform (throttle, mutex, etc.).
+   * Adapters that cannot stream leave it undefined so callers skip preview work.
    * @param fullText - The full cumulative response text so far.
    */
-  // oxlint-disable-next-line no-unused-vars
-  async onTextUpdate(_chatId: string, _fullText: string, _opts?: SendMessageOptions): Promise<void> {
-    // Default no-op — adapters that support streaming should override.
-  }
+  onTextUpdate?(chatId: string, fullText: string, opts?: SendMessageOptions): Promise<void>
 
   /** Release an inbound response superseded by batching without sending a reply. */
   // oxlint-disable-next-line no-unused-vars
@@ -339,30 +282,11 @@ export abstract class ChannelAdapter extends EventEmitter {
     return false
   }
 
-  /**
-   * Called when an agent tool starts or finishes execution.
-   * Platforms that support ephemeral status indicators (e.g. Telegram tool bubbles)
-   * can override this to reflect live progress.
-   */
-  // oxlint-disable-next-line no-unused-vars
-  async onToolProgress(_chatId: string, _event: ToolProgressEvent, _opts?: SendMessageOptions): Promise<void> {
-    // Default no-op.
-  }
-
-  /**
-   * Called when a turn completes, aborts, or pauses, dismissing any ephemeral tool indicators.
-   */
-  // oxlint-disable-next-line no-unused-vars
-  async dismissToolProgress(_chatId: string, _opts?: SendMessageOptions): Promise<void> {
-    // Default no-op.
-  }
-
   /* oxlint-enable no-unused-vars */
 
   // Typed event emitter overrides
   override emit(event: 'message', data: ChannelMessageEvent): boolean
   override emit(event: 'command', data: ChannelCommandEvent): boolean
-  override emit(event: 'callback_query', data: ChannelCallbackQueryEvent): boolean
   override emit(event: 'qr', url: string): boolean
   override emit(event: 'credentials', data: { appId: string; appSecret: string }): boolean
   override emit(event: 'log', data: ChannelLogEntry): boolean
@@ -373,7 +297,6 @@ export abstract class ChannelAdapter extends EventEmitter {
 
   override on(event: 'message', listener: (data: ChannelMessageEvent) => void): this
   override on(event: 'command', listener: (data: ChannelCommandEvent) => void): this
-  override on(event: 'callback_query', listener: (data: ChannelCallbackQueryEvent) => void): this
   override on(event: 'qr', listener: (url: string) => void): this
   override on(event: 'credentials', listener: (data: { appId: string; appSecret: string }) => void): this
   override on(event: 'log', listener: (data: ChannelLogEntry) => void): this
