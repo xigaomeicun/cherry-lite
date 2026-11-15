@@ -125,26 +125,12 @@ it('refuses legacy, malformed and foreign-runtime checkpoints consistently in li
   expect(actions(legacy.id)?.fork).toBe('legacy_history')
   expect(actions(malformed.id)?.fork).toBe('unsupported_checkpoint')
   expect(actions(foreign.id)?.fork).toBe('unsupported_checkpoint')
-  expect(actions(legacyEdit.id)?.edit).toBe('checkpoint_unsupported')
-  expect(actions(malformedEdit.id)?.edit).toBe('checkpoint_unsupported')
-  expect(actions(foreignEdit.id)?.edit).toBe('checkpoint_unsupported')
+  expect(actions(legacyEdit.id)?.edit).toBeNull()
+  expect(actions(malformedEdit.id)?.edit).toBeNull()
+  expect(actions(foreignEdit.id)?.edit).toBeNull()
   for (const reply of [legacy, malformed, foreign]) {
     await expect(new AgentSessionForkOperations().fork(sessionId, reply.id)).rejects.toMatchObject({
       reason: actions(reply.id)?.fork
-    })
-  }
-  for (const input of [legacyEdit, malformedEdit, foreignEdit]) {
-    await expect(runtime.getEditTarget(sessionId, input.id)).rejects.toMatchObject({ reason: 'checkpoint_unsupported' })
-    const target = { messageId: input.id, version: messages.readEditSnapshotTx(dbh.db, sessionId, input.id).version }
-    await expect(
-      new AgentSessionForkOperations().edit(
-        sessionId,
-        target,
-        async () => {},
-        () => {}
-      )
-    ).rejects.toMatchObject({
-      reason: 'checkpoint_unsupported'
     })
   }
   expect(rows.filter((row) => row.role === 'assistant').every((row) => row.status === 'success')).toBe(true)

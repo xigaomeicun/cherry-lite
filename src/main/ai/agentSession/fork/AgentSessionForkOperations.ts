@@ -22,7 +22,7 @@ import { isOutsidePath } from '@main/utils/file'
 import type { AgentSessionEditTarget } from '@shared/ai/agentSessionEdit'
 import { Sequencer } from '@shared/utils/async'
 
-import { ensureRetiredSessionHistory } from '../../runtime/pi/retiredSessionHistory'
+import { buildPiHistorySessionFile, ensureRetiredSessionHistory } from '../../runtime/pi/retiredSessionHistory'
 import { runtimeDriverRegistry } from '../../runtime/registry'
 import type { AgentSessionRuntimeDriver } from '../../runtime/types'
 import { copyForkWorkspace, forkFileIdentity, publishForkArtifact } from './files'
@@ -120,45 +120,49 @@ export class AgentSessionForkOperations {
       if (prefix.length) {
         const row = prefix.at(-1)!
         const boundary = resolveForkBoundary(driver, { ...row, anchor: row.data.runtimeAnchor })
-        if (boundary.reason) throw new AgentSessionEditError('checkpoint_unsupported')
-        const { anchor } = boundary
-        if (anchor.excludedMessageIds?.some((id) => prefix.some((row) => row.id === id)))
-          throw new AgentSessionForkError('history_changed')
-        const group = groupNativeHistory(prefix, bindings, driver).find((group) => group.rows.at(-1)?.id === row.id)!
-        if (group.context.locator.kind !== driver?.type) throw new AgentSessionEditError('checkpoint_unsupported')
-        const checkpoints = group.rows.map((row) => RuntimeForkAnchorSchema.parse(row.data.runtimeAnchor).checkpoint)
-        resources = {
-          version: 1,
-          operationId,
-          targetSessionId: sessionId,
-          resumeToken: '',
-          createdAt: Date.now(),
-          artifactDirectory: path.join(application.getPath('feature.agents.forks'), operationId),
-          published: []
+        if (boundary.reason) {
+          if (driver?.type !== 'pi') throw new AgentSessionEditError('checkpoint_unsupported')
+          await buildPiHistorySessionFile(prefix, source.workspace.path, nativeSessionId)
+        } else {
+          const { anchor } = boundary
+          if (anchor.excludedMessageIds?.some((id) => prefix.some((row) => row.id === id)))
+            throw new AgentSessionForkError('history_changed')
+          const group = groupNativeHistory(prefix, bindings, driver).find((group) => group.rows.at(-1)?.id === row.id)!
+          if (group.context.locator.kind !== driver?.type) throw new AgentSessionEditError('checkpoint_unsupported')
+          const checkpoints = group.rows.map((row) => RuntimeForkAnchorSchema.parse(row.data.runtimeAnchor).checkpoint)
+          resources = {
+            version: 1,
+            operationId,
+            targetSessionId: sessionId,
+            resumeToken: '',
+            createdAt: Date.now(),
+            artifactDirectory: path.join(application.getPath('feature.agents.forks'), operationId),
+            published: []
+          }
+          await this.prepareResources(resources)
+          const native = await boundary.fork({
+            sourceSessionId: sessionId,
+            sourceBackendId: group.context.backendId,
+            checkpoint: anchor.checkpoint,
+            checkpoints,
+            targetSessionId: nativeSessionId,
+            recordNativePreparation: async (contextId) => {
+              resources!.nativePreparations = [{ backendId: group.context.backendId, contextId }]
+              await writeForkResources(resources!)
+            },
+            targetCwd: source.workspace.path,
+            artifactDirectory: resources.artifactDirectory,
+            signal
+          })
+          if (!native.resumeToken.trim() || native.checkpoints.length !== checkpoints.length)
+            throw new AgentSessionForkError('history_corrupt')
+          nativeSessionId = native.resumeToken
+          nativeContextId = native.contextId
+          resources.resumeToken = native.resumeToken
+          await writeForkResources(resources)
+          remapNativeHistory(prefix, [{ group, result: native }])
+          await this.publish(resources, native.publish, signal)
         }
-        await this.prepareResources(resources)
-        const native = await boundary.fork({
-          sourceSessionId: sessionId,
-          sourceBackendId: group.context.backendId,
-          checkpoint: anchor.checkpoint,
-          checkpoints,
-          targetSessionId: nativeSessionId,
-          recordNativePreparation: async (contextId) => {
-            resources!.nativePreparations = [{ backendId: group.context.backendId, contextId }]
-            await writeForkResources(resources!)
-          },
-          targetCwd: source.workspace.path,
-          artifactDirectory: resources.artifactDirectory,
-          signal
-        })
-        if (!native.resumeToken.trim() || native.checkpoints.length !== checkpoints.length)
-          throw new AgentSessionForkError('history_corrupt')
-        nativeSessionId = native.resumeToken
-        nativeContextId = native.contextId
-        resources.resumeToken = native.resumeToken
-        await writeForkResources(resources)
-        remapNativeHistory(prefix, [{ group, result: native }])
-        await this.publish(resources, native.publish, signal)
       }
       signal.throwIfAborted()
       await closeSource()

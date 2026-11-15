@@ -15,12 +15,20 @@ export function preparePiBranch(sessionId: string, messageId?: string, nativeId?
   agentSessionService.assertIndependentSession(sessionId)
   return application.get('DbService').withWriteTx((tx) => {
     const root = ensureAgentSessionRootTx(tx, sessionId)
-    const existing = contexts.branchTx(tx, sessionId, messageId ?? root)
+    const anchor = messageId ?? root
+    const existing = contexts.branchTx(tx, sessionId, anchor)
     if (existing) {
       if (contexts.backendTx(tx, existing.backendId).locator.kind !== 'pi')
         throw new Error('The selected branch belongs to another runtime')
-      if (nativeId && existing.nativeThreadId !== nativeId)
+      if (nativeId && existing.nativeThreadId !== nativeId) {
+        if (
+          anchor !== existing.anchorMessageId &&
+          contexts.hasUnanchoredBranchTx(tx, sessionId, existing.backendId, nativeId)
+        ) {
+          return reservePiBranchTx(tx, sessionId, anchor, nativeId)
+        }
         throw new Error('Requested Pi identity does not match the captured branch')
+      }
       return existing
     }
     return reservePiBranchTx(tx, sessionId, root, nativeId ?? uuid())

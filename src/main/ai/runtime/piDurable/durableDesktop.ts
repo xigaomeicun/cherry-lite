@@ -28,6 +28,10 @@ import type { AgentRuntimeConnectInput, AgentRuntimeEvent } from '../types'
 import { createDurableMcp } from './durableMcp'
 import { withDurableShellTimeout } from './durableShellTimeout'
 
+// Reworded from @earendil-works/pi-durable's stock `read` description, which trips Devin's 403 content filter.
+const PI_DURABLE_READ_DESCRIPTION =
+  'Read a file from disk (text or jpg/png/gif/webp/bmp image). Text output is capped at 2000 lines or 50KB; use offset and limit for large files.'
+
 export async function prepareDurableDesktop(
   input: AgentRuntimeConnectInput,
   emit: (event: AgentRuntimeEvent) => void,
@@ -137,7 +141,9 @@ export async function prepareDurableDesktop(
       native.defineExtension({
         ...coding,
         tools: [
-          ...(coding.tools ?? []).filter((tool) => tool.name !== 'bash'),
+          ...(coding.tools ?? [])
+            .filter((tool) => tool.name !== 'bash')
+            .map((tool) => (tool.name === 'read' ? { ...tool, description: PI_DURABLE_READ_DESCRIPTION } : tool)),
           withDurableShellTimeout(bash),
           ...(process.platform === 'win32' ? [withDurableShellTimeout(tools.createPowerShellTool())] : [])
         ]

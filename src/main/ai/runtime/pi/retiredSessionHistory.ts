@@ -2,6 +2,7 @@ import { mkdir, rename, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 
 import { application } from '@application'
+import type { AgentSessionMessageRow } from '@data/db/schemas/agentSessionMessage'
 import {
   commitRetiredAgentSessionMigration,
   getRetiredAgentSessionMigration,
@@ -27,6 +28,108 @@ export async function migrateRetiredSessionHistories(): Promise<void> {
       logger.error('Retired session history migration remains pending', { sessionId: migration.sessionId, error })
     }
   }
+}
+
+function appendRowToPiSessionManager(
+  manager: Awaited<ReturnType<typeof loadPiSdk>>['SessionManager']['inMemory'] extends (...args: never[]) => infer R
+    ? R
+    : never,
+  row: AgentSessionMessageRow
+): void {
+  const content = buildAgentUserContent({
+    ...row,
+    role: row.role as AgentSessionMessageEntity['role'],
+    status: row.status as AgentSessionMessageEntity['status'],
+    delivery:
+      row.delivery && row.deliveryStatus
+        ? {
+            ...row.delivery,
+            status: row.deliveryStatus,
+            inReplyTo: row.deliveryInReplyTo,
+            turnRef: row.deliveryTurnRef
+          }
+        : null,
+    createdAt: new Date(row.createdAt).toISOString(),
+    updatedAt: new Date(row.updatedAt).toISOString()
+  })
+  const tools = (row.data.parts ?? []).flatMap((part) => {
+    if (part.type !== 'dynamic-tool' && !part.type.startsWith('tool-')) return []
+    return [JSON.stringify(part)]
+  })
+  const text = [content, ...tools.map((tool) => `Historical tool record (already executed):\n${tool}`)]
+    .filter(Boolean)
+    .join('\n\n')
+  if (text && row.role === 'user') {
+    manager.appendMessage({ role: 'user', content: [{ type: 'text', text }], timestamp: row.createdAt })
+  } else if (text && row.role === 'assistant') {
+    manager.appendMessage({
+      role: 'assistant',
+      content: [{ type: 'text', text }],
+      timestamp: row.createdAt,
+      api: 'openai-completions',
+      provider: 'cherry-history',
+      model: 'imported-history',
+      stopReason: 'stop',
+      usage: {
+        input: 0,
+        output: 0,
+        cacheRead: 0,
+        cacheWrite: 0,
+        totalTokens: 0,
+        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 }
+      }
+    })
+  } else if (text) {
+    manager.appendCustomMessageEntry('cherry-history', text, false)
+  }
+}
+
+async function writePiSessionFile(
+  manager: Parameters<typeof appendRowToPiSessionManager>[0],
+  workspacePath: string,
+  resumeToken: string
+): Promise<void> {
+  const sdk = await loadPiSdk()
+  const sessions = application.getPath('feature.agents.pi.sessions')
+  await mkdir(sessions, { recursive: true })
+  const file = path.join(sessions, `1970-01-01T00-00-00-000Z_${resumeToken}.jsonl`)
+  const temporary = `${file}.tmp`
+  try {
+    await writeFile(
+      temporary,
+      [manager.getHeader(), ...manager.getEntries()].map((entry) => JSON.stringify(entry)).join('\n') + '\n',
+      { mode: 0o600 }
+    )
+    const reopened = sdk.SessionManager.open(temporary, sessions, workspacePath)
+    if (reopened.getSessionId() !== resumeToken || reopened.getEntries().length !== manager.getEntries().length) {
+      throw new Error('Retired session history validation failed')
+    }
+    await rename(temporary, file)
+  } finally {
+    await rm(temporary, { force: true })
+  }
+}
+
+/** Materialize a Pi session file from DB history rows when editing a branch without native checkpoints. */
+export async function buildPiHistorySessionFile(
+  rows: readonly AgentSessionMessageRow[],
+  workspacePath: string,
+  resumeToken: string
+): Promise<void> {
+  const sdk = await loadPiSdk()
+  const manager = sdk.SessionManager.inMemory(workspacePath, { id: resumeToken })
+  for (const row of rows) {
+    if (
+      row.role === 'root' ||
+      row.status === 'pending' ||
+      row.status === 'streaming' ||
+      (row.deliveryStatus && row.deliveryStatus !== 'consumed')
+    ) {
+      continue
+    }
+    appendRowToPiSessionManager(manager, row)
+  }
+  await writePiSessionFile(manager, workspacePath, resumeToken)
 }
 
 /** A pending migration must never become a fresh Pi conversation, including on retry or fork. */

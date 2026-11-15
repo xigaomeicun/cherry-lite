@@ -1167,12 +1167,13 @@ export class AgentSessionMessageService {
       )
       .limit(1)
       .get()
-    if (existing?.inputContextId || existing?.data.nativeSessionId || ownsPendingReply) {
+    if (ownsPendingReply) {
       throw DataApiErrorFactory.resourceLocked('Message', messageId, 'native input binding')
     }
     this.invalidateForkPrefixTx(tx, sessionId, messageId)
     if (existing) {
       agentSessionContextService.removeRootMessagesTx(tx, sessionId, [messageId])
+      agentSessionContextService.reanchorBranchTx(tx, sessionId, messageId, existing.parentId)
       tx.update(sessionMessagesTable)
         .set({ parentId: existing.parentId })
         .where(and(eq(sessionMessagesTable.sessionId, sessionId), eq(sessionMessagesTable.parentId, messageId)))

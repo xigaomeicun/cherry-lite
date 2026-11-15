@@ -184,6 +184,28 @@ class AgentSessionContextService {
     return tx.insert(contexts).values(binding).returning().get()
   }
 
+  reanchorBranchTx(tx: DbOrTx, sessionId: string, deletedMessageId: string, parentId: string | null): void {
+    tx.update(contexts)
+      .set({ anchorMessageId: parentId })
+      .where(and(eq(contexts.sessionId, sessionId), eq(contexts.anchorMessageId, deletedMessageId)))
+      .run()
+  }
+
+  hasUnanchoredBranchTx(tx: DbOrTx, sessionId: string, backendId: string, nativeThreadId: string): boolean {
+    return !!tx
+      .select({ id: contexts.id })
+      .from(contexts)
+      .where(
+        and(
+          eq(contexts.sessionId, sessionId),
+          eq(contexts.backendId, backendId),
+          eq(contexts.nativeThreadId, nativeThreadId),
+          isNull(contexts.anchorMessageId)
+        )
+      )
+      .get()
+  }
+
   branchTx(tx: DbOrTx, sessionId: string, messageId: string) {
     const path = readAgentSessionAncestry(tx, sessionId, messageId)
     const bindings = tx.select().from(contexts).where(eq(contexts.sessionId, sessionId)).all()

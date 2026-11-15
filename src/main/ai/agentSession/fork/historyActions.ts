@@ -31,5 +31,6 @@ export function getEditFailure(
 ): AgentSessionHistoryActions['edit'] {
   if (target.role !== 'user' || target.delivery) return 'invalid_target'
   if (!driver?.fork || !driver.isForkCheckpoint || !parent) return 'checkpoint_unsupported'
+  if (driver.type === 'pi') return null
   return parent.role === 'root' || resolveForkBoundary(driver, parent).reason === null ? null : 'checkpoint_unsupported'
 }
