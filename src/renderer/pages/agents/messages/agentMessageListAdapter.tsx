@@ -57,7 +57,7 @@ const exportToObsidian: ExportMessagesToObsidian = async (title, messages) => {
   return popup.show({ title, messages, processingMethod: '1' })
 }
 
-const canDeleteMessage = (message: MessageListItem): boolean => message.role !== 'assistant'
+const canDeleteMessage = (): boolean => true
 
 const agentMessageListRuntimes = new Map<string, MessageListRuntime>()
 

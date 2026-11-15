@@ -206,6 +206,7 @@ const SessionItem = ({
       panePosition,
       pinned,
       sidebarPinned,
+      sessionId: session.id,
       sessionName,
       startEdit: startMenuEdit,
       t

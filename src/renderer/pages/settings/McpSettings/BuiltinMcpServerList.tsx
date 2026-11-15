@@ -57,7 +57,7 @@ const BuiltinMcpServerList: FC = () => {
               {t('settings.skills.installed')}
             </TabsTrigger>
             <TabsTrigger value="uninstalled" className="h-7 rounded-[14px] px-2.5 text-xs">
-              {t('settings.mcp.notInstalled')}
+              {t('code.not_installed')}
             </TabsTrigger>
           </TabsList>
         </Tabs>

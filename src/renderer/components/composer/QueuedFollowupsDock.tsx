@@ -150,7 +150,7 @@ export function QueuedFollowupsDock({
   steerDisabledReason
 }: QueuedFollowupsDockProps) {
   const { t } = useTranslation()
-  const [isExpanded, setIsExpanded] = useState(false)
+  const [isExpanded, setIsExpanded] = useState(true)
   const [shouldAnimate, setShouldAnimate] = useState(false)
   const listId = useId()
   const transition = {

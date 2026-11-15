@@ -39,6 +39,7 @@ function createSessionActionFixture(overrides: Partial<SessionActionContext> = {
     onSetPanePosition: vi.fn(),
     panePosition: 'left',
     pinned: false,
+    sessionId: 'session-1',
     sessionName: 'Session title',
     startEdit: vi.fn(),
     t,

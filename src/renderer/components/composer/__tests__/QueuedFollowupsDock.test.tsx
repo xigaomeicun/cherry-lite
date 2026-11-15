@@ -73,21 +73,24 @@ describe('QueuedFollowupsDock', () => {
       />
     )
     const toggle = screen.getByRole('button', { name: 'Queued (2)' })
-    expect(screen.queryByRole('button', { name: 'steer' })).not.toBeInTheDocument()
+    expect(toggle).toHaveAttribute('aria-expanded', 'true')
+    expect(screen.getAllByRole('button', { name: 'steer' })).toHaveLength(2)
     await user.tab()
     expect(toggle).toHaveFocus()
-    await user.keyboard('[Enter]')
-    expect(toggle).toHaveAttribute('aria-expanded', 'true')
-    await waitFor(() => expect(screen.getByText('second')).toBeVisible())
-    expect(screen.getAllByRole('button', { name: 'steer' })).toHaveLength(2)
     await user.keyboard('[Space]')
     expect(toggle).toHaveAttribute('aria-expanded', 'false')
     expect(screen.queryByRole('button', { name: 'steer' })).not.toBeInTheDocument()
     await user.tab()
     expect(screen.getByRole('button', { name: 'Pause auto-send' })).toHaveFocus()
     expect(onTogglePause).not.toHaveBeenCalled()
+    await user.tab({ shift: true })
+    expect(toggle).toHaveFocus()
+    await user.keyboard('[Enter]')
+    expect(toggle).toHaveAttribute('aria-expanded', 'true')
+    await waitFor(() => expect(screen.getByText('second')).toBeVisible())
+    expect(screen.getAllByRole('button', { name: 'steer' })).toHaveLength(2)
   })
-  it('starts collapsed, updates the count while folded, and preserves items when toggled', async () => {
+  it('starts expanded, updates the count while folded, and preserves items when toggled', async () => {
     const user = userEvent.setup()
     const props = {
       items,
@@ -101,9 +104,13 @@ describe('QueuedFollowupsDock', () => {
     const { rerender } = render(<QueuedFollowupsDock {...props} />)
     const toggle = screen.getByRole('button', { name: 'Queued (2)' })
 
+    expect(toggle).toHaveAttribute('aria-expanded', 'true')
+    expect(screen.getByText('first')).toBeVisible()
+    expect(screen.getByText('second')).toBeVisible()
+
+    await user.click(toggle)
     expect(toggle).toHaveAttribute('aria-expanded', 'false')
-    expect(screen.getByText('first')).not.toBeVisible()
-    expect(screen.getByText('second')).not.toBeVisible()
+    await waitFor(() => expect(screen.getByText('first')).not.toBeVisible())
 
     await user.click(screen.getByRole('button', { name: 'Pause auto-send' }))
     expect(props.onTogglePause).toHaveBeenCalledOnce()
@@ -148,7 +155,6 @@ describe('QueuedFollowupsDock', () => {
       />
     )
 
-    await user.click(screen.getByRole('button', { name: 'Queued (2)' }))
     expect(screen.getByText('first')).toBeInTheDocument()
     expect(screen.getByText('second')).toBeInTheDocument()
     expect(screen.queryByText('first https://example.com/docs')).not.toBeInTheDocument()
@@ -194,15 +200,13 @@ describe('QueuedFollowupsDock', () => {
       />
     )
 
-    await user.click(screen.getByRole('button', { name: 'Queued (1)' }))
     const steerButton = screen.getByLabelText('steer')
     expect(steerButton).toBeDisabled()
     await user.click(steerButton)
     expect(onSteer).not.toHaveBeenCalled()
   })
 
-  it('renders a token-only draft without repeating its prompt text or reserving text spacing', async () => {
-    const user = userEvent.setup()
+  it('renders a token-only draft without repeating its prompt text or reserving text spacing', () => {
     const url = 'https://example.com/docs'
     const { container } = render(
       <QueuedFollowupsDock
@@ -234,15 +238,13 @@ describe('QueuedFollowupsDock', () => {
       />
     )
 
-    await user.click(screen.getByRole('button', { name: 'Queued (1)' }))
     const linkToken = screen.getByRole('link', { name: url })
     expect(screen.queryByText(url)).not.toBeInTheDocument()
     expect(linkToken).toHaveTextContent('example.com/docs')
     expect(container.querySelector('[data-composer-token-kind="link"]')).toBe(linkToken)
   })
 
-  it('keeps draft prose when a token prompt no longer matches its recorded offset', async () => {
-    const user = userEvent.setup()
+  it('keeps draft prose when a token prompt no longer matches its recorded offset', () => {
     const text = 'user edited this queued message'
     render(
       <QueuedFollowupsDock
@@ -274,13 +276,11 @@ describe('QueuedFollowupsDock', () => {
       />
     )
 
-    await user.click(screen.getByRole('button', { name: 'Queued (1)' }))
     expect(screen.getByText(text)).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'https://example.com/docs' })).toBeInTheDocument()
   })
 
-  it('hides a knowledge token prompt while keeping the user text and chip', async () => {
-    const user = userEvent.setup()
+  it('hides a knowledge token prompt while keeping the user text and chip', () => {
     const { container } = render(
       <QueuedFollowupsDock
         items={[knowledgeItem]}
@@ -293,7 +293,6 @@ describe('QueuedFollowupsDock', () => {
       />
     )
 
-    await user.click(screen.getByRole('button', { name: 'Queued (1)' }))
     expect(container).toHaveTextContent('what is in it?')
     expect(container.querySelector('[data-composer-token-kind="knowledge"]')).toHaveTextContent('Notes')
     expect(container).not.toHaveTextContent(knowledgePrompt)

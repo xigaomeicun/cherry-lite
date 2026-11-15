@@ -20,6 +20,7 @@ import type { ResolvedAction } from '@renderer/components/chat/actions/actionTyp
 import EditIcon from '@renderer/components/icons/EditIcon'
 import SidebarShortcutIcon from '@renderer/components/icons/SidebarShortcutIcon'
 import { OpenInNewWindowIcon } from '@renderer/components/icons/WindowIcons'
+import { copySessionId } from '@renderer/services/copy'
 import type { TopicTabPosition } from '@shared/data/preference/preferenceTypes'
 
 export type SessionExportMenuOptions = Record<
@@ -68,6 +69,7 @@ export interface SessionActionContext {
   panePosition?: TopicTabPosition
   pinned?: boolean
   sidebarPinned?: boolean
+  sessionId: string
   sessionName: string
   startEdit: (value: string) => void
   t: TFunction
@@ -91,7 +93,14 @@ const hasExportOption = ({
   (exportMenuOptions?.notion && !!onExportNotion) ||
   (exportMenuOptions?.obsidian && !!onExportObsidian)
 
-const hasCopyOption = ({ exportMenuOptions, onCopyImage, onCopyMarkdown, onCopyPlainText }: SessionActionContext) =>
+const hasCopyOption = ({
+  exportMenuOptions,
+  onCopyImage,
+  onCopyMarkdown,
+  onCopyPlainText,
+  sessionId
+}: SessionActionContext) =>
+  !!sessionId ||
   !!onCopyMarkdown ||
   (!!exportMenuOptions?.image && !!onCopyImage) ||
   (!!exportMenuOptions?.plain_text && !!onCopyPlainText)
@@ -220,6 +229,12 @@ sessionActionRegistry.registerCommand({
     enabled: !!exportMenuOptions?.plain_text && !!onCopyPlainText
   }),
   run: ({ onCopyPlainText }) => onCopyPlainText?.()
+})
+
+sessionActionRegistry.registerCommand({
+  id: 'session.copy.session-id',
+  availability: ({ sessionId }) => ({ visible: !!sessionId, enabled: !!sessionId }),
+  run: ({ sessionId }) => copySessionId(sessionId)
 })
 
 sessionActionRegistry.registerCommand({

@@ -694,19 +694,19 @@ describe('useAgentMessageListProviderValue', () => {
       expect(result.current.actions.canDeleteMessage?.(user)).toBe(true)
     })
 
-    it('denies deletion presentation for the returned assistant item', () => {
+    it('allows deletion presentation for the returned assistant item', () => {
       const { result } = renderPolicyAdapter()
       const assistant = result.current.state.messages.find((message) => message.role === 'assistant')!
-      expect(result.current.actions.canDeleteMessage?.(assistant)).toBe(false)
+      expect(result.current.actions.canDeleteMessage?.(assistant)).toBe(true)
       expect(result.current.actions.deleteMessage).toBeDefined()
     })
 
-    it('hides selected delete for an assistant through the real capabilities and controller chain', () => {
+    it('allows selected delete for an assistant through the real capabilities and controller chain', () => {
       const { result, rerender } = renderPolicyAdapter()
       act(() => result.current.actions.selectMessage?.('assistant-1', true))
       rerender()
       expect(result.current.state.selection?.selectedMessageIds).toEqual(['assistant-1'])
-      expect(result.current.actions.deleteSelectedMessages).toBeUndefined()
+      expect(result.current.actions.deleteSelectedMessages).toBeDefined()
       expect(result.current.actions.copySelectedMessages).toBeDefined()
     })
 
