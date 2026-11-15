@@ -43,6 +43,7 @@ const mocks = vi.hoisted(() => ({
   applicationGet: vi.fn(),
   broadcastToType: vi.fn(),
   completionListener: undefined as ((event: ConversationCompletedEvent) => void) | undefined,
+  execFile: vi.fn(),
   electronNotifications: [] as Array<{
     options: { title: string; body: string }
     click?: () => void
@@ -67,6 +68,10 @@ const mocks = vi.hoisted(() => ({
   topicGetById: vi.fn()
 }))
 
+vi.mock('node:child_process', async (importOriginal) => ({
+  ...(await importOriginal()),
+  execFile: mocks.execFile
+}))
 vi.mock('@application', async () => {
   const { mockApplicationFactory } = await import('@test-mocks/main/application')
   return mockApplicationFactory()
@@ -915,9 +920,17 @@ describe('NotificationService', () => {
         if (active && status === 'succeeded') expect(record).toBeUndefined()
         else expect(record?.readAt !== null).toBe(silent)
         expect(mocks.electronNotifications).toHaveLength(silent ? 0 : 1)
-        expect(mocks.send.mock.calls.filter(([, event]) => event === 'notification.completion_sound')).toHaveLength(
-          !silent && status === 'succeeded' ? 1 : 0
-        )
+        if (process.platform === 'darwin') {
+          expect(
+            mocks.execFile.mock.calls.filter(
+              ([cmd, args]) => cmd === 'afplay' && String(args?.[0]).endsWith('cherrystudio-completion.mp3')
+            )
+          ).toHaveLength(status === 'succeeded' ? (active ? 2 : 1) : 0)
+        } else {
+          expect(mocks.send.mock.calls.filter(([, event]) => event === 'notification.completion_sound')).toHaveLength(
+            !silent && status === 'succeeded' ? 1 : 0
+          )
+        }
         expect(mocks.send.mock.calls.filter(([, event]) => event === 'notification.present')).toHaveLength(0)
       }
     }
@@ -1118,10 +1131,11 @@ describe('NotificationService', () => {
       expect(notificationRecordService.list({}).items[0].kind).toBe(
         completedTaskCount > 1 ? 'queue-completion' : 'task-completion'
       )
-      expect(mocks.send.mock.calls.map(([, event]) => event)).toEqual([
-        'notification.completion_sound',
-        'notification.present'
-      ])
+      expect(mocks.send.mock.calls.map(([, event]) => event)).toEqual(
+        process.platform === 'darwin'
+          ? ['notification.present']
+          : ['notification.completion_sound', 'notification.present']
+      )
     }
   )
 
@@ -1130,8 +1144,13 @@ describe('NotificationService', () => {
     mocks.getWindowInfosByType.mockImplementation((type: WindowType) =>
       type === WindowType.Main ? [mainWindowInfo()] : [mainWindowInfo({ id: 'sub-1', type })]
     )
+    mocks.execFile.mockClear()
     emitCompletion()
-    expect(mocks.send.mock.calls.filter(([, event]) => event === 'notification.completion_sound')).toHaveLength(1)
+    if (process.platform === 'darwin') {
+      expect(mocks.execFile).toHaveBeenCalledTimes(1)
+    } else {
+      expect(mocks.send.mock.calls.filter(([, event]) => event === 'notification.completion_sound')).toHaveLength(1)
+    }
     expect(mocks.electronNotifications[0].options).toMatchObject({ silent: true })
   })
 
@@ -1157,7 +1176,11 @@ describe('NotificationService', () => {
     mocks.getWindowInfosByType.mockReturnValue([])
     emitCompletion()
     expect(mocks.electronNotifications).toHaveLength(1)
-    expect(mocks.electronNotifications[0].options).not.toHaveProperty('silent', true)
+    if (process.platform === 'darwin') {
+      expect(mocks.electronNotifications[0].options).toMatchObject({ silent: true })
+    } else {
+      expect(mocks.electronNotifications[0].options).not.toHaveProperty('silent', true)
+    }
   })
 
   it('marks a deleted target read but never opens a replacement conversation', async () => {
@@ -1617,7 +1640,7 @@ describe('NotificationService', () => {
         source: 'assistant'
       })
     )
-    expect(mocks.preferenceGet).not.toHaveBeenCalled()
+    expect(mocks.preferenceGet).not.toHaveBeenCalledWith('app.notification.assistant.enabled')
     expect(mocks.electronNotifications).toHaveLength(0)
   })
 

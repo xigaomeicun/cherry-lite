@@ -1,3 +1,7 @@
+import { execFile } from 'node:child_process'
+import fs from 'node:fs'
+import path from 'node:path'
+
 import { app, Notification as ElectronNotification } from 'electron'
 
 import { application } from '@application'
@@ -81,6 +85,11 @@ export class NotificationService extends BaseService {
       const enabled = preferences.get(`app.notification.center.${input.category}.enabled`)
       const result = input.target?.result
       const completion = input.kind === 'task-completion' || input.kind === 'queue-completion'
+      const completionSoundEnabled = Boolean(
+        options.completion && preferences.get('app.notification.completion_sound.enabled')
+      )
+      let sound =
+        completionSoundEnabled && process.platform === 'darwin' && this.playSoundFile('cherrystudio-completion.mp3')
       const active =
         enabled &&
         (completion || !!result) &&
@@ -104,8 +113,7 @@ export class NotificationService extends BaseService {
       const windows = getFullChromeWindowInfos()
       const focused = windows.find((window) => window.isFocused)
       const owner = focused ?? windows.find((window) => window.type === WindowType.Main) ?? windows[0]
-      let sound = false
-      if (options.completion && preferences.get('app.notification.completion_sound.enabled') && owner) {
+      if (!sound && completionSoundEnabled && owner) {
         try {
           application.get('IpcApiService').send(owner.id, 'notification.completion_sound', { id: record.id })
           sound = true
@@ -215,14 +223,46 @@ export class NotificationService extends BaseService {
   }
 
   public deliverConversationNotification(notification: ConversationNotification): void {
+    const preferences = application.get('PreferenceService')
+    const sound =
+      notification.kind === 'approval-request' &&
+      preferences.get('app.notification.completion_sound.enabled') &&
+      process.platform === 'darwin' &&
+      this.playSoundFile('cherrystudio-approval.mp3')
     const focusedWindow = getFullChromeWindowInfos().find((window) => window.isFocused)
     if (focusedWindow) {
       application.get('IpcApiService').send(focusedWindow.id, 'notification.conversation', notification)
       return
     }
 
-    if (!application.get('PreferenceService').get('app.notification.assistant.enabled')) return
-    void this.sendNotification(notification)
+    if (!preferences.get('app.notification.assistant.enabled')) return
+    void this.sendNotification(sound ? { ...notification, silent: true } : notification)
+  }
+
+  private resolveSoundPath(filename: string): string | null {
+    const candidates = [
+      ...(process.resourcesPath
+        ? [
+            path.join(process.resourcesPath, filename),
+            path.join(process.resourcesPath, 'resources', filename),
+            path.join(process.resourcesPath, 'app.asar.unpacked', 'resources', filename)
+          ]
+        : []),
+      path.join(process.cwd(), 'resources', filename)
+    ]
+    for (const candidate of candidates) {
+      try {
+        if (fs.existsSync(candidate)) return candidate
+      } catch {}
+    }
+    return null
+  }
+
+  private playSoundFile(filename: string): boolean {
+    const soundPath = this.resolveSoundPath(filename)
+    if (!soundPath) return false
+    execFile('afplay', [soundPath], { timeout: 8000 }, () => {})
+    return true
   }
 
   private areAllOsNotificationPrefsDisabled(): boolean {
