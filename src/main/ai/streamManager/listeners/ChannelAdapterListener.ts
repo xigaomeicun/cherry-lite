@@ -1,4 +1,4 @@
-import type { UIMessageChunk } from 'ai'
+import { getToolName, isToolUIPart, type UIMessageChunk } from 'ai'
 
 import { loggerService } from '@logger'
 import {
@@ -23,7 +23,7 @@ import { t } from '@main/i18n'
 import type { CherryUIMessage } from '@shared/data/types/message'
 import type { UniqueModelId } from '@shared/data/types/model'
 
-import type { StreamDoneResult, StreamErrorResult, StreamListener, StreamPausedResult } from '../types'
+import type { AiStreamSource, StreamDoneResult, StreamErrorResult, StreamListener, StreamPausedResult } from '../types'
 
 const logger = loggerService.withContext('ChannelAdapterListener')
 const INCOMPLETE_CITATION_MARKER_PATTERN = /[ \t]?\[(?:c(?:i(?:t(?:e(?::[\w-]*)?)?)?)?)?$/
@@ -55,6 +55,8 @@ export class ChannelAdapterListener implements StreamListener {
   private readonly cursorToolParser: CursorToolLineParser | null
   private cursorToolSeq = 0
   private activeCursorToolId: string | null = null
+  private readonly toolPartStates = new Map<string, 'streaming' | 'available' | 'done'>()
+  private readonly reasoningProgress = new Map<number, { length: number; ended: boolean }>()
 
   constructor(
     private readonly adapter: ChannelAdapter,
@@ -123,43 +125,44 @@ export class ChannelAdapterListener implements StreamListener {
     }
 
     if (chunk.type === 'tool-input-available') {
-      void this.adapter
-        .onToolProgress?.(
-          this.platformChatId,
-          {
-            kind: 'start',
-            toolCallId: chunk.toolCallId,
-            toolName: chunk.toolName,
-            input: chunk.input
-          },
-          this.responseOptions
-        )
-        ?.catch(() => {})
+      this.emitToolStart(chunk.toolCallId, chunk.toolName, chunk.input)
     } else if (chunk.type === 'tool-input-start') {
-      void this.adapter
-        .onToolProgress?.(
-          this.platformChatId,
-          {
-            kind: 'start',
-            toolCallId: chunk.toolCallId,
-            toolName: chunk.toolName
-          },
-          this.responseOptions
-        )
-        ?.catch(() => {})
+      this.emitToolStart(chunk.toolCallId, chunk.toolName)
     } else if (chunk.type === 'tool-output-available' || chunk.type === 'tool-output-error') {
-      void this.adapter
-        .onToolProgress?.(
-          this.platformChatId,
-          {
-            kind: 'done',
-            toolCallId: chunk.toolCallId,
-            ok: chunk.type === 'tool-output-available'
-          },
-          this.responseOptions
-        )
-        ?.catch(() => {})
+      this.emitToolDone(chunk.toolCallId, chunk.type === 'tool-output-available')
     }
+  }
+
+  private emitToolStart(toolCallId: string, toolName: string, input?: unknown): void {
+    const nextState = input !== undefined ? 'available' : 'streaming'
+    const prevState = this.toolPartStates.get(toolCallId)
+    if (prevState === 'done' || prevState === 'available' || (prevState === 'streaming' && nextState === 'streaming')) {
+      return
+    }
+    this.toolPartStates.set(toolCallId, nextState)
+    void this.adapter
+      .onToolProgress?.(
+        this.platformChatId,
+        input !== undefined ? { kind: 'start', toolCallId, toolName, input } : { kind: 'start', toolCallId, toolName },
+        this.responseOptions
+      )
+      ?.catch(() => {})
+  }
+
+  private emitToolDone(toolCallId: string, ok: boolean): void {
+    if (this.toolPartStates.get(toolCallId) === 'done') return
+    this.toolPartStates.set(toolCallId, 'done')
+    void this.adapter
+      .onToolProgress?.(
+        this.platformChatId,
+        {
+          kind: 'done',
+          toolCallId,
+          ok
+        },
+        this.responseOptions
+      )
+      ?.catch(() => {})
   }
 
   /** Each new `[tool]` line replaces the previous one; turn end dismisses via `dismissToolProgress`. */
@@ -189,6 +192,8 @@ export class ChannelAdapterListener implements StreamListener {
   private resetCursorToolState(): void {
     this.cursorToolParser?.end()
     this.activeCursorToolId = null
+    this.reasoningProgress.clear()
+    this.toolPartStates.clear()
   }
 
   private sendTelegramApprovalCard(chunk: UIMessageChunk & { type: 'tool-approval-request' }): void {
@@ -283,11 +288,50 @@ export class ChannelAdapterListener implements StreamListener {
       .catch((err) => logger.error('Failed to send tool permission card', { err }))
   }
 
-  onMessage(message: CherryUIMessage): void {
+  onMessage(message: CherryUIMessage, _sourceModelId?: UniqueModelId, sourceKind?: AiStreamSource['kind']): void {
     if (this.settled) return
     this.accumulatedText = message.parts.flatMap((part) => (part.type === 'text' ? [part.text] : [])).join('')
+    if (sourceKind !== 'chunks') {
+      this.projectMessageToolProgress(message)
+    }
     if (this.adapter.onTextUpdate && !this.liveUpdateTimer) {
       this.liveUpdateTimer = setTimeout(() => this.pushLiveUpdate(), LIVE_UPDATE_INTERVAL_MS)
+    }
+  }
+
+  private projectMessageToolProgress(message: CherryUIMessage): void {
+    for (let i = 0; i < message.parts.length; i++) {
+      const part = message.parts[i]
+      if (part.type === 'reasoning') {
+        if (!this.cursorToolParser) continue
+        const prev = this.reasoningProgress.get(i) ?? { length: 0, ended: false }
+        const reasoningId = `msg-reasoning-${i}`
+        if (part.text.length > prev.length) {
+          const delta = part.text.slice(prev.length)
+          prev.length = part.text.length
+          this.handleCursorToolReasoning(reasoningId, delta)
+        }
+        if (part.state === 'done' && !prev.ended) {
+          prev.ended = true
+          this.cursorToolParser.end(reasoningId)
+        }
+        this.reasoningProgress.set(i, prev)
+        continue
+      }
+
+      if (!isToolUIPart(part)) continue
+      const toolName = getToolName(part)
+      if (part.state === 'input-streaming') {
+        this.emitToolStart(part.toolCallId, toolName)
+      } else if (
+        part.state === 'input-available' ||
+        part.state === 'approval-requested' ||
+        part.state === 'approval-responded'
+      ) {
+        this.emitToolStart(part.toolCallId, toolName, part.input)
+      } else if (part.state === 'output-available' || part.state === 'output-error' || part.state === 'output-denied') {
+        this.emitToolDone(part.toolCallId, part.state === 'output-available')
+      }
     }
   }
 

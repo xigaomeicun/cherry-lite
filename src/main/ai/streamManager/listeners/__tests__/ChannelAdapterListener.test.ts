@@ -243,4 +243,146 @@ describe('ChannelAdapterListener', () => {
     alive = false
     expect(listener.isAlive()).toBe(false)
   })
+
+  it('forwards tool progress from message-sourced tool parts without duplicating events', () => {
+    const onToolProgress = vi.fn().mockResolvedValue(undefined)
+    const adapter = makeAdapter({ channelType: 'telegram', onToolProgress })
+    const listener = new ChannelAdapterListener(adapter, '12345')
+
+    listener.onMessage(
+      {
+        id: 'reply',
+        role: 'assistant',
+        parts: [{ type: 'dynamic-tool', toolName: 'bash', toolCallId: 'call-1', state: 'input-streaming', input: {} }]
+      },
+      undefined,
+      'messages'
+    )
+    listener.onMessage(
+      {
+        id: 'reply',
+        role: 'assistant',
+        parts: [
+          {
+            type: 'dynamic-tool',
+            toolName: 'bash',
+            toolCallId: 'call-1',
+            state: 'input-available',
+            input: { command: 'ls' }
+          }
+        ]
+      },
+      undefined,
+      'messages'
+    )
+    listener.onMessage(
+      {
+        id: 'reply',
+        role: 'assistant',
+        parts: [
+          {
+            type: 'dynamic-tool',
+            toolName: 'bash',
+            toolCallId: 'call-1',
+            state: 'input-available',
+            input: { command: 'ls' }
+          }
+        ]
+      },
+      undefined,
+      'messages'
+    )
+    listener.onMessage(
+      {
+        id: 'reply',
+        role: 'assistant',
+        parts: [
+          {
+            type: 'dynamic-tool',
+            toolName: 'bash',
+            toolCallId: 'call-1',
+            state: 'output-available',
+            input: { command: 'ls' },
+            output: 'ok'
+          }
+        ]
+      },
+      undefined,
+      'messages'
+    )
+
+    expect(onToolProgress.mock.calls.map(([, event]) => event)).toEqual([
+      { kind: 'start', toolCallId: 'call-1', toolName: 'bash' },
+      { kind: 'start', toolCallId: 'call-1', toolName: 'bash', input: { command: 'ls' } },
+      { kind: 'done', toolCallId: 'call-1', ok: true }
+    ])
+  })
+
+  it('forwards Cursor CPA [tool] reasoning lines from message-sourced streams on Telegram', () => {
+    const onToolProgress = vi.fn().mockResolvedValue(undefined)
+    const adapter = makeAdapter({ channelType: 'telegram', onToolProgress })
+    const listener = new ChannelAdapterListener(adapter, '12345', false, undefined, undefined, undefined, {
+      cursorToolBubbles: true
+    })
+
+    listener.onMessage(
+      {
+        id: 'reply',
+        role: 'assistant',
+        parts: [{ type: 'reasoning', text: 'thinking\n[tool] read: package.json\n', state: 'streaming' }]
+      },
+      undefined,
+      'messages'
+    )
+    listener.onMessage(
+      {
+        id: 'reply',
+        role: 'assistant',
+        parts: [
+          {
+            type: 'reasoning',
+            text: 'thinking\n[tool] read: package.json\n[tool] shell: pnpm test\n',
+            state: 'done'
+          }
+        ]
+      },
+      undefined,
+      'messages'
+    )
+
+    expect(onToolProgress.mock.calls.map(([, event]) => event)).toEqual([
+      { kind: 'start', toolCallId: 'cursor-tool-1', toolName: 'view', description: 'view package.json' },
+      { kind: 'done', toolCallId: 'cursor-tool-1', ok: true },
+      { kind: 'start', toolCallId: 'cursor-tool-2', toolName: 'bash', description: 'pnpm test' }
+    ])
+  })
+
+  it('does not re-project tool progress from chunk-sourced snapshots', () => {
+    const onToolProgress = vi.fn().mockResolvedValue(undefined)
+    const adapter = makeAdapter({ channelType: 'telegram', onToolProgress })
+    const listener = new ChannelAdapterListener(adapter, '12345', false, undefined, undefined, undefined, {
+      cursorToolBubbles: true
+    })
+
+    listener.onMessage(
+      {
+        id: 'reply',
+        role: 'assistant',
+        parts: [
+          { type: 'reasoning', text: '[tool] read: a.ts\n', state: 'done' },
+          {
+            type: 'dynamic-tool',
+            toolName: 'bash',
+            toolCallId: 'c1',
+            state: 'input-available',
+            input: { command: 'ls' }
+          }
+        ]
+      },
+      undefined,
+      'chunks'
+    )
+
+    expect(onToolProgress).not.toHaveBeenCalled()
+  })
 })
