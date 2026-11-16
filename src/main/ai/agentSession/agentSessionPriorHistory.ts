@@ -1,12 +1,13 @@
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+import { eq } from 'drizzle-orm'
+
 import { application } from '@application'
 import { appStateTable } from '@data/db/schemas/appState'
 import type { DbOrTx } from '@data/db/types'
 import { agentSessionMessageService } from '@data/services/AgentSessionMessageService'
 import type { AgentSessionMessageEntity } from '@shared/data/api/schemas/agentSessionMessages'
-import { eq } from 'drizzle-orm'
 
 const HISTORY_SEEDED_KEY_PREFIX = 'agentSession:historySeeded:'
 const MAX_TRANSCRIPT_CHARS = 40_000

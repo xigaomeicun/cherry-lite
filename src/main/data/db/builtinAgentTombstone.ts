@@ -1,5 +1,6 @@
-import type { BuiltinAgentRole } from '@shared/ai/builtinAgent'
 import { eq } from 'drizzle-orm'
+
+import type { BuiltinAgentRole } from '@shared/ai/builtinAgent'
 
 import { appStateTable } from './schemas/appState'
 import type { DbOrTx } from './types'

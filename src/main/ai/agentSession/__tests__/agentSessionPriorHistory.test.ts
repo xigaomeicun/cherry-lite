@@ -1,5 +1,6 @@
-import type { AgentSessionMessageEntity } from '@shared/data/api/schemas/agentSessionMessages'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+import type { AgentSessionMessageEntity } from '@shared/data/api/schemas/agentSessionMessages'
 
 import {
   buildPriorConversationTranscript,

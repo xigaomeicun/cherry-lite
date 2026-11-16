@@ -5,11 +5,11 @@ on:
   workflow_dispatch:
     inputs:
       release_tag:
-        description: 'Release Tag (e.g. v6.0.0-lite)'
+        description: "Release Tag (e.g. v6.0.0-lite)"
         required: false
-        default: 'v6.0.0-lite'
+        default: "v6.0.0-lite"
       create_release:
-        description: 'Publish as GitHub Release'
+        description: "Publish as GitHub Release"
         required: true
         type: boolean
         default: true
@@ -35,7 +35,7 @@ jobs:
       - name: Install Node.js
         uses: actions/setup-node@v4
         with:
-          node-version-file: '.node-version'
+          node-version-file: ".node-version"
 
       - name: Setup macOS dependencies
         run: |

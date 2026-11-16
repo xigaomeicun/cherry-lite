@@ -1,22 +1,3 @@
-import { loggerService } from '@logger'
-import {
-  DEFAULT_MESSAGE_MENUBAR_BUTTON_IDS,
-  type MessageMenuBarButtonId,
-  STREAMING_DISABLED_BUTTON_IDS
-} from '@renderer/components/chat/messages/frame/messageMenuBarConfig'
-import { getMessageDeleteUnavailableText } from '@renderer/components/chat/messages/utils/messageDeleteAvailability'
-import CopyIcon from '@renderer/components/icons/CopyIcon'
-import DeleteIcon from '@renderer/components/icons/DeleteIcon'
-import EditIcon from '@renderer/components/icons/EditIcon'
-import RefreshIcon from '@renderer/components/icons/RefreshIcon'
-import { readMessageAloud } from '@renderer/services/voice'
-import type { MessageExportView } from '@renderer/types/messageExport'
-import { formatErrorMessageWithPrefix } from '@renderer/utils/error'
-import { removeTrailingDoubleSpaces } from '@renderer/utils/markdownLight'
-import { createComposerRichClipboardContentFromParts } from '@renderer/utils/message/composerClipboard'
-import { getTranslationFromParts, hasTextParts } from '@renderer/utils/message/partsHelpers'
-import type { CherryMessagePart } from '@shared/data/types/message'
-import type { TranslateLanguage } from '@shared/data/types/translate'
 import dayjs from 'dayjs'
 import type { TFunction } from 'i18next'
 import {
@@ -36,6 +17,26 @@ import {
   Volume2
 } from 'lucide-react'
 import type { ReactNode, RefObject } from 'react'
+
+import { loggerService } from '@logger'
+import {
+  DEFAULT_MESSAGE_MENUBAR_BUTTON_IDS,
+  type MessageMenuBarButtonId,
+  STREAMING_DISABLED_BUTTON_IDS
+} from '@renderer/components/chat/messages/frame/messageMenuBarConfig'
+import { getMessageDeleteUnavailableText } from '@renderer/components/chat/messages/utils/messageDeleteAvailability'
+import CopyIcon from '@renderer/components/icons/CopyIcon'
+import DeleteIcon from '@renderer/components/icons/DeleteIcon'
+import EditIcon from '@renderer/components/icons/EditIcon'
+import RefreshIcon from '@renderer/components/icons/RefreshIcon'
+import { readMessageAloud } from '@renderer/services/voice'
+import type { MessageExportView } from '@renderer/types/messageExport'
+import { formatErrorMessageWithPrefix } from '@renderer/utils/error'
+import { removeTrailingDoubleSpaces } from '@renderer/utils/markdownLight'
+import { createComposerRichClipboardContentFromParts } from '@renderer/utils/message/composerClipboard'
+import { getTranslationFromParts, hasTextParts } from '@renderer/utils/message/partsHelpers'
+import type { CherryMessagePart } from '@shared/data/types/message'
+import type { TranslateLanguage } from '@shared/data/types/translate'
 
 import { createActionRegistry } from '../../actions/actionRegistry'
 import type { ActionAvailabilityInput, ActionDescriptor, ResolvedAction } from '../../actions/actionTypes'

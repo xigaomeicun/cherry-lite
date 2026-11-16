@@ -453,9 +453,15 @@ export function getReadableToolActivity(
     case AgentToolsType.Search:
       return { label: labels.search, description: getReadableSearchTarget(searchText, t) }
     case AgentToolsType.Read:
-      return { label: labels.view, description: getReadablePathTarget(getStringArg(args, 'file_path') ?? getStringArg(args, 'path'), t) }
+      return {
+        label: labels.view,
+        description: getReadablePathTarget(getStringArg(args, 'file_path') ?? getStringArg(args, 'path'), t)
+      }
     case AgentToolsType.Write:
-      return { label: labels.write, description: getReadablePathTarget(getStringArg(args, 'file_path') ?? getStringArg(args, 'path'), t) }
+      return {
+        label: labels.write,
+        description: getReadablePathTarget(getStringArg(args, 'file_path') ?? getStringArg(args, 'path'), t)
+      }
     case AgentToolsType.Edit:
     case AgentToolsType.MultiEdit:
     case AgentToolsType.NotebookEdit:

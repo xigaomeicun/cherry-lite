@@ -1,9 +1,10 @@
+import { eq } from 'drizzle-orm'
+
 import { application } from '@application'
 import { appStateTable } from '@data/db/schemas/appState'
 import { agentSessionMessageService } from '@data/services/AgentSessionMessageService'
 import { loggerService } from '@logger'
 import type { AgentSessionMessageEntity } from '@shared/data/api/schemas/agentSessionMessages'
-import { eq } from 'drizzle-orm'
 
 const logger = loggerService.withContext('AgentSessionTodoState')
 
